@@ -117,3 +117,35 @@
     border-left: 8px solid #C4E0FF;
     z-index: 1;
 }
+
+/* System Messages */
+.chat-message.system {
+    display: flex;
+    justify-content: center;
+    margin: 10px 0;
+    width: 100%;
+}
+
+.system-tip {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: #999;
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 4px;
+    text-align: center;
+}
+
+/* No Bubble Style for Cards */
+.chat-message .message-content.no-bubble {
+    background: transparent !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    min-height: auto !important; /* Fix stretching */
+}
+
+/* Remove tails for no-bubble */
+.chat-message .message-content.no-bubble::before,
+.chat-message .message-content.no-bubble::after {
+    display: none !important;
+}

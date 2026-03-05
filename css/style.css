@@ -198,6 +198,88 @@
     font-style: italic;
 }
 
+/* Thought Pet */
+.thought-pet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 88px;
+    height: 88px;
+    z-index: 22;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    cursor: pointer;
+    touch-action: none;
+    user-select: none;
+}
+
+.thought-pet:active,
+.thought-pet.dragging {
+    transform: scale(0.97);
+}
+
+.thought-pet img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    -webkit-user-drag: none;
+    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.18));
+}
+
+.thought-pet-bubble {
+    --pet-bubble-arrow-offset: 0px;
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 10px);
+    transform: translateX(-50%);
+    max-width: min(250px, 74vw);
+    min-width: 120px;
+    padding: 10px 12px;
+    border: 2px solid #1f1f1f;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.97);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+    text-align: center;
+    z-index: 23;
+    pointer-events: auto;
+}
+
+.thought-pet-bubble::after,
+.thought-pet-bubble::before {
+    content: '';
+    position: absolute;
+    left: calc(50% + var(--pet-bubble-arrow-offset));
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+}
+
+.thought-pet-bubble::after {
+    top: calc(100% + 2px);
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 10px solid #1f1f1f;
+}
+
+.thought-pet-bubble::before {
+    top: 100%;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid rgba(255, 255, 255, 0.97);
+    z-index: 1;
+}
+
+.thought-pet-content {
+    font-size: 14px;
+    line-height: 1.4;
+    color: #2f2f2f;
+    font-style: italic;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 /* ====================
    iOS PWA全屏适配
    ==================== */
@@ -224,15 +306,22 @@ html, body {
     height: -webkit-fill-available;
   }
   
-  /* PWA 修复: 强制使用 100% 高度 */
+  /* PWA 修复: 强制使用 100dvh 高度 */
   .app-screen,
   .sub-screen {
-    height: 100%;
-    min-height: 100%;
+    height: 100dvh;
+    height: -webkit-fill-available;
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
   }
 }
 
 /* 3. 安全区域适配（iPhone X以上机型） */
+html, body {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   /* 移除 body 的 padding，让应用全屏，由内部元素处理适配 */
   /* padding-top: env(safe-area-inset-top); */
@@ -280,6 +369,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
+    height: 100dvh;
     overflow: hidden; /* 内部滚动 */
     -webkit-overflow-scrolling: touch;
     display: flex;
@@ -655,11 +745,12 @@ body {
 
 /* App Screen Styles */
 .app-screen {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+    height: 100dvh;
     background-color: #f2f2f7;
     z-index: 100;
     display: flex;
@@ -1461,7 +1552,7 @@ textarea {
     background-color: #fff;
     display: flex;
     align-items: center;
-    padding: 15px 20px; /* 将内边距移到这里，实现内容对齐但背景通栏 */
+    padding: 14px 20px; /* 将内边距移到这里，实现内容对齐但背景通栏 */
     width: 100%;
     box-sizing: border-box; /* 确保 padding 包含在宽度内 */
     transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); /* 平滑回弹 */
@@ -1556,6 +1647,13 @@ textarea {
     max-width: 200px;
 }
 
+.contact-name,
+.contact-time,
+.contact-msg-preview {
+    line-height: 1.2;
+    margin: 0;
+}
+
 .contact-status-icon {
     font-size: 12px;
 }
@@ -1584,7 +1682,7 @@ textarea {
 }
 
 /* Chat Settings Nav */
-.chat-settings-nav {
+#chat-settings-screen .chat-settings-nav {
     display: flex;
     background-color: #fff;
     border-radius: 30px;
@@ -1592,14 +1690,19 @@ textarea {
     margin: 10px 16px 20px;
     position: relative;
     height: 44px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    box-shadow: none;
+    overflow: hidden;
 }
 
-.nav-item {
+#chat-settings-screen .chat-settings-nav > .nav-item {
     flex: 1;
     text-align: center;
-    line-height: 36px;
-    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    line-height: 1;
+    font-size: 15px !important;
     font-weight: 500;
     color: #000;
     z-index: 2;
@@ -1607,11 +1710,11 @@ textarea {
     transition: color 0.3s;
 }
 
-.nav-item.active {
-    color: #fff;
+#chat-settings-screen .chat-settings-nav > .nav-item.active {
+    color: #fff !important;
 }
 
-.nav-indicator {
+#chat-settings-screen .chat-settings-nav > .nav-indicator {
     position: absolute;
     top: 4px;
     left: 4px;
@@ -1621,6 +1724,40 @@ textarea {
     border-radius: 26px;
     transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
     z-index: 1;
+    box-shadow: none !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform: translate3d(0, 0, 0);
+}
+
+#chat-settings-screen .list-item:not(.no-padding) {
+    padding: 12px 16px;
+    min-height: 52px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+}
+
+#chat-settings-screen .list-content label:not(.toggle-switch),
+#chat-settings-screen .list-content .ios-btn {
+    margin: 0;
+    line-height: 1.2;
+}
+
+#chat-settings-screen .list-content label.toggle-switch {
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    line-height: 0;
+    flex-shrink: 0;
+}
+
+#chat-settings-screen .list-content.column {
+    justify-content: center;
+    gap: 8px;
 }
 
 .chat-setting-tab-content {
@@ -1640,11 +1777,12 @@ textarea {
 
 /* Chat Screen */
 .sub-screen {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+    height: 100dvh;
     background-color: var(--wechat-bg);
     z-index: 150;
     display: flex;
@@ -2774,16 +2912,16 @@ textarea {
     line-height: 1.5;
 }
 
-.comment-item {
+.moment-comment-item {
     margin-bottom: 2px;
 }
 
-.comment-user {
+.moment-comment-user {
     color: var(--wechat-link);
     font-weight: 500;
 }
 
-.comment-content {
+.moment-comment-content {
     color: #000;
     white-space: pre-wrap; /* 支持换行 */
 }
@@ -3439,6 +3577,445 @@ input:checked + .slider:before {
 }
 
 /* Description Message Style (Third Person) */
+/* Card Messages Sizing Fix - Fixed Dimensions */
+.chat-message .message-content.order-progress-msg,
+.chat-message .message-content.shopping-gift-msg,
+.chat-message .message-content.delivery-share-msg,
+.chat-message .message-content.pay-request-msg,
+.chat-message .message-content.product-share-msg,
+.chat-message .message-content.icity-card-msg,
+.chat-message .message-content.gift-card-msg,
+.chat-message .message-content.music-listen-invite-msg {
+    width: fit-content !important;
+    height: fit-content !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    display: block !important;
+    align-self: flex-start;
+}
+
+/* Keep music invite card layout fixed when chat font-size setting changes */
+.chat-message .message-content.music-listen-invite-msg {
+    font-size: 14px !important;
+    line-height: 0 !important;
+}
+
+/* --------------------------------------------------------- */
+/* Music Listen Invite Card (Pure CSS Version)                */
+/* 调位置入口：直接改这里的变量，分别控制每个元素上下偏移 */
+/* --------------------------------------------------------- */
+.music-listen-invite-card {
+    --music-invite-card-width: 260px;
+    --music-invite-card-height: 90px;
+    --music-invite-card-shift-y: 0px;
+    --music-invite-content-shift-y: -8px;
+    --music-invite-cover-shift-y: 6px;
+    --music-invite-title-shift-y: 10px;
+    --music-invite-artist-shift-y: 10px;
+    --music-invite-platform-shift-y: 18px;
+    --music-invite-play-shift-y: 19px;
+
+    width: var(--music-invite-card-width);
+    height: var(--music-invite-card-height);
+    max-width: 78vw;
+    border-radius: 22px;
+    background: #e5e5ea;
+    padding: 14px 16px;
+    box-shadow: none;
+    cursor: pointer;
+    box-sizing: border-box;
+    user-select: none;
+    transform: translateY(var(--music-invite-card-shift-y));
+}
+
+.music-listen-invite-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    transform: translateY(var(--music-invite-content-shift-y));
+}
+
+.music-listen-invite-cover {
+    width: 65px;
+    height: 65px;
+    border-radius: 10px;
+    object-fit: cover;
+    background: #f2f2f2;
+    flex-shrink: 0;
+    transform: translateY(var(--music-invite-cover-shift-y));
+}
+
+.music-listen-invite-meta {
+    min-width: 0;
+    flex: 1;
+    overflow: visible;
+}
+
+.music-listen-invite-title {
+    font-size: 13px !important;
+    line-height: 1.1;
+    color: #111;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transform: translateY(var(--music-invite-title-shift-y));
+}
+
+.music-listen-invite-artist {
+    font-size: 12px !important;
+    line-height: 1.2 !important;
+    min-height: 14px;
+    display: block;
+    color: #2f2f2f;
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transform: translateY(var(--music-invite-artist-shift-y));
+}
+
+.music-listen-invite-platform {
+    font-size: 12px !important;
+    line-height: 1.2 !important;
+    min-height: 14px;
+    color: #8a8a8f;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transform: translateY(var(--music-invite-platform-shift-y));
+}
+
+.music-listen-invite-platform i {
+    font-size: 12px !important;
+}
+
+.music-listen-invite-play {
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    background: #000;
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
+    transform: translateY(var(--music-invite-play-shift-y));
+}
+
+.music-listen-invite-play i {
+    font-size: 16px !important;
+    margin-left: 4px;
+}
+
+/* Music invite prompt popup (matches music_app_v2 invite-popup look) */
+.music-invite-prompt-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10060;
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 0 12px;
+    background: transparent;
+}
+
+.music-invite-prompt-overlay.active {
+    display: flex;
+}
+
+.music-invite-prompt-popup {
+    margin-top: 50px;
+    width: min(92vw, 380px);
+    background: rgba(255, 255, 255, 0.95);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    border-radius: 24px;
+    padding: 16px;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+}
+
+.music-invite-prompt-popup .ip-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: #e5e5ea;
+}
+
+.music-invite-prompt-popup .ip-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.music-invite-prompt-popup .ip-info h4 {
+    margin: 0 0 2px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #111;
+    line-height: 1.2;
+}
+
+.music-invite-prompt-popup .ip-info p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.3;
+    color: var(--text-gray, #8e8e93);
+}
+
+.music-invite-prompt-popup .music-invite-prompt-song {
+    margin-top: 3px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #6b7280 !important;
+}
+
+.music-invite-prompt-popup .ip-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.music-invite-prompt-popup .ip-btn {
+    padding: 8px 16px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.music-invite-prompt-popup .ip-btn.accept {
+    background: var(--text-dark, #111);
+    color: #fff;
+}
+
+.music-invite-prompt-popup .ip-btn.reject {
+    background: #e5e5ea;
+    color: var(--text-dark, #111);
+}
+
+/* Keep bank-like cards stable when chat font size slider changes */
+.chat-message .message-content.family-card-msg,
+.chat-message .message-content.savings-invite-msg {
+    width: fit-content !important;
+    height: fit-content !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    display: block !important;
+    align-self: flex-start;
+    font-size: 14px !important;
+    line-height: 1.4 !important;
+}
+
+.chat-message .message-content.family-card-msg .chat-bank-v2-card,
+.chat-message .message-content.savings-invite-msg .chat-bank-v2-card {
+    font-size: 14px !important;
+    line-height: 1.4 !important;
+}
+
+.chat-message .message-content.family-card-msg .chat-bank-v2-card-title,
+.chat-message .message-content.savings-invite-msg .chat-bank-v2-card-title {
+    font-size: 18px !important;
+}
+
+.chat-message .message-content.family-card-msg .chat-bank-v2-card-num,
+.chat-message .message-content.savings-invite-msg .chat-bank-v2-card-num {
+    font-size: 15px !important;
+}
+
+.chat-message .message-content.family-card-msg .chat-bank-v2-card-info i,
+.chat-message .message-content.savings-invite-msg .chat-bank-v2-card-info i {
+    font-size: 20px !important;
+}
+
+.chat-message .message-content.family-card-msg .chat-bank-v2-status-check i,
+.chat-message .message-content.savings-invite-msg .chat-bank-v2-status-check i {
+    font-size: 9px !important;
+}
+
+/* Family card in chat uses the exact black bank card layout */
+.chat-bank-v2-card {
+    width: 280px;
+    height: 170px;
+    border-radius: 24px;
+    padding: 14px 22px 22px;
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+    background: #111;
+    box-sizing: border-box;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.chat-bank-v2-decor {
+    position: absolute;
+    right: 20px;
+    top: 42%;
+    transform: translateY(-50%);
+    font-size: 78px;
+    color: rgba(255, 255, 255, 0.1);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.chat-bank-v2-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    position: relative;
+    z-index: 1;
+}
+
+.chat-bank-v2-card.chat-bank-v2-card-light {
+    background: #ffffff;
+    color: #000;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+    border: 1px solid #d8d8dc;
+}
+
+.chat-bank-v2-card.chat-bank-v2-card-light .chat-bank-v2-decor {
+    color: rgba(0, 0, 0, 0.12);
+}
+
+.chat-bank-v2-card-title {
+    font-size: 18px;
+    font-weight: 600;
+    font-style: italic;
+    line-height: 1.1;
+    margin-top: -80px;
+    position: relative;
+    z-index: 1;
+}
+
+.chat-bank-v2-chip {
+    width: 40px;
+    height: 28px;
+    border-radius: 6px;
+    margin-top: -50px;
+    background: linear-gradient(135deg, #f4f4f4, #9f9f9f);
+    position: relative;
+    z-index: 1;
+}
+
+.chat-bank-v2-card.chat-bank-v2-card-light .chat-bank-v2-chip {
+    background: linear-gradient(135deg, #fff, #ccc);
+}
+
+.chat-bank-v2-card-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: 0;
+    position: relative;
+    z-index: 1;
+}
+
+.chat-bank-v2-card-num {
+    font-family: "Courier New", monospace;
+    font-size: 15px;
+    letter-spacing: 2px;
+    line-height: 1;
+    position: relative;
+    z-index: 1;
+}
+
+.chat-bank-v2-card-info i {
+    font-size: 20px;
+    color: #fff;
+    line-height: 1;
+    position: relative;
+    z-index: 1;
+}
+
+.chat-bank-v2-card.chat-bank-v2-card-light .chat-bank-v2-card-info i {
+    color: #000;
+}
+
+.chat-bank-v2-status-check {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: -80px;
+    position: relative;
+    z-index: 1;
+}
+
+.chat-bank-v2-status-check i {
+    font-size: 9px;
+    line-height: 1;
+}
+
+.chat-bank-v2-card.chat-bank-v2-card-light .chat-bank-v2-status-check {
+    background: rgba(0, 0, 0, 0.35);
+    border-color: rgba(0, 0, 0, 0.4);
+}
+
+/* Specific Card Dimensions */
+.order-share-card {
+    width: 240px !important;
+    height: 150px !important; /* Reverted to compact height */
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important; /* Stack from top */
+    box-sizing: border-box !important;
+    margin: 0 !important;
+}
+
+/* Push footer to bottom */
+.order-share-card > div:last-child {
+    margin-top: auto !important;
+}
+
+.shopping-gift-card,
+.delivery-share-card,
+.pay-request-card {
+    width: 230px !important;
+    height: 150px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+}
+
+.product-share-card {
+    width: 230px !important;
+    height: 150px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+}
+
 .message-content.description-msg {
     background-color: transparent !important;
     color: #fff !important;
@@ -3592,19 +4169,26 @@ input:checked + .slider:before {
 }
 
 /* Multi-select Styles */
-.chat-body.multi-select-mode .chat-message {
+.chat-body.multi-select-mode .chat-message:not(.system) {
     cursor: pointer;
     padding-left: 40px; /* 为复选框留出空间 */
     transition: padding-left 0.2s ease;
 }
 
+/* 系统消息在多选模式下不偏移，且不可点击 */
+.chat-body.multi-select-mode .chat-message.system {
+    padding-left: 0;
+    padding-right: 0;
+    pointer-events: none;
+}
+
 /* 对于右侧（用户）消息，把留白放到右侧，使勾选圈靠近气泡右侧 */
-.chat-body.multi-select-mode .chat-message.user {
+.chat-body.multi-select-mode .chat-message.user:not(.system) {
     padding-right: 40px;
     padding-left: 0;
 }
 
-.chat-body.multi-select-mode .chat-message.other {
+.chat-body.multi-select-mode .chat-message.other:not(.system) {
     padding-left: 40px;
     padding-right: 0;
 }
@@ -3717,20 +4301,48 @@ input.msg-select-checkbox {
     padding: 8px 10px;
     border-radius: 8px;
     font-size: 14px;
+    cursor: pointer;
 }
 
-/* 将删除按钮提升到底栏之上，避免遮挡底栏 */
-#multi-select-delete {
+/* 多选删除按钮 - 悬浮在右下角 */
+.multi-select-delete {
     position: absolute;
-    right: 14px;
-    bottom: calc(50px + env(safe-area-inset-bottom, 0px) + 12px);
-    z-index: 220;
-    background: #000000;
-    color: #fff;
+    bottom: 70px;
+    bottom: max(70px, env(safe-area-inset-bottom));
+    right: 20px;
+    background-color: rgba(0, 0, 0, 0.85);
+    color: white;
     border: none;
-    padding: 12px 16px;
+    padding: 8px 16px;
     border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 200;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
+
+.multi-select-delete.hidden {
+    display: none !important;
+}
+
+.multi-select-delete:active {
+    transform: scale(0.96);
+    background-color: #000;
+}
+
+.multi-select-delete:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
 
 /* Location App Styles */
 .timeline-container {
@@ -5637,3 +6249,412 @@ html body .chat-message.user .voice-icon-box i { transform: rotate(-90deg); }
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* Bank app (wallet_v2 style) */
+.bank-v2-screen {
+    background: #ffffff;
+    color: #000000;
+    z-index: 180;
+    display: flex;
+    flex-direction: column;
+}
+
+.bank-v2-top-nav {
+    padding: max(46px, env(safe-area-inset-top)) 24px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.bank-v2-icon-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid #e5e5ea;
+    background: #ffffff;
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+.bank-v2-icon-btn:active {
+    background: #f2f2f7;
+    transform: scale(0.92);
+}
+
+.bank-v2-content {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 120px;
+}
+
+.bank-v2-balance-section {
+    padding: 20px 24px;
+    text-align: center;
+}
+
+.bank-v2-balance-label {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    color: #8e8e93;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.bank-v2-balance-amount {
+    font-size: 54px;
+    font-weight: 700;
+    letter-spacing: -2px;
+    line-height: 1;
+}
+
+.bank-v2-balance-amount span {
+    color: #8e8e93;
+    font-weight: 400;
+}
+
+.bank-v2-cards-container {
+    padding: 20px 0 20px 24px;
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.bank-v2-cards-container::-webkit-scrollbar {
+    display: none;
+}
+
+.bank-v2-credit-card {
+    min-width: 280px;
+    height: 170px;
+    border-radius: 24px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 15px 25px rgba(0, 0, 0, 0.16);
+}
+
+.bank-v2-credit-card-dark {
+    background: #000;
+    color: #fff;
+}
+
+.bank-v2-credit-card-dark::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 60%);
+    transform: rotate(30deg);
+}
+
+.bank-v2-credit-card-light {
+    background: #e5e5ea;
+    color: #000;
+    border: 1px solid #d1d1d6;
+    box-shadow: none;
+}
+
+.bank-v2-card-type {
+    font-size: 18px;
+    font-weight: 600;
+    font-style: italic;
+    letter-spacing: 1px;
+}
+
+.bank-v2-card-chip {
+    width: 40px;
+    height: 28px;
+    background: linear-gradient(135deg, #e0e0e0, #9e9e9e);
+    border-radius: 6px;
+    margin: 20px 0;
+    position: relative;
+}
+
+.bank-v2-card-chip::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.bank-v2-card-chip-light {
+    background: linear-gradient(135deg, #fff, #ccc);
+}
+
+.bank-v2-card-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+.bank-v2-card-number {
+    font-family: "Courier New", Courier, monospace;
+    font-size: 16px;
+    letter-spacing: 2px;
+}
+
+.bank-v2-action-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    padding: 10px 24px 30px;
+    gap: 15px;
+}
+
+.bank-v2-grid-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.bank-v2-grid-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 16px;
+    background: #f2f2f7;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 18px;
+    color: #000;
+}
+
+.bank-v2-grid-item:active .bank-v2-grid-icon {
+    transform: scale(0.9);
+    background: #e5e5ea;
+}
+
+.bank-v2-grid-item span {
+    font-size: 12px;
+    font-weight: 500;
+    color: #8e8e93;
+}
+
+.bank-v2-contacts {
+    padding: 0 24px;
+}
+
+.bank-v2-section-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 15px;
+    letter-spacing: -0.5px;
+}
+
+.bank-v2-contact-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.bank-v2-contact-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    border-radius: 16px;
+}
+
+.bank-v2-contact-item:active {
+    background: #f2f2f7;
+}
+
+.bank-v2-contact-avatar {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: #000;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 16px;
+    margin-right: 15px;
+}
+
+.bank-v2-contact-avatar-light {
+    background: #e5e5ea;
+    color: #000;
+}
+
+.bank-v2-contact-avatar-gray {
+    background: #8e8e93;
+    color: #fff;
+}
+
+.bank-v2-contact-details {
+    flex: 1;
+}
+
+.bank-v2-contact-name {
+    font-weight: 600;
+    font-size: 15px;
+}
+
+.bank-v2-contact-action {
+    font-size: 13px;
+    color: #8e8e93;
+}
+
+.bank-v2-send-btn {
+    padding: 8px 16px;
+    background: #f2f2f7;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #000;
+}
+
+.bank-v2-bottom-nav {
+    position: absolute;
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    width: 85%;
+    height: 65px;
+    background: rgba(255, 255, 255, 0.86);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border-radius: 30px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    padding: 0 10px;
+}
+
+.bank-v2-nav-item {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 20px;
+    color: #8e8e93;
+}
+
+.bank-v2-nav-item.active {
+    color: #fff;
+    background: #000;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.bank-v2-nav-item:active {
+    transform: scale(0.85);
+}
+
+#wechat-tab-addressbook .addressbook-contact-item {
+    background-color: #fff;
+    border-bottom: 1px solid #f0f0f0;
+    padding: var(--wechat-row-pad-block, 12px) 15px;
+    min-height: 64px;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+#wechat-tab-addressbook .addressbook-contact-content {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+}
+
+#wechat-tab-addressbook .addressbook-contact-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    margin-right: 12px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+#wechat-tab-addressbook .addressbook-contact-name {
+    display: block;
+    margin: 0;
+    font-size: 16px;
+    color: #000;
+    line-height: 1.2;
+}
+
+/* WeChat list row vertical rhythm fix: keeps top/bottom spacing visually balanced */
+#wechat-tab-contacts,
+#wechat-tab-addressbook,
+#chat-settings-screen {
+    --wechat-row-pad-block: 12px;
+}
+
+#wechat-tab-contacts .contact-content-wrapper,
+#wechat-tab-addressbook .addressbook-contact-item,
+#chat-settings-screen .list-item:not(.no-padding) {
+    padding-top: var(--wechat-row-pad-block, 12px) !important;
+    padding-bottom: var(--wechat-row-pad-block, 12px) !important;
+}
+
+#wechat-tab-contacts .contact-avatar,
+#wechat-tab-addressbook .addressbook-contact-avatar {
+    display: block;
+}
+
+#wechat-tab-contacts .contact-name,
+#wechat-tab-contacts .contact-time,
+#wechat-tab-contacts .contact-msg-preview,
+#wechat-tab-addressbook .addressbook-contact-name,
+#chat-settings-screen .list-item .list-content > span,
+#chat-settings-screen .list-item .list-content > label:not(.toggle-switch),
+#chat-settings-screen .list-item .ios-btn {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    line-height: 1.2 !important;
+}
+
+#chat-settings-screen .list-item .list-content > input,
+#chat-settings-screen .list-item .list-content > select,
+#chat-settings-screen .list-item .list-content > textarea {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+@media (max-width: 768px) {
+    #wechat-tab-contacts .contact-content-wrapper {
+        min-height: 80px;
+    }
+
+    #wechat-tab-addressbook .addressbook-contact-name {
+        display: block;
+        line-height: 1.2 !important;
+        margin: 0;
+    }
+}
+
+#chat-screen.hide-chat-avatar .chat-avatar {
+    display: none;
+}
+
+#chat-screen.hide-chat-avatar-other .chat-message.other .chat-avatar {
+    display: none;
+}
+
+#chat-screen.hide-chat-avatar-self .chat-message.user .chat-avatar {
+    display: none;
+}
+
+#chat-screen.hide-chat-timestamp .msg-time,
+#chat-screen.hide-chat-timestamp .chat-time-stamp {
+    display: none;
+}
+

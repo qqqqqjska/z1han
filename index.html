@@ -1,7 +1,6 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
     <title>iPhone Simulator</title>
     
     <!-- 基本配置 -->
@@ -30,8 +29,20 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/chat_tail_style.css">
+    <link rel="stylesheet" href="css/image_refresh.css">
     <link rel="stylesheet" href="css/forum_style.css">
     <link rel="stylesheet" href="css/lookus_style.css">
+    <link rel="stylesheet" href="css/shopping_new.css">
+    <link rel="stylesheet" href="css/settings_v3.css">
+    <link rel="stylesheet" href="css/beautify_center.css">
+    <link rel="stylesheet" href="css/schedule_v4.css">
+    <!-- 替换为国内更稳定的静态链接，避免 Live Server 自动刷新时因 jsdelivr 被墙而报错 -->
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/regular/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/fill/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/bold/style.css">
+    <link rel="stylesheet" href="css/remixicon.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css">
+    <link rel="stylesheet" href="css/chat_ui_v1_overrides.css">
 </head>
 <body>
     <div class="screen-container" id="screen-container">
@@ -45,6 +56,24 @@
                 </div>
             </div>
             <div class="chat-notification-handle"></div>
+        </div>
+
+        <!-- LookUS 状态通知弹窗 -->
+        <div id="lookus-notification" class="lookus-notification-banner hidden" onclick="window.handleLookusNotificationClick()">
+            <div class="lookus-notification-content">
+                <div class="lookus-notification-icon">
+                    <i id="lookus-notification-icon" class="fas fa-bell" style="font-size: 20px;"></i>
+                </div>
+                <div class="lookus-notification-info">
+                    <div class="lookus-notification-header">
+                        <span class="lookus-notification-app">LookUs</span>
+                        <span class="lookus-notification-time" id="lookus-notification-time">现在</span>
+                    </div>
+                    <div class="lookus-notification-title" id="lookus-notification-title">状态更新</div>
+                    <div class="lookus-notification-message" id="lookus-notification-message">对方状态已更新</div>
+                </div>
+            </div>
+            <div class="lookus-notification-handle"></div>
         </div>
 
         <!-- 总结通知横幅 -->
@@ -210,291 +239,383 @@
 
         <!-- 设置全屏App -->
         <div id="settings-app" class="app-screen hidden">
-            <div class="app-header">
-                <button id="close-settings-app" class="back-btn"><i class="fas fa-chevron-left"></i> 返回</button>
-                <h3>设置</h3>
-                <div style="width: 60px;"></div>
+<div class="app-header">
+        <div class="header-title" onclick="document.getElementById('settings-app').classList.add('hidden')">Settings</div>
+        
+        <div class="nav-scroller">
+            <div class="nav-pill active" onclick="switchTab('ai')">
+                <i class="fas fa-brain"></i> AI Models
             </div>
-            <div class="app-body">
-                <!-- 主 API 设置 -->
-                <div class="section-title">主 API 设置</div>
-                
-                <!-- 预设 -->
-                <div class="ios-list-group">
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>配置预设</label>
-                            <div class="input-row full-width">
-                                <select id="ai-preset-select">
-                                    <option value="">-- 选择预设 --</option>
-                                </select>
-                                <button id="save-ai-preset" class="ios-btn-small">保存</button>
-                                <button id="delete-ai-preset" class="ios-btn-small danger">删除</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- API 详情 -->
-                <div class="ios-list-group">
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>API 地址 (Base URL)</label>
-                            <input type="text" id="ai-api-url" placeholder="https://api.openai.com/v1">
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>API 密钥 (Key)</label>
-                            <input type="password" id="ai-api-key" placeholder="sk-...">
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <div class="input-row full-width">
-                                <button id="fetch-models" class="ios-btn-block">拉取模型列表</button>
-                            </div>
-                            <div class="input-row full-width" style="margin-top: 10px;">
-                                <select id="ai-model-select">
-                                    <option value="">请先拉取模型</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <div style="display: flex; justify-content: space-between; width: 100%;">
-                                <label>温度 (Temperature)</label>
-                                <span id="ai-temp-value">0.7</span>
-                            </div>
-                            <input type="range" id="ai-temperature" min="0" max="2" step="0.1" value="0.7" style="width: 100%;">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Whisper API 设置 -->
-                <div class="section-title">语音转文字 (Whisper) 设置</div>
-                <div class="ios-list-group">
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>API地址</label>
-                            <select id="whisper-connection-mode" style="width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #ddd; background-color: #f2f2f7;">
-                                <option value="custom">自定义地址</option>
-                                <option value="siliconflow">硅基流动 (推荐)</option>
-                            </select>
-                            <div style="font-size: 12px; color: #999; margin-top: 5px;">
-                                ⚠️ 如遇CORS错误，请联系API提供商修复服务器配置
-                            </div>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>API 地址 (Base URL)</label>
-                            <input type="text" id="whisper-api-url" placeholder="https://api.openai.com/v1">
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>API 密钥 (Key)</label>
-                            <input type="password" id="whisper-api-key" placeholder="sk-...">
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>模型 (Model)</label>
-                            <div class="input-row full-width" style="margin-bottom: 10px;">
-                                <button id="fetch-whisper-models" class="ios-btn-block">拉取模型列表</button>
-                            </div>
-                            <input type="text" id="whisper-model" placeholder="whisper-1" value="whisper-1">
-                            <select id="whisper-model-select" class="hidden" style="margin-top: 10px; width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #ddd; background-color: #f2f2f7;">
-                                <option value="">选择模型...</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Minimax TTS 设置 -->
-                <div class="section-title">语音合成 (Minimax TTS) 全局配置</div>
-                <div class="ios-list-group">
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>Group ID</label>
-                            <input type="text" id="minimax-group-id" placeholder="Minimax Group ID">
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>API Key</label>
-                            <input type="password" id="minimax-api-key" placeholder="Minimax API Key">
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>模型 (Model)</label>
-                            <input type="text" id="minimax-model" placeholder="speech-01-turbo" value="speech-01-turbo" style="margin-bottom: 10px;">
-                            <select id="minimax-model-select" style="width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #ddd; background-color: #f2f2f7;">
-                                <option value="">-- 快速选择模型 --</option>
-                                <option value="speech-01-turbo">speech-01-turbo</option>
-                                <option value="speech-01-240228">speech-01-240228</option>
-                                <option value="speech-01">speech-01</option>
-                                <option value="speech-02">speech-02</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content">
-                            <span style="font-size: 12px; color: #888;">提示：启用开关和音色设置已移至每个联系人的“聊天详情”页。</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 高德地图 设置 -->
-                <div class="section-title">高德地图 (LookUS 位置)</div>
-                <div class="ios-list-group">
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>API Key (Web端)</label>
-                            <input type="password" id="amap-api-key" placeholder="高德地图 Key">
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>安全密钥 (Security Code)</label>
-                            <input type="password" id="amap-security-code" placeholder="Web服务 安全密钥">
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content">
-                            <span style="font-size: 12px; color: #888;">
-                                提示：请前往 <a href="https://console.amap.com/" target="_blank" style="color:#007AFF;">高德控制台</a> 申请 Web端(JS API) Key。<br>
-                                如果遇到跨域问题，请务必填写安全密钥。
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 副 API 设置 -->
-                <div class="section-title">副 API 设置</div>
-                
-                <!-- 预设 -->
-                <div class="ios-list-group">
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>配置预设</label>
-                            <div class="input-row full-width">
-                                <select id="ai-preset-select-2">
-                                    <option value="">-- 选择预设 --</option>
-                                </select>
-                                <button id="save-ai-preset-2" class="ios-btn-small">保存</button>
-                                <button id="delete-ai-preset-2" class="ios-btn-small danger">删除</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- API 详情 -->
-                <div class="ios-list-group">
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>API 地址 (Base URL)</label>
-                            <input type="text" id="ai-api-url-2" placeholder="https://api.openai.com/v1">
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>API 密钥 (Key)</label>
-                            <input type="password" id="ai-api-key-2" placeholder="sk-...">
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <div class="input-row full-width">
-                                <button id="fetch-models-2" class="ios-btn-block">拉取模型列表</button>
-                            </div>
-                            <div class="input-row full-width" style="margin-top: 10px;">
-                                <select id="ai-model-select-2">
-                                    <option value="">请先拉取模型</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <div style="display: flex; justify-content: space-between; width: 100%;">
-                                <label>温度 (Temperature)</label>
-                                <span id="ai-temp-value-2">0.7</span>
-                            </div>
-                            <input type="range" id="ai-temperature-2" min="0" max="2" step="0.1" value="0.7" style="width: 100%;">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 系统设置 -->
-                <div class="section-title">系统设置</div>
-                <div class="ios-list-group">
-                    <div class="list-item">
-                        <div class="list-content">
-                            <label>后台消息通知</label>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="system-notification-toggle">
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                                <label>后台音频播放</label>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="background-audio-toggle">
-                                    <span class="slider"></span>
-                                </label>
-                            </div>
-                            <div style="font-size: 12px; color: #888; margin-top: 5px;">
-                                开启后，音频将在后台继续播放，但可能会中断其他应用的音频。
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 数据管理 -->
-                <div class="section-title">数据管理</div>
-                <div class="ios-list-group">
-                    <div class="list-item">
-                        <button id="save-all-settings" class="ios-btn-block">保存所有配置</button>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content">
-                            <label>压缩导出 (ZIP)</label>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="export-as-zip" checked>
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="button-row full-width">
-                            <button id="export-json" class="ios-btn-block secondary">导出数据</button>
-                            <label for="import-json" class="ios-btn-block secondary file-label">
-                                导入数据
-                                <input type="file" id="import-json" accept=".json,.zip" style="display: none;">
-                            </label>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <button id="optimize-storage" class="ios-btn-block">压缩图片数据</button>
-                    </div>
-                    <div class="list-item">
-                        <button id="analyze-storage" class="ios-btn-block">存储占用分析</button>
-                    </div>
-                    <div class="list-item">
-                        <button id="clear-all-data" class="ios-btn-block danger">清空所有数据</button>
-                    </div>
-                </div>
-                
-                <div style="height: 50px;"></div>
+            <div class="nav-pill" onclick="switchTab('voice')">
+                <i class="fas fa-microphone"></i> Voice
+            </div>
+            <div class="nav-pill" onclick="switchTab('creative')">
+                <i class="fas fa-palette"></i> Creative
+            </div>
+            <div class="nav-pill" onclick="switchTab('location')">
+                <i class="fas fa-map-marker-alt"></i> Location
+            </div>
+            <div class="nav-pill" onclick="switchTab('system')">
+                <i class="fas fa-cog"></i> System
             </div>
         </div>
+    </div>
+
+    <div class="content-area">
+        
+        <!-- AI SECTION -->
+        <div id="tab-ai" class="section-view active">
+            <div class="section-hero">
+                <div class="hero-icon"><i class="fas fa-brain"></i></div>
+                <div class="hero-text">
+                    <h2>智能核心</h2>
+                    <p>管理 LLM 连接与参数</p>
+                </div>
+            </div>
+
+            <div class="option-group">
+                <!-- Main API -->
+                <div class="option-card">
+                    <div class="option-header">
+                        <span class="option-label">主 API</span>
+                        <div class="option-action">
+                            <select id="ai-preset-select" style="background:transparent; border:none; font-weight:600; text-align:right;">
+                                <option>默认预设</option>
+                            </select>
+                            <div class="preset-actions">
+                                <button class="btn-icon-small" id="save-ai-preset"><i class="fas fa-save"></i></button>
+                                <button class="btn-icon-small danger" id="delete-ai-preset"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="input-wrapper">
+                        <i class="fas fa-link" style="color:#ccc; margin-right:10px;"></i>
+                        <input type="text" id="ai-api-url" placeholder="API Address">
+                    </div>
+                    <div class="input-wrapper">
+                        <i class="fas fa-key" style="color:#ccc; margin-right:10px;"></i>
+                        <input type="password" id="ai-api-key" placeholder="API Key">
+                    </div>
+
+                    <div class="option-header" style="margin-top: 15px;">
+                        <span class="option-label" style="font-size: 14px;">Model</span>
+                        <button class="btn-text" id="fetch-models">Fetch</button>
+                    </div>
+                    <div class="input-wrapper">
+                        <select id="ai-model-select">
+                            <option value="">Select Model...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="slider-container">
+                        <div class="slider-header">
+                            <span>Temperature</span>
+                            <span id="ai-temp-value">0.7</span>
+                        </div>
+                        <input type="range" id="ai-temperature" min="0" max="2" step="0.1" value="0.7">
+                    </div>
+                </div>
+
+                <!-- Secondary API -->
+                <div class="option-card">
+                    <div class="option-header">
+                        <span class="option-label">副 API</span>
+                        <div class="option-action">
+                            <select id="ai-preset-select-2" style="background:transparent; border:none; font-weight:600; text-align:right;">
+                                <option>默认预设</option>
+                            </select>
+                            <div class="preset-actions">
+                                <button class="btn-icon-small" id="save-ai-preset-2"><i class="fas fa-save"></i></button>
+                                <button class="btn-icon-small danger" id="delete-ai-preset-2"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="input-wrapper">
+                        <input type="text" id="ai-api-url-2" placeholder="Secondary API Address">
+                    </div>
+                    <div class="input-wrapper">
+                        <input type="password" id="ai-api-key-2" placeholder="Secondary API Key">
+                    </div>
+                    <div class="option-header" style="margin-top: 15px;">
+                        <span class="option-label" style="font-size: 14px;">Model</span>
+                        <button class="btn-text" id="fetch-models-2">Fetch</button>
+                    </div>
+                    <div class="input-wrapper">
+                        <select id="ai-model-select-2">
+                            <option value="">Select Model...</option>
+                        </select>
+                    </div>
+                    <div class="slider-container">
+                        <div class="slider-header">
+                            <span>Temperature</span>
+                            <span id="ai-temp-value-2">0.7</span>
+                        </div>
+                        <input type="range" id="ai-temperature-2" min="0" max="2" step="0.1" value="0.7">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VOICE SECTION -->
+        <div id="tab-voice" class="section-view">
+            <div class="section-hero">
+                <div class="hero-icon"><i class="fas fa-wave-square"></i></div>
+                <div class="hero-text">
+                    <h2>语音交互</h2>
+                    <p>Whisper 听觉 & Minimax 发声</p>
+                </div>
+            </div>
+
+            <div class="option-group">
+                <div class="option-card">
+                    <div class="option-header">
+                        <span class="option-label">Whisper STT</span>
+                        <label>
+                            <input type="checkbox" class="toggle-input" checked>
+                            <div class="toggle-switch"></div>
+                        </label>
+                    </div>
+                    <div class="input-wrapper">
+                        <select id="whisper-connection-mode">
+                            <option value="siliconflow">硅基流动</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                    </div>
+                    <div class="input-wrapper">
+                        <input type="text" id="whisper-api-url" placeholder="API Address">
+                    </div>
+                    <div class="input-wrapper">
+                        <input type="text" id="whisper-api-key" placeholder="Whisper Key">
+                    </div>
+                    <div class="option-header" style="margin-top: 10px;">
+                        <span class="option-label" style="font-size: 14px;">Model</span>
+                        <button class="btn-text" id="fetch-whisper-models">Fetch</button>
+                    </div>
+                    <div class="input-wrapper">
+                        <input type="text" id="whisper-model" placeholder="Model Name (e.g. whisper-1)">
+                    </div>
+                    <div class="input-wrapper hidden">
+                        <select id="whisper-model-select"></select>
+                    </div>
+                </div>
+
+                <div class="option-card">
+                    <div class="option-header">
+                        <span class="option-label">Minimax TTS</span>
+                    </div>
+                    <div class="input-wrapper">
+                        <input type="text" id="minimax-group-id" placeholder="Group ID">
+                    </div>
+                    <div class="input-wrapper">
+                        <input type="password" id="minimax-api-key" placeholder="API Key">
+                    </div>
+                    <div class="input-wrapper">
+                        <input type="text" id="minimax-model" placeholder="Model">
+                    </div>
+                    <div class="input-wrapper">
+                        <select id="minimax-model-select">
+                            <option value="speech-01-turbo">speech-01-turbo</option>
+                            <option value="speech-01-240228">speech-01-240228</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CREATIVE SECTION -->
+        <div id="tab-creative" class="section-view">
+            <div class="section-hero">
+                <div class="hero-icon"><i class="fas fa-palette"></i></div>
+                <div class="hero-text">
+                    <h2>创意工坊</h2>
+                    <p>NovelAI 图像生成引擎</p>
+                </div>
+            </div>
+
+            <div class="option-group">
+                <div class="option-card">
+                    <div class="option-header">
+                        <span class="option-label">聊天生图</span>
+                        <label>
+                            <input type="checkbox" id="novelai-chat-enabled" class="toggle-input">
+                            <div class="toggle-switch"></div>
+                        </label>
+                    </div>
+                    
+                    <div class="input-wrapper">
+                        <input type="password" id="novelai-api-key" placeholder="NovelAI Key">
+                    </div>
+
+                    <div class="option-header" style="margin-top: 10px;">
+                        <span class="option-label" style="font-size: 14px;">Settings</span>
+                        <div class="option-action">
+                            <select id="novelai-preset-select" style="background:transparent; border:none; max-width: 80px;"></select>
+                            <select id="novelai-preset-type-select" style="background:transparent; border:none;"><option value="general">通用</option></select>
+                            <div class="preset-actions">
+                                <button class="btn-icon-small" id="save-novelai-preset"><i class="fas fa-save"></i></button>
+                                <button class="btn-icon-small danger" id="delete-novelai-preset"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="input-wrapper">
+                        <select id="novelai-model-select">
+                            <option value="nai-diffusion-3">nai-diffusion-3</option>
+                            <option value="nai-diffusion-4-5-curated-preview">nai-diffusion-4-5-curated-preview</option>
+                            <option value="nai-diffusion-4-5-full">nai-diffusion-4-5-full</option>
+                        </select>
+                    </div>
+                    <div class="input-wrapper">
+                        <select id="novelai-size-select">
+                            <option value="832x1216">Portrait</option>
+                            <option value="1216x832">Landscape</option>
+                            <option value="1024x1024">Square</option>
+                        </select>
+                    </div>
+
+                    <div class="input-wrapper" style="height:auto; align-items:flex-start;">
+                        <textarea id="novelai-prompt" placeholder="Positive Prompt" style="width:100%; border:none; background:transparent; resize:none; height:60px; outline:none;"></textarea>
+                    </div>
+                    <div class="input-wrapper" style="height:auto; align-items:flex-start;">
+                        <textarea id="novelai-negative-prompt" placeholder="Negative Prompt" style="width:100%; border:none; background:transparent; resize:none; height:60px; outline:none;"></textarea>
+                    </div>
+
+                    <div class="slider-container">
+                        <div class="slider-header"><span>Steps</span><span id="novelai-steps-val">28</span></div>
+                        <input type="range" id="novelai-steps" min="1" max="50" value="28">
+                    </div>
+                    <div class="slider-container">
+                        <div class="slider-header"><span>Scale</span><span id="novelai-scale-val">5</span></div>
+                        <input type="range" id="novelai-scale" min="1" max="20" step="0.5" value="5">
+                    </div>
+                    <div class="input-wrapper">
+                        <input type="number" id="novelai-seed" placeholder="Seed (-1)">
+                    </div>
+                    
+                    <button class="btn-black" id="novelai-generate-btn" style="width:100%; margin-top:15px;">生成测试</button>
+                    
+                    <div id="novelai-result-container" class="option-card" style="margin-top: 15px; background: #f9f9f9; display: none;">
+                        <div id="novelai-status-text" style="text-align: center; color: #999;">Ready</div>
+                        <img id="novelai-result-img" style="width: 100%; border-radius: 8px; margin-top: 10px; display: none;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LOCATION SECTION -->
+        <div id="tab-location" class="section-view">
+            <div class="section-hero">
+                <div class="hero-icon"><i class="fas fa-map-marked-alt"></i></div>
+                <div class="hero-text">
+                    <h2>时空定位</h2>
+                    <p>高德地图 LBS 服务</p>
+                </div>
+            </div>
+            <div class="option-group">
+                <div class="option-card">
+                    <div class="input-wrapper">
+                        <input type="password" id="amap-api-key" placeholder="Web API Key">
+                    </div>
+                    <div class="input-wrapper">
+                        <input type="password" id="amap-security-code" placeholder="Security Code">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SYSTEM SECTION -->
+        <div id="tab-system" class="section-view">
+            <div class="section-hero">
+                <div class="hero-icon"><i class="fas fa-server"></i></div>
+                <div class="hero-text">
+                    <h2>系统与数据</h2>
+                    <p>存储管理与环境设置</p>
+                </div>
+            </div>
+
+            <div class="option-group">
+                <div class="option-card">
+                    <div class="option-header">
+                        <span class="option-label">系统设置</span>
+                    </div>
+                    <div class="option-header">
+                        <span class="option-label" style="font-size: 14px; font-weight: 400;">后台通知</span>
+                        <label>
+                            <input type="checkbox" id="system-notification-toggle" class="toggle-input">
+                            <div class="toggle-switch"></div>
+                        </label>
+                    </div>
+                    <div class="option-header">
+                        <span class="option-label" style="font-size: 14px; font-weight: 400;">后台音频</span>
+                        <label>
+                            <input type="checkbox" id="background-audio-toggle" class="toggle-input">
+                            <div class="toggle-switch"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="option-card">
+                    <div class="option-header">
+                        <span class="option-label">数据管理</span>
+                    </div>
+                    <div class="option-header">
+                        <span class="option-label" style="font-size: 14px; font-weight: 400;">ZIP 压缩导出</span>
+                        <label>
+                            <input type="checkbox" id="export-as-zip" class="toggle-input" checked>
+                            <div class="toggle-switch"></div>
+                        </label>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+                        <button class="btn-black" id="save-all-settings">保存配置</button>
+                        <button class="btn-secondary" id="export-json">导出数据</button>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+                        <button class="btn-secondary" id="optimize-storage">压缩图片</button>
+                        <button class="btn-secondary" id="analyze-storage">存储分析</button>
+                    </div>
+                    <label for="import-json" class="btn-secondary" style="margin-top: 10px; width: 100%;">
+                        导入数据
+                        <input type="file" id="import-json" style="display: none;">
+                    </label>
+                    <button class="btn-text btn-danger" id="clear-all-data" style="width:100%; margin-top:10px;">清空所有数据</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="settings-status-pill">
+        <div class="status-dot"></div>
+        <span>System Ready</span>
+    </div>
+
+    <script>
+        function switchTab(tabId) {
+            // Remove active from pills
+            document.querySelectorAll('.nav-pill').forEach(el => el.classList.remove('active'));
+            // Add active to clicked pill (find by onclick attr or just text, here simplistic)
+            event.currentTarget.classList.add('active');
+
+            // Hide all views
+            document.querySelectorAll('.section-view').forEach(el => el.classList.remove('active'));
+            // Show target view
+            document.getElementById('tab-' + tabId).classList.add('active');
+        }
+
+        // Sliders
+        document.getElementById('ai-temperature').addEventListener('input', function(e) {
+            document.getElementById('ai-temp-value').innerText = e.target.value;
+        });
+        document.getElementById('ai-temperature-2').addEventListener('input', function(e) {
+            document.getElementById('ai-temp-value-2').innerText = e.target.value;
+        });
+        document.getElementById('novelai-steps').addEventListener('input', function(e) {
+            document.getElementById('novelai-steps-val').innerText = e.target.value;
+        });
+        document.getElementById('novelai-scale').addEventListener('input', function(e) {
+            document.getElementById('novelai-scale-val').innerText = e.target.value;
+        });
+    </script>
+</div>
 
         <!-- 微信全屏App -->
         <div id="wechat-app" class="app-screen hidden">
@@ -691,6 +812,31 @@
                             </div>
                             <div class="list-item">
                                 <div class="list-content">
+                                    <label>心声显示样式</label>
+                                    <select id="chat-setting-thought-style">
+                                        <option value="title">点击备注名</option>
+                                        <option value="desktop-pet">桌宠悬浮</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="list-item" id="chat-setting-thought-pet-panel" style="display: none;">
+                                <div class="list-content column">
+                                    <label>桌宠设置</label>
+                                    <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+                                        <img id="chat-setting-thought-pet-preview" src="" alt="桌宠预览" style="width: 56px; height: 56px; object-fit: contain; border-radius: 10px; background: #f2f2f7; border: 1px solid #e5e5ea; padding: 4px; flex-shrink: 0;">
+                                        <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                                            <input type="file" id="chat-setting-thought-pet-image" accept="image/*" class="file-input-hidden">
+                                            <label for="chat-setting-thought-pet-image" class="ios-btn">上传桌宠图片</label>
+                                            <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                                <label style="font-size: 14px; color: #6d6d72; white-space: nowrap;">大小 <span id="chat-setting-thought-pet-size-value">88px</span></label>
+                                                <input type="range" id="chat-setting-thought-pet-size" min="52" max="140" step="1" value="88" style="width: 100%;">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-content">
                                     <label>AI可知晓心声</label>
                                     <label class="toggle-switch">
                                         <input type="checkbox" id="chat-setting-thought-visible">
@@ -739,6 +885,21 @@
                         <div class="section-title">关联表情包</div>
                         <div class="ios-list-group" id="chat-setting-sticker-list">
                             <!-- 表情包分类列表将通过JS生成 -->
+                        </div>
+
+                        <div class="section-title">NovelAI 生图预设</div>
+                        <div class="ios-list-group">
+                            <div class="list-item">
+                                <div class="list-content column">
+                                    <label>选择预设</label>
+                                    <select id="chat-setting-novelai-preset" style="width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #ddd; background-color: #f2f2f7;">
+                                        <option value="">-- 不使用预设 --</option>
+                                    </select>
+                                    <div style="font-size: 12px; color: #888; margin-top: 5px;">
+                                        当在聊天中生成该角色的图片时，将使用此预设的提示词。
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="ios-list-group" style="margin-top: 20px;">
@@ -823,6 +984,26 @@
                                         <span id="chat-font-size-value">16px</span>
                                     </div>
                                     <input type="range" id="chat-font-size-slider" min="12" max="30" step="1" value="16" style="width: 100%;">
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-content">
+                                    <label>头像显示范围</label>
+                                    <select id="chat-setting-avatar-visibility">
+                                        <option value="show-both">都显示</option>
+                                        <option value="hide-other">隐藏对方</option>
+                                        <option value="hide-self">隐藏自己</option>
+                                        <option value="hide-both">隐藏双方</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-content">
+                                    <label>时间戳显示</label>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="chat-setting-show-timestamp" checked>
+                                        <span class="slider"></span>
+                                    </label>
                                 </div>
                             </div>
                             <div class="list-item">
@@ -1133,6 +1314,12 @@
                 <div class="chat-body" id="chat-messages">
                     <!-- 消息列表 -->
                 </div>
+                <div id="thought-pet" class="thought-pet hidden">
+                    <img id="thought-pet-image" src="" alt="桌宠">
+                    <div id="thought-pet-bubble" class="thought-pet-bubble hidden">
+                        <div class="thought-pet-content" id="thought-pet-content-text"></div>
+                    </div>
+                </div>
                 <!-- 引用回复条 -->
                 <div id="reply-bar" class="reply-bar hidden">
                     <div class="reply-content">
@@ -1145,10 +1332,18 @@
                     <span id="chat-toast-text"></span>
                 </div>
                 <div class="chat-input-area">
-                    <button id="chat-more-btn" class="chat-icon-btn"><i class="fas fa-plus-circle"></i></button>
-                    <input type="text" id="chat-input">
-                    <button id="sticker-btn" class="chat-icon-btn" style="margin-right: 5px;"><i class="far fa-smile"></i></button>
-                    <button id="trigger-ai-reply-btn"><i class="fas fa-arrow-up"></i></button>
+                    <button id="chat-more-btn" class="chat-icon-btn" aria-label="更多功能">
+                        <i class="ri-add-line"></i>
+                    </button>
+                    <div class="chat-input-shell">
+                        <input type="text" id="chat-input" placeholder="iMessage">
+                        <button id="sticker-btn" class="chat-input-inline-btn" aria-label="贴纸">
+                            <i class="ri-sticker-line ri-emoji-sticker-line"></i>
+                        </button>
+                        <button id="trigger-ai-reply-btn" class="chat-input-inline-btn" aria-label="语音">
+                            <i class="ri-mic-line"></i>
+                        </button>
+                    </div>
                 </div>
                 <!-- 表情包面板 -->
                 <div id="sticker-panel" class="sticker-panel hidden">
@@ -1263,7 +1458,7 @@
                             <div class="action-icon"><i class="fas fa-plus"></i></div>
                             <span>充值</span>
                         </button>
-                        <button class="wallet-action-btn" style="opacity: 0.5; cursor: not-allowed;">
+                        <button id="wallet-withdraw-btn" class="wallet-action-btn">
                             <div class="action-icon"><i class="fas fa-arrow-up"></i></div>
                             <span>提现</span>
                         </button>
@@ -1629,44 +1824,57 @@
         </div>
 
         <!-- 位置/行程全屏App -->
-        <div id="location-app" class="app-screen hidden">
-            <div class="app-header">
-                <button id="close-location-app" class="back-btn"><i class="fas fa-chevron-left"></i> 返回</button>
-                <h3>行程</h3>
-                <div class="header-actions" style="display: flex; gap: 10px;">
-                    <button id="itinerary-settings-btn" class="wechat-icon-btn"><i class="fas fa-cog"></i></button>
-                    <button id="refresh-location-btn" class="wechat-icon-btn"><i class="fas fa-sync-alt"></i></button>
-                </div>
+        <div id="location-app" class="app-screen hidden" style="background-color: #ffffff; color: #000000; z-index: 200;">
+            <!-- Background Decoration -->
+            <div class="bg-deco">
+                <div class="bg-char">24</div>
+                <div class="bg-char">◆</div>
+                <div class="bg-char">↗</div>
             </div>
-            <div class="app-body">
-                <div class="timeline-container">
-                    <!-- 示例数据 -->
-                    <div class="timeline-item">
-                        <div class="timeline-time">09:00</div>
-                        <div class="timeline-content">
-                            <div class="timeline-location"><i class="fas fa-home"></i> 家中</div>
-                            <div class="timeline-desc">起床，洗漱，吃早餐。</div>
-                        </div>
+
+            <!-- Floating Tiny Symbols -->
+            <div class="float-sym" style="top: 20%; left: 5%; animation-delay: 0s; animation-duration: 12s;">✦</div>
+            <div class="float-sym" style="top: 70%; left: 8%; animation-delay: -3s; animation-duration: 15s;">◇</div>
+            <div class="float-sym" style="top: 40%; right: 6%; animation-delay: -6s; animation-duration: 18s;">×</div>
+            <div class="float-sym" style="top: 85%; right: 12%; animation-delay: -9s; animation-duration: 10s;">—</div>
+            <div class="float-sym" style="top: 15%; right: 20%; animation-delay: -2s; animation-duration: 22s;">∙</div>
+
+            <!-- Floating particle symbols (background) -->
+            <div class="particle-container" id="particles"></div>
+
+            <!-- Frosted Header -->
+            <header>
+                <div class="header-left">
+                    <div id="close-location-btn-new" class="header-symbol" style="cursor: pointer;">✦</div>
+                    <div id="itinerary-settings-btn-new" class="header-ticks" style="cursor: pointer;">
+                        <div class="tick"></div>
+                        <div class="tick"></div>
+                        <div class="tick"></div>
                     </div>
-                    <div class="timeline-item">
-                        <div class="timeline-time">10:30</div>
-                        <div class="timeline-content">
-                            <div class="timeline-location"><i class="fas fa-subway"></i> 地铁站</div>
-                            <div class="timeline-desc">乘坐地铁前往公司。</div>
-                        </div>
+                    <div class="header-date" id="location-header-date">Monday, 23 February</div>
+                </div>
+                <div class="header-right">
+                    <div id="refresh-location-btn-new" class="header-status" style="cursor: pointer;">
+                        <div class="pulse-dot"></div>
+                        In Progress
                     </div>
-                     <div class="timeline-item">
-                        <div class="timeline-time">12:00</div>
-                        <div class="timeline-content">
-                            <div class="timeline-location"><i class="fas fa-utensils"></i> 公司食堂</div>
-                            <div class="timeline-desc">吃午饭，休息一会儿。</div>
-                        </div>
-                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content -->
+            <div class="container">
+                <div class="intro-index" id="location-intro-date">
+                    ★ Daily Itinerary / Feb 23
+                </div>
+
+                <div class="agenda-list" id="agendaList">
+                    <div class="agenda-progress" id="progressLine" style="height: 35%;"></div>
+                    <!-- 行程节点将通过 JS 动态渲染 -->
                 </div>
             </div>
 
-            <!-- 行程设置弹窗 -->
-            <div id="itinerary-settings-modal" class="modal hidden">
+            <!-- 行程设置弹窗 (保留原有功能) -->
+            <div id="itinerary-settings-modal" class="modal hidden" style="z-index: 210;">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h3>行程生成设置</h3>
@@ -1675,18 +1883,18 @@
                     <div class="modal-body">
                         <div class="setting-group">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                <label>启用自动生成行程</label>
+                                <label>开启自动生成行程</label>
                                 <label class="toggle-switch">
                                     <input type="checkbox" id="auto-itinerary-toggle">
                                     <span class="slider"></span>
                                 </label>
                             </div>
                             <div style="font-size: 12px; color: #888; margin-bottom: 15px;">
-                                当聊天消息累计达到指定条数时，自动生成一条新行程。
+                                开启后，消息累计达到指定条数时会自动生成一个新的行程。
                             </div>
                         </div>
                         <div class="setting-group">
-                            <label>触发间隔 (消息条数)</label>
+                            <label>触发条数 (消息数量)</label>
                             <input type="number" id="auto-itinerary-interval" placeholder="默认 10" min="1">
                         </div>
                         <button id="save-itinerary-settings-btn" class="ios-btn-block">保存</button>
@@ -1941,21 +2149,413 @@
 
         <!-- 记忆全屏App -->
         <div id="memory-app" class="app-screen hidden">
-            <div class="app-header">
-                <button id="close-memory-app" class="back-btn"><i class="fas fa-chevron-left"></i> 返回</button>
-                <h3>记忆碎片</h3>
-                <div class="header-actions" style="display: flex; gap: 10px;">
-                    <button id="add-memory-btn" class="wechat-icon-btn"><i class="fas fa-plus"></i></button>
-                    <button id="manual-summary-btn" class="wechat-icon-btn"><i class="fas fa-magic"></i></button>
-                    <button id="memory-settings-btn" class="wechat-icon-btn"><i class="fas fa-cog"></i></button>
-                </div>
+            <div class="back-btn" id="close-memory-app" title="Go Back">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
             </div>
-            <div class="app-body">
-                <div id="memory-list" class="ios-list-group" style="background-color: transparent; margin-top: 10px;">
-                    <!-- 记忆卡片列表 -->
+
+            <style>
+                #memory-app {
+                    --bg-base: #f4f8fb;
+                    --card-bg: #ffffff;
+                    --text-dark: #333333;
+                    --text-light: #aaaaaa;
+                    --accent: #d0d0d0;
+                    background-color: var(--bg-base);
+                    font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", -apple-system, BlinkMacSystemFont, sans-serif;
+                    color: var(--text-dark);
+                    overflow-x: hidden;
+                    overflow-y: auto;
+                    -webkit-overflow-scrolling: touch;
+                    background-image: radial-gradient(#dce4e8 1px, transparent 1px);
+                    background-size: 20px 20px;
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    z-index: 200;
+                }
+
+                #memory-app .layout {
+                    display: flex;
+                    min-height: 100vh;
+                }
+
+                #memory-app .sidebar {
+                    width: 80px;
+                    position: fixed;
+                    height: 100vh;
+                    border-right: 1px solid rgba(0,0,0,0.04);
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 40px;
+                    background: #ffffff;
+                    backdrop-filter: blur(10px);
+                    -webkit-backdrop-filter: blur(10px);
+                    z-index: 10;
+                }
+
+                #memory-app .side-btn {
+                    writing-mode: vertical-rl;
+                    transform: rotate(180deg);
+                    text-transform: uppercase;
+                    font-size: 11px;
+                    letter-spacing: 4px;
+                    color: var(--text-light);
+                    cursor: pointer;
+                    padding: 20px 0;
+                    transition: all 0.3s ease;
+                    position: relative;
+                }
+
+                #memory-app .side-btn::after {
+                    content: '';
+                    position: absolute;
+                    left: -10px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    width: 2px;
+                    height: 0;
+                    background: var(--text-dark);
+                    transition: height 0.3s ease;
+                }
+
+                #memory-app .side-btn:hover {
+                    color: var(--text-dark);
+                    letter-spacing: 6px;
+                }
+
+                #memory-app .side-btn:hover::after {
+                    height: 100%;
+                }
+
+                #memory-app .side-btn:active {
+                    transform: rotate(180deg) translateX(-2px);
+                }
+
+                #memory-app .back-btn {
+                    position: fixed;
+                    top: 60px;
+                    left: 20px;
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 50%;
+                    background: rgba(255,255,255,0.5);
+                    backdrop-filter: blur(10px);
+                    -webkit-backdrop-filter: blur(10px);
+                    border: 1px solid rgba(0,0,0,0.1);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    z-index: 100;
+                    transition: all 0.3s ease;
+                    color: var(--text-dark);
+                }
+
+                #memory-app .back-btn:hover {
+                    background: rgba(255,255,255,0.9);
+                    transform: translateX(-4px);
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+                }
+
+                #memory-app .back-btn svg {
+                    width: 18px;
+                    height: 18px;
+                }
+
+                #memory-app .main-content {
+                    margin-left: 80px;
+                    flex: 1;
+                    padding: 80px 40px 60px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    width: calc(100% - 80px);
+                }
+
+                #memory-app .page-header {
+                    width: 100%;
+                    max-width: 500px;
+                    margin-bottom: 50px;
+                    animation: fadeIn 1s ease forwards;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                }
+
+                #memory-app .header-tag {
+                    font-family: monospace;
+                    font-size: 11px;
+                    color: var(--text-light);
+                    letter-spacing: 3px;
+                }
+
+                #memory-app .header-main {
+                    font-size: 36px;
+                    font-weight: 600;
+                    margin: 0;
+                    letter-spacing: -1px;
+                    color: var(--text-dark);
+                    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+                }
+
+                #memory-app .header-desc {
+                    font-size: 14px;
+                    color: var(--text-light);
+                    line-height: 1.5;
+                    margin: 0;
+                    max-width: 80%;
+                    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+                }
+
+                #memory-app .memory-filter-tabs {
+                    width: 100%;
+                    max-width: 500px;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    margin-bottom: 14px;
+                }
+
+                #memory-app .memory-filter-btn {
+                    border: 1px solid rgba(0,0,0,0.14);
+                    background: #fff;
+                    color: #555;
+                    border-radius: 999px;
+                    padding: 6px 12px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+
+                #memory-app .memory-filter-btn.active {
+                    background: #111;
+                    border-color: #111;
+                    color: #fff;
+                }
+
+                #memory-app .memory-selection-toolbar {
+                    width: 100%;
+                    max-width: 500px;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    margin-bottom: 16px;
+                    align-items: center;
+                }
+
+                #memory-app .mini-toolbar-btn {
+                    border: 1px solid rgba(0,0,0,0.15);
+                    background: #fff;
+                    border-radius: 8px;
+                    font-size: 12px;
+                    color: #333;
+                    padding: 6px 10px;
+                    cursor: pointer;
+                }
+
+                #memory-app .mini-toolbar-btn.primary {
+                    background: #1f2937;
+                    border-color: #1f2937;
+                    color: #fff;
+                }
+
+                #memory-app .selected-memory-meta {
+                    margin-left: auto;
+                    font-size: 12px;
+                    color: #666;
+                }
+
+                #memory-app .archive-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: -20px;
+                    width: 100%;
+                    max-width: 500px;
+                    padding-bottom: 60px;
+                }
+
+                #memory-app .archive-card {
+                    background: var(--card-bg);
+                    backdrop-filter: blur(15px);
+                    -webkit-backdrop-filter: blur(15px);
+                    border: 1px solid rgba(0,0,0,0.08);
+                    border-radius: 4px;
+                    padding: 30px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+                    transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+                    cursor: pointer;
+                    margin-bottom: -30px;
+                    position: relative;
+                    transform-origin: center center;
+                }
+
+                #memory-app .archive-card:nth-child(even) {
+                    transform: translateX(25px);
+                }
+                #memory-app .archive-card:nth-child(odd) {
+                    transform: translateX(-25px);
+                }
+
+                #memory-app .archive-card.is-active {
+                    transform: translateX(0) translateY(-20px);
+                    box-shadow: 0 30px 60px rgba(0,0,0,0.15);
+                    z-index: 10 !important;
+                    background: rgba(255,255,255,0.98);
+                    border-color: rgba(0,0,0,0.15);
+                }
+
+                #memory-app .archive-list:has(.archive-card.is-active) .archive-card:not(.is-active):nth-child(even) {
+                    transform: translateX(25px) translateY(10px);
+                    opacity: 0.6;
+                }
+                #memory-app .archive-list:has(.archive-card.is-active) .archive-card:not(.is-active):nth-child(odd) {
+                    transform: translateX(-25px) translateY(10px);
+                    opacity: 0.6;
+                }
+
+                #memory-app .card-top {
+                    display: flex;
+                    justify-content: space-between;
+                    border-bottom: 1px solid rgba(0,0,0,0.1);
+                    padding-bottom: 15px;
+                    margin-bottom: 15px;
+                }
+
+                #memory-app .ref-id {
+                    font-family: monospace;
+                    font-size: 10px;
+                    letter-spacing: 1px;
+                }
+
+                #memory-app .status {
+                    font-size: 10px;
+                    text-transform: uppercase;
+                    letter-spacing: 2px;
+                    border: 1px solid var(--text-dark);
+                    padding: 3px 8px;
+                    border-radius: 20px;
+                }
+
+                #memory-app .card-body h3 {
+                    font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
+                    font-size: 22px;
+                    font-weight: 600;
+                    margin: 0 0 10px 0;
+                    letter-spacing: 1px;
+                }
+
+                #memory-app .card-body p {
+                    font-size: 13px;
+                    line-height: 1.6;
+                    color: var(--text-light);
+                    margin: 0;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 3;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                    transition: all 0.3s ease;
+                }
+
+                #memory-app .archive-card.is-active .card-body p {
+                    -webkit-line-clamp: unset;
+                    overflow: visible;
+                }
+
+                #memory-app .card-footer {
+                    margin-top: 20px;
+                    font-family: monospace;
+                    font-size: 10px;
+                    color: var(--accent);
+                    display: flex;
+                    justify-content: space-between;
+                }
+
+                #memory-app .archive-card {
+                    opacity: 0;
+                    animation: slideIn 0.8s forwards;
+                }
+                #memory-app .archive-card:nth-child(1) { animation-delay: 0.1s; z-index: 1;}
+                #memory-app .archive-card:nth-child(2) { animation-delay: 0.2s; z-index: 2;}
+                #memory-app .archive-card:nth-child(3) { animation-delay: 0.3s; z-index: 3;}
+                #memory-app .archive-card:nth-child(4) { animation-delay: 0.4s; z-index: 4;}
+
+                #memory-app .refine-highlights-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                    max-height: 260px;
+                    overflow-y: auto;
+                }
+
+                #memory-app .refine-highlight-item {
+                    border: 1px solid rgba(0,0,0,0.12);
+                    border-radius: 10px;
+                    padding: 10px;
+                    background: #fafafa;
+                }
+
+                #memory-app .refine-highlight-item textarea {
+                    border: 1px solid rgba(0,0,0,0.12);
+                    border-radius: 8px;
+                    padding: 8px;
+                    font-size: 13px;
+                    resize: vertical;
+                }
+
+                @keyframes slideIn {
+                    from { opacity: 0; transform: translateY(50px) translateX(0); }
+                    to { opacity: 1; }
+                }
+                
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+            </style>
+
+            <div class="layout">
+                <div class="sidebar">
+                    <div class="side-btn" id="add-memory-btn">INDEX_DIR</div>
+                    <div class="side-btn" id="manual-summary-btn">CLASSIFY</div>
+                    <div class="side-btn" id="memory-settings-btn">DECRYPT</div>
                 </div>
-                <div class="empty-state" id="memory-empty" style="display: none;">
-                    暂无记忆
+
+                <div class="main-content">
+                    <div class="page-header">
+                        <div class="header-tag">SYSTEM // LOG_ACCESS</div>
+                        <h1 class="header-main">Memory Archives</h1>
+                        <p class="header-desc">(^_−)−☆</p>
+                    </div>
+
+                    <div id="memory-filter-tabs" class="memory-filter-tabs">
+                        <button class="memory-filter-btn active" data-filter-mode="all">全部</button>
+                        <button class="memory-filter-btn" data-filter-mode="refined">精炼</button>
+                        <button class="memory-filter-btn" data-filter-mode="short_term">短期</button>
+                        <button class="memory-filter-btn" data-filter-mode="long_term">长期</button>
+                        <button class="memory-filter-btn" data-filter-mode="state">状态</button>
+                        <button class="memory-filter-btn" data-filter-mode="fact">具体信息</button>
+                    </div>
+
+                    <div id="memory-selection-toolbar" class="memory-selection-toolbar" style="display: none;">
+                        <button id="toggle-memory-selection-btn" class="mini-toolbar-btn">退出多选</button>
+                        <button id="select-all-memories-btn" class="mini-toolbar-btn">全选</button>
+                        <button id="clear-selected-memories-btn" class="mini-toolbar-btn">取消</button>
+                        <button id="refine-selected-memories-btn" class="mini-toolbar-btn primary">精炼已选</button>
+                        <button id="open-manual-summary-btn" class="mini-toolbar-btn">区间总结</button>
+                        <span class="selected-memory-meta">已选 <b id="selected-memory-count">0</b> 条</span>
+                    </div>
+
+                    <div id="memory-list" class="archive-list">
+                        <!-- 记忆卡片列表动态生成 -->
+                    </div>
+                    
+                    <div class="empty-state" id="memory-empty" style="display: none; text-align: center; color: #999; padding: 20px;">
+                        暂无记忆
+                    </div>
                 </div>
             </div>
 
@@ -1970,6 +2570,39 @@
                         <div class="setting-group">
                             <label>记忆内容</label>
                             <textarea id="manual-memory-content" placeholder="输入记忆内容..." style="height: 150px;"></textarea>
+                        </div>
+                        <div class="setting-group">
+                            <label>分类</label>
+                            <select id="manual-memory-kind">
+                                <option value="short_term">短期记忆</option>
+                                <option value="long_term">长期记忆</option>
+                                <option value="state">状态记忆</option>
+                                <option value="fact">具体信息记忆</option>
+                            </select>
+                        </div>
+                        <div class="setting-group">
+                            <label>具体信息子类</label>
+                            <select id="manual-memory-fact-subtype">
+                                <option value="fact">事实</option>
+                                <option value="preference">偏好</option>
+                                <option value="dislike">禁忌</option>
+                                <option value="plan">计划</option>
+                                <option value="named_entity">特定名称</option>
+                            </select>
+                        </div>
+                        <div class="setting-group">
+                            <label>状态类型</label>
+                            <select id="manual-memory-state-type">
+                                <option value="health">健康</option>
+                                <option value="schedule">日程</option>
+                                <option value="emotion">情绪</option>
+                                <option value="relationship">关系</option>
+                                <option value="other">其他</option>
+                            </select>
+                        </div>
+                        <div class="setting-group">
+                            <label>重要度 (0-1)</label>
+                            <input id="manual-memory-importance" type="number" min="0" max="1" step="0.05" placeholder="例如 0.7">
                         </div>
                         <button id="save-manual-memory-btn" class="ios-btn-block">保存</button>
                     </div>
@@ -2027,9 +2660,37 @@
                     <div class="modal-body">
                         <div class="setting-group">
                             <label>发送最近几条记忆给AI</label>
-                            <input type="number" id="modal-memory-send-limit" placeholder="默认3条" min="0">
+                            <input type="number" id="modal-memory-send-limit" placeholder="默认12条" min="0">
                         </div>
                         <button id="save-memory-settings-btn" class="ios-btn-block">保存</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 精炼草稿弹窗 -->
+            <div id="refine-memory-modal" class="modal hidden">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>精炼记忆草稿</h3>
+                        <button class="close-btn" id="close-refine-memory">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="setting-group">
+                            <label>总结（可编辑）</label>
+                            <textarea id="refine-summary-content" placeholder="精炼总结..." style="height: 110px;"></textarea>
+                        </div>
+                        <div class="setting-group">
+                            <div style="display:flex; justify-content: space-between; align-items: center;">
+                                <label>关键信息（可编辑）</label>
+                                <button type="button" id="add-refine-highlight-btn" class="ios-btn" style="padding: 5px 10px;">新增条目</button>
+                            </div>
+                            <div id="refine-highlights-list" class="refine-highlights-list"></div>
+                        </div>
+                        <div class="setting-group" style="display:flex; align-items:center; gap:8px;">
+                            <input id="refine-delete-source" type="checkbox" checked>
+                            <label for="refine-delete-source" style="margin:0;">提交后删除被精炼源记忆</label>
+                        </div>
+                        <button id="save-refine-memory-btn" class="ios-btn-block">保存精炼结果</button>
                     </div>
                 </div>
             </div>
@@ -2037,86 +2698,69 @@
         
         <!-- 世界书全屏App -->
         <div id="worldbook-app" class="app-screen hidden">
-            <div class="app-header">
-                <button id="close-worldbook-app" class="back-btn"><i class="fas fa-chevron-left"></i> 返回</button>
-                <h3>世界书</h3>
-                <button id="add-worldbook-category" class="wechat-icon-btn"><i class="fas fa-plus"></i></button>
-            </div>
-            <div class="app-body">
-                <div class="ios-list-group" id="worldbook-category-list">
-                    <!-- 分类列表将通过JS生成 -->
-                </div>
-                <div class="empty-state" id="worldbook-empty" style="display: none;">
-                    暂无分类，点击右上角添加
-                </div>
-            </div>
+            <link rel="stylesheet" href="css/worldbook_archive_style.css">
+            <div class="wb-archive-container">
+                <header class="wb-header">
+                    <div class="wb-header-content">
+                        <div id="wb-title-group" class="wb-title-group">
+                            <span id="wb-page-subtitle" class="wb-subtitle">System Database</span>
+                            <h1 id="wb-page-title" class="wb-h1">Archives</h1>
+                        </div>
+                        <div style="display: flex; margin-left: auto;">
+                            <button id="wb-action-btn" class="wb-nav-btn visible">
+                                <svg id="wb-icon-plus" viewBox="0 0 24 24" style="display: block;">
+                                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                                </svg>
+                                <svg id="wb-icon-edit" viewBox="0 0 24 24" style="display: none;">
+                                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </header>
 
-            <!-- 分类详情页 (子屏幕) -->
-            <div id="worldbook-detail-screen" class="sub-screen hidden">
-                <div class="app-header">
-                    <button id="back-to-worldbook-list" class="back-btn"><i class="fas fa-chevron-left"></i></button>
-                    <h3 id="wb-category-title">分类名</h3>
-                    <button id="add-worldbook-entry" class="wechat-icon-btn"><i class="fas fa-plus"></i></button>
-                </div>
-                <div class="app-body">
-                    <div class="ios-list-group" id="worldbook-entry-list">
-                        <!-- 条目列表 -->
-                    </div>
-                    <div class="empty-state" id="worldbook-entry-empty" style="display: none;">
-                        暂无条目，点击右上角添加
-                    </div>
-                    <div class="ios-list-group" style="margin-top: 20px;">
-                        <div class="list-item center-content" id="edit-category-btn">
-<span style="color: #000;">编辑当前分类</span>
+                <main class="wb-main">
+                    <!-- Page 1: Categories -->
+                    <div id="wb-page-categories" class="wb-page active">
+                        <div class="wb-grid-container" id="wb-category-grid">
+                            <!-- Injected via JS -->
                         </div>
                     </div>
-                </div>
-            </div>
-            
-            <!-- 条目编辑弹窗 -->
-            <div id="worldbook-edit-modal" class="modal hidden">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3 id="worldbook-modal-title">编辑条目</h3>
-                        <button class="close-btn" id="close-worldbook-edit">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="setting-group">
-                            <label>备注 (可选)</label>
-                            <input type="text" id="wb-remark" placeholder="输入备注">
-                        </div>
-                        <div class="setting-group">
-                            <label>关键字 (可选，逗号分隔)</label>
-                            <input type="text" id="wb-keys" placeholder="例如: 城堡, 国王">
-                        </div>
-                        <div class="setting-group">
-                            <label>内容</label>
-                            <textarea id="wb-content" placeholder="描述内容..." style="height: 200px;"></textarea>
-                        </div>
-                        <button id="save-worldbook-btn" class="ios-btn-block">保存</button>
-                        <button id="delete-worldbook-btn" class="ios-btn-block danger" style="margin-top: 10px;">删除</button>
-                    </div>
-                </div>
-            </div>
 
-            <!-- 分类编辑弹窗 -->
-            <div id="category-edit-modal" class="modal hidden">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3 id="category-modal-title">编辑分类</h3>
-                        <button class="close-btn" id="close-category-edit">&times;</button>
+                    <!-- Page 2: Entries List -->
+                    <div id="wb-page-entries" class="wb-page">
+                        <div class="wb-file-list" id="wb-entries-list">
+                            <!-- Injected via JS -->
+                        </div>
                     </div>
-                    <div class="modal-body">
-                        <div class="setting-group">
-                            <label>分类名称</label>
-                            <input type="text" id="cat-name" placeholder="输入分类名称">
+
+                    <!-- Page 3: Detail View -->
+                    <div id="wb-page-detail" class="wb-page">
+                        <div class="wb-doc-container">
+                            <div class="wb-deco-line"></div>
+                            <h2 id="wb-detail-title" style="font-size: 24px; margin-bottom: 8px;">Title</h2>
+                            <div id="wb-detail-tags" style="margin-bottom: 16px;"></div>
+                            <div class="wb-doc-meta">
+                                <span id="wb-detail-id">ID: 000000</span>
+                                <span id="wb-detail-date">DATE: 2023-10-27</span>
+                            </div>
+                            <div id="wb-detail-content" class="wb-doc-content"></div>
                         </div>
-                        <div class="setting-group">
-                            <label>描述 (可选)</label>
-                            <input type="text" id="cat-desc" placeholder="输入描述">
+                    </div>
+                </main>
+
+                <!-- Modal -->
+                <div id="wb-modal-overlay" class="wb-modal-overlay">
+                    <div class="wb-modal-card">
+                        <h3 id="wb-modal-title" class="wb-modal-title">New Folder</h3>
+                        <div id="wb-modal-content">
+                            <!-- Injected via JS -->
                         </div>
-                        <button id="save-category-btn" class="ios-btn-block">保存</button>
-                        <button id="delete-category-btn" class="ios-btn-block danger" style="margin-top: 10px; display: none;">删除分类</button>
+                        <div class="wb-modal-actions">
+                            <button id="wb-modal-cancel" class="wb-btn wb-btn-cancel">CANCEL</button>
+                            <button id="wb-modal-delete" class="wb-btn wb-btn-danger" style="display:none; margin-right:auto;">DELETE</button>
+                            <button id="wb-modal-save" class="wb-btn wb-btn-save">SAVE</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2188,229 +2832,310 @@
             </div>
 
         
-        <!-- 美化全屏App -->
-        <div id="theme-app" class="app-screen hidden">
-            <div class="app-header">
-                <button id="close-theme-app" class="back-btn"><i class="fas fa-chevron-left"></i> 返回</button>
-                <h3>美化中心</h3>
-                <button id="save-theme-config-btn" class="wechat-icon-btn" style="font-size: 16px; font-weight: 600; color: #007AFF; width: auto; padding: 0 10px;">保存</button>
+        <!-- 美化全屏App (新版画廊设计) -->
+        <div id="theme-app" class="app-screen hidden theme-app-v2" style="background-color: #f5f5f7;">
+            <!-- 顶部导航 -->
+            <header class="theme-nav-header">
+                <button class="theme-nav-btn" id="close-theme-app"><i class="fas fa-arrow-left"></i></button>
+                <div class="theme-nav-title">AESTHETICS</div>
+                <button class="theme-nav-btn" style="visibility: hidden;"><i class="fas fa-ellipsis-h"></i></button>
+            </header>
+
+            <div class="app-body" style="padding: 0; background: transparent;">
+                <!-- 标题区 -->
+                <section class="theme-hero-section">
+                    <h1 class="theme-hero-title">Design Your<br>Experience.</h1>
+                    <p class="theme-hero-subtitle">Personalize every detail of your workspace with minimalist precision.</p>
+                </section>
+
+                <!-- 画廊网格 -->
+                <main class="theme-gallery-container" id="theme-gallery-container">
+                    <!-- 字体设置卡片 (大) -->
+                    <div class="theme-gallery-item theme-item-large" id="open-theme-font">
+                        <div class="theme-decor-pattern"></div>
+                        <div class="theme-typographic-decor">F</div>
+                        <i class="fas fa-font theme-item-icon"></i>
+                        <div class="theme-item-content">
+                            <div class="theme-category-tag">Typography</div>
+                            <h3 class="theme-item-title">全局字体</h3>
+                            <p class="theme-item-desc">Customize system-wide typography, upload custom fonts, or use presets.</p>
+                        </div>
+                        <div class="theme-item-arrow"><i class="fas fa-arrow-right"></i></div>
+                    </div>
+
+                    <!-- 壁纸设置卡片 (高) -->
+                    <div class="theme-gallery-item theme-item-tall" id="open-theme-wallpaper">
+                        <div class="theme-decor-circle"></div>
+                        <div class="theme-category-tag">Visuals</div>
+                        <i class="fas fa-image theme-item-icon"></i>
+                        <h3 class="theme-item-title">壁纸设置</h3>
+                        <p class="theme-item-desc">Personalize your background with images or solid colors.</p>
+                        <div class="theme-item-arrow"><i class="fas fa-arrow-right"></i></div>
+                    </div>
+
+                    <!-- 应用图标卡片 -->
+                    <div class="theme-gallery-item" id="open-theme-icons">
+                        <div class="theme-typographic-decor">I</div>
+                        <div class="theme-category-tag">Visuals</div>
+                        <i class="fas fa-shapes theme-item-icon"></i>
+                        <h3 class="theme-item-title">应用图标</h3>
+                        <p class="theme-item-desc">Customize individual app icons and display names.</p>
+                        <div class="theme-item-arrow"><i class="fas fa-arrow-right"></i></div>
+                    </div>
+
+                    <!-- 界面设置卡片 -->
+                    <div class="theme-gallery-item" id="open-theme-interface">
+                        <div class="theme-typographic-decor">L</div>
+                        <div class="theme-category-tag">Layout</div>
+                        <i class="fas fa-border-all theme-item-icon"></i>
+                        <h3 class="theme-item-title">界面布局</h3>
+                        <p class="theme-item-desc">Toggle status bars and set media placeholders.</p>
+                        <div class="theme-item-arrow"><i class="fas fa-arrow-right"></i></div>
+                    </div>
+
+                    <!-- 性能/加载卡片 -->
+                    <div class="theme-gallery-item" id="open-theme-behavior">
+                        <div class="theme-typographic-decor">B</div>
+                        <div class="theme-category-tag">Logic</div>
+                        <i class="fas fa-bolt theme-item-icon"></i>
+                        <h3 class="theme-item-title">行为逻辑</h3>
+                        <p class="theme-item-desc">Adjust loading limits and interactions.</p>
+                        <div class="theme-item-arrow"><i class="fas fa-arrow-right"></i></div>
+                    </div>
+
+                    <!-- 高级定制卡片 (CSS) -->
+                    <div class="theme-gallery-item theme-item-large" id="open-theme-advanced">
+                        <div class="theme-decor-pattern"></div>
+                        <div class="theme-category-tag">Dev</div>
+                        <i class="fas fa-code theme-item-icon"></i>
+                        <div class="theme-item-content">
+                            <h3 class="theme-item-title">高级定制</h3>
+                            <p class="theme-item-desc">Inject custom CSS rules to completely override the default appearance.</p>
+                        </div>
+                        <div class="theme-item-arrow"><i class="fas fa-arrow-right"></i></div>
+                    </div>
+                </main>
             </div>
-            
-            <div class="app-body">
-                <!-- 美化选项 -->
-                <div class="section-title">个性化</div>
-                <div class="ios-list-group">
-                    <div class="list-item" id="open-theme-font">
-                        <div class="list-content">
-                            <label>字体设置</label>
-                            <i class="fas fa-chevron-right" style="color: #ccc;"></i>
-                        </div>
-                    </div>
-                    <div class="list-item" id="open-theme-wallpaper">
-                        <div class="list-content">
-                            <label>壁纸设置</label>
-                            <i class="fas fa-chevron-right" style="color: #ccc;"></i>
-                        </div>
-                    </div>
-                    <div class="list-item" id="open-theme-icons">
-                        <div class="list-content">
-                            <label>应用图标</label>
-                            <i class="fas fa-chevron-right" style="color: #ccc;"></i>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- 通用设置 (从设置页移来) -->
-                <div class="section-title">通用设置</div>
-                <div class="ios-list-group">
-                    <div class="list-item">
-                        <div class="list-content">
-                            <label>显示状态栏</label>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="show-status-bar-toggle" checked>
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>默认虚拟图片 URL</label>
-                            <input type="text" id="default-virtual-image-url" placeholder="https://placehold.co/600x400/png?text=Photo">
-                            <div style="font-size: 12px; color: #888; margin-top: 4px;">用于“拍摄”功能和AI发送的图片</div>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>动态图片 URL</label>
-                            <input type="text" id="default-moment-virtual-image-url" placeholder="https://placehold.co/600x400/png?text=Moment">
-                            <div style="font-size: 12px; color: #888; margin-top: 4px;">用于动态页面的图片描述</div>
-                        </div>
-                    </div>
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>初始加载聊天条数 (0为不限制)</label>
-                            <input type="number" id="chat-loading-limit" placeholder="默认20" min="0">
-                            <div style="font-size: 12px; color: #888; margin-top: 4px;">减少条数可加快进入聊天页面的速度</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- CSS编辑器区块 -->
-                <div class="section-title">高级自定义 (CSS)</div>
-                <div class="ios-list-group">
-                    <div class="list-item">
-                        <div class="list-content column">
-                            <label>CSS预设</label>
-                            <div class="input-row full-width">
-                                <select id="css-preset-select">
-                                    <option value="">-- 选择预设 --</option>
-                                </select>
-                                <button id="save-css-preset" class="ios-btn-small">保存</button>
-                                <button id="delete-css-preset" class="ios-btn-small danger">删除</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="list-item no-padding">
-                        <textarea id="css-editor" placeholder="/* 在此输入自定义CSS */"></textarea>
-                    </div>
-                    <div class="list-item">
-                        <div class="button-row full-width">
-                            <button id="save-css" class="ios-btn-block">应用并保存CSS配置</button>
-                            <button id="export-css" class="ios-btn-block secondary">导出CSS</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 还原默认 CSS 选项 -->
-                <div class="section-title">还原默认配置</div>
-                <div class="ios-list-group">
-                     <div class="list-item" id="restore-global-css-btn">
-                        <div class="list-content center-content">
-                            <span class="danger-text">还原全局CSS</span>
-                        </div>
-                    </div>
-                     <div class="list-item" id="restore-meeting-css-btn">
-                        <div class="list-content center-content">
-                            <span class="danger-text">还原见面页CSS</span>
-                        </div>
-                    </div>
-                     <div class="list-item" id="restore-chat-css-btn">
-                        <div class="list-content center-content">
-                            <span class="danger-text">还原聊天页面CSS...</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div style="height: 50px;"></div> <!-- 底部留白 -->
+            <!-- 底部操作栏 -->
+            <div class="theme-action-bar">
+                <button class="theme-action-btn" id="theme-reset-global-btn">
+                    <i class="fas fa-undo"></i> Reset
+                </button>
+                <button class="theme-action-btn theme-primary" id="save-theme-config-btn">
+                    <i class="fas fa-check"></i> Apply
+                </button>
             </div>
 
             <!-- 字体设置子页面 -->
-            <div id="theme-font-screen" class="sub-screen hidden">
-                <div class="app-header">
-                    <button id="close-theme-font" class="back-btn"><i class="fas fa-chevron-left"></i> 返回</button>
-                    <h3>字体设置</h3>
-                    <div style="width: 60px;"></div>
+            <div id="theme-font-screen" class="theme-sub-page-overlay hidden">
+                <div class="theme-sub-page-container">
+                    <div class="theme-sub-page-header">
+                    <h2 class="theme-sub-page-title">全局字体</h2>
+                    <button class="theme-close-sub-page" id="close-theme-font">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
-                <div class="app-body">
-                    <div class="section-title">字体设置</div>
-                    <div class="ios-list-group">
-                        <div class="list-item">
-                            <div class="list-content column">
-                                <label>字体预设</label>
-                                <div class="input-row full-width">
-                                    <select id="font-preset-select">
-                                        <option value="">-- 选择预设 --</option>
-                                    </select>
-                                    <button id="save-font-preset" class="ios-btn-small">保存</button>
-                                    <button id="delete-font-preset" class="ios-btn-small danger">删除</button>
-                                </div>
-                            </div>
+                <div class="theme-sub-page-content">
+                    <div class="theme-form-group">
+                        <label class="theme-form-label">字体预设</label>
+                        <div class="theme-custom-select" style="margin-bottom: 12px;">
+                            <select id="font-preset-select">
+                                <option value="">-- 选择字体预设 --</option>
+                            </select>
                         </div>
-                        <div class="list-item">
-                            <div class="list-content">
-                                <label>上传字体文件</label>
-                                <input type="file" id="font-upload" accept=".ttf,.otf,.woff,.woff2" class="file-input-hidden">
-                                <label for="font-upload" class="ios-btn">选择文件</label>
-                            </div>
-                        </div>
-                        <div class="list-item">
-                            <div class="list-content column">
-                                <label>网络字体链接</label>
-                                <div class="input-row full-width">
-                                    <input type="text" id="font-url" placeholder="https://...">
-                                    <button id="apply-font-url" class="ios-btn-small">应用</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="list-item center-content" id="reset-font-btn">
-                            <span class="danger-text">重置成系统默认字体</span>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="theme-action-btn" id="save-font-preset" style="flex: 1; justify-content: center; background: #f0f0f0;">保存为预设</button>
+                            <button class="theme-action-btn" id="delete-font-preset" style="flex: 1; justify-content: center; background: #ffebee; color: #d32f2f;">删除预设</button>
                         </div>
                     </div>
+                    <hr style="border: 0; border-top: 1px solid var(--border-color, rgba(0,0,0,0.08)); margin: 24px 0;">
+                    <div class="theme-form-group">
+                        <label class="theme-form-label">自定义字体</label>
+                        <span class="theme-form-hint" style="margin-bottom: 12px;">通过网络链接应用字体，或直接上传本地字体文件。</span>
+                        <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                            <input type="text" id="font-url" class="theme-form-input" placeholder="输入自定义字体 URL">
+                            <button class="theme-action-btn" id="apply-font-url" style="border: 1px solid var(--border-color, rgba(0,0,0,0.08)); border-radius: 10px;">应用</button>
+                        </div>
+                        <label class="theme-action-btn" style="width: 100%; justify-content: center; border: 1px dashed var(--border-color, rgba(0,0,0,0.08)); cursor: pointer; padding: 14px;">
+                            <i class="fas fa-upload"></i> 上传字体文件 (.ttf, .otf, .woff)
+                            <input type="file" id="font-upload" accept=".ttf,.otf,.woff,.woff2" class="file-input-hidden">
+                        </label>
+                    </div>
+                    <div style="margin-top: 24px;">
+                        <button class="theme-action-btn" id="reset-font-btn" style="width: 100%; justify-content: center; background: #ffebee; color: #d32f2f;">重置成系统默认字体</button>
+                    </div>
+                </div>
                 </div>
             </div>
 
             <!-- 壁纸设置子页面 -->
-            <div id="theme-wallpaper-screen" class="sub-screen hidden">
-                <div class="app-header">
-                    <button id="close-theme-wallpaper" class="back-btn"><i class="fas fa-chevron-left"></i> 返回</button>
-                    <h3>壁纸设置</h3>
-                    <div style="width: 60px;"></div>
+            <div id="theme-wallpaper-screen" class="theme-sub-page-overlay hidden">
+                <div class="theme-sub-page-container">
+                    <div class="theme-sub-page-header">
+                    <h2 class="theme-sub-page-title">壁纸设置</h2>
+                    <button class="theme-close-sub-page" id="close-theme-wallpaper">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
-                <div class="app-body">
-                    <div class="section-title">壁纸设置</div>
-                    <div class="ios-list-group">
-                        <div class="list-item">
-                            <div class="list-content">
-                                <label>上传壁纸</label>
+                <div class="theme-sub-page-content">
+                    <div class="theme-form-group">
+                        <label class="theme-form-label">当前壁纸</label>
+                        <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+                            <label class="theme-action-btn" style="flex: 1; justify-content: center; background: #000; color: #fff; cursor: pointer;">
+                                <i class="fas fa-image"></i> 上传壁纸
                                 <input type="file" id="wallpaper-upload" accept="image/*" class="file-input-hidden">
-                                <label for="wallpaper-upload" class="ios-btn">选择图片</label>
-                            </div>
-                        </div>
-                        <div class="list-item no-padding">
-                            <div id="wallpaper-gallery" class="gallery-scroll">
-                                <!-- 壁纸缩略图将在这里生成 -->
-                            </div>
-                        </div>
-                        <div class="list-item center-content" id="reset-wallpaper">
-                            <span class="danger-text">重置默认壁纸</span>
+                            </label>
+                            <button class="theme-action-btn" id="reset-wallpaper" style="flex: 1; justify-content: center; background: #ffebee; color: #d32f2f;">恢复默认</button>
                         </div>
                     </div>
+                    <div class="theme-form-group">
+                        <label class="theme-form-label">壁纸图库</label>
+                        <span class="theme-form-hint" style="margin-bottom: 12px;">点击选择系统内置或已上传的壁纸</span>
+                        <div id="wallpaper-gallery" class="gallery-scroll" style="display: flex; gap: 16px; overflow-x: auto; padding-bottom: 12px; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;">
+                            <!-- 壁纸缩略图将在这里生成 -->
+                        </div>
+                    </div>
+                </div>
                 </div>
             </div>
 
             <!-- 图标设置子页面 -->
-            <div id="theme-icons-screen" class="sub-screen hidden">
-                <div class="app-header">
-                    <button id="close-theme-icons" class="back-btn"><i class="fas fa-chevron-left"></i> 返回</button>
-                    <h3>应用图标</h3>
-                    <div style="width: 60px;"></div>
+            <div id="theme-icons-screen" class="theme-sub-page-overlay hidden">
+                <div class="theme-sub-page-container">
+                    <div class="theme-sub-page-header">
+                    <h2 class="theme-sub-page-title">应用图标</h2>
+                    <button class="theme-close-sub-page" id="close-theme-icons">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
-                <div class="app-body">
-                    <div class="section-title">图标预设</div>
-                    <div class="ios-list-group">
-                        <div class="list-item">
-                            <div class="list-content column">
-                                <label>管理预设</label>
-                                <div class="input-row full-width">
-                                    <select id="icon-preset-select">
-                                        <option value="">-- 选择预设 --</option>
-                                    </select>
-                                    <button id="save-icon-preset" class="ios-btn-small">保存</button>
-                                    <button id="delete-icon-preset" class="ios-btn-small danger">删除</button>
-                                </div>
+                <div class="theme-sub-page-content">
+                    <div class="theme-form-group">
+                        <label class="theme-form-label">图标预设</label>
+                        <div style="display: flex; gap: 10px;">
+                            <div class="theme-custom-select" style="flex: 1;">
+                                <select id="icon-preset-select">
+                                    <option value="">-- 选择预设 --</option>
+                                </select>
                             </div>
+                            <button class="theme-action-btn" id="save-icon-preset" style="border: 1px solid var(--border-color, rgba(0,0,0,0.08)); border-radius: 10px;">保存</button>
+                            <button class="theme-action-btn" id="delete-icon-preset" style="background: #ffebee; color: #d32f2f; border-radius: 10px;">删除</button>
+                        </div>
+                    </div>
+                    
+                    <div class="theme-form-group">
+                        <label class="theme-form-label">自定义图标</label>
+                        <span class="theme-form-hint" style="margin-bottom: 12px;">展开列表修改各应用的图标和名称</span>
+                        <div class="ios-list-group" id="icon-setting-list" style="background: transparent; box-shadow: none; padding: 0;">
+                            <!-- 图标设置项将通过JS动态生成 -->
                         </div>
                     </div>
 
-                    <div class="section-title">应用图标</div>
-                    <div class="ios-list-group" id="icon-setting-list">
-                        <!-- 图标设置项将通过JS动态生成 -->
+                    <div style="margin-top: 24px;">
+                        <button class="theme-action-btn" id="reset-icons" style="width: 100%; justify-content: center; background: #ffebee; color: #d32f2f;">重置所有自定义图标</button>
                     </div>
-                    <div class="ios-list-group">
-                        <div class="list-item center-content" id="reset-icons">
-                            <span class="danger-text">重置所有图标</span>
+                </div>
+                </div>
+            </div>
+
+            <!-- 界面布局子页面 (原通用设置拆分) -->
+            <div id="theme-interface-screen" class="theme-sub-page-overlay hidden">
+                <div class="theme-sub-page-container">
+                    <div class="theme-sub-page-header">
+                    <h2 class="theme-sub-page-title">界面布局</h2>
+                    <button class="theme-close-sub-page" id="close-theme-interface">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="theme-sub-page-content">
+                    <div class="theme-form-group">
+                        <div class="theme-toggle-container">
+                            <div>
+                                <label class="theme-form-label" style="margin-bottom: 0;">显示状态栏</label>
+                                <span class="theme-form-hint" style="margin-top: 2px;">在顶部显示时间、电量等系统图标</span>
+                            </div>
+                            <label class="theme-toggle-switch">
+                                <input type="checkbox" id="show-status-bar-toggle" checked>
+                                <span class="theme-toggle-slider"></span>
+                            </label>
                         </div>
                     </div>
+                    <div class="theme-form-group">
+                        <label class="theme-form-label">默认虚拟图片 URL</label>
+                        <input type="text" id="default-virtual-image-url" class="theme-form-input" placeholder="https://placehold.co/600x400/png?text=Photo">
+                        <span class="theme-form-hint">用于“发送图片”或AI生成的图片占位</span>
+                    </div>
+                    <div class="theme-form-group">
+                        <label class="theme-form-label">动态图片 URL</label>
+                        <input type="text" id="default-moment-virtual-image-url" class="theme-form-input" placeholder="https://placehold.co/600x400/png?text=Moment">
+                        <span class="theme-form-hint">用于动态页面等图片占位</span>
+                    </div>
+                </div>
+                </div>
+            </div>
+
+            <!-- 行为逻辑子页面 (原通用设置拆分) -->
+            <div id="theme-behavior-screen" class="theme-sub-page-overlay hidden">
+                <div class="theme-sub-page-container">
+                    <div class="theme-sub-page-header">
+                    <h2 class="theme-sub-page-title">行为逻辑</h2>
+                    <button class="theme-close-sub-page" id="close-theme-behavior">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="theme-sub-page-content">
+                    <div class="theme-form-group">
+                        <label class="theme-form-label">初始聊天加载记录数 (0为不限制)</label>
+                        <input type="number" id="chat-loading-limit" class="theme-form-input" placeholder="默认 20" min="0">
+                        <span class="theme-form-hint">限制初始生成的消息数量，可加快页面渲染速度</span>
+                    </div>
+                </div>
+                </div>
+            </div>
+
+            <!-- 高级定制子页面 (CSS) -->
+            <div id="theme-advanced-screen" class="theme-sub-page-overlay hidden">
+                <div class="theme-sub-page-container">
+                    <div class="theme-sub-page-header">
+                    <h2 class="theme-sub-page-title">高级定制 (CSS)</h2>
+                    <button class="theme-close-sub-page" id="close-theme-advanced">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="theme-sub-page-content">
+                    <div class="theme-form-group">
+                        <label class="theme-form-label">CSS 预设</label>
+                        <div style="display: flex; gap: 10px;">
+                            <div class="theme-custom-select" style="flex: 1;">
+                                <select id="css-preset-select">
+                                    <option value="">-- 选择预设 --</option>
+                                </select>
+                            </div>
+                            <button class="theme-action-btn" id="save-css-preset" style="border: 1px solid var(--border-color, rgba(0,0,0,0.08)); border-radius: 10px;">保存</button>
+                            <button class="theme-action-btn" id="delete-css-preset" style="background: #ffebee; color: #d32f2f; border-radius: 10px;">删除</button>
+                        </div>
+                    </div>
+                    <div class="theme-form-group">
+                        <label class="theme-form-label">自定义 CSS 编辑器</label>
+                        <textarea id="css-editor" class="theme-form-input" placeholder="/* 在此处输入自定义 CSS */" style="height: 200px;"></textarea>
+                        <span class="theme-form-hint">警告：错误的 CSS 代码可能会导致界面布局崩溃。</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button class="theme-action-btn" id="save-css" style="flex: 1; justify-content: center; background: #000; color: #fff;">应用并保存</button>
+                        <button class="theme-action-btn" id="export-css" style="flex: 1; justify-content: center; background: #f0f0f0;">导出 CSS</button>
+                    </div>
+                    
+                    <hr style="border: 0; border-top: 1px solid var(--border-color, rgba(0,0,0,0.08)); margin: 24px 0;">
+                    
+                    <div class="theme-form-group">
+                        <label class="theme-form-label">还原其他 CSS 配置</label>
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px;">
+                            <button class="theme-action-btn" id="restore-global-css-btn" style="justify-content: center; background: #ffebee; color: #d32f2f;">还原全局 CSS</button>
+                            <button class="theme-action-btn" id="restore-meeting-css-btn" style="justify-content: center; background: #ffebee; color: #d32f2f;">还原见面页 CSS</button>
+                            <button class="theme-action-btn" id="restore-chat-css-btn" style="justify-content: center; background: #ffebee; color: #d32f2f;">还原聊天页面 CSS</button>
+                        </div>
+                    </div>
+                </div>
                 </div>
             </div>
         </div>
@@ -2635,6 +3360,28 @@
         </div>
     </div>
 
+    <!-- 外卖订单弹窗 -->
+    <div id="shopping-delivery-order-modal" class="modal hidden" style="z-index: 260;">
+        <div class="modal-content shopping-delivery-order-sheet">
+            <div class="modal-header">
+                <h3 id="delivery-order-modal-title">外卖订单</h3>
+                <button class="close-btn" id="close-delivery-order-modal">&times;</button>
+            </div>
+            <div class="modal-body shopping-delivery-order-body">
+                <div id="delivery-order-modal-list" class="shopping-delivery-order-list"></div>
+            </div>
+            <div class="shopping-delivery-order-footer">
+                <div class="shopping-delivery-order-total">
+                    合计: <span id="delivery-order-modal-total">¥0.00</span>
+                </div>
+                <div class="shopping-delivery-order-actions">
+                    <button id="delivery-order-continue-btn" class="ios-btn-block secondary">继续点餐</button>
+                    <button id="delivery-order-checkout-btn" class="ios-btn-block">结算</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 购物规格选择弹窗 -->
     <div id="shopping-spec-modal" class="modal hidden" style="z-index: 230;">
         <div class="modal-content">
@@ -2646,7 +3393,7 @@
                 <div style="display: flex; gap: 10px; margin-bottom: 15px;">
                      <img id="shopping-spec-img" src="" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover; background: #eee;">
                      <div style="flex: 1;">
-                         <div id="shopping-spec-price" style="color: #FF5000; font-size: 18px; font-weight: bold;"></div>
+                         <div id="shopping-spec-price" style="color: #000000; font-size: 18px; font-weight: bold;"></div>
                          <div id="shopping-spec-selected-text" style="font-size: 12px; color: #666; margin-top: 4px;">请选择规格</div>
                      </div>
                 </div>
@@ -3431,6 +4178,11 @@
         <!-- 内容由 js/forum.js 动态生成 -->
     </div>
 
+    <!-- 音乐全屏App (内嵌还原 v2 样式，不依赖 iframe) -->
+    <div id="music-app" class="app-screen hidden" style="background-color: #e5e5ea; z-index: 210; overflow: hidden;">
+        <div id="music-app-shadow-host" style="width: 100%; height: 100%;"></div>
+    </div>
+
     <!-- 购物全屏App -->
     <div id="shopping-app" class="app-screen hidden" style="background-color: #f2f2f7; position: fixed; height: 100dvh; height: 100vh; top: 0; left: 0; width: 100%; z-index: 100;">
         <!-- 加入购物车成功反馈弹窗 -->
@@ -3439,12 +4191,15 @@
             <span style="font-size: 16px; font-weight: 500;">已加入购物车</span>
         </div>
 
-        <div class="app-header" style="background: #fff; border-bottom: 1px solid #e5e5e5;">
-            <button class="back-btn" id="close-shopping-app"><i class="fas fa-chevron-left"></i> 返回</button>
-            <h3>购物中心</h3>
-            <div style="display: flex; gap: 15px; align-items: center;">
-                <button id="shopping-link-contact-btn" class="icon-btn" style="color: #333; font-size: 18px;"><i class="fas fa-link"></i></button>
-                <button id="shopping-menu-btn" class="icon-btn" style="color: #333; font-size: 18px;"><i class="fas fa-search"></i></button>
+        <div class="shopping-main-header">
+            <h1 class="app-title" id="close-shopping-app" style="cursor: pointer;">Møde.</h1>
+            <div class="header-actions">
+                <button id="shopping-link-contact-btn" class="icon-btn">
+                    <i class="far fa-heart"></i>
+                </button>
+                <button id="shopping-menu-btn" class="icon-btn">
+                    <i class="far fa-star"></i>
+                </button>
             </div>
         </div>
 
@@ -3491,75 +4246,102 @@
             </div>
         </div>
 
-        <!-- Bottom Tab Bar -->
-        <div class="wechat-tab-bar" style="width: 100%; left: 0; bottom: 0; right: 0; border-radius: 0; padding-bottom: env(safe-area-inset-bottom); margin-bottom: 0; height: auto; padding-top: 6px; min-height: 50px;">
-            <div class="wechat-tab-item active" data-tab="home">
-                <i class="fas fa-shopping-bag"></i>
-                <span>购物</span>
+        <!-- Product Detail View (New) -->
+        <div id="product-detail" class="shopping-detail-view">
+            <div class="shopping-detail-header">
+                <button class="shopping-back-btn" onclick="closeDetail('product')">
+                    <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:2;">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                </button>
+                <button id="shopping-share-btn" class="icon-btn" style="background:rgba(255,255,255,0.8); backdrop-filter:blur(10px);">
+                    <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:2;">
+                        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                        <polyline points="16 6 12 2 8 6"></polyline>
+                        <line x1="12" y1="2" x2="12" y2="15"></line>
+                    </svg>
+                </button>
             </div>
-            <div class="wechat-tab-item" data-tab="cart">
-                <i class="fas fa-shopping-cart"></i>
-                <span>购物车</span>
+            <div class="shopping-detail-content">
+                <div class="shopping-pd-image">
+                    <img id="shopping-detail-img" src="" style="width: 70%; height: 70%; object-fit: contain;">
+                </div>
+                <div class="shopping-pd-info">
+                    <h2 class="shopping-pd-title" id="shopping-detail-title">Title</h2>
+                    <div class="shopping-pd-price" id="shopping-detail-price">$0</div>
+                    <p class="shopping-pd-desc" id="shopping-detail-desc">
+                        Description
+                    </p>
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                        <span style="padding: 8px 16px; background: #f5f5f5; border-radius: 20px; font-size: 12px; color: #333;">默认规格</span>
+                    </div>
+                </div>
             </div>
-            <div class="wechat-tab-item" data-tab="delivery">
-                <i class="fas fa-utensils"></i>
-                <span>外卖</span>
-            </div>
-            <div class="wechat-tab-item" data-tab="orders">
-                <i class="fas fa-clipboard-list"></i>
-                <span>订单</span>
-            </div>
+            <button class="shopping-add-btn" id="detail-add-to-cart-btn">Add to Cart</button>
         </div>
 
-        <!-- 商品详情页 -->
-        <div id="shopping-detail-screen" class="sub-screen hidden" style="z-index: 150; background-color: #f5f5f5;">
-            <!-- Header -->
-            <div class="app-header" style="background: transparent; position: absolute; width: 100%; z-index: 10; border: none; pointer-events: none;">
-                <button class="back-btn" id="close-shopping-detail" style="background: rgba(0,0,0,0.4); color: #fff; border-radius: 50%; width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; pointer-events: auto; margin-left: 10px;"><i class="fas fa-chevron-left" style="margin-right: 2px;"></i></button>
-                <div style="flex: 1;"></div>
-                <button id="shopping-share-btn" class="icon-btn" style="background: rgba(0,0,0,0.4); color: #fff; border-radius: 50%; width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; pointer-events: auto; margin-right: 10px;"><i class="fas fa-share"></i></button>
+        <!-- Food Detail View (New) -->
+        <div id="food-detail" class="shopping-detail-view">
+            <div class="shopping-detail-header">
+                <button class="shopping-back-btn" onclick="closeDetail('food')">
+                    <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:2;">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                </button>
             </div>
-            
-            <!-- Body -->
-            <div class="app-body" style="padding: 0; padding-bottom: 60px; overflow-y: auto;">
-                <img id="shopping-detail-img" src="" style="width: 100%; display: block;">
-                <div style="padding: 15px; background: #fff; margin-bottom: 10px;">
-                    <div style="color: #FF5000; font-size: 24px; font-weight: bold;">¥<span id="shopping-detail-price"></span></div>
-                    <div id="shopping-detail-title" style="font-size: 16px; font-weight: bold; margin: 10px 0; line-height: 1.4;"></div>
-                    <div style="display: flex; justify-content: space-between; color: #999; font-size: 12px;">
-                        <span>快递: 免运费</span>
-                        <span id="shopping-detail-paid"></span>
-                        <span>广东杭州</span>
+            <div class="shopping-detail-content">
+                <div class="shopping-fd-header">
+                    <!-- Placeholder background -->
+                    <div style="position:absolute; bottom:20px; left:24px;">
+                        <h2 style="font-size:28px; font-weight:700; color: #333;" id="food-detail-title">Restaurant</h2>
+                        <span style="background:#000; color:#fff; padding:4px 8px; border-radius:6px; font-size:12px;">★ 4.8</span>
                     </div>
                 </div>
-                
-                <div style="padding: 15px; background: #fff; margin-bottom: 10px; display: flex; align-items: center;">
-                    <div style="width: 40px; height: 40px; background: #eee; border-radius: 4px; margin-right: 10px; display: flex; align-items: center; justify-content: center;"><i class="fas fa-store"></i></div>
-                    <div style="flex: 1;">
-                        <div id="shopping-detail-shop" style="font-weight: bold;"></div>
-                        <div style="font-size: 12px; color: #999;">天猫五年老店</div>
+                <div class="shopping-fd-info">
+                    <h3 style="margin-bottom:15px; font-size: 18px; font-weight: 600;">热门单品</h3>
+                    <div id="food-detail-menu-list">
+                        <!-- Menu items will be generated here -->
                     </div>
-                    <button style="border: 1px solid #FF5000; color: #FF5000; background: #fff; padding: 4px 12px; border-radius: 12px; font-size: 12px;">进店</button>
-                </div>
-                
-                <div style="padding: 15px; background: #fff; min-height: 300px;">
-                    <div style="text-align: center; color: #ccc; margin-top: 20px;">—— 宝贝详情 ——</div>
-                    <div id="shopping-detail-desc" style="margin-top: 20px; font-size: 14px; line-height: 1.6; color: #333;"></div>
                 </div>
             </div>
-            
-            <!-- Footer -->
-            <div style="position: absolute; bottom: 0; width: 100%; background: #fff; display: flex; align-items: center; height: 80px; padding-bottom: max(10px, env(safe-area-inset-bottom)); border-top: 1px solid #eee;">
-                <div style="flex: 1; display: flex; justify-content: space-around;">
-                    <div style="display: flex; flex-direction: column; align-items: center; font-size: 10px; color: #666; gap: 2px;"><i class="fas fa-store" style="font-size: 20px;"></i>店铺</div>
-                    <div style="display: flex; flex-direction: column; align-items: center; font-size: 10px; color: #666; gap: 2px;"><i class="fas fa-comment-dots" style="font-size: 20px;"></i>客服</div>
-                    <div style="display: flex; flex-direction: column; align-items: center; font-size: 10px; color: #666; gap: 2px;"><i class="far fa-star" style="font-size: 20px;"></i>收藏</div>
-                </div>
-                <div style="flex: 1.6; display: flex; margin-right: 15px; height: 44px;">
-                    <button id="detail-add-to-cart-btn" style="flex: 1; background: linear-gradient(90deg, #FFCB00, #FF9402); color: #fff; border: none; border-top-left-radius: 22px; border-bottom-left-radius: 22px; font-size: 15px; font-weight: bold;">加入购物车</button>
-                    <button id="detail-buy-now-btn" style="flex: 1; background: linear-gradient(90deg, #FF5E00, #FF2A00); color: #fff; border: none; border-top-right-radius: 22px; border-bottom-right-radius: 22px; font-size: 15px; font-weight: bold;">立即购买</button>
-                </div>
-            </div>
+            <button class="shopping-add-btn" id="food-detail-action-btn">查看订单</button>
+        </div>
+
+        <!-- Navigation Bar (New SVG Style) -->
+        <div class="nav-bar">
+            <button class="nav-item active" data-tab="home">
+                <svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:2;">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+            </button>
+            <button class="nav-item" data-tab="cart">
+                <svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:2;">
+                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <path d="M16 10a4 4 0 0 1-8 0"></path>
+                </svg>
+            </button>
+            <button class="nav-item" data-tab="delivery">
+                <svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:2;">
+                    <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+                    <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+                    <line x1="6" y1="1" x2="6" y2="4"></line>
+                    <line x1="10" y1="1" x2="10" y2="4"></line>
+                    <line x1="14" y1="1" x2="14" y2="4"></line>
+                </svg>
+            </button>
+            <button class="nav-item" data-tab="orders">
+                <svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:2;">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+            </button>
         </div>
     </div>
 
@@ -3933,7 +4715,7 @@
             <!-- Map Container & Test Button -->
             <div style="padding: 10px 15px;">
                 <button id="lookus-test-map-btn" onclick="testAmapAPI()" style="width: 100%; padding: 12px; background: #007AFF; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 10px;">
-                    <i class="fas fa-map-marked-alt"></i> 测试高德地图 API
+                    <i class="fas fa-map-marked-alt"></i> 加载地图
                 </button>
                 <div id="lookus-map-status" style="font-size: 13px; color: #999; text-align: center; margin-bottom: 10px; display: none;"></div>
                 <div id="lookus-map-container" style="width: 100%; height: 250px; border-radius: 12px; overflow: hidden; display: none; border: 1px solid #e0e0e0;"></div>
@@ -3994,6 +4776,1020 @@
         </div>
     </div>
 
+    <!-- 银行应用（主屏入口） -->
+    <style>
+        #bank-app {
+            background: #ffffff;
+            z-index: 210;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #bank-app .bank-v2-top-nav {
+            padding: max(48px, env(safe-area-inset-top)) 20px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        #bank-app .bank-v2-icon-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid #e5e5ea;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            cursor: pointer;
+        }
+        #bank-app .bank-v2-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: calc(90px + env(safe-area-inset-bottom));
+            -webkit-overflow-scrolling: touch;
+        }
+        #bank-app .bank-v2-balance {
+            text-align: center;
+            padding: 4px 20px 14px;
+        }
+        #bank-app .bank-v2-balance-label {
+            font-size: 12px;
+            letter-spacing: 1.2px;
+            color: #8e8e93;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        #bank-app .bank-v2-balance-amount {
+            font-size: 48px;
+            font-weight: 700;
+            line-height: 1;
+            letter-spacing: -1.5px;
+        }
+        #bank-app .bank-v2-cards {
+            padding: 16px 0 20px 20px;
+            display: flex;
+            gap: 14px;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        #bank-app .bank-v2-cards::-webkit-scrollbar { display: none; }
+        #bank-app .bank-v2-card {
+            min-width: 280px;
+            height: 170px;
+            border-radius: 24px;
+            padding: 22px;
+            color: #fff;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 15px 24px rgba(0, 0, 0, 0.18);
+            background: #111;
+        }
+        #bank-app .bank-v2-card.light {
+            background: #e5e5ea;
+            color: #000;
+            box-shadow: none;
+            border: 1px solid #d8d8dc;
+        }
+        #bank-app .bank-v2-card-title {
+            font-size: 18px;
+            font-weight: 600;
+            font-style: italic;
+        }
+        #bank-app .bank-v2-chip {
+            width: 40px;
+            height: 28px;
+            border-radius: 6px;
+            margin: 18px 0;
+            background: linear-gradient(135deg, #f4f4f4, #9f9f9f);
+        }
+        #bank-app .bank-v2-card.light .bank-v2-chip {
+            background: linear-gradient(135deg, #fff, #ccc);
+        }
+        #bank-app .bank-v2-card-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        #bank-app .bank-v2-card-num {
+            font-family: "Courier New", monospace;
+            font-size: 15px;
+            letter-spacing: 2px;
+        }
+        #bank-app .bank-v2-family-card {
+            cursor: pointer;
+        }
+        #bank-app .bank-v2-family-card .bank-v2-card-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        #bank-app .bank-v2-family-badge {
+            font-size: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: 10px;
+            padding: 2px 6px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        #bank-app .bank-v2-card.light .bank-v2-family-badge {
+            border-color: rgba(0, 0, 0, 0.2);
+            color: rgba(0, 0, 0, 0.72);
+        }
+        #bank-app .bank-family-detail-kv {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 14px;
+        }
+        #bank-app .bank-family-detail-kv:last-of-type {
+            border-bottom: none;
+        }
+        #bank-app .bank-family-detail-key {
+            color: #8e8e93;
+        }
+        #bank-app .bank-family-detail-val {
+            color: #111;
+            font-weight: 600;
+            text-align: right;
+        }
+        #bank-app .bank-v2-actions {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            padding: 4px 20px 24px;
+        }
+        #bank-app .bank-v2-action-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            color: #8e8e93;
+            font-size: 12px;
+        }
+        #bank-app .bank-v2-action-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 16px;
+            background: #f2f2f7;
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        #bank-app .bank-v2-section {
+            padding: 0 20px;
+        }
+        #bank-app .bank-v2-section h3 {
+            font-size: 20px;
+            margin-bottom: 12px;
+        }
+        #bank-app .bank-v2-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        #bank-app .bank-v2-contact {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-radius: 14px;
+            background: #fff;
+        }
+        #bank-app .bank-v2-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: #111;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 600;
+            margin-right: 12px;
+        }
+        #bank-app .bank-v2-contact-meta {
+            flex: 1;
+            min-width: 0;
+        }
+        #bank-app .bank-v2-contact-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: #000;
+        }
+        #bank-app .bank-v2-contact-sub {
+            font-size: 12px;
+            color: #8e8e93;
+            margin-top: 2px;
+        }
+        #bank-app .bank-v2-send {
+            border: none;
+            background: #f2f2f7;
+            border-radius: 18px;
+            padding: 7px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #000;
+        }
+        #bank-app .bank-v2-bottom-nav {
+            position: absolute;
+            left: 50%;
+            bottom: calc(18px + env(safe-area-inset-bottom));
+            transform: translateX(-50%);
+            width: calc(100% - 40px);
+            max-width: 320px;
+            height: 62px;
+            border-radius: 30px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            overflow: hidden;
+        }
+        #bank-app .bank-v2-nav-indicator {
+            position: absolute;
+            left: 0;
+            top: 50%;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: #000;
+            transform: translate(0, -50%);
+            opacity: 0;
+            transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 120ms ease;
+            pointer-events: none;
+            z-index: 0;
+        }
+        #bank-app .bank-v2-nav-item {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            color: #8e8e93;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 19px;
+            position: relative;
+            z-index: 1;
+            transition: color 220ms ease;
+        }
+        #bank-app .bank-v2-nav-item.active {
+            color: #fff;
+            background: transparent !important;
+            box-shadow: none !important;
+            transform: none !important;
+        }
+        #bank-app .bank-v2-scroll.bank-view-enter-right {
+            animation: bankViewInRight 220ms ease;
+        }
+        #bank-app .bank-v2-scroll.bank-view-enter-left {
+            animation: bankViewInLeft 220ms ease;
+        }
+        @keyframes bankViewInRight {
+            from {
+                opacity: 0;
+                transform: translateX(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        @keyframes bankViewInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        #bank-app .bank-family-modal,
+        .bank-family-modal {
+            z-index: 260;
+            align-items: center;
+            justify-content: center;
+        }
+        #bank-app .bank-family-modal .modal-content,
+        .bank-family-modal .modal-content {
+            width: 86%;
+            max-width: 340px;
+            border-radius: 16px;
+            border: 1px solid #e5e5ea;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+            background: #fff;
+            overflow: hidden;
+        }
+        #bank-app .bank-family-option-list,
+        .bank-family-option-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        #bank-app .bank-family-option,
+        .bank-family-option {
+            width: 100%;
+            border: 1px solid #e5e5ea;
+            background: #f8f8fa;
+            border-radius: 12px;
+            padding: 12px 14px;
+            text-align: left;
+            color: #000;
+            cursor: pointer;
+        }
+        #bank-app .bank-family-option-title,
+        .bank-family-option-title {
+            font-size: 15px;
+            font-weight: 700;
+        }
+        #bank-app .bank-family-option-desc,
+        .bank-family-option-desc {
+            font-size: 12px;
+            color: #8e8e93;
+            margin-top: 3px;
+        }
+        #bank-app .bank-family-compose .modal-content {
+            width: 86%;
+            max-width: 360px;
+            border-radius: 16px;
+            border: 1px solid #e5e5ea;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+            background: #fff;
+            overflow: hidden;
+        }
+        #bank-app .bank-family-compose .setting-group {
+            margin-bottom: 14px;
+        }
+        #bank-app .bank-family-compose .setting-group label {
+            display: block;
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 6px;
+        }
+        #bank-app .bank-family-compose .setting-group input,
+        #bank-app .bank-family-compose .setting-group textarea {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 10px 12px;
+            background: #fafafa;
+            font-size: 14px;
+            color: #000;
+            outline: none;
+        }
+        #bank-app .bank-family-compose .setting-group textarea {
+            min-height: 74px;
+            resize: vertical;
+        }
+        #bank-app .bank-family-compose .compose-hint {
+            color: #8e8e93;
+            font-size: 12px;
+            margin-top: -6px;
+            margin-bottom: 10px;
+        }
+        #family-card-detail-modal .modal-content,
+        #savings-invite-detail-modal .modal-content {
+            width: 86%;
+            max-width: 340px;
+            border-radius: 16px;
+            border: 1px solid #e5e5ea;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+            background: #fff;
+        }
+        .family-detail-kv {
+            padding: 10px 0;
+            border-bottom: 1px solid #f1f1f4;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 14px;
+        }
+        .family-detail-kv:last-child {
+            border-bottom: none;
+        }
+        .family-detail-key {
+            color: #8e8e93;
+            flex-shrink: 0;
+        }
+        .family-detail-val {
+            color: #000;
+            text-align: right;
+            word-break: break-word;
+        }
+        #bank-savings-view .ssv1-page {
+            padding: 14px 20px 24px;
+        }
+        #bank-savings-view .ssv1-head-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        #bank-savings-view .ssv1-title {
+            font-size: 30px;
+            font-weight: 700;
+            letter-spacing: -0.6px;
+            color: #000;
+        }
+        #bank-savings-view .ssv1-icon-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid #e5e5ea;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            cursor: pointer;
+        }
+        #bank-savings-view .ssv1-savings-card {
+            background: #fff;
+            border-radius: 20px;
+            padding: 22px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+            margin-bottom: 12px;
+        }
+        #bank-savings-view .ssv1-partner-line {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+        #bank-savings-view .ssv1-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #ddd;
+            border: 2px solid #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #555;
+        }
+        #bank-savings-view .ssv1-avatar.dark {
+            margin-left: -10px;
+            background: #333;
+            color: #fff;
+        }
+        #bank-savings-view .ssv1-partner-switch {
+            border: none;
+            background: transparent;
+            color: #666;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 0;
+            cursor: pointer;
+        }
+        #bank-savings-view .ssv1-amount {
+            font-size: 40px;
+            font-weight: 700;
+            letter-spacing: -1px;
+            color: #000;
+            margin: 5px 0;
+            line-height: 1.1;
+        }
+        #bank-savings-view .ssv1-goal-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 8px;
+            margin-top: 4px;
+        }
+        #bank-savings-view .ssv1-goal-text {
+            font-size: 13px;
+            color: #8e8e93;
+        }
+        #bank-savings-view .ssv1-interest-badge {
+            background: #f0f0f0;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #000;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        #bank-savings-view .ssv1-progress-container {
+            height: 6px;
+            background: #f0f0f0;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 18px;
+        }
+        #bank-savings-view .ssv1-progress-bar {
+            height: 100%;
+            width: 0%;
+            background: #000;
+            border-radius: 3px;
+            transition: width 0.35s ease;
+        }
+        #bank-savings-view .ssv1-challenge-chip {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #555;
+            background: #f5f5f7;
+            border-radius: 10px;
+            padding: 8px 10px;
+        }
+        #bank-savings-view .ssv1-actions-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        #bank-savings-view .ssv1-action-btn {
+            border: none;
+            border-radius: 16px;
+            padding: 14px 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #fff;
+            color: #000;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        #bank-savings-view .ssv1-action-btn.primary {
+            background: #000;
+            color: #fff;
+        }
+        #bank-savings-view .ssv1-section-title {
+            margin: 22px 0 10px;
+            font-size: 13px;
+            color: #8e8e93;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        #bank-savings-view .ssv1-list-container {
+            background: #fff;
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        #bank-savings-view .ssv1-list-item {
+            padding: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        #bank-savings-view .ssv1-list-item:last-child {
+            border-bottom: none;
+        }
+        #bank-savings-view .ssv1-item-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+        #bank-savings-view .ssv1-item-icon {
+            width: 36px;
+            height: 36px;
+            background: #f5f5f7;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+            flex-shrink: 0;
+        }
+        #bank-savings-view .ssv1-item-icon svg {
+            width: 20px;
+            height: 20px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        #bank-savings-view .ssv1-item-details {
+            min-width: 0;
+        }
+        #bank-savings-view .ssv1-item-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #000;
+        }
+        #bank-savings-view .ssv1-item-subtitle {
+            font-size: 12px;
+            color: #8e8e93;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #bank-savings-view .ssv1-item-amount {
+            font-size: 15px;
+            font-weight: 700;
+            color: #000;
+            flex-shrink: 0;
+        }
+        #bank-savings-view .ssv1-empty {
+            text-align: center;
+            color: #8e8e93;
+            font-size: 13px;
+            padding: 20px 10px;
+        }
+        #bank-savings-more-modal .bank-family-option-list {
+            gap: 8px;
+        }
+        #bank-savings-amount-modal input {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            padding: 12px;
+            font-size: 16px;
+            outline: none;
+            background: #fafafa;
+            color: #000;
+        }
+        #bank-savings-switch-modal .bank-family-option {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+    <div id="bank-app" class="app-screen hidden">
+        <div class="bank-v2-top-nav">
+            <button class="bank-v2-icon-btn" onclick="document.getElementById('bank-app').classList.add('hidden')">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <button class="bank-v2-icon-btn">
+                <i class="far fa-bell"></i>
+            </button>
+        </div>
+        <div class="bank-v2-scroll">
+            <div class="bank-v2-balance">
+                <div class="bank-v2-balance-label">Total Balance</div>
+                <div id="bank-v2-balance-amount" class="bank-v2-balance-amount"><span style="color:#8e8e93;font-weight:400;">¥</span>8,250<span style="color:#8e8e93;font-weight:400;">.50</span></div>
+            </div>
+
+            <div id="bank-v2-cards" class="bank-v2-cards">
+                <div id="bank-own-cash-card" class="bank-v2-card" onclick="window.openBankOwnCardDetailModal()">
+                    <div class="bank-v2-card-title">Black Card</div>
+                    <div class="bank-v2-chip"></div>
+                    <div class="bank-v2-card-info">
+                        <div class="bank-v2-card-num">**** 4921</div>
+                        <i class="fas fa-credit-card"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bank-v2-actions">
+                <div class="bank-v2-action-item"><div class="bank-v2-action-icon"><i class="fas fa-paper-plane"></i></div><span>Transfer</span></div>
+                <div class="bank-v2-action-item"><div class="bank-v2-action-icon"><i class="fas fa-wallet"></i></div><span>Deposit</span></div>
+                <div id="bank-family-card-btn" class="bank-v2-action-item" onclick="window.openFamilyCardTypeModal()"><div class="bank-v2-action-icon"><i class="fas fa-id-card"></i></div><span>亲属卡</span></div>
+                <div class="bank-v2-action-item"><div class="bank-v2-action-icon"><i class="fas fa-ellipsis"></i></div><span>More</span></div>
+            </div>
+
+            <div class="bank-v2-section">
+                <h3>Quick Send</h3>
+                <div class="bank-v2-list">
+                    <div class="bank-v2-contact">
+                        <div class="bank-v2-avatar">S</div>
+                        <div class="bank-v2-contact-meta">
+                            <div class="bank-v2-contact-name">Sarah Jenkins</div>
+                            <div class="bank-v2-contact-sub">sarah.j@email.com</div>
+                        </div>
+                        <button class="bank-v2-send">Send</button>
+                    </div>
+                    <div class="bank-v2-contact">
+                        <div class="bank-v2-avatar" style="background:#e5e5ea;color:#000;">M</div>
+                        <div class="bank-v2-contact-meta">
+                            <div class="bank-v2-contact-name">Mike Peterson</div>
+                            <div class="bank-v2-contact-sub">mike.p@email.com</div>
+                        </div>
+                        <button class="bank-v2-send">Send</button>
+                    </div>
+                    <div class="bank-v2-contact">
+                        <div class="bank-v2-avatar" style="background:#8e8e93;">A</div>
+                        <div class="bank-v2-contact-meta">
+                            <div class="bank-v2-contact-name">Alex Wong</div>
+                            <div class="bank-v2-contact-sub">alex.w@email.com</div>
+                        </div>
+                        <button class="bank-v2-send">Send</button>
+                    </div>
+                </div>
+            </div>
+            <div id="wallet-withdraw-modal" class="modal hidden" style="z-index: 200; align-items: center;">
+                <div class="modal-content" style="height: auto; border-radius: 12px; width: 85%; max-width: 320px; background-color: #fff;">
+                    <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
+                        <h3 style="width: 100%; text-align: center; color: #000;">提现</h3>
+                        <button class="close-btn" id="close-withdraw-modal" style="position: absolute; right: 15px;">&times;</button>
+                    </div>
+                    <div class="modal-body" style="padding: 20px;">
+                        <div class="setting-group">
+                            <label>提现金额</label>
+                            <div style="display: flex; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                                <span style="font-size: 24px; font-weight: bold; color: #000;">¥</span>
+                                <input type="number" id="withdraw-amount" placeholder="0.00" style="border: none; font-size: 24px; font-weight: bold; width: 100%; background: transparent; outline: none; color: #000;">
+                            </div>
+                        </div>
+                        <button id="do-withdraw-btn" class="ios-btn-block" style="margin-top: 20px; background-color: #000;">确认提现</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="bank-savings-view" class="bank-v2-scroll hidden">
+            <div class="ssv1-page">
+                <div class="ssv1-head-row">
+                    <div class="ssv1-title">Savings</div>
+                    <button id="bank-savings-more-btn" class="ssv1-icon-btn" type="button" aria-label="更多">
+                        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="5" cy="12" r="1"></circle>
+                            <circle cx="12" cy="12" r="1"></circle>
+                            <circle cx="19" cy="12" r="1"></circle>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="ssv1-savings-card">
+                    <div class="ssv1-partner-line">
+                        <div class="ssv1-avatar">我</div>
+                        <div class="ssv1-avatar dark">TA</div>
+                        <button id="bank-savings-switch-btn" class="ssv1-partner-switch" type="button">我 / 未选择</button>
+                    </div>
+                    <div id="bank-savings-amount" class="ssv1-amount">¥0.00</div>
+                    <div class="ssv1-goal-row">
+                        <span id="bank-savings-goal" class="ssv1-goal-text">目标：¥0.00</span>
+                        <div id="bank-savings-apr" class="ssv1-interest-badge">0.00% APY</div>
+                    </div>
+                    <div class="ssv1-progress-container">
+                        <div id="bank-savings-progress" class="ssv1-progress-bar"></div>
+                    </div>
+                    <div id="bank-savings-challenge" class="ssv1-challenge-chip">今日挑战：未开启</div>
+                </div>
+
+                <div class="ssv1-actions-grid">
+                    <button id="bank-savings-deposit-btn" class="ssv1-action-btn primary" type="button">Deposit</button>
+                    <button id="bank-savings-withdraw-btn" class="ssv1-action-btn" type="button">Withdraw</button>
+                </div>
+
+                <div class="ssv1-section-title">Recent Activity</div>
+                <div id="bank-savings-activity-list" class="ssv1-list-container">
+                    <div class="ssv1-empty">暂无共同存钱记录</div>
+                </div>
+            </div>
+        </div>
+        <div id="bank-statement-view" class="bank-v2-scroll hidden">
+            <div class="bank-v2-section">
+                <h3>银行流水</h3>
+                <div id="bank-statement-list" class="bank-v2-list"></div>
+            </div>
+        </div>
+        <div class="bank-v2-bottom-nav">
+            <div id="bank-nav-indicator" class="bank-v2-nav-indicator"></div>
+            <div id="bank-nav-home" class="bank-v2-nav-item active"><i class="fas fa-house"></i></div>
+            <div id="bank-nav-savings" class="bank-v2-nav-item"><i class="fas fa-chart-pie"></i></div>
+            <div id="bank-nav-history" class="bank-v2-nav-item"><i class="fas fa-clock-rotate-left"></i></div>
+        </div>
+
+        <div id="family-card-type-modal" class="modal hidden bank-family-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>亲属卡</h3>
+                    <button class="close-btn" onclick="document.getElementById('family-card-type-modal').classList.add('hidden')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="bank-family-option-list">
+                        <button class="bank-family-option" onclick="window.openFamilyCardContactPicker('request')">
+                            <div class="bank-family-option-title">索要亲属卡</div>
+                            <div class="bank-family-option-desc">向联系人申请开通并设置月额度</div>
+                        </button>
+                        <button class="bank-family-option" onclick="window.openFamilyCardContactPicker('grant')">
+                            <div class="bank-family-option-title">给予亲属卡</div>
+                            <div class="bank-family-option-desc">为联系人发起亲属卡给予请求</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="family-card-compose-modal" class="modal hidden bank-family-modal bank-family-compose">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="family-compose-title">填写亲属卡信息</h3>
+                    <button class="close-btn" onclick="window.closeFamilyCardComposeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="setting-group">
+                        <label for="family-compose-note">备注</label>
+                        <textarea id="family-compose-note" placeholder="可填写说明（选填）"></textarea>
+                    </div>
+                    <div class="setting-group hidden" id="family-compose-limit-group">
+                        <label for="family-compose-limit">每月额度（给予时必填）</label>
+                        <input id="family-compose-limit" type="number" min="1" step="1" placeholder="例如：2000">
+                    </div>
+                    <div class="compose-hint" id="family-compose-hint">发送后由对方决定是否接受亲属卡。</div>
+                    <button id="family-compose-send-btn" class="ios-btn-block" style="background:#000;">发送</button>
+                    <button class="ios-btn-block secondary" style="margin-top:10px;" onclick="window.closeFamilyCardComposeModal()">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="bank-family-detail-modal" class="modal hidden bank-family-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>亲属卡详情</h3>
+                    <button class="close-btn" onclick="window.closeBankFamilyDetailModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="bank-family-detail-kv">
+                        <span class="bank-family-detail-key">关系</span>
+                        <span id="bank-family-detail-flow" class="bank-family-detail-val">-</span>
+                    </div>
+                    <div class="bank-family-detail-kv">
+                        <span class="bank-family-detail-key">本月总额度</span>
+                        <span id="bank-family-detail-limit" class="bank-family-detail-val">-</span>
+                    </div>
+                    <div class="bank-family-detail-kv">
+                        <span class="bank-family-detail-key">本月剩余额度</span>
+                        <span id="bank-family-detail-remaining" class="bank-family-detail-val">-</span>
+                    </div>
+                    <button id="bank-family-unbind-btn" class="ios-btn-block secondary" style="margin-top:16px;color:#ff3b30;">解绑亲属卡</button>
+                </div>
+            </div>
+        </div>
+        <div id="bank-own-card-detail-modal" class="modal hidden bank-family-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>银行卡余额</h3>
+                    <button class="close-btn" onclick="window.closeBankOwnCardDetailModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="bank-family-detail-kv">
+                        <span class="bank-family-detail-key">本人银行卡余额</span>
+                        <span id="bank-own-card-cash" class="bank-family-detail-val">¥0.00</span>
+                    </div>
+                    <div class="bank-family-detail-kv">
+                        <span class="bank-family-detail-key">说明</span>
+                        <span class="bank-family-detail-val">不包含亲属卡额度</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="bank-funding-source-modal" class="modal hidden bank-family-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>选择资金来源</h3>
+                    <button class="close-btn" onclick="window.closeBankFundingSourceModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="bank-funding-source-list" class="bank-family-option-list"></div>
+                </div>
+            </div>
+        </div>
+        <div id="bank-savings-more-modal" class="modal hidden bank-family-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>共同存钱</h3>
+                    <button class="close-btn" onclick="document.getElementById('bank-savings-more-modal').classList.add('hidden')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="bank-family-option-list">
+                        <button id="bank-savings-invite-btn" class="bank-family-option" type="button">
+                            <div class="bank-family-option-title">邀请一起存钱</div>
+                            <div class="bank-family-option-desc">选择微信联系人，发起共同存钱邀请</div>
+                        </button>
+                        <button id="bank-savings-challenge-btn" class="bank-family-option" type="button">
+                            <div class="bank-family-option-title">挑战设置</div>
+                            <div class="bank-family-option-desc">设置随机挑战开关与难度</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="bank-savings-amount-modal" class="modal hidden bank-family-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="bank-savings-amount-title">输入金额</h3>
+                    <button class="close-btn" onclick="window.closeSavingsAmountModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="setting-group">
+                        <label for="bank-savings-amount-input">金额</label>
+                        <input id="bank-savings-amount-input" type="number" min="0.01" step="0.01" placeholder="例如：200.00">
+                    </div>
+                    <button id="bank-savings-amount-confirm-btn" class="ios-btn-block" style="background:#000;">确认</button>
+                </div>
+            </div>
+        </div>
+        <div id="bank-savings-switch-modal" class="modal hidden bank-family-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>切换联系人</h3>
+                    <button class="close-btn" onclick="document.getElementById('bank-savings-switch-modal').classList.add('hidden')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="bank-savings-switch-list" class="bank-family-option-list"></div>
+                </div>
+            </div>
+        </div>
+        <div id="bank-savings-challenge-modal" class="modal hidden bank-family-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>挑战设置</h3>
+                    <button class="close-btn" onclick="document.getElementById('bank-savings-challenge-modal').classList.add('hidden')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="setting-group">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input id="bank-savings-challenge-enabled" type="checkbox">
+                            开启随机挑战
+                        </label>
+                    </div>
+                    <div class="setting-group">
+                        <label for="bank-savings-challenge-level">难度</label>
+                        <select id="bank-savings-challenge-level" style="width:100%;border:1px solid #ddd;border-radius:10px;padding:10px;background:#fafafa;color:#000;">
+                            <option value="easy">easy</option>
+                            <option value="normal">normal</option>
+                            <option value="hard">hard</option>
+                        </select>
+                    </div>
+                    <button id="bank-savings-challenge-save-btn" class="ios-btn-block" style="background:#000;">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="family-card-detail-modal" class="modal hidden" style="z-index: 320; align-items: center;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>亲属卡详情</h3>
+                <button class="close-btn" onclick="window.closeFamilyCardDetail()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding-top: 6px;">
+                <div class="family-detail-kv">
+                    <span class="family-detail-key">类型</span>
+                    <span class="family-detail-val" id="family-detail-type">-</span>
+                </div>
+                <div class="family-detail-kv">
+                    <span class="family-detail-key">状态</span>
+                    <span class="family-detail-val" id="family-detail-status">-</span>
+                </div>
+                <div class="family-detail-kv">
+                    <span class="family-detail-key">每月额度</span>
+                    <span class="family-detail-val" id="family-detail-limit">-</span>
+                </div>
+                <div class="family-detail-kv">
+                    <span class="family-detail-key">发起时间</span>
+                    <span class="family-detail-val" id="family-detail-time">-</span>
+                </div>
+                <div class="family-detail-kv">
+                    <span class="family-detail-key">备注</span>
+                    <span class="family-detail-val" id="family-detail-note">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="savings-invite-detail-modal" class="modal hidden" style="z-index: 320; align-items: center;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>共同存钱详情</h3>
+                <button class="close-btn" onclick="window.closeSavingsInviteDetail()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding-top: 6px;">
+                <div class="family-detail-kv">
+                    <span class="family-detail-key">标题</span>
+                    <span class="family-detail-val" id="savings-invite-detail-title">共同存钱邀请</span>
+                </div>
+                <div class="family-detail-kv">
+                    <span class="family-detail-key">计划</span>
+                    <span class="family-detail-val" id="savings-invite-detail-plan">共同存钱计划</span>
+                </div>
+                <div class="family-detail-kv">
+                    <span class="family-detail-key">目标</span>
+                    <span class="family-detail-val" id="savings-invite-detail-target">¥0.00</span>
+                </div>
+                <div class="family-detail-kv">
+                    <span class="family-detail-key">基础年化</span>
+                    <span class="family-detail-val" id="savings-invite-detail-apr">0.00%</span>
+                </div>
+                <div class="family-detail-kv">
+                    <span class="family-detail-key">提示</span>
+                    <span class="family-detail-val" id="savings-invite-detail-text">已邀请你一起存钱</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 音频元素 -->
     <audio id="bg-music" loop></audio>
 
@@ -4012,15 +5808,25 @@
     <script src="js/apps.js"></script>
     <script src="js/icity.js"></script>
     <script src="js/home.js"></script>
+    <script src="js/music_app_screen.js"></script>
     <script src="js/check_phone.js"></script>
-    <script src="js/chat.js"></script>
+    <script src="js/chat/01-contact-settings.js"></script>
+    <script src="js/chat/02-message-bank.js"></script>
+    <script src="js/chat/03-ai-engine.js"></script>
+    <script src="js/chat/04-media-init.js"></script>
+    <script src="js/chat/05-addressbook-friends.js"></script>
     <script src="js/shopping.js"></script>
     <script src="js/forum.js"></script>
     <script src="js/games.js"></script>
     <script src="js/call_history.js"></script>
     <script src="js/lookus.js"></script>
+    <script src="js/novelai.js"></script>
+    <script src="js/settings_v3.js"></script>
     <script>
         // 修复 资料卡 背景点击上传图片
+
+
+
         document.addEventListener('DOMContentLoaded', () => {
             const aiProfileBg = document.getElementById('ai-profile-bg');
             const aiProfileBgInput = document.getElementById('ai-profile-bg-input');
@@ -4331,27 +6137,3 @@
 
 </body>
 </html>
-
-</file_content>
-
-现在您已经获得了文件的最新状态，请使用更少、更精确的 SEARCH 块再次尝试操作。特别是对于大型文件，明智的做法可能是尝试将自己限制在每次不超过 5 个 SEARCH/REPLACE 块，然后等待用户对操作结果的响应，然后再进行另一个 replace_in_file 调用来进行额外的编辑。
-（如果您连续 3 次遇到此错误，您可以使用 write_to_file 工具作为后备方案。）
-</error><environment_details>
-# VSCode Visible Files
-script.js
-index.html
-
-# VSCode Open Tabs
-style.css
-script.js
-index.html
-
-# 当前时间
-2026/1/24 下午3:18:00 (Asia/Shanghai, UTC+8:00)
-
-# 上下文窗口使用
-0 / 300K 令牌已使用 (0%)
-
-# 当前模式
-行动模式
-</environment_details>

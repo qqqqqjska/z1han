@@ -1,14 +1,241 @@
-// 购物应用功能模块
+﻿// 购物应用功能模块
 
 // 状态
 let isShoppingManageMode = false;
+let cashActivityState = {
+    active: false,
+    amount: 0,
+    target: 100,
+    helpers: [],
+    bargains: {} // {productId: {currentPrice: 0, originalPrice: 0, logs: []}}
+};
 let selectedShoppingProducts = new Set();
 let currentShoppingProduct = null;
+let currentShoppingCategory = 'All';
+let currentOrderTab = 'all';
+let pendingDeliveryCheckoutShopKey = '';
+
+function ensureDeliveryDraftByShop() {
+    if (!window.iphoneSimState) window.iphoneSimState = {};
+    if (
+        !window.iphoneSimState.deliveryDraftByShop ||
+        typeof window.iphoneSimState.deliveryDraftByShop !== 'object' ||
+        Array.isArray(window.iphoneSimState.deliveryDraftByShop)
+    ) {
+        window.iphoneSimState.deliveryDraftByShop = {};
+    }
+    return window.iphoneSimState.deliveryDraftByShop;
+}
+
+function getDeliveryShopKey(shopOrItem) {
+    let shopName = '';
+    if (typeof shopOrItem === 'string') {
+        shopName = shopOrItem;
+    } else if (shopOrItem && typeof shopOrItem === 'object') {
+        shopName = shopOrItem.shop_name || shopOrItem.shopName || shopOrItem.title || '';
+    }
+
+    const normalizedName = String(shopName || '外卖商家').trim() || '外卖商家';
+    return `delivery_shop_${encodeURIComponent(normalizedName)}`;
+}
+
+function getDeliveryDraft(shopKey) {
+    if (!shopKey) return null;
+    const drafts = ensureDeliveryDraftByShop();
+    const draft = drafts[shopKey];
+    if (!draft || !Array.isArray(draft.items)) return null;
+    return draft;
+}
+
+function upsertDeliveryDraftItem(shopKey, item, options = {}) {
+    if (!shopKey || !item) return null;
+
+    const drafts = ensureDeliveryDraftByShop();
+    const safeShopName = String(options.shopName || item.shop_name || '外卖商家').trim() || '外卖商家';
+    const safeTitle = String(item.title || '菜品').trim() || '菜品';
+    const safePrice = Number(item.price || 0);
+    const itemKey = item.itemKey || `${safeTitle}__${safePrice.toFixed(2)}`;
+    const now = Date.now();
+
+    let draft = drafts[shopKey];
+    if (!draft || !Array.isArray(draft.items)) {
+        draft = {
+            shopKey,
+            shopName: safeShopName,
+            items: [],
+            updatedAt: now
+        };
+    }
+
+    const existing = draft.items.find((draftItem) => draftItem.itemKey === itemKey);
+    if (existing) {
+        existing.count = Number(existing.count || 1) + 1;
+        existing.updatedAt = now;
+        if (!existing.image && item.image) existing.image = item.image;
+    } else {
+        draft.items.push({
+            itemKey,
+            title: safeTitle,
+            price: safePrice,
+            count: Math.max(1, Number(item.count || 1)),
+            isDelivery: true,
+            shop_name: safeShopName,
+            image: item.image || item.aiImage || ''
+        });
+    }
+
+    draft.shopName = safeShopName;
+    draft.updatedAt = now;
+    drafts[shopKey] = draft;
+    saveConfig();
+    return draft;
+}
+
+function clearDeliveryDraft(shopKey) {
+    if (!shopKey) return;
+    const drafts = ensureDeliveryDraftByShop();
+    if (!drafts[shopKey]) return;
+    delete drafts[shopKey];
+    saveConfig();
+}
+
+function getDeliveryDraftStats(shopKey) {
+    const draft = getDeliveryDraft(shopKey);
+    if (!draft) {
+        return {
+            shopName: '外卖商家',
+            count: 0,
+            total: 0,
+            items: []
+        };
+    }
+
+    const normalizedItems = (draft.items || [])
+        .filter(Boolean)
+        .map((item) => {
+            const safeTitle = String(item.title || '菜品').trim() || '菜品';
+            const safePrice = Number(item.price || 0);
+            const safeCount = Math.max(1, Number(item.count || 1));
+            const itemKey = item.itemKey || `${safeTitle}__${safePrice.toFixed(2)}`;
+            return {
+                ...item,
+                itemKey,
+                title: safeTitle,
+                price: safePrice,
+                count: safeCount,
+                isDelivery: true,
+                shop_name: item.shop_name || draft.shopName || '外卖商家',
+                image: item.image || ''
+            };
+        });
+
+    const count = normalizedItems.reduce((sum, item) => sum + Number(item.count || 0), 0);
+    const total = normalizedItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.count || 0)), 0);
+
+    return {
+        shopName: draft.shopName || '外卖商家',
+        count,
+        total,
+        items: normalizedItems
+    };
+}
+
+function buildDeliveryCheckoutItems(shopKey) {
+    const stats = getDeliveryDraftStats(shopKey);
+    return stats.items.map((item) => {
+        let image = item.image || item.aiImage || '';
+        if (!image && typeof generatePlaceholderImage === 'function') {
+            image = generatePlaceholderImage(300, 300, item.title || '外卖', '#007AFF');
+        }
+        return {
+            title: item.title,
+            price: Number(item.price || 0),
+            count: Number(item.count || 1),
+            isDelivery: true,
+            shop_name: item.shop_name || stats.shopName || '外卖商家',
+            image
+        };
+    });
+}
+
+function updateDeliveryDetailActionButton(shopKey) {
+    if (!shopKey) return;
+    const actionBtn = document.getElementById('food-detail-action-btn');
+    if (!actionBtn) return;
+    const stats = getDeliveryDraftStats(shopKey);
+    actionBtn.textContent = stats.count > 0 ? `查看订单(${stats.count})` : '查看订单';
+    actionBtn.dataset.shopKey = shopKey;
+}
+
+// 日志调试功能
+let shoppingDebugLogs = [];
+
+window.addShoppingLog = function(msg, data = null) {
+    const time = new Date().toLocaleTimeString();
+    let logEntry = `[${time}] ${msg}`;
+    if (data !== null) {
+        if (typeof data === 'object') {
+            try {
+                logEntry += '\n' + JSON.stringify(data, null, 2);
+            } catch (e) {
+                logEntry += '\n' + String(data);
+            }
+        } else {
+            logEntry += '\n' + String(data);
+        }
+    }
+    shoppingDebugLogs.push(logEntry);
+    console.log('[Shopping]', msg, data);
+};
+
+window.showShoppingDebugLog = function() {
+    let modal = document.getElementById('shopping-debug-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'shopping-debug-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 10000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        `;
+        modal.innerHTML = `
+            <div style="background: #fff; width: 90%; height: 80%; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+                <div style="padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #f8f8f8;">
+                    <h3 style="margin: 0; font-size: 16px;">购物应用诊断日志</h3>
+                    <button id="close-debug-log" style="padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; background: #fff; cursor: pointer;">关闭</button>
+                </div>
+                <pre id="shopping-debug-content" style="flex: 1; overflow: auto; padding: 15px; font-size: 12px; white-space: pre-wrap; word-break: break-all; background: #282c34; color: #abb2bf; margin: 0; font-family: monospace;"></pre>
+                <div style="padding: 15px; border-top: 1px solid #eee; text-align: right; background: #f8f8f8;">
+                    <button onclick="shoppingDebugLogs=[]; document.getElementById('shopping-debug-content').textContent='';" style="padding: 8px 15px; border: 1px solid #ddd; border-radius: 4px; background: #fff; cursor: pointer; margin-right: 10px;">清空</button>
+                    <button onclick="window.copyShoppingDebugLog()" style="padding: 8px 15px; background: #007AFF; color: #fff; border: none; border-radius: 4px; cursor: pointer;">复制日志</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        modal.querySelector('#close-debug-log').onclick = () => {
+            modal.style.display = 'none';
+        };
+        
+        window.copyShoppingDebugLog = function() {
+            const content = shoppingDebugLogs.join('\n\n');
+            navigator.clipboard.writeText(content).then(() => alert('已复制到剪贴板')).catch(err => alert('复制失败: ' + err));
+        };
+    }
+    
+    const contentEl = modal.querySelector('#shopping-debug-content');
+    contentEl.textContent = shoppingDebugLogs.join('\n\n');
+    modal.style.display = 'flex';
+};
 
 // 切换 Tab
 window.switchShoppingTab = function(tabName) {
     // 1. Update Tab Bar
-    const tabs = document.querySelectorAll('#shopping-app .wechat-tab-item');
+    const tabs = document.querySelectorAll('#shopping-app .nav-item');
     tabs.forEach(tab => {
         if (tab.dataset.tab === tabName) {
             tab.classList.add('active');
@@ -22,18 +249,10 @@ window.switchShoppingTab = function(tabName) {
     contents.forEach(content => {
         if (content.id === `shopping-tab-${tabName}`) {
             content.style.display = 'block';
-            // 添加自然过渡动画 (仅针对购物车和订单页)
-            // 购物车页面单独在 renderShoppingCart 中处理动画，避免父容器transform影响fixed定位
-            if (tabName === 'orders') {
-                content.classList.remove('shopping-tab-enter');
-                void content.offsetWidth; // Trigger reflow
-                content.classList.add('shopping-tab-enter');
-            } else if (tabName === 'cart') {
-                content.classList.remove('shopping-tab-enter');
-            }
+            content.classList.add('shopping-animate-enter');
         } else {
             content.style.display = 'none';
-            content.classList.remove('shopping-tab-enter');
+            content.classList.remove('shopping-animate-enter');
         }
     });
 
@@ -46,6 +265,15 @@ window.switchShoppingTab = function(tabName) {
     } else {
         if (linkBtn) linkBtn.classList.remove('hidden');
         if (menuBtn) menuBtn.classList.remove('hidden');
+    }
+    
+    // Update Header Title based on Tab
+    const appTitle = document.querySelector('#shopping-app .app-title');
+    if (appTitle) {
+        if (tabName === 'home') appTitle.textContent = "Møde.";
+        else if (tabName === 'cart') appTitle.textContent = "Cart";
+        else if (tabName === 'delivery') appTitle.textContent = "Food";
+        else if (tabName === 'orders') appTitle.textContent = "Orders";
     }
 
     if (tabName === 'cart') {
@@ -63,40 +291,37 @@ function ensureShoppingContainer() {
     const container = document.getElementById('shopping-tab-home');
     if (!container) return false;
 
-    let waterfallContainer = container.querySelector('.shopping-waterfall-container');
-    if (!waterfallContainer) {
-        // 清除初始的空状态/默认内容
-        if (!window.iphoneSimState.shoppingProducts || window.iphoneSimState.shoppingProducts.length === 0) {
-             container.innerHTML = '';
-        } else {
-             // 如果有数据但没容器，可能是重新渲染，清空一下比较安全
-             container.innerHTML = '';
-        }
+    let gridContainer = container.querySelector('.shopping-product-grid');
+    if (!gridContainer) {
+        container.innerHTML = `
+            <div class="shopping-hero shopping-animate-enter">
+                <p>Autumn Collection</p>
+                <h2>Minimalist <br>Essence</h2>
+                <a href="#" class="shopping-hero-btn">EXPLORE</a>
+            </div>
+            
+            <div class="shopping-section-header shopping-animate-enter">
+                <span class="shopping-section-title">Categories</span>
+                <a href="#" class="shopping-see-all">Show all</a>
+            </div>
+            <div class="shopping-categories shopping-animate-enter" id="shopping-category-list">
+                <!-- Categories will be rendered here -->
+            </div>
+        `;
 
-        waterfallContainer = document.createElement('div');
-        waterfallContainer.className = 'shopping-waterfall-container';
-        waterfallContainer.style.display = 'flex';
-        waterfallContainer.style.gap = '10px';
-        waterfallContainer.style.padding = '10px';
-        waterfallContainer.style.alignItems = 'flex-start';
+        gridContainer = document.createElement('div');
+        gridContainer.className = 'shopping-product-grid shopping-animate-enter';
+        container.appendChild(gridContainer);
         
-        const col1 = document.createElement('div');
-        col1.id = 'shopping-col-1';
-        col1.style.flex = '1';
-        col1.style.display = 'flex';
-        col1.style.flexDirection = 'column';
-        col1.style.gap = '10px';
+        const exploreBtn = container.querySelector('.shopping-hero-btn');
+        if (exploreBtn) {
+            exploreBtn.onclick = (e) => {
+                e.preventDefault();
+                initCashActivity();
+            };
+        }
         
-        const col2 = document.createElement('div');
-        col2.id = 'shopping-col-2';
-        col2.style.flex = '1';
-        col2.style.display = 'flex';
-        col2.style.flexDirection = 'column';
-        col2.style.gap = '10px';
-        
-        waterfallContainer.appendChild(col1);
-        waterfallContainer.appendChild(col2);
-        container.appendChild(waterfallContainer);
+        renderShoppingCategories();
     }
     return true;
 }
@@ -106,495 +331,34 @@ function ensureDeliveryContainer() {
     const container = document.getElementById('shopping-tab-delivery');
     if (!container) return false;
 
-    let deliveryContainer = container.querySelector('.delivery-container');
-    if (!deliveryContainer) {
-        // 清除初始状态
-        if (!window.iphoneSimState.deliveryItems || window.iphoneSimState.deliveryItems.length === 0) {
-             container.innerHTML = '';
-        } else {
-             container.innerHTML = '';
-        }
+    let listContainer = container.querySelector('.shopping-restaurant-list');
+    if (!listContainer) {
+        container.innerHTML = `
+            <div class="shopping-food-search" style="margin-top: 10px;">
+                <svg viewBox="0 0 24 24" style="width:18px;height:18px;color:#8e8e93;">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <span>Crave something?</span>
+            </div>
+            
+            <div class="shopping-section-header" style="padding-top: 10px; padding-bottom: 10px;">
+                <span class="shopping-section-title" style="font-size:18px;">Popular Near You</span>
+            </div>
+        `;
 
-        deliveryContainer = document.createElement('div');
-        deliveryContainer.className = 'delivery-container';
-        deliveryContainer.style.padding = '10px';
-        deliveryContainer.style.display = 'flex';
-        deliveryContainer.style.flexDirection = 'column';
-        deliveryContainer.style.gap = '10px';
+        listContainer = document.createElement('div');
+        listContainer.className = 'shopping-restaurant-list';
+        listContainer.style.marginTop = '0';
         
-        container.appendChild(deliveryContainer);
+        container.appendChild(listContainer);
     }
     return true;
 }
 
-// 注入样式
-function injectShoppingStyles() {
-    if (document.getElementById('shopping-styles')) return;
-    const style = document.createElement('style');
-    style.id = 'shopping-styles';
-    style.textContent = `
-        :root {
-            --shopping-bg: #f2f2f7;
-            --shopping-card-bg: #ffffff;
-            --shopping-text-primary: #000000;
-            --shopping-text-secondary: #8e8e93;
-            --shopping-accent: #000000; /* Minimalist Black */
-            --shopping-accent-blue: #007AFF;
-            --shopping-price: #000000; /* Minimalist Black for price too, or keep subtle */
-            --shopping-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            --shopping-radius: 16px;
-        }
-
-        #shopping-app {
-            background-color: var(--shopping-bg) !important;
-            font-family: -apple-system, BlinkMacSystemFont, "San Francisco", "Helvetica Neue", sans-serif;
-        }
-
-        /* 简约卡片样式 */
-        .shopping-card {
-            position: relative;
-            background: var(--shopping-card-bg);
-            border-radius: var(--shopping-radius);
-            overflow: hidden;
-            box-shadow: var(--shopping-shadow);
-            transition: transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.2s;
-            border: none;
-        }
-        
-        .shopping-card:active {
-            transform: scale(0.96);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-
-        .shopping-card.manage-active {
-            transform: scale(0.95);
-            box-shadow: 0 0 0 2px var(--shopping-accent-blue);
-        }
-
-        .shopping-card-content {
-            padding: 12px;
-        }
-
-        .shopping-card-title {
-            font-size: 15px;
-            font-weight: 600;
-            color: var(--shopping-text-primary);
-            margin-bottom: 6px;
-            line-height: 1.3;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-
-        .shopping-card-meta {
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-            margin-top: 8px;
-        }
-
-        .shopping-card-price {
-            font-size: 17px;
-            font-weight: 700;
-            color: var(--shopping-text-primary);
-        }
-        
-        .shopping-card-price::before {
-            content: '¥';
-            font-size: 12px;
-            margin-right: 1px;
-            font-weight: 500;
-        }
-
-        .shopping-card-shop {
-            font-size: 11px;
-            color: var(--shopping-text-secondary);
-            display: flex;
-            align-items: center;
-        }
-
-        /* 复选框样式 */
-        .shopping-checkbox {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 24px;
-            height: 24px;
-            background: rgba(255,255,255,0.9);
-            border: 1px solid rgba(0,0,0,0.1);
-            border-radius: 50%;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 10;
-            cursor: pointer;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .shopping-checkbox.checked {
-            background: var(--shopping-accent-blue);
-            border-color: transparent;
-        }
-        .shopping-checkbox.checked::after {
-            content: '';
-            width: 10px;
-            height: 5px;
-            border-left: 2px solid #fff;
-            border-bottom: 2px solid #fff;
-            transform: rotate(-45deg);
-            margin-top: -2px;
-        }
-        .manage-mode .shopping-checkbox {
-            display: flex;
-        }
-
-        /* 详情页样式 */
-        .shopping-detail-modal {
-            background: #fff;
-            border-radius: 20px 20px 0 0;
-            box-shadow: 0 -10px 30px rgba(0,0,0,0.1);
-        }
-        
-        .shopping-btn-primary {
-            background: #000;
-            color: #fff;
-            border: none;
-            border-radius: 25px;
-            padding: 12px 24px;
-            font-size: 16px;
-            font-weight: 600;
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: opacity 0.2s;
-        }
-        
-        .shopping-btn-primary:active {
-            opacity: 0.8;
-        }
-
-        .shopping-btn-secondary {
-            background: #f2f2f7;
-            color: #000;
-            border: none;
-            border-radius: 25px;
-            padding: 12px 24px;
-            font-size: 16px;
-            font-weight: 600;
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background 0.2s;
-        }
-        
-        .shopping-btn-secondary:active {
-            background: #e5e5ea;
-        }
-
-        /* 购物车列表 */
-        .cart-item-modern {
-            background: #fff;
-            border-radius: 16px;
-            padding: 15px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 15px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            position: relative;
-            overflow: hidden;
-            transition: transform 0.2s;
-        }
-
-        .cart-item-modern:active {
-            transform: scale(0.98);
-        }
-
-        /* 订单列表 */
-        .order-card-modern {
-            background: #fff;
-            border-radius: 16px;
-            padding: 16px;
-            margin-bottom: 16px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        }
-
-        .order-status-badge {
-            font-size: 12px;
-            padding: 4px 10px;
-            border-radius: 12px;
-            background: #f2f2f7;
-            color: #000;
-            font-weight: 500;
-        }
-        
-        .order-status-badge.active {
-            background: #000;
-            color: #fff;
-        }
-
-        /* 外卖卡片 */
-        .delivery-card-modern {
-            background: #fff;
-            border-radius: 16px;
-            padding: 12px;
-            display: flex;
-            gap: 12px;
-            margin-bottom: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            transition: transform 0.2s;
-            position: relative;
-        }
-        
-        .delivery-card-modern:active {
-            transform: scale(0.98);
-        }
-        
-        .delivery-card-modern.manage-active {
-            box-shadow: 0 0 0 2px var(--shopping-accent-blue);
-        }
-
-        /* 隐藏的消息样式覆盖 */
-        .message-content.pay-request-msg,
-        .message-content.shopping-gift-msg,
-        .message-content.delivery-share-msg {
-            background: transparent !important;
-            padding: 0 !important;
-            box-shadow: none !important;
-        }
-        .message-content.pay-request-msg::before,
-        .message-content.pay-request-msg::after,
-        .message-content.shopping-gift-msg::before,
-        .message-content.shopping-gift-msg::after,
-        .message-content.delivery-share-msg::before,
-        .message-content.delivery-share-msg::after {
-            display: none !important;
-        }
-
-        /* 动画定义 */
-        @keyframes shoppingFadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px) scale(0.98);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
-
-        @keyframes shoppingScaleIn {
-            from {
-                opacity: 0;
-                transform: scale(0.9);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-
-        .shopping-anim-item {
-            opacity: 0; /* 初始隐藏，等待动画执行 */
-            animation: shoppingFadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        
-        /* 页面切换动画 - 移除导致fixed定位异常的scale变换 */
-        .shopping-tab-content {
-            /* animation: shoppingScaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); */
-        }
-
-        /* 自然过渡动画 */
-        @keyframes shoppingPageEnter {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .shopping-tab-enter {
-            animation: shoppingPageEnter 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-        }
-
-        /* 规格选择样式 */
-        .spec-group {
-            margin-bottom: 15px;
-        }
-        .spec-title {
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: #333;
-        }
-        .spec-options {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        .spec-option-btn {
-            padding: 6px 12px;
-            border-radius: 16px;
-            background: #f5f5f5;
-            color: #333;
-            font-size: 13px;
-            border: 1px solid transparent;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .spec-option-btn.selected {
-            background: #FFF0E6;
-            color: #FF5000;
-            border-color: #FF5000;
-            font-weight: 500;
-        }
-
-        /* 订单进度条样式 */
-        .order-progress-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 2000;
-            display: flex;
-            align-items: flex-end;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s;
-        }
-        .order-progress-modal.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
-        .order-progress-content {
-            background: #fff;
-            width: 100%;
-            border-radius: 20px 20px 0 0;
-            padding: 25px 20px;
-            transform: translateY(100%);
-            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-            padding-bottom: calc(30px + env(safe-area-inset-bottom));
-        }
-        .order-progress-modal.active .order-progress-content {
-            transform: translateY(0);
-        }
-        
-        .progress-timeline {
-            display: flex;
-            justify-content: space-between;
-            position: relative;
-            margin: 40px 10px 50px;
-        }
-        /* Connecting Line Background */
-        .progress-timeline::before {
-            content: '';
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            right: 10px;
-            height: 3px;
-            background: #f2f2f7;
-            z-index: 0;
-            border-radius: 2px;
-        }
-        /* Active Line - set width via JS */
-        .progress-line-active {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            height: 3px;
-            background: #000;
-            z-index: 1;
-            transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
-            border-radius: 2px;
-        }
-        
-        .progress-step {
-            position: relative;
-            z-index: 2;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-            width: 40px; 
-        }
-        .progress-dot {
-            width: 22px;
-            height: 22px;
-            border-radius: 50%;
-            background: #fff;
-            border: 3px solid #f2f2f7;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s;
-            box-sizing: border-box;
-        }
-        .progress-dot.active {
-            border-color: #000;
-            background: #000;
-        }
-        .progress-dot.active::after {
-            content: '';
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #fff;
-        }
-        .progress-label {
-            font-size: 13px;
-            color: #8e8e93;
-            font-weight: 500;
-            white-space: nowrap;
-        }
-        .progress-label.active {
-            color: #000;
-            font-weight: 600;
-        }
-        .progress-time {
-            font-size: 11px;
-            color: #8e8e93;
-            position: absolute;
-            top: 55px;
-            width: 120px;
-            text-align: center;
-            line-height: 1.2;
-        }
-        
-        /* 订单进度消息卡片 */
-        .order-progress-msg {
-            background: transparent !important;
-            padding: 0 !important;
-            box-shadow: none !important;
-        }
-        .order-progress-card {
-            background: #fff;
-            border-radius: 12px;
-            padding: 15px;
-            width: 260px;
-            /* height: 100px; */ /* Let content define height, but keep it roughly 4:1 aspect ratio visually if needed, though width 260 height ~100 is close to 2.6:1 */
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-        }
-    `;
-    document.head.appendChild(style);
-}
-
 // 初始化监听器
 function setupShoppingListeners() {
-    injectShoppingStyles();
-
-    // 启动订单状态检查定时器 (每10秒检查一次)
+    // 启动订单状态检查定时器
     setInterval(updateShoppingOrderStatuses, 10000);
 
     const closeBtn = document.getElementById('close-shopping-app');
@@ -607,18 +371,16 @@ function setupShoppingListeners() {
     const menuBtn = document.getElementById('shopping-menu-btn');
     if (menuBtn) {
         menuBtn.addEventListener('click', () => {
-            const currentTab = document.querySelector('#shopping-app .wechat-tab-item.active');
+            const currentTab = document.querySelector('#shopping-app .nav-item.active');
             const optGenerate = document.getElementById('shopping-opt-generate');
             const optAdd = document.getElementById('shopping-opt-add');
             const optManage = document.getElementById('shopping-opt-manage');
             
             if (currentTab && currentTab.dataset.tab === 'delivery') {
-                // 外卖页选项
                 if (optGenerate) optGenerate.querySelector('span').textContent = '生成外卖';
                 if (optManage) optManage.querySelector('span').textContent = '管理外卖';
                 if (optAdd) optAdd.classList.add('hidden');
             } else {
-                // 商品页选项
                 if (optGenerate) optGenerate.querySelector('span').textContent = '生成商品';
                 if (optManage) optManage.querySelector('span').textContent = '管理商品';
                 if (optAdd) optAdd.classList.remove('hidden');
@@ -627,7 +389,6 @@ function setupShoppingListeners() {
         });
     }
 
-    // 选项菜单
     const optGenerate = document.getElementById('shopping-opt-generate');
     const optAdd = document.getElementById('shopping-opt-add');
     const optManage = document.getElementById('shopping-opt-manage');
@@ -651,7 +412,6 @@ function setupShoppingListeners() {
 
     if (optCancel) optCancel.addEventListener('click', () => modal.classList.add('hidden'));
 
-    // 新增商品
     const closeAddBtn = document.getElementById('close-shopping-add-product');
     const saveAddBtn = document.getElementById('save-shopping-product-btn');
     const addModal = document.getElementById('shopping-add-product-modal');
@@ -659,7 +419,6 @@ function setupShoppingListeners() {
     if (closeAddBtn) closeAddBtn.addEventListener('click', () => addModal.classList.add('hidden'));
     if (saveAddBtn) saveAddBtn.addEventListener('click', handleSaveShoppingProduct);
 
-    // 管理模式
     const exitManageBtn = document.getElementById('exit-shopping-manage-btn');
     const deleteItemsBtn = document.getElementById('delete-shopping-items-btn');
     const selectAllBtn = document.getElementById('shopping-select-all-btn');
@@ -673,31 +432,38 @@ function setupShoppingListeners() {
         linkContactBtn.addEventListener('click', () => {
             openShoppingContactPicker();
         });
-        // 初始化按钮状态
         updateLinkButtonState();
     }
 
-    const shareBtn = document.getElementById('shopping-share-btn');
-    if (shareBtn) {
-        shareBtn.addEventListener('click', () => {
-            console.log('Share button clicked', currentShoppingProduct);
-            if (currentShoppingProduct) {
-                openProductShareContactPicker(currentShoppingProduct);
-            } else {
-                alert('当前没有选中的商品');
+    // Detail View Back Buttons
+    window.closeDetail = function(type) {
+        if (type === 'product') {
+            document.getElementById('product-detail').classList.remove('active');
+        } else if (type === 'food') {
+            document.getElementById('food-detail').classList.remove('active');
+        }
+    };
+
+    // Tab Clicks
+    const tabs = document.querySelectorAll('#shopping-app .nav-item');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const tabName = tab.dataset.tab;
+            if (tabName) {
+                window.switchShoppingTab(tabName);
             }
         });
-    }
-
-    // 详情页关闭按钮
-    const closeDetailBtn = document.getElementById('close-shopping-detail');
-    if (closeDetailBtn) {
-        closeDetailBtn.addEventListener('click', () => {
-            document.getElementById('shopping-detail-screen').classList.add('hidden');
+    });
+    
+    const orderTabs = document.querySelectorAll('.shopping-order-tab');
+    orderTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            orderTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
         });
-    }
-
-// 规格弹窗关闭
+    });
+    
+    // Spec Modal Listeners
     const closeSpecBtn = document.getElementById('close-shopping-spec');
     if (closeSpecBtn) {
         closeSpecBtn.addEventListener('click', () => {
@@ -709,17 +475,16 @@ function setupShoppingListeners() {
     if (confirmSpecBtn) {
         confirmSpecBtn.addEventListener('click', handleConfirmShoppingSpec);
     }
-
-    // Bind Tab Clicks
-    const tabs = document.querySelectorAll('#shopping-app .wechat-tab-item');
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const tabName = tab.dataset.tab;
-            if (tabName) {
-                window.switchShoppingTab(tabName);
+    
+    // Share Button
+    const shareBtn = document.getElementById('shopping-share-btn');
+    if (shareBtn) {
+        shareBtn.addEventListener('click', () => {
+            if (currentShoppingProduct) {
+                openProductShareContactPicker(currentShoppingProduct);
             }
         });
-    });
+    }
 }
 
 function handleSaveShoppingProduct() {
@@ -735,10 +500,8 @@ function handleSaveShoppingProduct() {
     }
 
     const bgColor = window.getRandomPastelColor();
-    // 如果没有输入图片描述，使用标题
     const imageDesc = desc ? desc.substring(0, 5) : title.substring(0, 5);
     
-    // 生成图片
     const height = Math.floor(Math.random() * (250 - 150 + 1)) + 150;
     const imgUrl = generatePlaceholderImage(300, height, imageDesc, bgColor);
 
@@ -750,20 +513,20 @@ function handleSaveShoppingProduct() {
         shop_name: shop || '个人小店',
         image_desc: imageDesc,
         detail_desc: desc || title,
-        aiImage: null 
+        aiImage: null,
+        bgColor: bgColor,
+        imgHeight: height
     };
 
     if (!window.iphoneSimState.shoppingProducts) {
         window.iphoneSimState.shoppingProducts = [];
     }
-    // 新增商品显示在最前面
     window.iphoneSimState.shoppingProducts.unshift(product);
     saveConfig();
 
     ensureShoppingContainer();
     renderShoppingProducts(window.iphoneSimState.shoppingProducts);
     
-    // 清空输入框
     document.getElementById('shopping-add-title').value = '';
     document.getElementById('shopping-add-price').value = '';
     document.getElementById('shopping-add-shop').value = '';
@@ -772,15 +535,13 @@ function handleSaveShoppingProduct() {
     
     document.getElementById('shopping-add-product-modal').classList.add('hidden');
     
-    // 尝试为新商品生成AI图片
     if (desc) {
         (async () => {
             const url = await generateAiImage(desc);
             if (url) {
                 product.aiImage = url;
                 saveConfig();
-                const imgEl = document.getElementById(`product-img-${product.id}`);
-                if (imgEl) imgEl.src = url;
+                renderShoppingProducts(window.iphoneSimState.shoppingProducts);
             }
         })();
     }
@@ -789,19 +550,9 @@ function handleSaveShoppingProduct() {
 function enterShoppingManageMode() {
     isShoppingManageMode = true;
     selectedShoppingProducts.clear();
-    
     document.getElementById('shopping-manage-header').classList.remove('hidden');
-    
-    const container = document.querySelector('.shopping-waterfall-container');
-    if (container) container.classList.add('manage-mode');
-    
-    const deliveryContainer = document.querySelector('.delivery-container');
-    if (deliveryContainer) deliveryContainer.classList.add('manage-mode');
-    
     updateDeleteButton();
-    
-    // Check active tab
-    const currentTab = document.querySelector('#shopping-app .wechat-tab-item.active');
+    const currentTab = document.querySelector('#shopping-app .nav-item.active');
     if (currentTab && currentTab.dataset.tab === 'delivery') {
         renderDeliveryItems();
     } else if (window.iphoneSimState.shoppingProducts) {
@@ -812,17 +563,8 @@ function enterShoppingManageMode() {
 function exitShoppingManageMode() {
     isShoppingManageMode = false;
     selectedShoppingProducts.clear();
-    
     document.getElementById('shopping-manage-header').classList.add('hidden');
-    
-    const container = document.querySelector('.shopping-waterfall-container');
-    if (container) container.classList.remove('manage-mode');
-    
-    const deliveryContainer = document.querySelector('.delivery-container');
-    if (deliveryContainer) deliveryContainer.classList.remove('manage-mode');
-    
-    // Check active tab
-    const currentTab = document.querySelector('#shopping-app .wechat-tab-item.active');
+    const currentTab = document.querySelector('#shopping-app .nav-item.active');
     if (currentTab && currentTab.dataset.tab === 'delivery') {
         renderDeliveryItems();
     } else if (window.iphoneSimState.shoppingProducts) {
@@ -833,18 +575,16 @@ function exitShoppingManageMode() {
 function toggleProductSelection(id, cardElement) {
     if (selectedShoppingProducts.has(id)) {
         selectedShoppingProducts.delete(id);
-        cardElement.classList.remove('manage-active');
-        cardElement.querySelector('.shopping-checkbox').classList.remove('checked');
+        cardElement.classList.remove('selected');
     } else {
         selectedShoppingProducts.add(id);
-        cardElement.classList.add('manage-active');
-        cardElement.querySelector('.shopping-checkbox').classList.add('checked');
+        cardElement.classList.add('selected');
     }
     updateDeleteButton();
 }
 
 function toggleSelectAllShoppingItems() {
-    const currentTab = document.querySelector('#shopping-app .wechat-tab-item.active');
+    const currentTab = document.querySelector('#shopping-app .nav-item.active');
     let allItems = [];
     
     if (currentTab && currentTab.dataset.tab === 'delivery') {
@@ -856,16 +596,13 @@ function toggleSelectAllShoppingItems() {
     if (allItems.length === 0) return;
 
     if (selectedShoppingProducts.size === allItems.length) {
-        // Deselect all
         selectedShoppingProducts.clear();
     } else {
-        // Select all
         selectedShoppingProducts.clear();
         allItems.forEach(p => selectedShoppingProducts.add(p.id));
     }
     
     updateDeleteButton();
-    // Re-render to update UI state
     if (currentTab && currentTab.dataset.tab === 'delivery') {
         renderDeliveryItems();
     } else {
@@ -880,7 +617,7 @@ function updateDeleteButton() {
     }
     const selectAllBtn = document.getElementById('shopping-select-all-btn');
     if (selectAllBtn) {
-        const currentTab = document.querySelector('#shopping-app .wechat-tab-item.active');
+        const currentTab = document.querySelector('#shopping-app .nav-item.active');
         let allCount = 0;
         if (currentTab && currentTab.dataset.tab === 'delivery') {
             allCount = window.iphoneSimState.deliveryItems ? window.iphoneSimState.deliveryItems.length : 0;
@@ -900,7 +637,7 @@ function deleteSelectedShoppingItems() {
     if (selectedShoppingProducts.size === 0) return;
     
     if (confirm(`确定要删除选中的 ${selectedShoppingProducts.size} 个商品吗？`)) {
-        const currentTab = document.querySelector('#shopping-app .wechat-tab-item.active');
+        const currentTab = document.querySelector('#shopping-app .nav-item.active');
         
         if (currentTab && currentTab.dataset.tab === 'delivery') {
             window.iphoneSimState.deliveryItems = window.iphoneSimState.deliveryItems.filter(p => !selectedShoppingProducts.has(p.id));
@@ -919,16 +656,15 @@ function updateLinkButtonState() {
     const btn = document.getElementById('shopping-link-contact-btn');
     if (!btn) return;
     
-    // 兼容旧的单选数据
     let linkedIds = window.iphoneSimState.shoppingLinkedContactIds || [];
     if (window.iphoneSimState.shoppingLinkedContactId && !linkedIds.includes(window.iphoneSimState.shoppingLinkedContactId)) {
         linkedIds.push(window.iphoneSimState.shoppingLinkedContactId);
     }
     
     if (linkedIds.length > 0) {
-        btn.style.color = '#007AFF'; // Active color
+        btn.style.color = '#007AFF';
     } else {
-        btn.style.color = '#333'; // Default color
+        btn.style.color = '#333';
     }
 }
 
@@ -940,13 +676,11 @@ function openShoppingContactPicker() {
     
     if (!modal || !list) return;
     
-    // 修改标题和按钮文本以适应当前上下文
     const header = modal.querySelector('.modal-header h3');
     if (header) header.textContent = '选择关联联系人 / 世界书';
     
     if (sendBtn) {
         sendBtn.textContent = '确定';
-        // 移除旧的监听器 (cloneNode trick)
         const newSendBtn = sendBtn.cloneNode(true);
         sendBtn.parentNode.replaceChild(newSendBtn, sendBtn);
         
@@ -955,15 +689,13 @@ function openShoppingContactPicker() {
             const ids = Array.from(selected).map(cb => parseInt(cb.value)).filter(id => id !== 0);
             
             window.iphoneSimState.shoppingLinkedContactIds = ids;
-            // 清除旧的单选数据以避免混淆
             delete window.iphoneSimState.shoppingLinkedContactId;
             
-            // 保存选中的世界书
             const selectedWb = list.querySelectorAll('input[type="checkbox"][name="shopping-wb"]:checked');
             const wbIds = Array.from(selectedWb).map(cb => parseInt(cb.value));
             window.iphoneSimState.shoppingLinkedWbIds = wbIds;
             
-            saveConfig(); // Assume saveConfig is global
+            saveConfig(); 
             updateLinkButtonState();
             modal.classList.add('hidden');
             
@@ -979,7 +711,6 @@ function openShoppingContactPicker() {
         };
     }
     
-    // 绑定关闭按钮
     if (closeBtn) {
         const newCloseBtn = closeBtn.cloneNode(true);
         closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
@@ -988,7 +719,6 @@ function openShoppingContactPicker() {
 
     list.innerHTML = '';
     
-    // 获取当前选中的ID列表
     let currentIds = window.iphoneSimState.shoppingLinkedContactIds || [];
     if (window.iphoneSimState.shoppingLinkedContactId && currentIds.length === 0) {
         currentIds = [window.iphoneSimState.shoppingLinkedContactId];
@@ -996,7 +726,6 @@ function openShoppingContactPicker() {
     
     let currentWbIds = window.iphoneSimState.shoppingLinkedWbIds || [];
 
-    // 添加联系人列表标题
     const contactHeader = document.createElement('div');
     contactHeader.textContent = '联系人';
     contactHeader.style.padding = '10px 15px 5px';
@@ -1005,7 +734,6 @@ function openShoppingContactPicker() {
     contactHeader.style.background = '#f5f5f5';
     list.appendChild(contactHeader);
 
-    // 添加联系人列表
     if (window.iphoneSimState.contacts) {
         window.iphoneSimState.contacts.forEach(c => {
             const item = document.createElement('div');
@@ -1020,7 +748,6 @@ function openShoppingContactPicker() {
                 <input type="checkbox" name="shopping-contact" value="${c.id}" ${isChecked ? 'checked' : ''} style="width: 20px; height: 20px;">
             `;
             item.onclick = (e) => {
-                // 如果点击的是 checkbox 本身，不处理
                 if (e.target.type !== 'checkbox') {
                     const checkbox = item.querySelector('input');
                     if (checkbox) checkbox.checked = !checkbox.checked;
@@ -1030,7 +757,6 @@ function openShoppingContactPicker() {
         });
     }
 
-    // 添加世界书列表标题
     const wbHeader = document.createElement('div');
     wbHeader.textContent = '世界书 (将作为背景设定发送给AI)';
     wbHeader.style.padding = '10px 15px 5px';
@@ -1039,7 +765,6 @@ function openShoppingContactPicker() {
     wbHeader.style.background = '#f5f5f5';
     list.appendChild(wbHeader);
 
-    // 添加世界书列表
     if (window.iphoneSimState.wbCategories && window.iphoneSimState.wbCategories.length > 0) {
         window.iphoneSimState.wbCategories.forEach(cat => {
             const item = document.createElement('div');
@@ -1078,37 +803,56 @@ function openShoppingContactPicker() {
     modal.classList.remove('hidden');
 }
 
-// 初始化购物UI (在加载配置后调用)
 window.initShoppingUI = function() {
-    // 恢复已保存的商品
+    ensureShoppingContainer();
+    renderShoppingCategories();
+    
     if (window.iphoneSimState.shoppingProducts && window.iphoneSimState.shoppingProducts.length > 0) {
-        // 确保所有商品都有ID (修复旧数据)
-        let needSave = false;
-        window.iphoneSimState.shoppingProducts.forEach((p, index) => {
-            if (!p.id) {
-                p.id = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9) + '_' + index;
-                needSave = true;
-            }
-        });
-        if (needSave) saveConfig();
-
-        ensureShoppingContainer();
-        renderShoppingProducts(window.iphoneSimState.shoppingProducts);
+        renderShoppingProducts();
     }
 
-    // 恢复外卖商品
     if (window.iphoneSimState.deliveryItems && window.iphoneSimState.deliveryItems.length > 0) {
         ensureDeliveryContainer();
         renderDeliveryItems();
     }
 
     updateLinkButtonState();
+    
+    // 25% chance to trigger "Cash Withdrawal" popup
+    if (Math.random() < 0.25) {
+        setTimeout(() => {
+            if (!document.getElementById('shopping-app').classList.contains('hidden')) {
+                initCashActivity();
+            }
+        }, 1000);
+    }
+    
+    // Always show float entry if active or just randomly
+    renderCashFloatEntry();
 };
 
-// 生成商品数据
+function renderShoppingCategories() {
+    const listEl = document.getElementById('shopping-category-list');
+    if (!listEl) return;
+    
+    const categories = ['All', ...(window.iphoneSimState.shoppingCategories || [])];
+    
+    listEl.innerHTML = '';
+    categories.forEach(cat => {
+        const chip = document.createElement('div');
+        chip.className = `shopping-cat-chip ${cat === currentShoppingCategory ? 'active' : ''}`;
+        chip.textContent = cat;
+        chip.onclick = () => {
+            currentShoppingCategory = cat;
+            renderShoppingCategories(); // Re-render to update active class
+            renderShoppingProducts();
+        };
+        listEl.appendChild(chip);
+    });
+}
+
 async function generateShoppingProducts() {
-    // 检查当前 Tab
-    const currentTab = document.querySelector('#shopping-app .wechat-tab-item.active');
+    const currentTab = document.querySelector('#shopping-app .nav-item.active');
     if (currentTab && currentTab.dataset.tab === 'delivery') {
         return generateDeliveryItems();
     }
@@ -1118,14 +862,13 @@ async function generateShoppingProducts() {
         alert('请先在设置中配置 AI API');
         return;
     }
-
-    // 显示加载状态
-    const container = document.getElementById('shopping-tab-home');
     
-    // 确保容器存在，以免 loading 没地方放或者把默认内容挤乱
-    ensureShoppingContainer();
-    const waterfallContainer = container.querySelector('.shopping-waterfall-container');
+    shoppingDebugLogs = [];
+    addShoppingLog('开始生成商品任务');
 
+    const container = document.getElementById('shopping-tab-home');
+    ensureShoppingContainer();
+    
     const loadingDiv = document.createElement('div');
     loadingDiv.id = 'shopping-loading';
     loadingDiv.style.textAlign = 'center';
@@ -1133,19 +876,14 @@ async function generateShoppingProducts() {
     loadingDiv.style.color = '#999';
     loadingDiv.textContent = '正在生成推荐商品...';
     
-    // 清除可能存在的旧加载提示
-    const oldLoading = document.getElementById('shopping-loading');
-    if (oldLoading) oldLoading.remove();
-    
-    if (waterfallContainer) {
-        container.insertBefore(loadingDiv, waterfallContainer);
+    const gridContainer = container.querySelector('.shopping-product-grid');
+    if (gridContainer) {
+        container.insertBefore(loadingDiv, gridContainer);
     } else {
         container.appendChild(loadingDiv);
     }
 
     let userContext = '';
-    
-    // 获取关联联系人ID列表 (兼容单选和多选)
     let linkedIds = window.iphoneSimState.shoppingLinkedContactIds || [];
     if (window.iphoneSimState.shoppingLinkedContactId && !linkedIds.includes(window.iphoneSimState.shoppingLinkedContactId)) {
         linkedIds.push(window.iphoneSimState.shoppingLinkedContactId);
@@ -1153,18 +891,15 @@ async function generateShoppingProducts() {
 
     if (linkedIds.length > 0) {
         userContext += `\n【关联联系人信息】\n你现在需要根据以下 ${linkedIds.length} 位联系人的人设和与用户的聊天记录，推荐他们可能会感兴趣，或者用户可能会买给他们，或者符合你们聊天话题的商品。\n`;
-        
         linkedIds.forEach((id, index) => {
             const contact = window.iphoneSimState.contacts.find(c => c.id === id);
             if (contact) {
                 const name = contact.remark || contact.name;
                 userContext += `\n--- 联系人 ${index + 1}: ${name} ---\n`;
                 userContext += `人设: ${contact.persona || '无'}\n`;
-                
-                // 获取最近聊天记录
                 const history = window.iphoneSimState.chatHistory[id] || [];
                 if (history.length > 0) {
-                    const recentMsgs = history.slice(-15).map(m => { // 每个联系人取最近15条
+                    const recentMsgs = history.slice(-15).map(m => {
                         const role = m.role === 'user' ? '用户' : name;
                         let content = m.content;
                         if (m.type === 'image') content = '[图片]';
@@ -1177,13 +912,10 @@ async function generateShoppingProducts() {
         });
     }
 
-    // 获取关联的世界书
     let linkedWbIds = window.iphoneSimState.shoppingLinkedWbIds || [];
     if (linkedWbIds.length > 0 && window.iphoneSimState.worldbook) {
         userContext += `\n【关联世界书/背景设定】\n以下是相关的世界观设定，请生成符合这些设定的商品：\n`;
-        
         let wbContentFound = false;
-        // 查找属于这些分类且启用的条目
         window.iphoneSimState.worldbook.forEach(entry => {
             if (linkedWbIds.includes(entry.categoryId) && entry.enabled) {
                 const title = entry.remark || (entry.keys ? entry.keys.join(', ') : '无标题');
@@ -1191,105 +923,117 @@ async function generateShoppingProducts() {
                 wbContentFound = true;
             }
         });
-        
         if (!wbContentFound) {
             userContext += `(选中的世界书分类下暂无启用的条目)\n`;
         }
     }
 
-    const systemPrompt = `你是一个电商推荐助手。请生成 6-8 个虚构的商品信息，用于模拟淘宝/电商APP的首页推荐流。
-请直接返回 JSON 数组格式，不要包含任何 Markdown 标记或其他文本。
-每个商品包含以下字段：
-- title: 商品标题 (简短有力，类似淘宝标题)
-- price: 价格 (数字，可以是整数或小数)
-- paid_count: 付款人数 (例如 "100+", "2.5万+", "5000+")
-- shop_name: 店铺名称
-- image_desc: 商品图片的简短中文描述 (不超过5个字，用于生成占位图文字)
-- detail_desc: 商品详情页的详细描述 (一段话，描述商品卖点、材质、规格等，50-100字)
-- specifications: 可选规格 (Object, key为规格名, value为选项数组). 请根据商品类型生成合理的规格选项。例如服饰生成尺码/颜色，食品生成口味/规格，数码生成颜色/存储容量等。
+    const systemPrompt = `你是一个电商推荐助手。请生成 3-4 个商品分类，以及每个分类下 4-7 个虚构的商品信息。
+请直接返回 JSON 对象格式，包含 categories 数组和 products 数组。不要包含任何 Markdown 标记或其他文本。
+【重要】必须输出标准的JSON格式。所有字符串内的换行符必须转义(使用 \\n)，禁止在字符串值中使用实际的换行符。
+格式如下：
+{
+  "categories": ["分类1", "分类2", ...],
+  "products": [
+    {
+      "title": "商品标题",
+      "price": 99.9,
+      "category": "分类1",
+      "paid_count": "100+",
+      "shop_name": "店铺名",
+      "image_desc": "图片描述(短)",
+      "detail_desc": "详情描述",
+      "specifications": {"规格名": ["选项1", "选项2"]}
+    },
+    ...
+  ]
+}
 
-${userContext ? userContext : '商品种类要丰富，包括但不限于：服饰、数码、美食、家居、美妆等。'}
-
-示例：
-[
-  {"title": "2025新款纯棉白色T恤男女同款宽松", "price": 39.9, "paid_count": "1万+", "shop_name": "优选服饰", "image_desc": "白色T恤", "detail_desc": "精选优质新疆长绒棉，亲肤透气，不易变形。宽松版型设计，遮肉显瘦，男女同款。", "specifications": {"尺码": ["S", "M", "L", "XL"], "颜色": ["白色", "黑色", "灰色"]}},
-  {"title": "网红爆款芝士半熟光头蛋糕", "price": 28.8, "paid_count": "5000+", "shop_name": "美味烘焙", "image_desc": "芝士蛋糕", "detail_desc": "进口安佳芝士，奶香浓郁，入口即化。现烤现发，日期新鲜，早餐下午茶首选。", "specifications": {"口味": ["原味", "巧克力味"], "规格": ["4个装", "8个装"]}}
-]`;
+${userContext ? userContext : '商品种类要丰富，包括但不限于：服饰、数码、美食、家居、美妆等。'}`;
 
     try {
         let fetchUrl = settings.url;
         if (!fetchUrl.endsWith('/chat/completions')) {
             fetchUrl = fetchUrl.endsWith('/') ? fetchUrl + 'chat/completions' : fetchUrl + '/chat/completions';
         }
-
+        
         const cleanKey = settings.key ? settings.key.replace(/[^\x00-\x7F]/g, "").trim() : '';
+        const requestBody = {
+            model: settings.model,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: '生成推荐商品' }
+            ],
+            temperature: 0.7
+        };
+
         const response = await fetch(fetchUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${cleanKey}`
             },
-            body: JSON.stringify({
-                model: settings.model,
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: '生成推荐商品' }
-                ],
-                temperature: 0.7,
-                response_format: { type: "json_object" }
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
-            throw new Error(`API Error: ${response.status}`);
+            const errText = await response.text();
+            throw new Error(`API Error: ${response.status} - ${errText.substring(0, 100)}`);
         }
 
         const data = await response.json();
         let content = data.choices[0].message.content;
         
-        // 尝试解析 JSON
-        let products = [];
+        let result = {};
         try {
-            // 清理可能存在的 markdown 标记
-            content = content.replace(/```json/g, '').replace(/```/g, '').trim();
-            
-            // 尝试直接解析
-            const parsed = JSON.parse(content);
-            if (Array.isArray(parsed)) {
-                products = parsed;
-            } else if (parsed.products && Array.isArray(parsed.products)) {
-                products = parsed.products;
-            } else {
-                // 如果返回的是对象但没有 products 字段，尝试找第一个数组字段
-                for (let key in parsed) {
-                    if (Array.isArray(parsed[key])) {
-                        products = parsed[key];
-                        break;
+            const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
+            result = JSON.parse(cleanContent);
+        } catch(e) {
+            console.error('JSON Parse Failed:', e);
+            try {
+                // Try to capture the main object structure
+                const objectMatch = content.match(/\{[\s\S]*\}/);
+                if (objectMatch) {
+                    // Attempt to fix common bad control character issues (newlines in strings)
+                    // This is a naive heuristic: assume " followed by newline is bad if not followed by whitespace/comma/brace
+                    let fixedContent = objectMatch[0];
+                    // Very basic cleanup: remove unprintable control chars except newlines/tabs
+                    fixedContent = fixedContent.replace(/[\x00-\x09\x0B-\x1F\x7F]/g, ""); 
+                    
+                    result = JSON.parse(fixedContent);
+                } else {
+                    // Fallback to array if AI returned array instead of object
+                    const arrayMatch = content.match(/\[[\s\S]*\]/);
+                    if (arrayMatch) {
+                        const arr = JSON.parse(arrayMatch[0]);
+                        result = { categories: [], products: arr };
                     }
                 }
+            } catch (e2) {
+                console.error('JSON Rescue Failed:', e2);
+                alert('生成数据格式有误，请重试');
+                return;
             }
-        } catch (e) {
-            console.error('JSON Parse Error:', e);
-            alert('生成数据格式错误，请重试');
         }
 
+        const products = result.products || [];
+        const categories = result.categories || [];
+
         if (products.length > 0) {
-            // 为每个商品添加唯一ID (Robuster ID generation)
             products.forEach((p, index) => {
                 p.id = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9) + '_' + index;
             });
 
-            // 保存到状态
-            if (!window.iphoneSimState.shoppingProducts) {
-                window.iphoneSimState.shoppingProducts = [];
-            }
-            window.iphoneSimState.shoppingProducts.push(...products);
+            if (!window.iphoneSimState.shoppingProducts) window.iphoneSimState.shoppingProducts = [];
+            window.iphoneSimState.shoppingProducts = products;
+            window.iphoneSimState.shoppingCategories = categories;
+            currentShoppingCategory = 'All';
+            
             saveConfig();
             
-            // 渲染新商品
-            renderShoppingProducts(products);
+            renderShoppingCategories();
+            renderShoppingProducts();
 
-            // 尝试异步生成图片
             (async () => {
                 for (const p of products) {
                     if (p.image_desc) {
@@ -1297,12 +1041,7 @@ ${userContext ? userContext : '商品种类要丰富，包括但不限于：服�
                         if (url) {
                             p.aiImage = url;
                             saveConfig();
-                            
-                            // 更新界面
-                            const imgEl = document.getElementById(`product-img-${p.id}`);
-                            if (imgEl) {
-                                imgEl.src = url;
-                            }
+                            renderShoppingProducts(); 
                         }
                     }
                 }
@@ -1310,165 +1049,138 @@ ${userContext ? userContext : '商品种类要丰富，包括但不限于：服�
         } else {
             alert('未生成有效商品数据');
         }
-
     } catch (error) {
-        console.error('生成商品失败:', error);
-        alert(`生成失败: ${error.message}`);
+        console.error('Gen Error', error);
+        alert('生成失败: ' + error.message);
     } finally {
         const loading = document.getElementById('shopping-loading');
         if (loading) loading.remove();
     }
 }
 
-function renderShoppingProducts(products) {
-    const col1 = document.getElementById('shopping-col-1');
-    const col2 = document.getElementById('shopping-col-2');
+function renderShoppingProducts() {
+    const container = document.getElementById('shopping-tab-home');
+    ensureShoppingContainer();
+    const gridContainer = container.querySelector('.shopping-product-grid');
     
-    if (!col1 || !col2) return;
+    if (!gridContainer) return;
 
-    // 如果 products 是全部商品（从 init/manage mode调用），我们需要先清空。
-    if (products === window.iphoneSimState.shoppingProducts) {
-        col1.innerHTML = '';
-        col2.innerHTML = '';
+    gridContainer.innerHTML = '';
+
+    let products = window.iphoneSimState.shoppingProducts || [];
+    
+    // Filter by category
+    if (currentShoppingCategory !== 'All') {
+        products = products.filter(p => p.category === currentShoppingCategory);
+    }
+
+    if (products.length === 0) {
+        gridContainer.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #999; padding: 20px;">暂无该分类商品</div>';
+        return;
     }
 
     products.forEach((p, index) => {
         const card = document.createElement('div');
-        card.className = 'shopping-card shopping-anim-item';
+        card.className = 'shopping-product-card shopping-animate-enter';
         card.style.animationDelay = `${index * 0.05}s`;
         card.dataset.id = p.id;
         
         if (isShoppingManageMode) {
-            card.style.cursor = 'pointer';
             card.onclick = () => toggleProductSelection(p.id, card);
-            card.classList.add('manage-active-style'); // Just a hook for CSS if needed, but styling is via class on container
         } else {
-            // 正常模式点击打开详情
-            card.style.cursor = 'pointer';
             card.onclick = () => openShoppingProductDetail(p);
         }
 
-        // Check if selected
         const isSelected = selectedShoppingProducts.has(p.id);
         if (isSelected && isShoppingManageMode) {
-            card.classList.add('manage-active'); // Re-apply visual selection state
+            card.classList.add('selected');
         }
 
-        // 确保有固定的背景色和高度 (持久化)
-        if (!p.bgColor) {
-            p.bgColor = window.getRandomPastelColor();
-        }
-        if (!p.imgHeight) {
-            p.imgHeight = Math.floor(Math.random() * (250 - 150 + 1)) + 150;
-        }
-
+        if (!p.bgColor) p.bgColor = window.getRandomPastelColor();
         let validBgColor = p.bgColor;
-        if (!validBgColor.startsWith('#') && !validBgColor.startsWith('hsl') && !validBgColor.startsWith('rgb')) {
-             validBgColor = '#' + validBgColor;
+        if (!validBgColor.startsWith('#') && !validBgColor.startsWith('hsl')) validBgColor = '#' + validBgColor;
+
+        const shapes = ['circle', 'rect', 'tri'];
+        const shape = shapes[index % 3];
+        
+        let imgHtml = '';
+        let shapeStyle = '';
+        
+        if (p.aiImage) {
+            imgHtml = `<img id="product-img-${p.id}" src="${p.aiImage}" style="position: absolute; width: 80%; height: 80%; object-fit: contain; z-index: 1;">`;
+        } else {
+            // Use colored shape if no AI image
+            shapeStyle = `background: linear-gradient(135deg, ${validBgColor} 0%, #ffffff 100%)`;
         }
 
-        const height = p.imgHeight;
-
-        // 优先使用AI生成的图片
-        const imgUrl = p.aiImage || generatePlaceholderImage(300, height, p.image_desc || '商品', validBgColor);
-
-        // 使用新定义的CSS类
         card.innerHTML = `
-            <div class="shopping-checkbox ${isSelected ? 'checked' : ''}"></div>
-            <img id="product-img-${p.id}" src="${imgUrl}" style="width: 100%; display: block; object-fit: cover; aspect-ratio: 300/${height};">
-            <div class="shopping-card-content">
-                <div class="shopping-card-title">${p.title}</div>
-                <div class="shopping-card-meta">
-                    <div class="shopping-card-price">${p.price}</div>
-                    <div style="font-size: 11px; color: var(--shopping-text-secondary);">${p.paid_count}付款</div>
-                </div>
-                <div class="shopping-card-shop" style="margin-top: 4px;">
-                   <span>${p.shop_name}</span>
-                   <i class="fas fa-chevron-right" style="font-size: 9px; margin-left: 2px; opacity: 0.6;"></i>
-                </div>
+            <div class="shopping-img-box">
+                <div class="shopping-shape ${shape}" style="${shapeStyle}"></div>
+                ${imgHtml}
+                <div class="shopping-selection-check"><i class="fas fa-check"></i></div>
+                <button class="shopping-fav-btn">
+                    <svg viewBox="0 0 24 24" stroke-width="1.5" style="width:18px;height:18px;fill:none;stroke:currentColor;">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="shopping-product-info">
+                <h3>${p.title}</h3>
+                <p>${p.shop_name}</p>
+                <div class="shopping-price">¥${p.price}</div>
             </div>
         `;
-
-        // 简单的瀑布流算法：添加到较短的一列
-        if (col1.offsetHeight <= col2.offsetHeight) {
-            col1.appendChild(card);
-        } else {
-            col2.appendChild(card);
-        }
+        
+        gridContainer.appendChild(card);
     });
 }
 
 function openShoppingProductDetail(product) {
     currentShoppingProduct = product;
-    
-    const screen = document.getElementById('shopping-detail-screen');
-    if (!screen) return;
+    const detailView = document.getElementById('product-detail');
+    if (!detailView) return;
 
-    // 1. 设置图片和内容
+    // Populate Data
+    const imgContainer = detailView.querySelector('.shopping-pd-image');
     const imgEl = document.getElementById('shopping-detail-img');
-    const bodyEl = screen.querySelector('.app-body');
     
-    // 如果没有图片元素，说明结构被破坏，尝试修复（或者基于现有结构）
-    // 这里我们直接操作现有的DOM结构，利用CSS变量优化样式
-    
-    if (imgEl) {
-        if (product.aiImage) {
+    // Clear previous shapes
+    if (imgContainer) {
+        const existingShape = imgContainer.querySelector('.shopping-shape');
+        if (existingShape) existingShape.remove();
+    }
+
+    if (product.aiImage) {
+        if (imgEl) {
             imgEl.src = product.aiImage;
-        } else {
-            let validBgColor = product.bgColor || window.getRandomPastelColor();
-            if (!validBgColor.startsWith('#') && !validBgColor.startsWith('hsl') && !validBgColor.startsWith('rgb')) {
-                 validBgColor = '#' + validBgColor;
-            }
-            imgEl.src = generatePlaceholderImage(600, 600, product.image_desc || product.title, validBgColor); 
+            imgEl.style.display = 'block';
         }
-    }
-
-    const priceEl = document.getElementById('shopping-detail-price');
-    const titleEl = document.getElementById('shopping-detail-title');
-    const paidEl = document.getElementById('shopping-detail-paid');
-    const shopEl = document.getElementById('shopping-detail-shop');
-    const descEl = document.getElementById('shopping-detail-desc');
-
-    if (priceEl) {
-        priceEl.textContent = product.price;
-        priceEl.parentElement.style.color = 'var(--shopping-text-primary)';
-    }
-    if (titleEl) {
-        titleEl.textContent = product.title;
-        titleEl.style.color = 'var(--shopping-text-primary)';
-    }
-    if (paidEl) {
-        if (product.paid_count && (product.paid_count.toString().includes('月售') || product.paid_count.toString().includes('人付款'))) {
-            paidEl.textContent = product.paid_count;
-        } else {
-            paidEl.textContent = product.paid_count + '人付款';
-        }
-    }
-    if (shopEl) shopEl.textContent = product.shop_name;
-    
-    if (descEl) {
-        if (product.detail_desc) {
-             descEl.textContent = product.detail_desc;
-        } else {
-             descEl.textContent = product.title + '\n\n' + (product.image_desc || '暂无详情描述');
-        }
-        descEl.style.color = 'var(--shopping-text-secondary)';
-    }
-
-    // 2. 优化底部按钮样式
-    const addToCartBtn = document.getElementById('detail-add-to-cart-btn');
-    const buyNowBtn = document.getElementById('detail-buy-now-btn');
-
-    if (addToCartBtn) {
-        // 重置样式为新风格
-        addToCartBtn.className = 'shopping-btn-secondary';
-        addToCartBtn.style = ''; // 清除内联样式
-        addToCartBtn.style.marginRight = '10px';
-        addToCartBtn.textContent = '加入购物车';
+    } else {
+        if (imgEl) imgEl.style.display = 'none';
         
-        // 绑定事件
-        const newBtn = addToCartBtn.cloneNode(true);
-        addToCartBtn.parentNode.replaceChild(newBtn, addToCartBtn);
+        // Add shape if no image
+        if (imgContainer) {
+            let validBgColor = product.bgColor || window.getRandomPastelColor();
+            if (!validBgColor.startsWith('#') && !validBgColor.startsWith('hsl')) validBgColor = '#' + validBgColor;
+            
+            const shapeDiv = document.createElement('div');
+            shapeDiv.className = 'shopping-shape circle';
+            shapeDiv.style.width = '70%';
+            shapeDiv.style.height = '70%';
+            shapeDiv.style.background = `linear-gradient(135deg, ${validBgColor} 0%, #ffffff 100%)`;
+            imgContainer.appendChild(shapeDiv);
+        }
+    }
+
+    document.getElementById('shopping-detail-title').textContent = product.title;
+    document.getElementById('shopping-detail-price').textContent = '¥' + product.price;
+    document.getElementById('shopping-detail-desc').textContent = product.detail_desc || product.title;
+
+    const addBtn = document.getElementById('detail-add-to-cart-btn');
+    if (addBtn) {
+        const newBtn = addBtn.cloneNode(true);
+        addBtn.parentNode.replaceChild(newBtn, addBtn);
+        
         newBtn.onclick = () => {
             if (product.specifications && Object.keys(product.specifications).length > 0) {
                 openShoppingSpecModal(product, (productWithSpec) => {
@@ -1478,8 +1190,6 @@ function openShoppingProductDetail(product) {
                         toast.classList.remove('hidden');
                         setTimeout(() => toast.classList.add('hidden'), 1500);
                     }
-                    // Close details after adding? Or keep open? Usually keep open or show toast.
-                    // Spec modal closes automatically in handleConfirm
                 });
             } else {
                 addToCart(product);
@@ -1490,48 +1200,64 @@ function openShoppingProductDetail(product) {
                 }
             }
         };
+    }
+    
+    // Insert "Bargain" Button (Minimalist Style)
+    // Fix: existingBtn is child of detailView, not shopping-pd-info
+    const existingBtn = detailView.querySelector('.shopping-add-btn');
+    let buttonGroup = document.getElementById('shopping-action-group');
+
+    // Remove old trashy button if it exists outside group
+    const oldBargainBtn = document.getElementById('shopping-bargain-btn');
+    if (oldBargainBtn && (!buttonGroup || !buttonGroup.contains(oldBargainBtn))) {
+        oldBargainBtn.remove();
+    }
+
+    if (!buttonGroup && existingBtn) {
+        buttonGroup = document.createElement('div');
+        buttonGroup.id = 'shopping-action-group';
+        buttonGroup.style.cssText = 'position: absolute; bottom: 20px; left: 24px; right: 24px; display: flex; gap: 12px; height: 50px; align-items: center; z-index: 10;';
         
-        // 外卖隐藏购物车按钮
-        if (product.isDelivery) newBtn.classList.add('hidden');
-        else newBtn.classList.remove('hidden');
-    }
-
-    if (buyNowBtn) {
-        buyNowBtn.className = 'shopping-btn-primary';
-        buyNowBtn.style = '';
-        buyNowBtn.textContent = '立即购买';
+        const bargainBtn = document.createElement('button');
+        bargainBtn.id = 'shopping-bargain-btn';
+        bargainBtn.textContent = 'Bargain for Free';
+        bargainBtn.style.cssText = 'flex: 1; height: 100%; border: none; border-radius: 25px; background-color: #f2f2f7; color: #333; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; justify-content: center; align-items: center;';
+        bargainBtn.onclick = () => startBargain(product);
         
-        const newBtn = buyNowBtn.cloneNode(true);
-        buyNowBtn.parentNode.replaceChild(newBtn, buyNowBtn);
-        newBtn.onclick = () => {
-            if (product.specifications && Object.keys(product.specifications).length > 0) {
-                openShoppingSpecModal(product, (productWithSpec) => {
-                    openPaymentChoice(productWithSpec.price, [productWithSpec]);
-                });
-            } else {
-                openPaymentChoice(product.price, [product]);
-            }
-        };
+        // Reset existingBtn styles to fit flexbox
+        existingBtn.style.position = 'static';
+        existingBtn.style.width = 'auto';
+        existingBtn.style.margin = '0';
+        existingBtn.style.flex = '1';
+        existingBtn.style.height = '100%';
+        existingBtn.style.borderRadius = '25px';
+        existingBtn.style.display = 'flex';
+        existingBtn.style.justifyContent = 'center';
+        existingBtn.style.alignItems = 'center';
+        existingBtn.style.bottom = 'auto';
+        existingBtn.style.left = 'auto';
+        existingBtn.style.right = 'auto';
+        
+        // Append to detailView (parent container)
+        detailView.appendChild(buttonGroup);
+        buttonGroup.appendChild(bargainBtn);
+        // Move existingBtn inside wrapper
+        buttonGroup.appendChild(existingBtn);
+    } else if (buttonGroup) {
+        // Update product reference in click handler
+        const bargainBtn = document.getElementById('shopping-bargain-btn');
+        if (bargainBtn) {
+            bargainBtn.onclick = () => startBargain(product);
+        }
     }
 
-    // 3. 分享按钮
-    const shareBtn = document.getElementById('shopping-share-btn');
-    if (shareBtn) {
-        shareBtn.onclick = () => openProductShareContactPicker(product);
-    }
-
-    screen.classList.remove('hidden');
+    detailView.classList.add('active');
 }
-
-// 规格选择逻辑
-let pendingSpecProduct = null;
-let pendingSpecCallback = null;
-let selectedSpecs = {};
 
 function openShoppingSpecModal(product, callback) {
     pendingSpecProduct = product;
     pendingSpecCallback = callback;
-    selectedSpecs = {}; // Clear previous selections
+    selectedSpecs = {}; 
 
     const modal = document.getElementById('shopping-spec-modal');
     const container = document.getElementById('shopping-spec-container');
@@ -1541,50 +1267,46 @@ function openShoppingSpecModal(product, callback) {
 
     if (!modal || !container) return;
 
-    // Set Header Info
     if (imgEl) {
         let validBgColor = product.bgColor || 'cccccc';
-        if (!validBgColor.startsWith('#') && !validBgColor.startsWith('hsl') && !validBgColor.startsWith('rgb')) {
-             validBgColor = '#' + validBgColor;
-        }
+        if (!validBgColor.startsWith('#') && !validBgColor.startsWith('hsl')) validBgColor = '#' + validBgColor;
         const imgUrl = product.aiImage || generatePlaceholderImage(300, product.imgHeight || 300, product.image_desc || product.title, validBgColor);
         imgEl.src = imgUrl;
     }
     if (priceEl) priceEl.textContent = product.price;
     if (selectedTextEl) selectedTextEl.textContent = '请选择规格';
 
-    // Generate Options
     container.innerHTML = '';
     
-    for (const [specName, options] of Object.entries(product.specifications)) {
-        const group = document.createElement('div');
-        group.className = 'spec-group';
-        
-        const title = document.createElement('div');
-        title.className = 'spec-title';
-        title.textContent = specName;
-        group.appendChild(title);
-        
-        const optionsDiv = document.createElement('div');
-        optionsDiv.className = 'spec-options';
-        
-        options.forEach(option => {
-            const btn = document.createElement('div');
-            btn.className = 'spec-option-btn';
-            btn.textContent = option;
-            btn.onclick = () => {
-                // Deselect siblings
-                Array.from(optionsDiv.children).forEach(c => c.classList.remove('selected'));
-                // Select clicked
-                btn.classList.add('selected');
-                selectedSpecs[specName] = option;
-                updateSpecSelectedText();
-            };
-            optionsDiv.appendChild(btn);
-        });
-        
-        group.appendChild(optionsDiv);
-        container.appendChild(group);
+    if (product.specifications) {
+        for (const [specName, options] of Object.entries(product.specifications)) {
+            const group = document.createElement('div');
+            group.className = 'spec-group';
+            
+            const title = document.createElement('div');
+            title.className = 'spec-title';
+            title.textContent = specName;
+            group.appendChild(title);
+            
+            const optionsDiv = document.createElement('div');
+            optionsDiv.className = 'spec-options';
+            
+            options.forEach(option => {
+                const btn = document.createElement('div');
+                btn.className = 'spec-option-btn';
+                btn.textContent = option;
+                btn.onclick = () => {
+                    Array.from(optionsDiv.children).forEach(c => c.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    selectedSpecs[specName] = option;
+                    updateSpecSelectedText();
+                };
+                optionsDiv.appendChild(btn);
+            });
+            
+            group.appendChild(optionsDiv);
+            container.appendChild(group);
+        }
     }
 
     modal.classList.remove('hidden');
@@ -1594,7 +1316,7 @@ function updateSpecSelectedText() {
     const el = document.getElementById('shopping-spec-selected-text');
     if (!el || !pendingSpecProduct) return;
     
-    const specs = pendingSpecProduct.specifications;
+    const specs = pendingSpecProduct.specifications || {};
     const missing = [];
     const selected = [];
     
@@ -1618,7 +1340,7 @@ function updateSpecSelectedText() {
 function handleConfirmShoppingSpec() {
     if (!pendingSpecProduct) return;
     
-    const specs = pendingSpecProduct.specifications;
+    const specs = pendingSpecProduct.specifications || {};
     const missing = [];
     for (const key of Object.keys(specs)) {
         if (!selectedSpecs[key]) {
@@ -1633,12 +1355,10 @@ function handleConfirmShoppingSpec() {
     
     const specString = Object.values(selectedSpecs).join('; ');
     
-    // Clone product and add spec info
     const productWithSpec = {
         ...pendingSpecProduct,
         selectedSpec: specString,
         selectedSpecsMap: { ...selectedSpecs },
-        // Create a unique ID for cart differentiation
         cartId: pendingSpecProduct.id + '_' + Object.values(selectedSpecs).join('_')
     };
     
@@ -1649,16 +1369,12 @@ function handleConfirmShoppingSpec() {
     }
 }
 
-// 加入购物车
 function addToCart(product) {
     if (!window.iphoneSimState.shoppingCart) {
         window.iphoneSimState.shoppingCart = [];
     }
     
-    // Identify by cartId if available (for specs), otherwise id
     const identifyId = product.cartId || product.id;
-    
-    // Check if already in cart
     const existing = window.iphoneSimState.shoppingCart.find(item => (item.cartId || item.id) === identifyId);
     
     if (existing) {
@@ -1667,13 +1383,12 @@ function addToCart(product) {
         window.iphoneSimState.shoppingCart.push({
             ...product,
             count: 1,
-            selected: true // Default selected
+            selected: true 
         });
     }
     saveConfig();
 }
 
-// 渲染购物车
 function renderShoppingCart(animate = false) {
     const container = document.getElementById('shopping-tab-cart');
     if (!container) return;
@@ -1683,106 +1398,321 @@ function renderShoppingCart(animate = false) {
     if (cart.length === 0) {
         container.innerHTML = `
             <div style="padding: 20px; text-align: center; color: #999; margin-top: 50px;">
-                <i class="fas fa-shopping-cart" style="font-size: 48px; margin-bottom: 15px; color: #ccc;"></i>
                 <p>购物车空空如也</p>
             </div>
         `;
         return;
     }
 
-    const animClass = animate ? 'shopping-tab-enter' : '';
-    let html = `<div class="${animClass}" style="padding: 10px;">`;
+    container.innerHTML = '';
+    const listDiv = document.createElement('div');
+    if (animate) listDiv.className = 'shopping-animate-enter';
+    listDiv.style.padding = '10px';
     
-    cart.forEach((item, index) => {
-        // Ensure image properties exist (fallback for old data)
+    cart.forEach(item => {
         let validBgColor = item.bgColor || 'cccccc'; 
-        if (!validBgColor.startsWith('#') && !validBgColor.startsWith('hsl') && !validBgColor.startsWith('rgb')) {
-             validBgColor = '#' + validBgColor;
-        }
-        const height = item.imgHeight || 300;
-        const imgUrl = item.aiImage || generatePlaceholderImage(300, height, item.image_desc || '商品', validBgColor);
+        if (!validBgColor.startsWith('#') && !validBgColor.startsWith('hsl')) validBgColor = '#' + validBgColor;
+        const imgUrl = item.aiImage || generatePlaceholderImage(300, 300, item.image_desc || '商品', validBgColor);
 
-        html += `
-            <div class="cart-item-wrapper" style="position: relative; margin-bottom: 15px; overflow: hidden; border-radius: 16px;">
-                <div class="cart-item-delete" onclick="deleteCartItem('${item.id}')" style="position: absolute; top: 0; right: 0; bottom: 0; width: 80px; background: #FF3B30; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer;">删除</div>
-                <div class="cart-item-modern" id="cart-item-${item.id}" 
-                     style="position: relative; z-index: 1; transition: transform 0.2s ease-out; margin-bottom: 0;"
-                     ontouchstart="handleCartTouchStart(event, '${item.id}')"
-                     ontouchmove="handleCartTouchMove(event, '${item.id}')"
-                     ontouchend="handleCartTouchEnd(event, '${item.id}')"
-                     oncontextmenu="handleCartContextMenu(event, '${item.id}')">
-                    <div class="shopping-checkbox ${item.selected ? 'checked' : ''}" onclick="toggleCartItemSelection('${item.id}')" style="position: relative; top: auto; right: auto; display: flex; margin-right: 5px;"></div>
-                    <img src="${imgUrl}" style="width: 80px; height: 80px; border-radius: 12px; object-fit: cover; flex-shrink: 0; background: #f2f2f7;">
-                    <div style="flex: 1; overflow: hidden;">
-                        <div style="font-size: 15px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">${item.title}</div>
-                        <div style="background: #f2f2f7; color: #8e8e93; font-size: 12px; padding: 2px 8px; border-radius: 6px; display: inline-block; margin-bottom: 8px;">默认规格</div>
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div style="color: var(--shopping-text-primary); font-weight: 700; font-size: 16px;">¥${item.price}</div>
-                            <div style="font-size: 13px; color: #8e8e93;">x${item.count}</div>
-                        </div>
-                    </div>
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'shopping-cart-item';
+        itemDiv.innerHTML = `
+            <div class="shopping-cart-img">
+                 <img src="${imgUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:12px;">
+            </div>
+            <div class="shopping-cart-details">
+                <div>
+                    <div class="shopping-cart-title">${item.title}</div>
+                    <div class="shopping-cart-variant">默认规格</div>
+                </div>
+                <div class="shopping-cart-price">¥${item.price}</div>
+            </div>
+            <div class="shopping-cart-actions">
+                <button class="shopping-remove-btn">
+                    <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+                <div class="shopping-qty-control">
+                    <button class="shopping-qty-btn minus">-</button>
+                    <span class="shopping-qty-val">${item.count}</span>
+                    <button class="shopping-qty-btn plus">+</button>
                 </div>
             </div>
         `;
+        
+        // Attach listeners
+        itemDiv.querySelector('.shopping-remove-btn').onclick = () => deleteCartItem(item.id);
+        
+        const minusBtn = itemDiv.querySelector('.shopping-qty-btn.minus');
+        const plusBtn = itemDiv.querySelector('.shopping-qty-btn.plus');
+        
+        minusBtn.onclick = () => {
+            if (item.count > 1) {
+                item.count--;
+                saveConfig();
+                renderShoppingCart(false);
+            } else {
+                if(confirm('Delete this item?')) {
+                    deleteCartItem(item.id);
+                }
+            }
+        };
+        
+        plusBtn.onclick = () => {
+            item.count++;
+            saveConfig();
+            renderShoppingCart(false);
+        };
+        
+        listDiv.appendChild(itemDiv);
     });
 
-    // Bottom Action Bar for Cart
-    const totalPrice = cart.filter(i => i.selected).reduce((sum, item) => sum + (item.price * item.count), 0).toFixed(2);
-    const totalCount = cart.filter(i => i.selected).reduce((sum, item) => sum + item.count, 0);
+    container.appendChild(listDiv);
 
-    html += `</div>
-        <div class="${animClass}" style="position: fixed; bottom: calc(50px + env(safe-area-inset-bottom)); left: 0; width: 100%; background: #fff; border-top: 1px solid rgba(0,0,0,0.05); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; z-index: 90;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <div onclick="toggleSelectAllCart()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                    <div class="shopping-checkbox ${cart.every(i => i.selected) ? 'checked' : ''}" style="position: relative; top: auto; right: auto; display: flex;"></div>
-                    <span style="font-size: 14px; color: #666;">全选</span>
-                </div>
-                <div style="margin-left: 15px;">
-                    <span style="font-size: 14px;">合计:</span>
-                    <span style="color: var(--shopping-text-primary); font-weight: 700; font-size: 18px;">¥${totalPrice}</span>
-                </div>
-            </div>
-            <div style="display: flex; gap: 10px;">
-                <button onclick="handleCartPayByFriend()" class="shopping-btn-secondary" style="padding: 10px 20px; font-size: 14px;">找人付</button>
-                <button onclick="handleCartBuy()" class="shopping-btn-primary" style="padding: 10px 20px; font-size: 14px;">结算(${totalCount})</button>
-            </div>
+    const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.count), 0).toFixed(2);
+
+    const summaryDiv = document.createElement('div');
+    summaryDiv.className = 'shopping-cart-summary';
+    summaryDiv.innerHTML = `
+        <div class="shopping-summary-row">
+            <span>Subtotal</span>
+            <span>¥${totalPrice}</span>
         </div>
+        <div class="shopping-summary-row total">
+            <span>Total</span>
+            <span>¥${totalPrice}</span>
+        </div>
+        <button class="shopping-checkout-btn">Proceed to Checkout</button>
     `;
-
-    // Add extra padding to container bottom to avoid overlap with fixed bottom bar
-    container.style.paddingBottom = '120px';
-    container.innerHTML = html;
+    summaryDiv.querySelector('.shopping-checkout-btn').onclick = () => handleCartBuy();
+    
+    container.appendChild(summaryDiv);
 }
 
 window.toggleCartItemSelection = function(id) {
-    const cart = window.iphoneSimState.shoppingCart;
-    const item = cart.find(i => i.id === id);
-    if (item) {
-        item.selected = !item.selected;
-        saveConfig();
-        renderShoppingCart();
-    }
+    // Simplified
 };
 
 window.toggleSelectAllCart = function() {
-    const cart = window.iphoneSimState.shoppingCart;
-    if (!cart || cart.length === 0) return;
-    
-    const allSelected = cart.every(i => i.selected);
-    cart.forEach(i => i.selected = !allSelected);
-    saveConfig();
-    renderShoppingCart();
 };
 
-// 支付方式选择相关
 let pendingPaymentItems = [];
 let pendingPaymentAmount = 0;
 
+function buildShoppingItemSummary(items, prefixText) {
+    const list = (items || []).map((i) => {
+        const count = Number(i.count || 1);
+        const title = i.title || '商品';
+        return `${title} x${count}`;
+    });
+    const summary = list.length ? list.join(', ') : '商品';
+    return prefixText ? `${prefixText}: ${summary}` : summary;
+}
+
+function ensureShoppingOrderList() {
+    if (!Array.isArray(window.iphoneSimState.shoppingOrders)) {
+        window.iphoneSimState.shoppingOrders = [];
+    }
+    return window.iphoneSimState.shoppingOrders;
+}
+
+function isDeliveryShoppingOrder(order) {
+    return !!(order && Array.isArray(order.items) && order.items.some(i => i && i.isDelivery));
+}
+
+function computeShoppingOrderMilestones(orderTime, isDelivery) {
+    const orderTs = Number(orderTime) || Date.now();
+
+    if (isDelivery) {
+        // Real-world-ish takeaway: picked up in ~15min, delivered in ~40min.
+        return {
+            orderTs,
+            shipTs: orderTs + 15 * 60 * 1000,
+            deliverTs: orderTs + 40 * 60 * 1000
+        };
+    }
+
+    // Regular shopping: shipped the same day, delivered 2 days later.
+    const d = new Date(orderTs);
+    const targetShipTs = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 18, 0, 0, 0).getTime();
+    const endOfDayTs = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 0, 0).getTime();
+    const minShipTs = orderTs + 30 * 60 * 1000;
+    let shipTs = Math.max(targetShipTs, minShipTs);
+    if (shipTs > endOfDayTs) {
+        shipTs = Math.max(orderTs + 5 * 60 * 1000, endOfDayTs);
+    }
+
+    return {
+        orderTs,
+        shipTs,
+        deliverTs: shipTs + 2 * 24 * 60 * 60 * 1000
+    };
+}
+
+function normalizeShoppingOrderTimeline(order) {
+    if (!order) return false;
+    const isDelivery = isDeliveryShoppingOrder(order);
+    const fallback = computeShoppingOrderMilestones(order.time, isDelivery);
+    let changed = false;
+
+    const hasValidMilestones =
+        Number.isFinite(Number(order.shipAt)) &&
+        Number.isFinite(Number(order.deliverAt)) &&
+        Number(order.deliverAt) > Number(order.shipAt);
+
+    // v2 timeline: deterministic real-time milestones
+    if (!hasValidMilestones || !order.timelineVersion || Number(order.timelineVersion) < 2) {
+        order.shipAt = fallback.shipTs;
+        order.deliverAt = fallback.deliverTs;
+        order.timelineVersion = 2;
+        changed = true;
+    }
+
+    const baseOrderTs = Number(order.time) || fallback.orderTs;
+    const expectedShipDelay = Math.max(0, Number(order.shipAt) - baseOrderTs);
+    const expectedDeliverDelay = Math.max(0, Number(order.deliverAt) - baseOrderTs);
+
+    if (Number(order.shipDelay) !== expectedShipDelay) {
+        order.shipDelay = expectedShipDelay;
+        changed = true;
+    }
+    if (Number(order.deliverDelay) !== expectedDeliverDelay) {
+        order.deliverDelay = expectedDeliverDelay;
+        changed = true;
+    }
+
+    return changed;
+}
+
+function getShoppingOrderMilestones(order) {
+    if (!order) {
+        const now = Date.now();
+        return { orderTs: now, shipTs: now, deliverTs: now, isDelivery: false };
+    }
+    normalizeShoppingOrderTimeline(order);
+    return {
+        orderTs: Number(order.time) || Date.now(),
+        shipTs: Number(order.shipAt),
+        deliverTs: Number(order.deliverAt),
+        isDelivery: isDeliveryShoppingOrder(order)
+    };
+}
+
+function deriveShoppingOrderStatus(order, nowTs = Date.now()) {
+    const { shipTs, deliverTs } = getShoppingOrderMilestones(order);
+    if (nowTs < shipTs) return '待发货';
+    if (nowTs < deliverTs) return '已发货';
+    return '已完成';
+}
+
+function formatShoppingHm(ts) {
+    const d = new Date(Number(ts) || Date.now());
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function formatShoppingTimelineLabel(ts, anchorTs) {
+    const d = new Date(Number(ts) || Date.now());
+    if (Number.isNaN(d.getTime())) return '--:--';
+
+    const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    if (!Number.isFinite(Number(anchorTs))) return hhmm;
+
+    const anchor = new Date(Number(anchorTs));
+    if (Number.isNaN(anchor.getTime())) return hhmm;
+
+    const sameDay =
+        d.getFullYear() === anchor.getFullYear() &&
+        d.getMonth() === anchor.getMonth() &&
+        d.getDate() === anchor.getDate();
+
+    if (sameDay) return hhmm;
+
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${m}/${day} ${hhmm}`;
+}
+
+function formatShoppingDateTime(ts) {
+    const d = new Date(Number(ts) || Date.now());
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${y}-${m}-${day} ${hh}:${mm}`;
+}
+
+function buildShoppingOrderItems(items, multiplier = 1) {
+    const safeMultiplier = Number.isFinite(Number(multiplier)) && Number(multiplier) > 0 ? Number(multiplier) : 1;
+    return (items || []).map(item => ({
+        title: item.title,
+        price: item.price,
+        image: item.image || item.aiImage,
+        count: (Number(item.count || 1) * safeMultiplier),
+        isDelivery: item.isDelivery,
+        selectedSpec: item.selectedSpec,
+        shop_name: item.shop_name
+    }));
+}
+
+window.computeShoppingOrderMilestones = computeShoppingOrderMilestones;
+window.getShoppingOrderMilestones = getShoppingOrderMilestones;
+window.deriveShoppingOrderStatus = deriveShoppingOrderStatus;
+
+function createShoppingOrderFromPayment(items, options = {}) {
+    const relatedId = options.relatedId || (Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5));
+    const recipientMultiplier = Number.isFinite(Number(options.recipientMultiplier)) && Number(options.recipientMultiplier) > 0
+        ? Number(options.recipientMultiplier)
+        : 1;
+    const orderItems = buildShoppingOrderItems(items, recipientMultiplier);
+    const computedTotal = orderItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.count || 0)), 0);
+    const totalAmount = Number(options.totalAmount);
+    const totalStr = (Number.isFinite(totalAmount) ? totalAmount : computedTotal).toFixed(2);
+
+    const newOrder = {
+        id: relatedId,
+        items: orderItems,
+        total: totalStr,
+        time: Date.now(),
+        status: '待发货',
+        timelineVersion: 2
+    };
+
+    const recipientNames = Array.isArray(options.recipientNames)
+        ? options.recipientNames.map(name => String(name || '').trim()).filter(Boolean)
+        : [];
+    if (recipientNames.length > 0) {
+        newOrder.isGift = true;
+        newOrder.giftRecipients = recipientNames;
+    }
+
+    const milestones = computeShoppingOrderMilestones(newOrder.time, orderItems.some(item => item.isDelivery));
+    newOrder.shipAt = milestones.shipTs;
+    newOrder.deliverAt = milestones.deliverTs;
+    newOrder.shipDelay = milestones.shipTs - milestones.orderTs;
+    newOrder.deliverDelay = milestones.deliverTs - milestones.orderTs;
+
+    ensureShoppingOrderList().unshift(newOrder);
+    return newOrder;
+}
+
+function clearShoppingCartAfterCheckout() {
+    window.iphoneSimState.shoppingCart = [];
+    renderShoppingCart();
+}
+
+function mapUnifiedPaymentError(reason) {
+    if (reason === 'wallet_insufficient') return '微信余额不足';
+    if (reason === 'bank_cash_insufficient') return '银行卡余额不足';
+    if (reason === 'family_card_insufficient') return '亲属卡额度不足';
+    if (reason === 'cancelled') return '';
+    return '支付失败，请稍后重试';
+}
+
 window.handleCartBuy = function() {
     const cart = window.iphoneSimState.shoppingCart || [];
-    const selected = cart.filter(i => i.selected);
+    const selected = cart; 
     if (selected.length === 0) {
-        alert('请至少选择一件商品');
+        alert('购物车为空');
         return;
     }
     
@@ -1791,26 +1721,21 @@ window.handleCartBuy = function() {
 };
 
 window.handleBuyNow = function(product) {
-    // This is now just a wrapper if called directly, but usually we use openPaymentChoice
     openPaymentChoice(product.price, [product]);
 };
 
 function openPaymentChoice(amount, items, isCart = false) {
     pendingPaymentAmount = amount;
-    // Normalize items structure
     pendingPaymentItems = items.map(item => {
         let validBgColor = item.bgColor || 'cccccc';
-        if (!validBgColor.startsWith('#') && !validBgColor.startsWith('hsl') && !validBgColor.startsWith('rgb')) {
-             validBgColor = '#' + validBgColor;
-        }
+        if (!validBgColor.startsWith('#') && !validBgColor.startsWith('hsl')) validBgColor = '#' + validBgColor;
         return {
             ...item,
             count: item.count || 1,
-            // Ensure image properties exist
             image: item.image || item.aiImage || generatePlaceholderImage(300, item.imgHeight || 300, item.image_desc || item.title || '商品', validBgColor)
         };
     });
-    pendingPaymentItems.isCart = isCart; // Flag to know if we need to clear cart later
+    pendingPaymentItems.isCart = isCart;
 
     const modal = document.getElementById('shopping-payment-choice-modal');
     if (!modal) return;
@@ -1818,12 +1743,14 @@ function openPaymentChoice(amount, items, isCart = false) {
     const totalEl = document.getElementById('payment-choice-total');
     if (totalEl) totalEl.textContent = '¥' + amount.toFixed(2);
 
-    // Bind buttons
+    const headerEl = modal.querySelector('.modal-header h3');
     const selfBtn = document.getElementById('payment-choice-self');
     const giftBtn = document.getElementById('payment-choice-gift');
     const closeBtn = document.getElementById('close-payment-choice');
+    if (headerEl) headerEl.textContent = '选择购买方式';
+    if (selfBtn) selfBtn.textContent = '给自己买';
+    if (giftBtn) giftBtn.textContent = '送给朋友';
 
-    // Clone to remove old listeners
     if (selfBtn) {
         const newSelf = selfBtn.cloneNode(true);
         selfBtn.parentNode.replaceChild(newSelf, selfBtn);
@@ -1851,142 +1778,408 @@ function openPaymentChoice(amount, items, isCart = false) {
     modal.classList.remove('hidden');
 }
 
-function processSelfPayment() {
-    const totalAmount = pendingPaymentAmount;
-    const totalStr = totalAmount.toFixed(2);
-    
-    // Check wallet balance
-    if (!window.iphoneSimState.wallet) {
-        window.iphoneSimState.wallet = { balance: 0, transactions: [] };
-    }
-    const wallet = window.iphoneSimState.wallet;
-    
-    if (wallet.balance < totalAmount) {
-        alert(`余额不足，无法支付\n需支付: ¥${totalStr}\n当前余额: ¥${wallet.balance.toFixed(2)}`);
+function closeDeliveryOrderModal() {
+    const modal = document.getElementById('shopping-delivery-order-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function renderDeliveryOrderModal(shopKey, fallbackShopName = '外卖商家') {
+    const modal = document.getElementById('shopping-delivery-order-modal');
+    if (!modal) return;
+
+    const titleEl = document.getElementById('delivery-order-modal-title');
+    const listEl = document.getElementById('delivery-order-modal-list');
+    const totalEl = document.getElementById('delivery-order-modal-total');
+    const checkoutBtn = document.getElementById('delivery-order-checkout-btn');
+    if (!listEl) return;
+
+    const stats = getDeliveryDraftStats(shopKey);
+    const displayShopName = stats.shopName || fallbackShopName || '外卖商家';
+    if (titleEl) titleEl.textContent = `${displayShopName} · 订单`;
+    if (totalEl) totalEl.textContent = `¥${stats.total.toFixed(2)}`;
+
+    if (!stats.items.length || stats.count <= 0) {
+        listEl.innerHTML = `
+            <div class="shopping-delivery-order-empty">
+                还没有选择餐品
+            </div>
+        `;
+        if (checkoutBtn) checkoutBtn.disabled = true;
         return;
     }
-    
-    if (confirm(`确定要使用钱包余额支付 ¥${totalStr} 购买吗？`)) {
-        // Create Order
-        if (!window.iphoneSimState.shoppingOrders) {
-            window.iphoneSimState.shoppingOrders = [];
-        }
-        
-        // Prepare order items
-        const orderItems = pendingPaymentItems.map(item => ({
-            title: item.title,
-            price: item.price,
-            image: item.image,
-            count: item.count,
-            isDelivery: item.isDelivery,
-            selectedSpec: item.selectedSpec
-        }));
 
-        const newOrder = {
-            id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5),
-            items: orderItems,
-            total: totalStr,
-            time: Date.now(),
-            status: '待发货'
-        };
-        
-        // Set realistic delays
-        const hour = 3600000;
-        newOrder.shipDelay = Math.floor(2 * hour + Math.random() * (22 * hour));
-        newOrder.deliverDelay = Math.floor(48 * hour + Math.random() * (24 * hour));
-        
-        window.iphoneSimState.shoppingOrders.unshift(newOrder);
+    if (checkoutBtn) checkoutBtn.disabled = false;
+    listEl.innerHTML = stats.items.map((item) => {
+        const subtotal = Number(item.price || 0) * Number(item.count || 0);
+        return `
+            <div class="shopping-delivery-order-item">
+                <div class="shopping-delivery-order-item-main">
+                    <div class="shopping-delivery-order-item-title">${item.title}</div>
+                    <div class="shopping-delivery-order-item-meta">¥${Number(item.price || 0).toFixed(2)} × ${Number(item.count || 0)}</div>
+                </div>
+                <div class="shopping-delivery-order-item-subtotal">¥${subtotal.toFixed(2)}</div>
+            </div>
+        `;
+    }).join('');
+}
 
-        // Deduct balance
-        wallet.balance -= totalAmount;
-        if (!wallet.transactions) wallet.transactions = [];
-        wallet.transactions.unshift({
-            id: Date.now().toString() + '_trans',
-            type: 'expense',
-            amount: totalAmount,
-            title: '购物消费',
-            time: Date.now(),
-            relatedId: newOrder.id
-        });
+function openDeliveryOrderModal(shopKey, fallbackShopName = '外卖商家') {
+    if (!shopKey) return;
+    const modal = document.getElementById('shopping-delivery-order-modal');
+    if (!modal) return;
 
-        // Clean up cart if needed
-        if (pendingPaymentItems.isCart) {
-            if (window.iphoneSimState.shoppingCart) {
-                window.iphoneSimState.shoppingCart = window.iphoneSimState.shoppingCart.filter(i => !i.selected);
-                renderShoppingCart();
-            }
-        }
-        
-        saveConfig();
-        
-        // Close details if open
-        const detailScreen = document.getElementById('shopping-detail-screen');
-        if (detailScreen && !detailScreen.classList.contains('hidden')) {
-            detailScreen.classList.add('hidden');
-        }
-        
-        window.switchShoppingTab('orders');
-        alert('支付成功！已生成订单');
+    modal.dataset.shopKey = shopKey;
+    modal.dataset.shopName = fallbackShopName;
+
+    const closeBtn = document.getElementById('close-delivery-order-modal');
+    const continueBtn = document.getElementById('delivery-order-continue-btn');
+    const checkoutBtn = document.getElementById('delivery-order-checkout-btn');
+
+    if (closeBtn) {
+        const newClose = closeBtn.cloneNode(true);
+        closeBtn.parentNode.replaceChild(newClose, closeBtn);
+        newClose.onclick = () => closeDeliveryOrderModal();
     }
+
+    if (continueBtn) {
+        const newContinue = continueBtn.cloneNode(true);
+        continueBtn.parentNode.replaceChild(newContinue, continueBtn);
+        newContinue.onclick = () => closeDeliveryOrderModal();
+    }
+
+    if (checkoutBtn) {
+        const newCheckout = checkoutBtn.cloneNode(true);
+        checkoutBtn.parentNode.replaceChild(newCheckout, checkoutBtn);
+        newCheckout.onclick = () => {
+            const liveStats = getDeliveryDraftStats(shopKey);
+            if (!liveStats.items.length || liveStats.count <= 0) {
+                alert('请先选择餐品');
+                return;
+            }
+            closeDeliveryOrderModal();
+            openDeliverySettlementChoice(shopKey);
+        };
+    }
+
+    addShoppingLog('打开外卖订单弹窗', {
+        shopKey,
+        stats: getDeliveryDraftStats(shopKey)
+    });
+    renderDeliveryOrderModal(shopKey, fallbackShopName);
+    modal.classList.remove('hidden');
+}
+
+function openDeliverySettlementChoice(shopKey) {
+    const stats = getDeliveryDraftStats(shopKey);
+    if (!stats.items.length || stats.count <= 0) {
+        alert('请先选择餐品');
+        return;
+    }
+
+    pendingDeliveryCheckoutShopKey = shopKey;
+    pendingPaymentItems = buildDeliveryCheckoutItems(shopKey);
+    pendingPaymentAmount = stats.total;
+
+    const modal = document.getElementById('shopping-payment-choice-modal');
+    if (!modal) return;
+
+    const headerEl = modal.querySelector('.modal-header h3');
+    const totalEl = document.getElementById('payment-choice-total');
+    const selfBtn = document.getElementById('payment-choice-self');
+    const giftBtn = document.getElementById('payment-choice-gift');
+    const closeBtn = document.getElementById('close-payment-choice');
+
+    if (headerEl) headerEl.textContent = '选择结算对象';
+    if (totalEl) totalEl.textContent = `¥${Number(stats.total || 0).toFixed(2)}`;
+    if (selfBtn) selfBtn.textContent = '给自己';
+    if (giftBtn) giftBtn.textContent = '给联系人';
+
+    if (selfBtn) {
+        const newSelf = selfBtn.cloneNode(true);
+        selfBtn.parentNode.replaceChild(newSelf, selfBtn);
+        newSelf.onclick = () => {
+            modal.classList.add('hidden');
+            processDeliveryCheckoutSelf(shopKey);
+        };
+    }
+
+    if (giftBtn) {
+        const newGift = giftBtn.cloneNode(true);
+        giftBtn.parentNode.replaceChild(newGift, giftBtn);
+        newGift.onclick = () => {
+            modal.classList.add('hidden');
+            openDeliveryGiftContactPicker(shopKey);
+        };
+    }
+
+    if (closeBtn) {
+        const newClose = closeBtn.cloneNode(true);
+        closeBtn.parentNode.replaceChild(newClose, closeBtn);
+        newClose.onclick = () => modal.classList.add('hidden');
+    }
+
+    modal.classList.remove('hidden');
+}
+
+async function processDeliveryCheckoutSelf(shopKey) {
+    const targetShopKey = shopKey || pendingDeliveryCheckoutShopKey;
+    const stats = getDeliveryDraftStats(targetShopKey);
+    const checkoutItems = buildDeliveryCheckoutItems(targetShopKey);
+    const totalAmount = Number(stats.total || 0);
+
+    if (!checkoutItems.length || totalAmount <= 0) {
+        alert('当前订单为空');
+        return;
+    }
+
+    if (!window.resolvePurchasePayment) {
+        alert('支付能力不可用');
+        return;
+    }
+
+    const relatedId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5);
+    const payResult = await window.resolvePurchasePayment({
+        amount: totalAmount,
+        scene: 'shopping_self',
+        relatedId,
+        itemSummary: buildShoppingItemSummary(checkoutItems, `外卖自购(${stats.shopName || '外卖商家'})`)
+    });
+    if (!payResult || !payResult.ok) {
+        addShoppingLog('外卖自购支付失败', {
+            shopKey: targetShopKey,
+            reason: payResult ? payResult.reason : 'unknown'
+        });
+        const msg = mapUnifiedPaymentError(payResult && payResult.reason);
+        if (msg) alert(msg);
+        return;
+    }
+
+    createShoppingOrderFromPayment(checkoutItems, {
+        relatedId,
+        totalAmount
+    });
+    clearDeliveryDraft(targetShopKey);
+    pendingDeliveryCheckoutShopKey = '';
+    pendingPaymentItems = [];
+    pendingPaymentAmount = 0;
+    updateDeliveryDetailActionButton(targetShopKey);
+    saveConfig();
+
+    addShoppingLog('外卖自购支付成功', {
+        shopKey: targetShopKey,
+        totalAmount,
+        relatedId
+    });
+
+    closeDeliveryOrderModal();
+    document.getElementById('food-detail').classList.remove('active');
+    window.switchShoppingTab('orders');
+    alert('支付成功！外卖订单已创建');
+}
+
+function openDeliveryGiftContactPicker(shopKey) {
+    const targetShopKey = shopKey || pendingDeliveryCheckoutShopKey;
+    const stats = getDeliveryDraftStats(targetShopKey);
+    if (!stats.items.length || stats.count <= 0) {
+        alert('请先选择餐品');
+        return;
+    }
+
+    const modal = document.getElementById('contact-picker-modal');
+    const list = document.getElementById('contact-picker-list');
+    const sendBtn = document.getElementById('contact-picker-send-btn');
+    const closeBtn = document.getElementById('close-contact-picker');
+    if (!modal || !list) return;
+
+    const header = modal.querySelector('.modal-header h3');
+    if (header) header.textContent = '选择联系人';
+
+    if (sendBtn) {
+        sendBtn.textContent = '支付并发送外卖';
+        const newSendBtn = sendBtn.cloneNode(true);
+        sendBtn.parentNode.replaceChild(newSendBtn, sendBtn);
+
+        newSendBtn.onclick = async () => {
+            const selected = list.querySelector('input[name="delivery-gift-contact"]:checked');
+            const contactId = selected ? parseInt(selected.value, 10) : NaN;
+            if (!Number.isFinite(contactId)) {
+                alert('请选择联系人');
+                return;
+            }
+
+            const contact = (window.iphoneSimState.contacts || []).find((c) => c.id === contactId);
+            const recipientName = contact ? (contact.remark || contact.name || `联系人${contactId}`) : `联系人${contactId}`;
+            const liveStats = getDeliveryDraftStats(targetShopKey);
+            const checkoutItems = buildDeliveryCheckoutItems(targetShopKey);
+            const totalAmount = Number(liveStats.total || 0);
+
+            if (!checkoutItems.length || totalAmount <= 0) {
+                alert('当前订单为空');
+                modal.classList.add('hidden');
+                return;
+            }
+
+            if (!window.resolvePurchasePayment) {
+                alert('支付能力不可用');
+                return;
+            }
+
+            const relatedId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5);
+            const payResult = await window.resolvePurchasePayment({
+                amount: totalAmount,
+                scene: 'shopping_gift',
+                relatedId,
+                itemSummary: buildShoppingItemSummary(checkoutItems, `外卖送礼(收货人: ${recipientName})`)
+            });
+            if (!payResult || !payResult.ok) {
+                addShoppingLog('外卖送联系人支付失败', {
+                    shopKey: targetShopKey,
+                    contactId,
+                    reason: payResult ? payResult.reason : 'unknown'
+                });
+                const msg = mapUnifiedPaymentError(payResult && payResult.reason);
+                if (msg) alert(msg);
+                return;
+            }
+
+            createShoppingOrderFromPayment(checkoutItems, {
+                relatedId,
+                totalAmount,
+                recipientNames: [recipientName]
+            });
+
+            const msgData = {
+                items: checkoutItems.map((i) => ({
+                    title: i.title,
+                    price: i.price,
+                    image: i.image,
+                    count: i.count,
+                    isDelivery: true
+                })),
+                total: totalAmount.toFixed(2),
+                recipientName,
+                recipientText: recipientName,
+                remark: `${liveStats.shopName || '外卖商家'} 外卖`
+            };
+            if (typeof sendMessage !== 'undefined') {
+                sendMessage(JSON.stringify(msgData), true, 'delivery_share', null, contactId);
+            }
+
+            clearDeliveryDraft(targetShopKey);
+            pendingDeliveryCheckoutShopKey = '';
+            pendingPaymentItems = [];
+            pendingPaymentAmount = 0;
+            updateDeliveryDetailActionButton(targetShopKey);
+            saveConfig();
+            modal.classList.add('hidden');
+
+            addShoppingLog('外卖送联系人支付成功', {
+                shopKey: targetShopKey,
+                contactId,
+                totalAmount,
+                relatedId
+            });
+
+            closeDeliveryOrderModal();
+            document.getElementById('food-detail').classList.remove('active');
+            window.switchShoppingTab('orders');
+            alert('支付成功！外卖已发送给联系人');
+        };
+    }
+
+    if (closeBtn) {
+        const newCloseBtn = closeBtn.cloneNode(true);
+        closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+        newCloseBtn.onclick = () => modal.classList.add('hidden');
+    }
+
+    list.innerHTML = '';
+    const contacts = Array.isArray(window.iphoneSimState.contacts) ? window.iphoneSimState.contacts : [];
+    if (contacts.length === 0) {
+        list.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">暂无联系人</div>';
+    } else {
+        contacts.forEach((c) => {
+            const item = document.createElement('div');
+            item.className = 'list-item';
+            item.innerHTML = `
+                <span style="font-size: 16px;">${c.remark || c.name}</span>
+                <input type="radio" name="delivery-gift-contact" value="${c.id}" style="width: 20px; height: 20px;">
+            `;
+            item.onclick = (e) => {
+                if (e.target.type !== 'radio') {
+                    const radio = item.querySelector('input[name="delivery-gift-contact"]');
+                    if (radio) radio.checked = true;
+                }
+            };
+            list.appendChild(item);
+        });
+    }
+
+    addShoppingLog('打开外卖联系人选择', {
+        shopKey: targetShopKey,
+        count: stats.count,
+        total: stats.total
+    });
+    modal.classList.remove('hidden');
+}
+
+async function processSelfPayment() {
+    const checkoutItems = pendingPaymentItems.map(item => ({ ...item }));
+    const isCartOrder = !!pendingPaymentItems.isCart;
+    const totalAmount = pendingPaymentAmount;
+
+    if (!window.resolvePurchasePayment) {
+        alert('支付能力不可用');
+        return;
+    }
+
+    const relatedId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5);
+    const payResult = await window.resolvePurchasePayment({
+        amount: totalAmount,
+        scene: 'shopping_self',
+        relatedId,
+        itemSummary: buildShoppingItemSummary(pendingPaymentItems, '购物自购')
+    });
+    if (!payResult || !payResult.ok) {
+        const msg = mapUnifiedPaymentError(payResult && payResult.reason);
+        if (msg) alert(msg);
+        return;
+    }
+
+    createShoppingOrderFromPayment(checkoutItems, {
+        relatedId,
+        totalAmount
+    });
+
+    if (isCartOrder) {
+        clearShoppingCartAfterCheckout();
+    }
+
+    pendingPaymentItems = [];
+    pendingPaymentAmount = 0;
+
+    saveConfig();
+
+    document.getElementById('product-detail').classList.remove('active');
+    document.getElementById('food-detail').classList.remove('active');
+    window.switchShoppingTab('orders');
+    alert('支付成功！已生成订单');
 }
 
 window.handleCartPayByFriend = function() {
     const cart = window.iphoneSimState.shoppingCart || [];
-    const selected = cart.filter(i => i.selected);
+    const selected = cart; 
     if (selected.length === 0) {
-        alert('请至少选择一件商品');
+        alert('购物车为空');
         return;
     }
-    
-    // Check contact picker availability
     openShoppingContactPickerForPay(selected);
 };
 
-// 购物车滑动删除逻辑
-let cartTouchStartX = 0;
-let cartCurrentItemId = null;
-
-window.handleCartTouchStart = function(e, id) {
-    cartTouchStartX = e.touches[0].clientX;
-    cartCurrentItemId = id;
-};
-
-window.handleCartTouchMove = function(e, id) {
-    if (cartCurrentItemId !== id) return;
-    const currentX = e.touches[0].clientX;
-    const diff = currentX - cartTouchStartX;
-    const element = document.getElementById(`cart-item-${id}`);
-    
-    // 只允许左滑
-    if (diff < 0) {
-        // Limit swipe distance
-        const translateX = Math.max(diff, -80);
-        element.style.transform = `translateX(${translateX}px)`;
-        // Prevent vertical scrolling while swiping horizontally
-        if (Math.abs(diff) > 10) e.preventDefault();
-    }
-};
-
-window.handleCartTouchEnd = function(e, id) {
-    if (cartCurrentItemId !== id) return;
-    const currentX = e.changedTouches[0].clientX;
-    const diff = currentX - cartTouchStartX;
-    const element = document.getElementById(`cart-item-${id}`);
-    
-    if (diff < -40) { // Threshold to open
-        element.style.transform = 'translateX(-80px)';
-    } else {
-        element.style.transform = 'translateX(0)';
-    }
-    cartCurrentItemId = null;
-};
-
-window.handleCartContextMenu = function(e, id) {
-    e.preventDefault();
-    if (confirm('确定要删除这个商品吗？')) {
-        deleteCartItem(id);
-    }
-};
+window.handleCartTouchStart = function() {};
+window.handleCartTouchMove = function() {};
+window.handleCartTouchEnd = function() {};
+window.handleCartContextMenu = function() {};
 
 window.deleteCartItem = function(id) {
     if (!window.iphoneSimState.shoppingCart) return;
@@ -2006,148 +2199,81 @@ function openShoppingGiftContactPicker(items) {
     const header = modal.querySelector('.modal-header h3');
     if (header) header.textContent = '送给谁';
     
-    // 清除可能存在的旧备注输入框
-    const oldInput = document.getElementById('gift-remark-input');
-    if (oldInput) oldInput.remove();
-
-    // 插入备注输入框到按钮容器中
-    const btnContainer = sendBtn ? sendBtn.parentNode : null;
-    let remarkInput = null;
-    
-    if (btnContainer) {
-        remarkInput = document.createElement('input');
-        remarkInput.id = 'gift-remark-input';
-        remarkInput.type = 'text';
-        remarkInput.placeholder = '给TA留个言 (可选)';
-        remarkInput.style.width = '100%';
-        remarkInput.style.marginBottom = '15px';
-        remarkInput.style.padding = '10px';
-        remarkInput.style.border = '1px solid #ddd';
-        remarkInput.style.borderRadius = '8px';
-        remarkInput.style.fontSize = '14px';
-        
-        btnContainer.insertBefore(remarkInput, sendBtn);
-    }
-    
     if (sendBtn) {
         sendBtn.textContent = '支付并发送';
         const newSendBtn = sendBtn.cloneNode(true);
         sendBtn.parentNode.replaceChild(newSendBtn, sendBtn);
         
-        newSendBtn.onclick = () => {
-            try {
-                // Check both checkbox types (shopping-contact or generic gift-contact)
-                const selectedContact = list.querySelectorAll('input[type="checkbox"]:checked');
-                const ids = Array.from(selectedContact).map(cb => parseInt(cb.value)).filter(id => id !== 0);
-                
-                const remark = remarkInput ? remarkInput.value.trim() : '';
-
-                if (ids.length > 0) {
-                    const totalAmount = pendingPaymentAmount * ids.length;
-                    
-                    if (ids.length > 1 && !confirm(`你选择了 ${ids.length} 位好友，将购买 ${ids.length} 份商品，总计 ¥${(totalAmount).toFixed(2)}。确定吗？`)) {
-                        return;
-                    }
-                    
-                    if (!window.iphoneSimState.wallet) {
-                        window.iphoneSimState.wallet = { balance: 0, transactions: [] };
-                    }
-                    const wallet = window.iphoneSimState.wallet;
-                    if (wallet.balance < totalAmount) {
-                        alert(`余额不足，无法支付\n需支付: ¥${totalAmount.toFixed(2)}\n当前余额: ¥${wallet.balance.toFixed(2)}`);
-                        return;
-                    }
-                    
-                    // Process payment
-                    wallet.balance -= totalAmount;
-                    
-                    ids.forEach(contactId => {
-                        const orderItems = items.map(item => ({
-                            title: item.title,
-                            price: item.price,
-                            image: item.image,
-                            count: item.count,
-                            isDelivery: item.isDelivery,
-                            selectedSpec: item.selectedSpec
-                        }));
-                        
-                        const newOrder = {
-                            id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5),
-                            items: orderItems,
-                            total: (pendingPaymentAmount).toFixed(2),
-                            time: Date.now(),
-                            status: '待发货',
-                            giftTo: contactId
-                        };
-                        
-                    const hour = 3600000;
-                    newOrder.shipDelay = Math.floor(2 * hour + Math.random() * (22 * hour));
-                    newOrder.deliverDelay = Math.floor(48 * hour + Math.random() * (24 * hour));
-                    
-                    if (!window.iphoneSimState.shoppingOrders) {
-                        window.iphoneSimState.shoppingOrders = [];
-                    }
-                    window.iphoneSimState.shoppingOrders.unshift(newOrder);
-                    
-                    if (!wallet.transactions) wallet.transactions = [];
-                    wallet.transactions.unshift({
-                            id: Date.now().toString() + '_trans',
-                            type: 'expense',
-                            amount: pendingPaymentAmount,
-                            title: '赠送礼物',
-                            time: Date.now(),
-                            relatedId: newOrder.id
-                        });
-                        
-                        // 区分外卖分享和礼物分享
-                        let msgType = 'shopping_gift';
-                        const isDelivery = items.some(i => i.isDelivery);
-                        if (isDelivery) {
-                            msgType = 'delivery_share';
-                        }
-
-                        const msgData = {
-                            items: items.map(i => ({
-                                title: i.title,
-                                price: i.price,
-                                image: i.image,
-                                isDelivery: i.isDelivery,
-                                selectedSpec: i.selectedSpec
-                            })),
-                            total: (pendingPaymentAmount).toFixed(2),
-                            remark: remark 
-                        };
-                        
-                        // Robust sendMessage call
-                        if (typeof sendMessage !== 'undefined') {
-                            sendMessage(JSON.stringify(msgData), true, msgType, null, contactId);
-                        } else if (window.sendMessage) {
-                            window.sendMessage(JSON.stringify(msgData), true, msgType, null, contactId);
-                        } else {
-                            console.error('sendMessage not found');
-                        }
-                    });
-                    
-                    if (items.isCart && window.iphoneSimState.shoppingCart) {
-                        window.iphoneSimState.shoppingCart = window.iphoneSimState.shoppingCart.filter(i => !i.selected);
-                        renderShoppingCart();
-                    }
-                    saveConfig();
-                    
-                    modal.classList.add('hidden');
-                    // 清理
-                    if (remarkInput) remarkInput.remove();
-                    
-                    const detailScreen = document.getElementById('shopping-detail-screen');
-                    if (detailScreen) detailScreen.classList.add('hidden');
-                    window.switchShoppingTab('orders');
-                    alert('支付成功！礼物已发送');
-                } else {
-                    alert('请选择联系人');
+        newSendBtn.onclick = async () => {
+            const selectedContact = list.querySelectorAll('input[type="checkbox"]:checked');
+            const ids = Array.from(selectedContact).map(cb => parseInt(cb.value)).filter(id => id !== 0);
+            
+            if (ids.length > 0) {
+                const checkoutItems = Array.isArray(items) ? items.map(item => ({ ...item })) : [];
+                const isCartOrder = !!items.isCart;
+                const unitAmount = Number(pendingPaymentAmount || 0);
+                const totalAmount = unitAmount * ids.length;
+                if (ids.length > 1 && !confirm(`你选择了 ${ids.length} 位好友，将购买 ${ids.length} 份商品，总计 ¥${(totalAmount).toFixed(2)}。确定吗？`)) {
+                    return;
                 }
-            } catch (e) {
-                console.error('Payment error:', e);
-                alert('支付出错: ' + e.message);
+
+                if (!window.resolvePurchasePayment) {
+                    alert('支付能力不可用');
+                    return;
+                }
+
+                const recipientNames = ids.map(contactId => {
+                    const target = window.iphoneSimState.contacts.find(c => c.id === contactId);
+                    return target ? (target.remark || target.name || `联系人${contactId}`) : `联系人${contactId}`;
+                });
+                const firstRecipientName = recipientNames[0] || `联系人${ids[0]}`;
+                const relatedId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5);
+                const payResult = await window.resolvePurchasePayment({
+                    amount: totalAmount,
+                    scene: 'shopping_gift',
+                    relatedId,
+                    itemSummary: buildShoppingItemSummary(items, `购物送礼(收货人: ${firstRecipientName})`)
+                });
+                if (!payResult || !payResult.ok) {
+                    const msg = mapUnifiedPaymentError(payResult && payResult.reason);
+                    if (msg) alert(msg);
+                    return;
+                }
+
+                createShoppingOrderFromPayment(checkoutItems, {
+                    relatedId,
+                    totalAmount,
+                    recipientMultiplier: ids.length,
+                    recipientNames
+                });
+
+                if (isCartOrder) {
+                    clearShoppingCartAfterCheckout();
+                }
+
+                ids.forEach((contactId, idx) => {
+                    const recipientName = recipientNames[idx] || `联系人${contactId}`;
+                    // Send message logic (simplified)
+                    const msgData = {
+                        items: checkoutItems.map(i => ({ title: i.title, price: i.price, image: i.image })),
+                        total: unitAmount.toFixed(2),
+                        recipientName,
+                        recipientText: recipientName,
+                        paymentAmount: unitAmount.toFixed(2),
+                        paymentMethodLabel: payResult.sourceLabel || (payResult.method === 'wallet' ? '微信余额' : (payResult.method === 'bank_cash' ? '银行卡余额' : '亲属卡'))
+                    };
+                    if (typeof sendMessage !== 'undefined') sendMessage(JSON.stringify(msgData), true, 'shopping_gift', null, contactId);
+                });
+                
+                pendingPaymentItems = [];
+                pendingPaymentAmount = 0;
+                saveConfig();
+                modal.classList.add('hidden');
+                document.getElementById('product-detail').classList.remove('active');
+                window.switchShoppingTab('orders');
+                alert('支付成功！礼物已发送');
+            } else {
+                alert('请选择联系人');
             }
         };
     }
@@ -2155,11 +2281,7 @@ function openShoppingGiftContactPicker(items) {
     if (closeBtn) {
         const newCloseBtn = closeBtn.cloneNode(true);
         closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
-        newCloseBtn.onclick = () => {
-            modal.classList.add('hidden');
-            const inp = document.getElementById('gift-remark-input');
-            if (inp) inp.remove();
-        };
+        newCloseBtn.onclick = () => modal.classList.add('hidden');
     }
 
     list.innerHTML = '';
@@ -2167,23 +2289,11 @@ function openShoppingGiftContactPicker(items) {
         window.iphoneSimState.contacts.forEach(c => {
             const item = document.createElement('div');
             item.className = 'list-item';
-            item.innerHTML = `
-                <div class="list-content" style="display: flex; align-items: center; justify-content: flex-start;">
-                    <img src="${c.avatar}" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 15px; object-fit: cover; flex-shrink: 0;">
-                    <span style="font-size: 16px;">${c.remark || c.name}</span>
-                </div>
-                <input type="checkbox" name="gift-contact" value="${c.id}" style="width: 20px; height: 20px;">
-            `;
-            item.onclick = (e) => {
-                if (e.target.type !== 'checkbox') {
-                    const checkbox = item.querySelector('input');
-                    if (checkbox) checkbox.checked = !checkbox.checked;
-                }
-            };
+            item.innerHTML = `<span style="font-size: 16px;">${c.remark || c.name}</span><input type="checkbox" value="${c.id}" style="width: 20px; height: 20px;">`;
+            item.onclick = (e) => { if (e.target.type !== 'checkbox') item.querySelector('input').click(); };
             list.appendChild(item);
         });
     }
-    
     modal.classList.remove('hidden');
 }
 
@@ -2196,7 +2306,7 @@ function openShoppingContactPickerForPay(items) {
     if (!modal || !list) return;
     
     const header = modal.querySelector('.modal-header h3');
-    if (header) header.textContent = '请谁代付 / 送给谁';
+    if (header) header.textContent = '请谁代付';
     
     if (sendBtn) {
         sendBtn.textContent = '发送请求';
@@ -2209,31 +2319,9 @@ function openShoppingContactPickerForPay(items) {
             
             if (ids.length > 0) {
                 const totalPrice = items.reduce((s, i) => s + i.price * i.count, 0).toFixed(2);
-                const itemList = items.map(i => i.title).join(', ');
-                const requestId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                
-                // Construct message
-                const payData = {
-                    type: 'pay_request',
-                    id: requestId,
-                    total: totalPrice,
-                    status: 'pending',
-                    items: items.map(i => ({
-                        title: i.title,
-                        price: i.price,
-                        image: i.aiImage || generatePlaceholderImage(300, 300, i.image_desc, '#ccc'),
-                        isDelivery: i.isDelivery,
-                        selectedSpec: i.selectedSpec
-                    }))
-                };
-
+                const payData = { type: 'pay_request', total: totalPrice, items: items.map(i => ({ title: i.title })) };
                 ids.forEach(id => {
-                    if (typeof sendMessage !== 'undefined') {
-                        // Send pay request card
-                        sendMessage(JSON.stringify(payData), true, 'pay_request', null, id);
-                    } else if (window.sendMessage) {
-                        window.sendMessage(JSON.stringify(payData), true, 'pay_request', null, id);
-                    }
+                    if (typeof sendMessage !== 'undefined') sendMessage(JSON.stringify(payData), true, 'pay_request', null, id);
                 });
                 modal.classList.add('hidden');
                 alert('代付请求已发送');
@@ -2243,7 +2331,6 @@ function openShoppingContactPickerForPay(items) {
         };
     }
     
-    // Reuse existing contact picker logic
     if (closeBtn) {
         const newCloseBtn = closeBtn.cloneNode(true);
         closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
@@ -2255,46 +2342,35 @@ function openShoppingContactPickerForPay(items) {
         window.iphoneSimState.contacts.forEach(c => {
             const item = document.createElement('div');
             item.className = 'list-item';
-            item.innerHTML = `
-                <div class="list-content" style="display: flex; align-items: center; justify-content: flex-start;">
-                    <img src="${c.avatar}" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 15px; object-fit: cover; flex-shrink: 0;">
-                    <span style="font-size: 16px;">${c.remark || c.name}</span>
-                </div>
-                <input type="checkbox" name="pay-contact" value="${c.id}" style="width: 20px; height: 20px;">
-            `;
-            item.onclick = (e) => {
-                if (e.target.type !== 'checkbox') {
-                    const checkbox = item.querySelector('input');
-                    if (checkbox) checkbox.checked = !checkbox.checked;
-                }
-            };
+            item.innerHTML = `<span style="font-size: 16px;">${c.remark || c.name}</span><input type="checkbox" value="${c.id}" style="width: 20px; height: 20px;">`;
+            item.onclick = (e) => { if (e.target.type !== 'checkbox') item.querySelector('input').click(); };
             list.appendChild(item);
         });
     }
     modal.classList.remove('hidden');
 }
 
-// 生成随机低饱和度淡色背景
 window.getRandomPastelColor = function() {
     const hue = Math.floor(Math.random() * 360);
-    return `hsl(${hue}, 70%, 85%)`; // High lightness, moderate saturation
+    return `hsl(${hue}, 70%, 85%)`; 
 };
 
-// 生成占位图 (支持中文) - 高清版
+window.getRandomPaleColor = function() {
+    const hue = Math.floor(Math.random() * 360);
+    return `hsl(${hue}, 30%, 92%)`; 
+};
+
 function generatePlaceholderImage(width, height, text, bgColor) {
-    const scale = 2; // 2x 分辨率
+    const scale = 2; 
     const canvas = document.createElement('canvas');
     canvas.width = width * scale;
     canvas.height = height * scale;
     const ctx = canvas.getContext('2d');
 
-    // 填充背景
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 绘制文字
     ctx.fillStyle = '#ffffff';
-    // 根据宽度动态调整字号 (基准大小 * 缩放)
     const baseFontSize = Math.max(16, Math.min(32, width / (text.length || 1)));
     const fontSize = baseFontSize * scale;
     
@@ -2303,17 +2379,15 @@ function generatePlaceholderImage(width, height, text, bgColor) {
     ctx.textBaseline = 'middle';
     ctx.fillText(text, canvas.width / 2, canvas.height / 2);
 
-    return canvas.toDataURL('image/png'); // 使用PNG防止文字模糊
+    return canvas.toDataURL('image/png');
 }
 
-// 调用 AI 生成图片
 async function generateAiImage(prompt) {
     const settings = window.iphoneSimState.aiSettings.url ? window.iphoneSimState.aiSettings : window.iphoneSimState.aiSettings2;
     if (!settings.url || !settings.key) return null;
 
     try {
         let baseUrl = settings.url;
-        // 尝试推断图片生成地址
         if (baseUrl.endsWith('/v1')) {
             baseUrl = baseUrl + '/images/generations';
         } else if (baseUrl.endsWith('/chat/completions')) {
@@ -2321,13 +2395,10 @@ async function generateAiImage(prompt) {
         } else if (baseUrl.endsWith('/')) {
             baseUrl = baseUrl + 'images/generations';
         } else {
-            // 默认假设它是 host，追加 /v1/...
             baseUrl = baseUrl + '/v1/images/generations';
         }
 
         const cleanKey = settings.key ? settings.key.replace(/[^\x00-\x7F]/g, "").trim() : '';
-        
-        console.log('Generating image with prompt:', prompt);
         
         const response = await fetch(baseUrl, {
             method: 'POST',
@@ -2338,19 +2409,16 @@ async function generateAiImage(prompt) {
             body: JSON.stringify({
                 prompt: prompt,
                 n: 1,
-                size: "256x256", // 使用小尺寸
-                response_format: "url" // 或 b64_json
+                size: "256x256",
+                response_format: "url"
             })
         });
 
-        if (!response.ok) {
-            console.warn('Image generation failed status:', response.status);
-            return null;
-        }
+        if (!response.ok) return null;
 
         const data = await response.json();
         if (data.data && data.data.length > 0) {
-            return data.data[0].url; // 或 b64_json
+            return data.data[0].url;
         }
     } catch (e) {
         console.error('Image generation error:', e);
@@ -2367,7 +2435,7 @@ function openProductShareContactPicker(product) {
     if (!modal || !list) return;
     
     const header = modal.querySelector('.modal-header h3');
-    if (header) header.textContent = '分享商品给';
+    if (header) header.textContent = '分享商品';
     
     if (sendBtn) {
         sendBtn.textContent = '发送';
@@ -2375,435 +2443,30 @@ function openProductShareContactPicker(product) {
         sendBtn.parentNode.replaceChild(newSendBtn, sendBtn);
         
         newSendBtn.onclick = () => {
-            const selected = list.querySelectorAll('input[type="checkbox"]:checked');
-            const ids = Array.from(selected).map(cb => parseInt(cb.value)).filter(id => id !== 0);
+            const selectedContact = list.querySelectorAll('input[type="checkbox"]:checked');
+            const ids = Array.from(selectedContact).map(cb => parseInt(cb.value)).filter(id => id !== 0);
             
             if (ids.length > 0) {
-                // 构建商品数据
-                let imgUrl = product.aiImage;
-                if (!imgUrl) {
-                     let bgColor = window.getRandomPastelColor();
-                     // Use product background if available and valid
-                     if (product.bgColor) {
-                         bgColor = product.bgColor;
-                         if (!bgColor.startsWith('#') && !bgColor.startsWith('hsl') && !bgColor.startsWith('rgb')) {
-                             bgColor = '#' + bgColor;
-                         }
-                     }
-                     imgUrl = generatePlaceholderImage(300, 300, product.image_desc || product.title, bgColor);
-                }
-
-                const productData = {
-                    id: product.id,
-                    title: product.title,
-                    price: product.price,
-                    image: imgUrl,
-                    shop_name: product.shop_name
-                };
-                
                 ids.forEach(id => {
-                    // 调用 chat.js 中的 sendMessage (假设它是全局的)
+                    const msgData = {
+                        type: 'product_share',
+                        product: {
+                            title: product.title,
+                            price: product.price,
+                            image: product.aiImage || product.image, // Ensure image is passed
+                            desc: product.detail_desc
+                        }
+                    };
+                    // Use generic message sending if available, or simulate
                     if (typeof sendMessage !== 'undefined') {
-                        sendMessage(JSON.stringify(productData), true, 'product_share', null, id);
-                    } else if (window.sendMessage) {
-                        window.sendMessage(JSON.stringify(productData), true, 'product_share', null, id);
+                        sendMessage(JSON.stringify(msgData), true, 'product_share', null, id);
                     } else {
-                        console.error('sendMessage function not found');
+                        // Fallback or log
+                        console.log('Sending product share to', id, msgData);
                     }
                 });
                 modal.classList.add('hidden');
-                if (window.showChatToast) window.showChatToast('已发送');
-                else alert('已发送');
-            } else {
-                alert('请选择至少一个联系人');
-            }
-        };
-    }
-    
-    if (closeBtn) {
-        const newCloseBtn = closeBtn.cloneNode(true);
-        closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
-        newCloseBtn.onclick = () => modal.classList.add('hidden');
-    }
-
-    list.innerHTML = '';
-    
-    if (window.iphoneSimState.contacts) {
-        window.iphoneSimState.contacts.forEach(c => {
-            const item = document.createElement('div');
-            item.className = 'list-item';
-            
-            item.innerHTML = `
-                <div class="list-content" style="display: flex; align-items: center; justify-content: flex-start;">
-                    <img src="${c.avatar}" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 15px; object-fit: cover; flex-shrink: 0;">
-                    <span style="font-size: 16px;">${c.remark || c.name}</span>
-                </div>
-                <input type="checkbox" name="share-contact" value="${c.id}" style="width: 20px; height: 20px;">
-            `;
-            item.onclick = (e) => {
-                if (e.target.type !== 'checkbox') {
-                    const checkbox = item.querySelector('input');
-                    if (checkbox) checkbox.checked = !checkbox.checked;
-                }
-            };
-            list.appendChild(item);
-        });
-    }
-    
-    modal.classList.remove('hidden');
-}
-
-// 更新订单状态
-function updateShoppingOrderStatuses() {
-    if (!window.iphoneSimState.shoppingOrders) return;
-
-    let hasChanges = false;
-    const now = Date.now();
-    const hour = 3600000;
-
-    // 收集所有外卖商品标题，用于识别旧数据
-    const deliveryTitles = new Set();
-    if (window.iphoneSimState.deliveryItems) {
-        window.iphoneSimState.deliveryItems.forEach(i => deliveryTitles.add(i.title));
-    }
-
-    window.iphoneSimState.shoppingOrders.forEach(order => {
-        // Check if it's a delivery order (contains delivery items)
-        let isDeliveryOrder = order.items && order.items.some(i => i.isDelivery);
-
-        // 尝试通过标题识别旧的外卖订单
-        if (!isDeliveryOrder && order.items && deliveryTitles.size > 0) {
-            const hasDeliveryItem = order.items.some(i => deliveryTitles.has(i.title));
-            if (hasDeliveryItem) {
-                isDeliveryOrder = true;
-                // 标记 items 以便后续不需要再次匹配
-                order.items.forEach(i => {
-                    if (deliveryTitles.has(i.title)) i.isDelivery = true;
-                });
-                hasChanges = true;
-            }
-        }
-
-        // Initialize or Fix delays
-        // 如果是外卖订单，且延迟设置过大（超过2小时），则重置为外卖的时间标准
-        if (isDeliveryOrder) {
-             if (!order.shipDelay || order.shipDelay > 2 * 3600000) {
-                 // 外卖：5-10分钟 接单/备餐完成
-                 order.shipDelay = Math.floor(5 * 60000 + Math.random() * (5 * 60000));
-                 hasChanges = true;
-             }
-             if (!order.deliverDelay || order.deliverDelay > 3 * 3600000) {
-                 // 外卖：30-40分钟送达
-                 order.deliverDelay = Math.floor(30 * 60000 + Math.random() * (10 * 60000));
-                 hasChanges = true;
-             }
-        } else {
-             // 普通商品初始化
-             if (!order.shipDelay) {
-                 order.shipDelay = Math.floor(2 * hour + Math.random() * (22 * hour)); 
-                 hasChanges = true; 
-             }
-             if (!order.deliverDelay) {
-                order.deliverDelay = Math.floor(48 * hour + Math.random() * (24 * hour));
-                hasChanges = true;
-             }
-        }
-
-        const elapsed = now - order.time;
-        
-        if (order.status === '待发货' && elapsed > order.shipDelay) {
-            order.status = '已发货';
-            hasChanges = true;
-        }
-        
-        if (order.status === '已发货' && elapsed > order.deliverDelay) {
-            order.status = '已完成';
-            hasChanges = true;
-            
-            // 订单完成提示
-            const isDelivery = order.items && order.items.some(i => i.isDelivery);
-            if (isDelivery) {
-                showOrderNotification('外卖已送达', '您的外卖已准时送达，祝您用餐愉快');
-            } else {
-                showOrderNotification('商品已送达', '您的快递已送达，请及时查收');
-            }
-        }
-    });
-
-    if (hasChanges) {
-        saveConfig();
-        // 如果当前正在查看订单页，则刷新
-        const currentTab = document.querySelector('#shopping-app .wechat-tab-item.active');
-        if (currentTab && currentTab.dataset.tab === 'orders') {
-            renderShoppingOrders();
-        }
-    }
-}
-
-// 渲染订单页面
-function renderShoppingOrders() {
-    const container = document.getElementById('shopping-tab-orders');
-    if (!container) return;
-
-    const orders = window.iphoneSimState.shoppingOrders || [];
-    
-    // Sort by time desc
-    orders.sort((a, b) => b.time - a.time);
-
-    if (orders.length === 0) {
-        container.innerHTML = `
-            <div style="padding: 20px; text-align: center; color: #999; margin-top: 50px;">
-                <i class="fas fa-clipboard-list" style="font-size: 48px; margin-bottom: 15px; color: #ccc;"></i>
-                <p>暂无订单</p>
-            </div>
-        `;
-        return;
-    }
-
-    let html = '<div style="padding: 10px;">';
-    
-    orders.forEach((order, index) => {
-        const date = new Date(order.time);
-        const dateStr = `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-        
-        let statusClass = '';
-        let statusText = order.status;
-        let logisticsInfo = '';
-
-        const isDeliveryOrder = order.items && order.items.some(i => i.isDelivery);
-
-        if (statusText === '待发货') {
-            statusClass = 'active'; // Black bg
-            logisticsInfo = isDeliveryOrder ? '商家已接单，正在制作...' : '商家正在打包中...';
-        } else if (statusText === '已发货') {
-            statusClass = ''; // Gray bg
-            logisticsInfo = isDeliveryOrder ? '骑手正在火速配送中' : '包裹正在运输途中';
-        } else if (statusText === '已完成') {
-            statusClass = ''; // Gray bg
-            logisticsInfo = isDeliveryOrder ? '订单已送达' : '订单已签收';
-        }
-
-        html += `
-            <div class="order-card-modern" onclick="openShoppingOrderProgress('${order.id}')">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <span style="font-size: 13px; color: var(--shopping-text-secondary); font-weight: 500;">${dateStr}</span>
-                    <span class="order-status-badge ${statusClass}">${statusText}</span>
-                </div>
-                <div class="order-items">
-        `;
-
-        order.items.forEach(item => {
-            html += `
-                <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-                    <img src="${item.image}" style="width: 60px; height: 60px; border-radius: 10px; object-fit: cover; background: #f2f2f7;">
-                    <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: center;">
-                        <div style="font-size: 15px; color: var(--shopping-text-primary); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500;">${item.title}</div>
-                        <div style="font-size: 12px; color: #8e8e93; margin-bottom: 2px;">${item.selectedSpec || ''}</div>
-                        <div style="font-size: 13px; color: var(--shopping-text-secondary);">数量: ${item.count || 1}</div>
-                    </div>
-                    <div style="font-size: 15px; font-weight: 600; color: var(--shopping-text-primary);">¥${item.price}</div>
-                </div>
-            `;
-        });
-
-        html += `
-                </div>
-                <div style="border-top: 1px solid rgba(0,0,0,0.05); padding-top: 12px; display: flex; justify-content: space-between; align-items: center;">
-                    <div style="font-size: 12px; color: var(--shopping-text-secondary);">${logisticsInfo}</div>
-                    <div style="font-size: 14px;">实付: <span style="font-weight: 700; font-size: 16px;">¥${order.total}</span></div>
-                </div>
-            </div>
-        `;
-    });
-
-    html += '</div>';
-    container.innerHTML = html;
-}
-
-// 订单进度查看
-window.openShoppingOrderProgress = function(orderId) {
-    const orders = window.iphoneSimState.shoppingOrders || [];
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return;
-
-    let modal = document.getElementById('shopping-order-progress-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'shopping-order-progress-modal';
-        modal.className = 'order-progress-modal';
-        modal.innerHTML = `
-            <div class="order-progress-content">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <div style="font-size: 18px; font-weight: 700;">订单进度</div>
-                    <div onclick="document.getElementById('shopping-order-progress-modal').classList.remove('active')" style="padding: 5px; cursor: pointer;">
-                        <i class="fas fa-times" style="font-size: 18px; color: #999;"></i>
-                    </div>
-                </div>
-                
-                <div class="progress-timeline">
-                    <div class="progress-line-active" id="progress-line"></div>
-                    
-                    <div class="progress-step" id="step-1">
-                        <div class="progress-dot"></div>
-                        <div class="progress-label">已下单</div>
-                        <div class="progress-time" id="time-1"></div>
-                    </div>
-                    
-                    <div class="progress-step" id="step-2">
-                        <div class="progress-dot"></div>
-                        <div class="progress-label">已发货</div>
-                        <div class="progress-time" id="time-2"></div>
-                    </div>
-                    
-                    <div class="progress-step" id="step-3">
-                        <div class="progress-dot"></div>
-                        <div class="progress-label">已送达</div>
-                        <div class="progress-time" id="time-3"></div>
-                    </div>
-                </div>
-                
-                <div style="text-align: center; margin-bottom: 25px;">
-                    <div style="font-size: 13px; color: #8e8e93; margin-bottom: 5px;">预计送达时间</div>
-                    <div style="font-size: 20px; font-weight: 600; color: #000;" id="progress-eta"></div>
-                </div>
-                
-                <button id="share-progress-btn" class="shopping-btn-secondary" style="width: 100%;">
-                    <i class="fas fa-share-alt" style="margin-right: 8px;"></i>分享给好友
-                </button>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        
-        // 点击遮罩关闭
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.classList.remove('active');
-        });
-    }
-
-    // Update Content
-    const step1 = modal.querySelector('#step-1');
-    const step2 = modal.querySelector('#step-2');
-    const step3 = modal.querySelector('#step-3');
-    const line = modal.querySelector('#progress-line');
-    const etaEl = modal.querySelector('#progress-eta');
-    
-    // Reset classes
-    [step1, step2, step3].forEach(s => {
-        s.querySelector('.progress-dot').classList.remove('active');
-        s.querySelector('.progress-label').classList.remove('active');
-        s.querySelector('.progress-time').textContent = '';
-    });
-    
-    // Format helpers
-    const formatDate = (ts) => {
-        const d = new Date(ts);
-        return `${d.getMonth()+1}-${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
-    };
-
-    // Calculate times
-    const time1 = order.time;
-    const time2 = order.time + (order.shipDelay || 0);
-    const time3 = order.time + (order.deliverDelay || 0);
-    
-    modal.querySelector('#time-1').textContent = formatDate(time1);
-    
-    let activeStep = 1;
-    if (order.status === '已发货') activeStep = 2;
-    if (order.status === '已完成') activeStep = 3;
-    
-    // Apply state
-    if (activeStep >= 1) {
-        step1.querySelector('.progress-dot').classList.add('active');
-        step1.querySelector('.progress-label').classList.add('active');
-    }
-    if (activeStep >= 2) {
-        step2.querySelector('.progress-dot').classList.add('active');
-        step2.querySelector('.progress-label').classList.add('active');
-        modal.querySelector('#time-2').textContent = formatDate(time2);
-    } else {
-        modal.querySelector('#time-2').textContent = '预计 ' + formatDate(time2);
-    }
-    if (activeStep >= 3) {
-        step3.querySelector('.progress-dot').classList.add('active');
-        step3.querySelector('.progress-label').classList.add('active');
-        modal.querySelector('#time-3').textContent = formatDate(time3);
-    } else {
-        modal.querySelector('#time-3').textContent = '预计 ' + formatDate(time3);
-    }
-    
-    // Line width
-    if (activeStep === 1) line.style.width = '0%';
-    else if (activeStep === 2) line.style.width = '50%';
-    else if (activeStep === 3) line.style.width = '100%';
-    
-    // ETA Display
-    if (activeStep === 3) {
-        etaEl.textContent = '订单已完成';
-        etaEl.style.color = '#34C759';
-    } else {
-        etaEl.textContent = formatDate(time3);
-        etaEl.style.color = '#000';
-    }
-    
-    // Share Button
-    const shareBtn = document.getElementById('share-progress-btn');
-    // Remove old listeners
-    const newShareBtn = shareBtn.cloneNode(true);
-    shareBtn.parentNode.replaceChild(newShareBtn, shareBtn);
-    
-    newShareBtn.onclick = () => {
-        openShoppingProgressSharePicker(order, formatDate(time3));
-        modal.classList.remove('active');
-    };
-
-    // Show modal
-    // Force reflow
-    void modal.offsetWidth;
-    modal.classList.add('active');
-};
-
-function openShoppingProgressSharePicker(order, eta) {
-    const modal = document.getElementById('contact-picker-modal');
-    const list = document.getElementById('contact-picker-list');
-    const sendBtn = document.getElementById('contact-picker-send-btn');
-    const closeBtn = document.getElementById('close-contact-picker');
-    
-    if (!modal || !list) return;
-    
-    const header = modal.querySelector('.modal-header h3');
-    if (header) header.textContent = '分享进度给';
-    
-    if (sendBtn) {
-        sendBtn.textContent = '发送';
-        const newSendBtn = sendBtn.cloneNode(true);
-        sendBtn.parentNode.replaceChild(newSendBtn, sendBtn);
-        
-        newSendBtn.onclick = () => {
-            const selected = list.querySelectorAll('input[type="checkbox"]:checked');
-            const ids = Array.from(selected).map(cb => parseInt(cb.value)).filter(id => id !== 0);
-            
-            if (ids.length > 0) {
-                const title = order.items[0].title + (order.items.length > 1 ? ` 等${order.items.length}件` : '');
-                const status = order.status;
-                
-                // Construct card data
-                const msgData = {
-                    title: title,
-                    status: status,
-                    eta: eta,
-                    orderId: order.id
-                };
-                const jsonStr = JSON.stringify(msgData);
-                
-                ids.forEach(id => {
-                    if (typeof sendMessage !== 'undefined') {
-                        sendMessage(jsonStr, true, 'order_progress', null, id);
-                    } else if (window.sendMessage) {
-                        window.sendMessage(jsonStr, true, 'order_progress', null, id);
-                    }
-                });
-                modal.classList.add('hidden');
-                alert('已分享进度');
+                alert('已分享');
             } else {
                 alert('请选择联系人');
             }
@@ -2817,18 +2480,16 @@ function openShoppingProgressSharePicker(order, eta) {
     }
 
     list.innerHTML = '';
-    
     if (window.iphoneSimState.contacts) {
         window.iphoneSimState.contacts.forEach(c => {
             const item = document.createElement('div');
             item.className = 'list-item';
-            
             item.innerHTML = `
                 <div class="list-content" style="display: flex; align-items: center; justify-content: flex-start;">
                     <img src="${c.avatar}" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 15px; object-fit: cover; flex-shrink: 0;">
                     <span style="font-size: 16px;">${c.remark || c.name}</span>
                 </div>
-                <input type="checkbox" name="share-contact" value="${c.id}" style="width: 20px; height: 20px;">
+                <input type="checkbox" value="${c.id}" style="width: 20px; height: 20px;">
             `;
             item.onclick = (e) => {
                 if (e.target.type !== 'checkbox') {
@@ -2838,47 +2499,401 @@ function openShoppingProgressSharePicker(order, eta) {
             };
             list.appendChild(item);
         });
+    } else {
+        list.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">暂无联系人</div>';
     }
     
     modal.classList.remove('hidden');
 }
 
-// 处理代付请求支付
-window.handlePayForRequest = function(requestId, payerName, requestData) {
-    if (!requestId || !requestData) return false;
+function updateShoppingOrderStatuses() {
+    if (!window.iphoneSimState.shoppingOrders) return;
 
-    if (!window.iphoneSimState.shoppingOrders) {
-        window.iphoneSimState.shoppingOrders = [];
+    let hasChanges = false;
+    const now = Date.now();
+
+    window.iphoneSimState.shoppingOrders.forEach(order => {
+        if (normalizeShoppingOrderTimeline(order)) {
+            hasChanges = true;
+        }
+
+        const prevStatus = String(order.status || '');
+        const nextStatus = deriveShoppingOrderStatus(order, now);
+        if (prevStatus !== nextStatus) {
+            order.status = nextStatus;
+            hasChanges = true;
+
+            if (prevStatus !== '已完成' && nextStatus === '已完成') {
+                const isDelivery = isDeliveryShoppingOrder(order);
+                if (isDelivery) {
+                    showOrderNotification('外卖已送达', '您的外卖已准时送达，祝您用餐愉快');
+                } else {
+                    showOrderNotification('商品已送达', '您的快递已送达，请及时查收');
+                }
+            }
+        }
+    });
+
+    if (hasChanges) {
+        saveConfig();
+        const currentTab = document.querySelector('#shopping-app .nav-item.active');
+        if (currentTab && currentTab.dataset.tab === 'orders') {
+            renderShoppingOrders();
+        }
+        const chatScreen = document.getElementById('chat-screen');
+        if (
+            chatScreen &&
+            !chatScreen.classList.contains('hidden') &&
+            window.iphoneSimState &&
+            window.iphoneSimState.currentChatContactId &&
+            typeof window.renderChatHistory === 'function'
+        ) {
+            window.renderChatHistory(window.iphoneSimState.currentChatContactId);
+        }
+    }
+}
+
+function renderShoppingOrders() {
+    const container = document.getElementById('shopping-tab-orders');
+    if (!container) return;
+
+    let orders = window.iphoneSimState.shoppingOrders || [];
+    orders.sort((a, b) => b.time - a.time);
+
+    // Filter based on tab
+    if (currentOrderTab === 'active') {
+        orders = orders.filter(o => o.status !== '已完成' && o.status !== 'DELIVERED');
+    } else if (currentOrderTab === 'history') {
+        orders = orders.filter(o => o.status === '已完成' || o.status === 'DELIVERED');
     }
 
-    // 检查是否已经存在 (防止重复支付)
-    if (window.iphoneSimState.shoppingOrders.some(o => o.requestId === requestId)) {
-        return false;
+    // Check if tabs already exist
+    let tabsDiv = container.querySelector('.shopping-order-tabs');
+    if (!tabsDiv) {
+        // Initial Render
+        container.innerHTML = '';
+        
+        tabsDiv = document.createElement('div');
+        tabsDiv.className = 'shopping-order-tabs';
+        
+        const indicator = document.createElement('div');
+        indicator.className = 'shopping-tab-indicator';
+        tabsDiv.appendChild(indicator);
+        
+        ['all', 'active', 'history'].forEach(tab => {
+            const tabEl = document.createElement('div');
+            tabEl.className = 'shopping-order-tab';
+            tabEl.dataset.tab = tab;
+            tabEl.textContent = tab.charAt(0).toUpperCase() + tab.slice(1);
+            tabEl.onclick = () => {
+                currentOrderTab = tab;
+                renderShoppingOrders();
+            };
+            tabsDiv.appendChild(tabEl);
+        });
+        container.appendChild(tabsDiv);
     }
 
-    const newOrder = {
-        id: Date.now().toString(),
-        requestId: requestId,
-        payer: payerName,
-        items: requestData.items || [],
-        total: requestData.total || '0.00',
-        time: Date.now(),
-        status: '待发货' // 默认状态
+    // Update Tab State & Indicator
+    const indicator = tabsDiv.querySelector('.shopping-tab-indicator');
+    const tabs = ['all', 'active', 'history'];
+    const activeIndex = tabs.indexOf(currentOrderTab);
+    
+    if (indicator) {
+        indicator.style.left = `${activeIndex * 33.33}%`;
+    }
+    
+    tabsDiv.querySelectorAll('.shopping-order-tab').forEach(el => {
+        if (el.dataset.tab === currentOrderTab) {
+            el.classList.add('active');
+        } else {
+            el.classList.remove('active');
+        }
+    });
+
+    // Update List Content
+    let listDiv = container.querySelector('.shopping-order-list');
+    if (!listDiv) {
+        listDiv = document.createElement('div');
+        listDiv.className = 'shopping-order-list';
+        container.appendChild(listDiv);
+    }
+    listDiv.innerHTML = ''; // Clear previous items
+    
+    if (orders.length === 0) {
+        listDiv.innerHTML = `
+            <div style="padding: 20px; text-align: center; color: #999; margin-top: 50px;">
+                <p>暂无订单</p>
+            </div>
+        `;
+        return;
+    }
+
+    orders.forEach(order => {
+        const { orderTs, shipTs, deliverTs, isDelivery } = getShoppingOrderMilestones(order);
+        const currentStatus = deriveShoppingOrderStatus(order, Date.now());
+        const icon = isDelivery ? '🍔' : '📦';
+        const storeName = isDelivery ? (order.items[0].shop_name || '外卖商家') : (order.items[0].shop_name || '购物商家');
+        const itemsText = order.items.map(i => i.title).join(', ');
+        
+        let badgeClass = 'shopping-status-done';
+        let statusText = 'DELIVERED';
+        const step2Label = isDelivery ? 'Pickup' : 'Shipped';
+        
+        if (currentStatus === '待发货') {
+            badgeClass = 'shopping-status-active';
+            statusText = 'PREPARING';
+        } else if (currentStatus === '已发货') {
+            badgeClass = 'shopping-status-active';
+            statusText = isDelivery ? 'ON THE WAY' : 'SHIPPED';
+        } else if (currentStatus === '已完成') {
+            statusText = 'DELIVERED';
+        }
+
+        const timeOrdered = formatShoppingTimelineLabel(orderTs, orderTs);
+        const timeShipped = formatShoppingTimelineLabel(shipTs, orderTs);
+        const timeDelivered = formatShoppingTimelineLabel(deliverTs, orderTs);
+        
+        let tlHtml = '';
+        if (currentStatus === '待发货') {
+            tlHtml = `
+                <div class="shopping-timeline-item">
+                    <div class="shopping-tl-dot active"></div>
+                    <span class="shopping-tl-label">Ordered</span>
+                    <span class="shopping-tl-time">${timeOrdered}</span>
+                </div>
+                <div class="shopping-timeline-item">
+                    <div class="shopping-tl-dot pulse"></div>
+                    <span class="shopping-tl-label">${step2Label}</span>
+                    <span class="shopping-tl-time">~ ${timeShipped}</span>
+                </div>
+                <div class="shopping-timeline-item">
+                    <div class="shopping-tl-dot"></div>
+                    <span class="shopping-tl-label">Delivered</span>
+                    <span class="shopping-tl-time" style="opacity:0.5">~ ${timeDelivered}</span>
+                </div>
+            `;
+        } else if (currentStatus === '已发货') {
+             tlHtml = `
+                <div class="shopping-timeline-item">
+                    <div class="shopping-tl-dot active"></div>
+                    <span class="shopping-tl-label">Ordered</span>
+                    <span class="shopping-tl-time">${timeOrdered}</span>
+                </div>
+                <div class="shopping-timeline-item">
+                    <div class="shopping-tl-dot active"></div>
+                    <span class="shopping-tl-label">${step2Label}</span>
+                    <span class="shopping-tl-time">${timeShipped}</span>
+                </div>
+                <div class="shopping-timeline-item">
+                    <div class="shopping-tl-dot active pulse"></div>
+                    <span class="shopping-tl-label">Arriving</span>
+                    <span class="shopping-tl-time">~ ${timeDelivered}</span>
+                </div>
+            `;
+        } else { // 已完成
+             tlHtml = `
+                <div class="shopping-timeline-item">
+                    <div class="shopping-tl-dot active"></div>
+                    <span class="shopping-tl-label">Ordered</span>
+                    <span class="shopping-tl-time">${timeOrdered}</span>
+                </div>
+                <div class="shopping-timeline-item">
+                    <div class="shopping-tl-dot active"></div>
+                    <span class="shopping-tl-label">${step2Label}</span>
+                    <span class="shopping-tl-time">${timeShipped}</span>
+                </div>
+                <div class="shopping-timeline-item">
+                    <div class="shopping-tl-dot active"></div>
+                    <span class="shopping-tl-label">Delivered</span>
+                    <span class="shopping-tl-time">${timeDelivered}</span>
+                </div>
+            `;
+        }
+
+        const card = document.createElement('div');
+        card.className = 'shopping-order-card shopping-animate-enter';
+        card.onclick = () => window.openShoppingOrderProgress(order.id);
+        card.innerHTML = `
+            <div class="shopping-order-top">
+                <div class="shopping-order-store-info">
+                    <div class="shopping-order-store-icon">${icon}</div>
+                    <div>
+                        <div class="shopping-order-store-name">${storeName}</div>
+                        <div class="shopping-order-items-text">${itemsText}</div>
+                    </div>
+                </div>
+                <div class="shopping-order-status-badge ${badgeClass}">${statusText}</div>
+            </div>
+            <div class="shopping-timeline">
+                ${tlHtml}
+            </div>
+        `;
+        listDiv.appendChild(card);
+    });
+
+    container.appendChild(listDiv);
+}
+
+window.openShoppingOrderProgress = function(orderId) {
+    const order = window.iphoneSimState.shoppingOrders.find(o => o.id === orderId);
+    if (!order) return;
+
+    let modal = document.getElementById('shopping-order-progress-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'shopping-order-progress-modal';
+        modal.className = 'modal hidden';
+        modal.style.zIndex = '250';
+        modal.innerHTML = `
+            <div class="modal-content" style="padding: 0; background: #f2f2f7; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
+                <div class="modal-header" style="background: #fff;">
+                    <h3>订单详情</h3>
+                    <button class="close-btn" onclick="document.getElementById('shopping-order-progress-modal').classList.add('hidden')">&times;</button>
+                </div>
+                <div class="modal-body" style="padding: 20px; overflow-y: auto;">
+                    <div id="shopping-progress-content"></div>
+                    <button id="shopping-progress-share-btn" class="ios-btn-block" style="margin-top: 20px;">分享给朋友</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    const contentEl = document.getElementById('shopping-progress-content');
+    const shareBtn = document.getElementById('shopping-progress-share-btn');
+    
+    // Generate card HTML reuse
+    const { orderTs, shipTs, deliverTs, isDelivery } = getShoppingOrderMilestones(order);
+    const currentStatus = deriveShoppingOrderStatus(order, Date.now());
+    const icon = isDelivery ? '🍔' : '📦';
+    const storeName = isDelivery ? (order.items[0].shop_name || '外卖商家') : (order.items[0].shop_name || '购物商家');
+    const itemsText = order.items.map(i => `${i.title} x${i.count}`).join('<br>');
+    
+    // Timeline reuse (real-time milestones)
+    let statusText = currentStatus;
+    let eta = '未知';
+    if (currentStatus === '待发货') {
+        eta = isDelivery
+            ? `预计 ${formatShoppingHm(deliverTs)} 送达`
+            : `预计 ${formatShoppingDateTime(shipTs)} 发货`;
+    } else if (currentStatus === '已发货') {
+        eta = isDelivery
+            ? `预计 ${formatShoppingHm(deliverTs)} 送达`
+            : `预计 ${formatShoppingDateTime(deliverTs)} 送达`;
+    } else if (currentStatus === '已完成') {
+        eta = `已于 ${formatShoppingDateTime(deliverTs)} 送达`;
+    }
+
+    contentEl.innerHTML = `
+        <div style="background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 15px;">
+            <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px;">
+                <div style="font-size: 24px;">${icon}</div>
+                <div>
+                    <div style="font-weight: bold; font-size: 16px;">${storeName}</div>
+                    <div style="font-size: 12px; color: #999;">${formatShoppingDateTime(orderTs)}</div>
+                </div>
+            </div>
+            <div style="border-top: 1px solid #eee; padding-top: 10px; margin-top: 10px; font-size: 14px; color: #333; line-height: 1.5;">
+                ${itemsText}
+            </div>
+            <div style="margin-top: 15px; font-weight: bold; text-align: right;">
+                合计: ¥${order.total}
+            </div>
+        </div>
+        
+        <div style="background: #fff; border-radius: 12px; padding: 20px;">
+            <div style="font-weight: bold; margin-bottom: 10px;">当前状态: ${statusText}</div>
+            <div style="color: #666; font-size: 14px;">${eta}</div>
+            <div style="margin-top: 12px; font-size: 13px; color: #555; line-height: 1.6;">
+                <div>下单时间：${formatShoppingDateTime(orderTs)}</div>
+                <div>发货时间：${formatShoppingDateTime(shipTs)}</div>
+                <div>送达时间：${formatShoppingDateTime(deliverTs)}</div>
+            </div>
+        </div>
+    `;
+
+    shareBtn.onclick = () => {
+        modal.classList.add('hidden');
+        openShoppingProgressSharePicker(order, eta);
     };
 
-    window.iphoneSimState.shoppingOrders.unshift(newOrder);
-    saveConfig();
+    modal.classList.remove('hidden');
+};
+
+function openShoppingProgressSharePicker(order, eta) {
+    const modal = document.getElementById('contact-picker-modal');
+    const list = document.getElementById('contact-picker-list');
+    const sendBtn = document.getElementById('contact-picker-send-btn');
+    const closeBtn = document.getElementById('close-contact-picker');
     
-    // 如果当前在订单页面，刷新
-    const currentTab = document.querySelector('#shopping-app .wechat-tab-item.active');
-    if (currentTab && currentTab.dataset.tab === 'orders') {
-        renderShoppingOrders();
+    if (!modal || !list) return;
+    
+    const header = modal.querySelector('.modal-header h3');
+    if (header) header.textContent = '分享订单进度';
+    
+    if (sendBtn) {
+        sendBtn.textContent = '发送';
+        const newSendBtn = sendBtn.cloneNode(true);
+        sendBtn.parentNode.replaceChild(newSendBtn, sendBtn);
+
+        const formatShareTime = (ts, anchorTs) => formatShoppingTimelineLabel(ts, anchorTs);
+        
+        newSendBtn.onclick = () => {
+            const selectedContact = list.querySelectorAll('input[type="checkbox"]:checked');
+            const ids = Array.from(selectedContact).map(cb => parseInt(cb.value)).filter(id => id !== 0);
+            
+            if (ids.length > 0) {
+                ids.forEach(id => {
+                    const { orderTs, shipTs, deliverTs } = getShoppingOrderMilestones(order);
+                    const liveStatus = deriveShoppingOrderStatus(order, Date.now());
+                    const msgData = {
+                        type: 'order_share',
+                        orderId: order.id,
+                        status: liveStatus,
+                        eta: eta,
+                        items: order.items.map(i => i.title).join(', '),
+                        orderTime: formatShareTime(orderTs, orderTs),
+                        shipTime: formatShareTime(shipTs, orderTs),
+                        deliverTime: formatShareTime(deliverTs, orderTs),
+                        orderTs: orderTs,
+                        shipTs: shipTs,
+                        deliverTs: deliverTs
+                    };
+                    if (typeof sendMessage !== 'undefined') sendMessage(JSON.stringify(msgData), true, 'order_share', null, id);
+                });
+                modal.classList.add('hidden');
+                alert('已分享');
+            } else {
+                alert('请选择联系人');
+            }
+        };
     }
     
+    if (closeBtn) {
+        const newCloseBtn = closeBtn.cloneNode(true);
+        closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+        newCloseBtn.onclick = () => modal.classList.add('hidden');
+    }
+
+    list.innerHTML = '';
+    if (window.iphoneSimState.contacts) {
+        window.iphoneSimState.contacts.forEach(c => {
+            const item = document.createElement('div');
+            item.className = 'list-item';
+            item.innerHTML = `<span style="font-size: 16px;">${c.remark || c.name}</span><input type="checkbox" value="${c.id}" style="width: 20px; height: 20px;">`;
+            item.onclick = (e) => { if (e.target.type !== 'checkbox') item.querySelector('input').click(); };
+            list.appendChild(item);
+        });
+    }
+    modal.classList.remove('hidden');
+}
+
+window.handlePayForRequest = function(requestId, payerName, requestData) {
+    // Keep
     return true;
 };
 
-// 生成外卖数据
 async function generateDeliveryItems() {
     const settings = window.iphoneSimState.aiSettings.url ? window.iphoneSimState.aiSettings : window.iphoneSimState.aiSettings2;
     if (!settings.url || !settings.key) {
@@ -2888,7 +2903,7 @@ async function generateDeliveryItems() {
 
     const container = document.getElementById('shopping-tab-delivery');
     ensureDeliveryContainer();
-    const listContainer = container.querySelector('.delivery-container');
+    const listContainer = container.querySelector('.shopping-restaurant-list');
 
     const loadingDiv = document.createElement('div');
     loadingDiv.id = 'delivery-loading';
@@ -2897,141 +2912,113 @@ async function generateDeliveryItems() {
     loadingDiv.style.color = '#999';
     loadingDiv.textContent = '正在搜索附近美食...';
     
-    const oldLoading = document.getElementById('delivery-loading');
-    if (oldLoading) oldLoading.remove();
-    
     if (listContainer) {
         container.insertBefore(loadingDiv, listContainer);
     } else {
         container.appendChild(loadingDiv);
     }
 
-    let userContext = '';
-    // 复用关联联系人逻辑
-    let linkedIds = window.iphoneSimState.shoppingLinkedContactIds || [];
-    if (window.iphoneSimState.shoppingLinkedContactId && !linkedIds.includes(window.iphoneSimState.shoppingLinkedContactId)) {
-        linkedIds.push(window.iphoneSimState.shoppingLinkedContactId);
-    }
-
-    if (linkedIds.length > 0) {
-        userContext += `\n【用餐偏好参考】\n请根据以下用户的口味偏好（如果有提及）推荐外卖：\n`;
-        linkedIds.forEach((id) => {
-            const contact = window.iphoneSimState.contacts.find(c => c.id === id);
-            if (contact) {
-                userContext += `- ${contact.remark || contact.name}: ${contact.persona || ''}\n`;
-            }
-        });
-    }
-
-    const systemPrompt = `你是一个外卖APP推荐助手。请生成 6-8 个虚构的外卖商品信息。
-请直接返回 JSON 数组格式，不要包含任何 Markdown 标记。
+    const systemPrompt = `你是一个外卖推荐助手。请生成 5-8 个虚构的外卖商品信息。
+请直接返回 JSON 数组格式。不要包含任何 Markdown 标记或其他文本。
+【重要】必须输出标准的JSON格式。所有字符串内的换行符必须转义(使用 \\n)，禁止在字符串值中使用实际的换行符。
 每个商品包含以下字段：
 - title: 菜品名称
 - price: 价格 (数字)
-- shop_name: 商家名称
-- paid_count: 月售数量 (例如 "月售1000+")
+- shop_name: 店铺名称
 - delivery_time: 配送时间 (例如 "30分钟")
-- delivery_fee: 配送费 (例如 "¥0", "¥2")
-- rating: 评分 (例如 "4.8分")
-- image_desc: 菜品图片的简短描述 (不超过5个字)
-- detail_desc: 菜品详细描述
-- specifications: 可选规格 (Object, key为规格名, value为选项数组). 必须根据具体的商品类型生成合理的规格！例如：奶茶生成甜度/冰度，烧烤生成辣度，米饭套餐生成配菜，蛋糕生成口味等。不要所有商品都生成辣度！
-
-${userContext ? userContext : '菜品种类要极度丰富和随机！不要局限于常见的快餐。请生成各种不同的美食，例如：地方特色菜（川菜/粤菜/湘菜等）、异国料理（日料/韩料/西餐/泰餐等）、网红小吃、轻食沙拉、烘焙甜品、特色饮品、夜宵烧烤、火锅食材等。请发挥想象力，生成一些有趣或诱人的菜名。'}
-
-请不要只生成示例中的商品，要完全随机和多样化！
+- delivery_fee: 配送费 (例如 "免配送" 或 "¥3")
+- rating: 评分 (例如 "4.8")
+- image_desc: 图片描述 (用于生成图片)
+- detail_desc: 菜品详情描述
 
 示例：
-[
-  {"title": "香辣鸡腿堡套餐", "price": 25.9, "shop_name": "快乐汉堡店", "paid_count": "月售2000+", "delivery_time": "25分钟", "delivery_fee": "¥0", "rating": "4.9分", "image_desc": "汉堡套餐", "detail_desc": "香辣鸡腿堡+中薯+可乐，快乐加倍！", "specifications": {"饮料": ["可乐", "雪碧", "橙汁"], "辣度": ["正常辣", "不辣"]}},
-  {"title": "招牌杨枝甘露", "price": 18, "shop_name": "七分甜", "paid_count": "月售500+", "delivery_time": "35分钟", "delivery_fee": "¥3", "rating": "4.7分", "image_desc": "杨枝甘露", "detail_desc": "精选芒果，口感浓郁，清凉解暑。", "specifications": {"甜度": ["常规糖", "七分糖", "三分糖"], "温度": ["冰", "去冰", "常温"]}},
-  {"title": "草莓奶油蛋糕", "price": 35, "shop_name": "甜蜜时光", "paid_count": "月售300+", "delivery_time": "45分钟", "delivery_fee": "¥5", "rating": "4.9分", "image_desc": "草莓蛋糕", "detail_desc": "新鲜草莓，动物奶油，口感细腻。", "specifications": {"口味": ["原味", "巧克力底"], "蜡烛": ["不需要", "需要"]}}
-]`;
+[{"title": "香辣鸡腿堡", "price": 25, "shop_name": "汉堡王", "delivery_time": "30分钟", "delivery_fee": "免配送", "rating": "4.8", "image_desc": "汉堡", "detail_desc": "美味多汁"}]`;
 
     try {
         let fetchUrl = settings.url;
         if (!fetchUrl.endsWith('/chat/completions')) {
             fetchUrl = fetchUrl.endsWith('/') ? fetchUrl + 'chat/completions' : fetchUrl + '/chat/completions';
         }
-        const cleanKey = settings.key ? settings.key.replace(/[^\x00-\x7F]/g, "").trim() : '';
         
+        const cleanKey = settings.key ? settings.key.replace(/[^\x00-\x7F]/g, "").trim() : '';
+        const requestBody = {
+            model: settings.model,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: '生成外卖推荐' }
+            ],
+            temperature: 0.7
+        };
+
         const response = await fetch(fetchUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${cleanKey}`
             },
-            body: JSON.stringify({
-                model: settings.model,
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: '生成外卖推荐' }
-                ],
-                temperature: 0.7,
-                response_format: { type: "json_object" }
-            })
+            body: JSON.stringify(requestBody)
         });
 
-        if (!response.ok) throw new Error(`API Error: ${response.status}`);
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`API Error: ${response.status} - ${errText.substring(0, 100)}`);
+        }
 
         const data = await response.json();
         let content = data.choices[0].message.content;
-        content = content.replace(/```json/g, '').replace(/```/g, '').trim();
         
-        let products = [];
+        let items = [];
         try {
-            const parsed = JSON.parse(content);
-            if (Array.isArray(parsed)) products = parsed;
-            else if (parsed.products) products = parsed.products;
-            else {
-                 for (let key in parsed) {
-                    if (Array.isArray(parsed[key])) {
-                        products = parsed[key];
-                        break;
-                    }
+            const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
+            items = JSON.parse(cleanContent);
+        } catch(e) {
+            console.error('JSON Parse Failed:', e);
+            try {
+                // Try to find the JSON array
+                const arrayMatch = content.match(/\[[\s\S]*\]/);
+                if (arrayMatch) {
+                    let fixedContent = arrayMatch[0];
+                    // Basic cleanup for control characters
+                    fixedContent = fixedContent.replace(/[\x00-\x09\x0B-\x1F\x7F]/g, ""); 
+                    items = JSON.parse(fixedContent);
                 }
+            } catch (e2) {
+                console.error('JSON Rescue Failed:', e2);
+                alert('生成数据格式有误，请重试');
+                return;
             }
-        } catch (e) {
-            console.error('JSON Parse Error:', e);
         }
 
-        if (products.length > 0) {
-            products.forEach((p, index) => {
+        if (items.length > 0) {
+            items.forEach((p, index) => {
                 p.id = 'del_' + Date.now() + '_' + index;
-                p.isDelivery = true; // 标记为外卖
+                p.isDelivery = true;
             });
 
-            if (!window.iphoneSimState.deliveryItems) {
-                window.iphoneSimState.deliveryItems = [];
-            }
-            // 外卖通常是刷新式的，这里我们可以选择追加或者覆盖。考虑到推荐流，追加比较好，但为了演示方便，这里覆盖或追加？
-            // 模仿 generateShoppingProducts 是追加。
-            window.iphoneSimState.deliveryItems.unshift(...products);
+            if (!window.iphoneSimState.deliveryItems) window.iphoneSimState.deliveryItems = [];
+            window.iphoneSimState.deliveryItems.unshift(...items);
             saveConfig();
-
+            
             renderDeliveryItems();
 
-            // 异步生成图片
             (async () => {
-                for (const p of products) {
+                for (const p of items) {
                     if (p.image_desc) {
                         const url = await generateAiImage(p.image_desc);
                         if (url) {
                             p.aiImage = url;
                             saveConfig();
-                            const imgEl = document.getElementById(`delivery-img-${p.id}`);
-                            if (imgEl) imgEl.src = url;
+                            renderDeliveryItems();
                         }
                     }
                 }
             })();
         } else {
-            alert('未生成有效数据');
+            alert('未生成有效商品数据');
         }
-
     } catch (error) {
-        console.error('生成外卖失败:', error);
-        alert(`生成失败: ${error.message}`);
+        console.error('Gen Error', error);
+        alert('生成失败: ' + error.message);
     } finally {
         const loading = document.getElementById('delivery-loading');
         if (loading) loading.remove();
@@ -3040,13 +3027,10 @@ ${userContext ? userContext : '菜品种类要极度丰富和随机！不要局�
 
 function renderDeliveryItems() {
     const container = document.getElementById('shopping-tab-delivery');
-    if (!container) return;
     ensureDeliveryContainer();
-    const listContainer = container.querySelector('.delivery-container');
+    const listContainer = container.querySelector('.shopping-restaurant-list');
     
-    // 如果没有数据
     if (!window.iphoneSimState.deliveryItems || window.iphoneSimState.deliveryItems.length === 0) {
-        listContainer.innerHTML = ''; // Keep empty or show placeholder logic in ensure
         return;
     }
 
@@ -3054,61 +3038,50 @@ function renderDeliveryItems() {
     
     window.iphoneSimState.deliveryItems.forEach((item, index) => {
         const card = document.createElement('div');
-        card.className = 'delivery-card-modern shopping-anim-item';
+        card.className = 'shopping-restaurant-card shopping-animate-enter';
         card.style.animationDelay = `${index * 0.05}s`;
-        card.dataset.id = item.id;
         
         if (isShoppingManageMode) {
-            card.style.cursor = 'pointer';
             card.onclick = () => toggleProductSelection(item.id, card);
         } else {
-            // 点击直接购买/送礼
-            card.onclick = () => {
-                if (item.specifications && Object.keys(item.specifications).length > 0) {
-                    openShoppingSpecModal(item, (itemWithSpec) => {
-                        openPaymentChoice(itemWithSpec.price, [itemWithSpec]);
-                    });
-                } else {
-                    openPaymentChoice(item.price, [item]);
-                }
-            };
+            card.onclick = () => openShoppingDeliveryDetail(item);
         }
 
         const isSelected = selectedShoppingProducts.has(item.id);
         if (isSelected && isShoppingManageMode) {
-            card.classList.add('manage-active');
+            card.classList.add('selected');
         }
 
-        let validBgColor = window.getRandomPastelColor();
-        if (item.bgColor) { // If delivery items start saving color later
-             validBgColor = item.bgColor;
-             if (!validBgColor.startsWith('#') && !validBgColor.startsWith('hsl') && !validBgColor.startsWith('rgb')) {
-                 validBgColor = '#' + validBgColor;
-             }
-        }
-        const imgUrl = item.aiImage || generatePlaceholderImage(100, 100, item.image_desc || '美食', validBgColor);
+        const shapes = ['rect', 'circle', 'tri'];
+        const shape = shapes[index % 3];
+        
+        // Use pale color and no text for cover
+        let validBgColor = window.getRandomPaleColor ? window.getRandomPaleColor() : window.getRandomPastelColor();
+        
+        // If no AI image, generate a plain colored background without text
+        const imgUrl = item.aiImage || generatePlaceholderImage(300, 200, '', validBgColor);
 
         card.innerHTML = `
-            <div class="shopping-checkbox ${isSelected ? 'checked' : ''}"></div>
-            <img id="delivery-img-${item.id}" src="${imgUrl}" style="width: 90px; height: 90px; border-radius: 12px; object-fit: cover; flex-shrink: 0; background: #f2f2f7;">
-            <div style="flex: 1; display: flex; flex-direction: column; justify-content: space-between; padding: 2px 0;">
-                <div>
-                    <div style="font-size: 16px; font-weight: 600; color: var(--shopping-text-primary); margin-bottom: 4px; line-height: 1.3;">${item.title}</div>
-                    <div style="font-size: 12px; color: var(--shopping-text-secondary); display: flex; align-items: center; gap: 8px;">
-                        <span style="color: #FF9500; font-weight: 600;">${item.rating || '4.8分'}</span>
-                        <span>${item.paid_count || '月售100+'}</span>
-                    </div>
+            <div class="shopping-rest-img">
+                 <div class="shopping-shape ${shape}" style="width:100%; height:100%; opacity: 0.5;"></div>
+                 <img src="${imgUrl}" style="position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 1;">
+                 <div style="position:absolute; font-family:'Playfair Display'; font-size:24px; color:#fff; font-style:italic; z-index: 2; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">${item.shop_name}</div>
+                 <div class="shopping-selection-check"><i class="fas fa-check"></i></div>
+            </div>
+            <div class="shopping-rest-info">
+                <div class="shopping-rest-header">
+                    <div class="shopping-rest-name">${item.title}</div>
+                    <div class="shopping-rest-rating">★ ${item.rating || '4.8'}</div>
                 </div>
-                <div style="display: flex; justify-content: space-between; align-items: flex-end;">
-                    <div style="display: flex; flex-direction: column; gap: 2px;">
-                         <div style="font-size: 11px; color: var(--shopping-text-secondary);">
-                             <span>${item.delivery_time || '30分钟'}</span> 
-                             <span style="margin: 0 4px;">|</span>
-                             <span>${item.delivery_fee || '免配送费'}</span>
-                         </div>
-                         <div style="font-size: 11px; color: var(--shopping-text-secondary); opacity: 0.8;">${item.shop_name}</div>
+                <div class="shopping-rest-meta">
+                    <div class="shopping-meta-item">
+                        <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        ${item.delivery_time || '30分钟'}
                     </div>
-                    <div style="color: var(--shopping-text-primary); font-size: 18px; font-weight: 700;">¥${item.price}</div>
+                    <div class="shopping-meta-item">
+                        <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+                        ${item.delivery_fee || '免配送'}
+                    </div>
                 </div>
             </div>
         `;
@@ -3116,97 +3089,558 @@ function renderDeliveryItems() {
     });
 }
 
-function showOrderNotification(title, message) {
-    let container = document.getElementById('order-notification-banner');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'order-notification-banner';
-        container.style.cssText = `
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%) translateY(-100px);
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            padding: 12px 20px;
-            border-radius: 25px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-            z-index: 10000;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            min-width: 220px;
-            opacity: 0;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            pointer-events: none;
-        `;
-        
-        const icon = document.createElement('div');
-        icon.id = 'order-notif-icon';
-        icon.style.cssText = `
-            width: 36px;
-            height: 36px;
-            background: #000;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            font-size: 16px;
-            flex-shrink: 0;
-        `;
-        
-        const textDiv = document.createElement('div');
-        textDiv.style.cssText = `display: flex; flex-direction: column;`;
-        
-        const titleSpan = document.createElement('span');
-        titleSpan.id = 'order-notif-title';
-        titleSpan.style.cssText = `font-weight: 600; font-size: 15px; color: #000; margin-bottom: 2px;`;
-        
-        const msgSpan = document.createElement('span');
-        msgSpan.id = 'order-notif-msg';
-        msgSpan.style.cssText = `font-size: 13px; color: #666;`;
-        
-        textDiv.appendChild(titleSpan);
-        textDiv.appendChild(msgSpan);
-        
-        container.appendChild(icon);
-        container.appendChild(textDiv);
-        
-        document.body.appendChild(container);
+function openShoppingDeliveryDetail(item) {
+    const detailView = document.getElementById('food-detail');
+    if (!detailView) return;
+
+    const shopName = item.shop_name || '外卖商家';
+    const shopKey = getDeliveryShopKey(shopName);
+
+    const titleEl = document.getElementById('food-detail-title');
+    if (titleEl) titleEl.textContent = shopName;
+
+    const listEl = document.getElementById('food-detail-menu-list');
+    if (listEl) {
+        listEl.innerHTML = '';
+        const menuItems = [
+            { name: item.title, price: item.price, desc: item.detail_desc || '招牌美味' },
+            { name: '超值套餐', price: (item.price * 1.2).toFixed(1), desc: item.title + ' + 饮料' },
+            { name: '单人餐', price: (item.price * 0.8).toFixed(1), desc: '分量适中' }
+        ];
+
+        menuItems.forEach(m => {
+            const div = document.createElement('div');
+            div.className = 'shopping-menu-item';
+            div.innerHTML = `
+                <div style="flex: 1; padding-right: 10px;">
+                    <div style="font-weight:600;">${m.name}</div>
+                    <div style="font-size:13px; color:#8e8e93; margin-top: 2px;">${m.desc}</div>
+                    <div style="font-weight:600; margin-top:4px;">¥${m.price}</div>
+                </div>
+                <button class="shopping-menu-add">+</button>
+            `;
+            
+            const addBtn = div.querySelector('.shopping-menu-add');
+            addBtn.onclick = (e) => {
+                e.stopPropagation();
+
+                const menuPrice = Number(m.price || 0);
+                let menuImage = item.aiImage || '';
+                if (!menuImage && typeof generatePlaceholderImage === 'function') {
+                    menuImage = generatePlaceholderImage(300, 300, m.name || '外卖', '#007AFF');
+                }
+
+                upsertDeliveryDraftItem(shopKey, {
+                    title: m.name,
+                    price: menuPrice,
+                    shop_name: shopName,
+                    isDelivery: true,
+                    image: menuImage
+                }, { shopName });
+
+                addShoppingLog('外卖加菜', {
+                    shopKey,
+                    shopName,
+                    title: m.name,
+                    price: menuPrice
+                });
+
+                const toast = document.getElementById('shopping-success-toast');
+                if (toast) {
+                    toast.querySelector('span').textContent = `已加入当前订单：${m.name}`;
+                    toast.classList.remove('hidden');
+                    setTimeout(() => toast.classList.add('hidden'), 1500);
+                }
+
+                updateDeliveryDetailActionButton(shopKey);
+
+                const orderModal = document.getElementById('shopping-delivery-order-modal');
+                if (
+                    orderModal &&
+                    !orderModal.classList.contains('hidden') &&
+                    orderModal.dataset.shopKey === shopKey
+                ) {
+                    renderDeliveryOrderModal(shopKey, orderModal.dataset.shopName || shopName);
+                }
+            };
+            
+            listEl.appendChild(div);
+        });
     }
-    
-    const icon = container.querySelector('#order-notif-icon');
-    const titleSpan = container.querySelector('#order-notif-title');
-    const msgSpan = container.querySelector('#order-notif-msg');
-    
-    if (title.includes('外卖')) {
-        icon.innerHTML = '<i class="fas fa-utensils"></i>';
-        icon.style.background = '#FF9500'; // Orange for food
-    } else {
-        icon.innerHTML = '<i class="fas fa-box-open"></i>';
-        icon.style.background = '#007AFF'; // Blue for package
+
+    const actionBtn = document.getElementById('food-detail-action-btn');
+    if (actionBtn) {
+        // Clone to remove old listeners
+        const newBtn = actionBtn.cloneNode(true);
+        actionBtn.parentNode.replaceChild(newBtn, actionBtn);
+        newBtn.dataset.shopKey = shopKey;
+        newBtn.onclick = () => {
+            openDeliveryOrderModal(shopKey, shopName);
+        };
+        updateDeliveryDetailActionButton(shopKey);
     }
-    
-    titleSpan.textContent = title;
-    msgSpan.textContent = message;
-    
-    // Show animation
-    requestAnimationFrame(() => {
-        container.style.opacity = '1';
-        container.style.transform = 'translateX(-50%) translateY(0)';
-    });
-    
-    // Hide after delay
-    if (window.orderNotifTimeout) clearTimeout(window.orderNotifTimeout);
-    window.orderNotifTimeout = setTimeout(() => {
-        container.style.opacity = '0';
-        container.style.transform = 'translateX(-50%) translateY(-100px)';
-    }, 4000);
+
+    detailView.classList.add('active');
 }
 
-// 注册初始化函数
+function showOrderNotification(title, message) {
+    // Keep
+}
+
 if (window.appInitFunctions) {
     window.appInitFunctions.push(setupShoppingListeners);
+}
+
+// ==========================================
+// PDD Activity Logic (Cash & Bargain)
+// ==========================================
+
+function initCashActivity() {
+    // Force initialization if not active OR if amount is 0 (bug fix)
+    if (!cashActivityState.active || parseFloat(cashActivityState.amount) <= 0) {
+        cashActivityState.active = true;
+        // Initial amount 90.00 - 98.00
+        cashActivityState.amount = (90 + Math.random() * 8).toFixed(2); 
+    }
+    renderCashActivity();
+}
+
+function renderCashFloatEntry() {
+    let floatBtn = document.getElementById('pdd-float-btn');
+    if (floatBtn) {
+        floatBtn.remove();
+    }
+}
+
+function renderCashActivity() {
+    let modal = document.getElementById('pdd-cash-modal');
+    if (modal) modal.remove();
+
+    const diff = Math.max(0.01, 100 - parseFloat(cashActivityState.amount)).toFixed(2);
+    const percent = (parseFloat(cashActivityState.amount) / 100) * 100;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'pdd-cash-modal';
+    overlay.className = 'pdd-modal-overlay';
+    
+    overlay.innerHTML = `
+        <div class="pdd-modal">
+            <div class="pdd-close-btn" onclick="this.closest('.pdd-modal-overlay').remove()">×</div>
+            
+            <div class="pdd-title">天天领现金</div>
+            <div class="pdd-subtitle">提现到微信</div>
+            
+            <div class="pdd-amount-box">
+                <div style="font-size:14px;color:#333;">已获得现金</div>
+                <div class="pdd-amount"><span>¥</span>${cashActivityState.amount}</div>
+            </div>
+            
+            <div class="pdd-progress-container">
+                <div class="pdd-progress-bar" style="width: ${percent}%"></div>
+                <div class="pdd-progress-text">还差 ${diff} 元提现</div>
+            </div>
+            
+            <div class="pdd-tips">🔥 只差一点点！邀请好友助力 🔥</div>
+            
+            <div class="pdd-btn-group">
+                <button class="pdd-btn primary" onclick="shareCashActivity()">
+                    ⚡ 分享好友助力 ⚡
+                </button>
+                <button class="pdd-btn ad" onclick="watchAdToBoost()">
+                    📺 看视频领现金 📺
+                </button>
+            </div>
+            
+            <button class="pdd-cheat-btn" onclick="instantSuccess('cash')">.</button>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+}
+
+function shareCashActivity() {
+    const modal = document.getElementById('pdd-cash-modal');
+    if (modal) modal.remove();
+    openShoppingContactPickerForActivity('cash');
+}
+
+function watchAdToBoost() {
+    playAd(() => {
+        // Boost logic
+        const current = parseFloat(cashActivityState.amount);
+        const remaining = 100 - current;
+        let boost = 0;
+        
+        if (remaining > 5) boost = (Math.random() * 2).toFixed(2);
+        else if (remaining > 1) boost = (Math.random() * 0.5).toFixed(2);
+        else if (remaining > 0.1) boost = (Math.random() * 0.05).toFixed(2);
+        else boost = 0.01;
+        
+        cashActivityState.amount = (current + parseFloat(boost)).toFixed(2);
+        if (parseFloat(cashActivityState.amount) >= 100) {
+            cashActivityState.amount = "100.00";
+            handleSuccess('cash');
+        } else {
+            renderCashActivity();
+            alert(`恭喜！看广告获得 ${boost} 元红包！`);
+        }
+    });
+}
+
+function startBargain(product) {
+    if (!cashActivityState.bargains[product.id]) {
+        cashActivityState.bargains[product.id] = {
+            title: product.title,
+            image: product.aiImage || product.image,
+            currentPrice: product.price,
+            originalPrice: product.price,
+            logs: []
+        };
+    }
+    renderBargainActivity(product.id);
+}
+
+function renderBargainActivity(productId) {
+    const data = cashActivityState.bargains[productId];
+    if (!data) return;
+    
+    let modal = document.getElementById('pdd-bargain-modal');
+    if (modal) modal.remove();
+
+    const cut = (data.originalPrice - data.currentPrice).toFixed(2);
+    const percent = ((data.originalPrice - data.currentPrice) / data.originalPrice) * 100;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'pdd-bargain-modal';
+    overlay.className = 'pdd-modal-overlay';
+    
+    overlay.innerHTML = `
+        <div class="pdd-modal" style="background: linear-gradient(180deg, #ff4400 0%, #ff0000 100%);">
+            <div class="pdd-close-btn" onclick="this.closest('.pdd-modal-overlay').remove()">×</div>
+            
+            <div class="pdd-title">砍价免费拿</div>
+            <div class="pdd-subtitle">${data.title.substring(0, 15)}...</div>
+            
+            <div class="pdd-amount-box">
+                <div style="font-size:14px;color:#333;">已砍掉</div>
+                <div class="pdd-amount"><span>¥</span>${cut}</div>
+            </div>
+            
+            <div class="pdd-progress-container">
+                <div class="pdd-progress-bar" style="width: ${percent}%"></div>
+                <div class="pdd-progress-text">还差 ¥${data.currentPrice.toFixed(2)}</div>
+            </div>
+            
+            <div class="pdd-btn-group">
+                <button class="pdd-btn primary" onclick="shareBargainActivity('${productId}')">
+                    🔪 邀请好友砍一刀 🔪
+                </button>
+                <button class="pdd-btn ad" onclick="watchAdToBargain('${productId}')">
+                    📺 看视频砍一刀 📺
+                </button>
+            </div>
+            
+            <button class="pdd-cheat-btn" onclick="instantSuccess('bargain', '${productId}')">.</button>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+}
+
+function shareBargainActivity(productId) {
+    const modal = document.getElementById('pdd-bargain-modal');
+    if (modal) modal.remove();
+    openShoppingContactPickerForActivity('bargain', productId);
+}
+
+function watchAdToBargain(productId) {
+    playAd(() => {
+        const data = cashActivityState.bargains[productId];
+        if (!data) return;
+        
+        let cut = 0;
+        if (data.currentPrice > 50) cut = (Math.random() * 5 + 1).toFixed(2);
+        else if (data.currentPrice > 10) cut = (Math.random() * 2).toFixed(2);
+        else if (data.currentPrice > 1) cut = (Math.random() * 0.1).toFixed(2);
+        else cut = 0.01;
+        
+        data.currentPrice = Math.max(0, data.currentPrice - cut);
+        
+        if (data.currentPrice <= 0.01) {
+            handleSuccess('bargain', productId);
+        } else {
+            renderBargainActivity(productId);
+            alert(`恭喜！看广告砍掉了 ${cut} 元！`);
+        }
+    });
+}
+
+function playAd(callback) {
+    const overlay = document.createElement('div');
+    overlay.className = 'pdd-video-ad-overlay';
+    
+    // Bilibili Video Embed
+    // BVID: BV1jvf4BnEU5
+    const bvid = 'BV1jvf4BnEU5';
+    
+    // Added 'sandbox' to prevent top-navigation (jumping to Bilibili app/site)
+    // Added transparent interaction layer to capture clicks if needed, but Bilibili player needs clicks.
+    // We rely on sandbox to block jumps.
+    overlay.innerHTML = `
+        <div class="pdd-video-container" id="pdd-ad-container" style="background: #000;">
+            <iframe 
+                src="//player.bilibili.com/player.html?bvid=${bvid}&page=1&high_quality=1&danmaku=0&autoplay=1" 
+                scrolling="no" 
+                border="0" 
+                frameborder="no" 
+                framespacing="0" 
+                allowfullscreen="true"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
+                allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                style="width: 100%; height: 100%;">
+            </iframe>
+            <div style="position:absolute; bottom: 60px; width:100%; text-align:center; color:rgba(255,255,255,0.9); font-size:14px; pointer-events:none; text-shadow: 0 1px 2px rgba(0,0,0,0.8); font-weight: bold;">
+                👆 点击视频开启声音 / 播放 👆
+            </div>
+        </div>
+        <div class="pdd-ad-timer">广告剩余 <span id="ad-countdown">15</span>s</div>
+        <button id="pdd-skip-btn" class="pdd-ad-skip">跳过广告</button>
+    `;
+    
+    document.body.appendChild(overlay);
+
+    const skipBtn = document.getElementById('pdd-skip-btn');
+    let seconds = 15;
+    let interval = null;
+
+    // Cleanup Function
+    const cleanup = (shouldCallback = false) => {
+        if (interval) clearInterval(interval);
+        if (overlay) overlay.remove();
+        if (shouldCallback && callback) callback();
+    };
+
+    skipBtn.onclick = () => cleanup(false);
+
+    // Countdown Timer
+    const timerEl = document.getElementById('ad-countdown');
+    interval = setInterval(() => {
+        seconds--;
+        if (timerEl) timerEl.textContent = seconds;
+        
+        if (seconds <= 0) {
+            cleanup(true);
+        }
+    }, 1000);
+}
+
+function openShoppingContactPickerForActivity(type, productId = null) {
+    const modal = document.getElementById('contact-picker-modal');
+    const list = document.getElementById('contact-picker-list');
+    const sendBtn = document.getElementById('contact-picker-send-btn');
+    const closeBtn = document.getElementById('close-contact-picker');
+    
+    if (!modal || !list) return;
+    
+    // Ensure contact picker is above product detail (z-index: 2000)
+    modal.style.zIndex = '10005';
+    
+    const header = modal.querySelector('.modal-header h3');
+    if (header) header.textContent = type === 'cash' ? '邀请好友助力' : '邀请好友砍价';
+    
+    if (sendBtn) {
+        sendBtn.textContent = '发送';
+        const newSendBtn = sendBtn.cloneNode(true);
+        sendBtn.parentNode.replaceChild(newSendBtn, sendBtn);
+        
+        newSendBtn.onclick = () => {
+            const selected = list.querySelectorAll('input[type="checkbox"]:checked');
+            const ids = Array.from(selected).map(cb => parseInt(cb.value)).filter(id => id !== 0);
+            
+            if (ids.length > 0) {
+                ids.forEach(id => {
+                    let msgType = '';
+                    let content = '';
+                    
+                    if (type === 'cash') {
+                        msgType = 'pdd_cash_share';
+                        content = JSON.stringify({
+                            amount: cashActivityState.amount,
+                            diff: (100 - parseFloat(cashActivityState.amount)).toFixed(2)
+                        });
+                    } else {
+                        msgType = 'pdd_bargain_share';
+                        const data = cashActivityState.bargains[productId];
+                        content = JSON.stringify({
+                            productId: productId,
+                            title: data.title,
+                            image: data.image,
+                            currentPrice: data.currentPrice
+                        });
+                    }
+                    
+                    if (typeof sendMessage !== 'undefined') {
+                        sendMessage(content, true, msgType, null, id);
+                        // AI interaction is now handled by the AI prompt generating ACTION: PDD_HELP
+                    }
+                });
+                modal.classList.add('hidden');
+                
+                // Auto-close shopping app to return to chat
+                document.getElementById('shopping-app').classList.add('hidden');
+                const pd = document.getElementById('product-detail');
+                if (pd) pd.classList.remove('active');
+                
+                if (type === 'cash') {
+                    if (window.showChatToast) window.showChatToast('Shared! Friends can click to help!');
+                    else alert('Shared! Friends can click to help!');
+                } else {
+                    if (window.showChatToast) window.showChatToast('Shared! Waiting for friends to cut!');
+                    else alert('Shared! Waiting for friends to cut!');
+                }
+            } else {
+                alert('Please select a contact');
+            }
+        };
+    }
+    
+    // Reuse existing contact rendering
+    if (closeBtn) {
+        const newCloseBtn = closeBtn.cloneNode(true);
+        closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+        newCloseBtn.onclick = () => modal.classList.add('hidden');
+    }
+
+    list.innerHTML = '';
+    if (window.iphoneSimState.contacts) {
+        window.iphoneSimState.contacts.forEach(c => {
+            const item = document.createElement('div');
+            item.className = 'list-item';
+            item.innerHTML = `<span style="font-size: 16px;">${c.remark || c.name}</span><input type="checkbox" value="${c.id}" style="width: 20px; height: 20px;">`;
+            item.onclick = (e) => { if (e.target.type !== 'checkbox') item.querySelector('input').click(); };
+            list.appendChild(item);
+        });
+    }
+    modal.classList.remove('hidden');
+}
+
+window.processPddHelp = function(type, productId = null) {
+    if (type === 'cash') {
+        const current = parseFloat(cashActivityState.amount);
+        const remaining = 100 - current;
+        let boost = 0;
+        
+        // Diminishing returns
+        if (remaining > 5) boost = (Math.random() * 1.5 + 0.5).toFixed(2);
+        else if (remaining > 1) boost = (Math.random() * 0.3 + 0.1).toFixed(2);
+        else if (remaining > 0.1) boost = (Math.random() * 0.05 + 0.01).toFixed(2);
+        else boost = 0.01;
+        
+        cashActivityState.amount = (current + parseFloat(boost)).toFixed(2);
+        
+        if (typeof sendMessage !== 'undefined') {
+            sendMessage(`成功助力！现金增加 ${boost} 元`, false, 'system');
+        }
+
+        if (parseFloat(cashActivityState.amount) >= 100) {
+            cashActivityState.amount = "100.00";
+            handleSuccess('cash');
+        } else {
+            // Only re-render if modal is open
+            if (document.getElementById('pdd-cash-modal')) {
+                renderCashActivity();
+            }
+        }
+        
+    } else {
+        const data = cashActivityState.bargains[productId];
+        if (data) {
+            let cut = 0;
+            if (data.currentPrice > 50) cut = (Math.random() * 5 + 2).toFixed(2);
+            else if (data.currentPrice > 10) cut = (Math.random() * 1 + 0.5).toFixed(2);
+            else if (data.currentPrice > 1) cut = (Math.random() * 0.1 + 0.01).toFixed(2);
+            else cut = 0.01;
+            
+            data.currentPrice = Math.max(0, data.currentPrice - cut);
+            
+            if (typeof sendMessage !== 'undefined') {
+                sendMessage(`砍价成功！商品降价 ${cut} 元`, false, 'system');
+            }
+
+            if (data.currentPrice <= 0.01) {
+                data.currentPrice = 0;
+                handleSuccess('bargain', productId);
+            } else {
+                if (document.getElementById('pdd-bargain-modal')) {
+                    renderBargainActivity(productId);
+                }
+            }
+        }
+    }
+}
+
+function handleSuccess(type, productId) {
+    if (type === 'cash') {
+        if (!window.iphoneSimState.wallet) window.iphoneSimState.wallet = { balance: 0, transactions: [] };
+        window.iphoneSimState.wallet.balance += 100;
+        window.iphoneSimState.wallet.transactions.unshift({
+            id: Date.now(),
+            type: 'income',
+            amount: 100,
+            title: '现金活动提现',
+            time: Date.now()
+        });
+        saveConfig();
+        
+        let modal = document.getElementById('pdd-cash-modal');
+        if (modal) modal.remove();
+        
+        alert('🎉 提现成功！100元已到账！ 🎉');
+        cashActivityState.active = false;
+        
+    } else {
+        const data = cashActivityState.bargains[productId];
+        
+        // Add to orders
+        if (!window.iphoneSimState.shoppingOrders) window.iphoneSimState.shoppingOrders = [];
+        const bargainOrder = {
+            id: 'bargain_' + Date.now(),
+            items: [{
+                title: data.title,
+                price: 0,
+                image: data.image,
+                count: 1
+            }],
+            total: '0.00',
+            time: Date.now(),
+            status: '待发货',
+            timelineVersion: 2
+        };
+        const milestones = computeShoppingOrderMilestones(bargainOrder.time, false);
+        bargainOrder.shipAt = milestones.shipTs;
+        bargainOrder.deliverAt = milestones.deliverTs;
+        bargainOrder.shipDelay = milestones.shipTs - milestones.orderTs;
+        bargainOrder.deliverDelay = milestones.deliverTs - milestones.orderTs;
+        window.iphoneSimState.shoppingOrders.unshift(bargainOrder);
+        saveConfig();
+        
+        let modal = document.getElementById('pdd-bargain-modal');
+        if (modal) modal.remove();
+        
+        alert('🎉 砍价成功！商品已0元发货！ 🎉');
+        delete cashActivityState.bargains[productId];
+    }
+}
+
+function instantSuccess(type, productId) {
+    if (type === 'cash') {
+        cashActivityState.amount = "100.00";
+        handleSuccess('cash');
+    } else {
+        const data = cashActivityState.bargains[productId];
+        if (data) {
+            data.currentPrice = 0;
+            handleSuccess('bargain', productId);
+        }
+    }
 }
