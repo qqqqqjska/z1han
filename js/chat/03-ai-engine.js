@@ -2066,6 +2066,200 @@ function normalizeStrictAiItems(items) {
     return { messagesList, actions, thoughtContent };
 }
 
+function normalizeLegacyCompatType(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const lower = raw.toLowerCase();
+    const typeMap = {
+        'message': 'text',
+        'msg': 'text',
+        '文本': 'text',
+        '消息': 'text',
+        'sticker': 'sticker',
+        '表情包': 'sticker',
+        'image': 'image',
+        '图片': 'image',
+        'voice': 'voice',
+        'voice_message': 'voice',
+        '语音': 'voice',
+        '语音消息': 'voice',
+        'description': 'description',
+        '旁白': 'description',
+        'thought': 'thought',
+        '心声': 'thought',
+        '思考': 'thought',
+        'action': 'action',
+        '动作': 'action'
+    };
+    return typeMap[lower] || typeMap[raw] || raw;
+}
+
+const LEGACY_COMPAT_SUPPORTED_TYPES = new Set([
+    'text',
+    'html',
+    'sticker',
+    'image',
+    'voice',
+    'description',
+    'virtual_image',
+    'transfer',
+    'family_card',
+    'pay_request',
+    'gift_card',
+    'shopping_gift',
+    'delivery_share',
+    'order_progress',
+    'savings_invite',
+    'savings_withdraw_request',
+    'savings_progress',
+    'music_listen_invite',
+    'icity_card',
+    'pdd_cash_share',
+    'pdd_bargain_share',
+    'voice_call_text'
+]);
+
+function normalizeLegacyCompatMessages(messagesList) {
+    if (!Array.isArray(messagesList) || messagesList.length === 0) return [];
+
+    const normalized = [];
+    for (const item of messagesList) {
+        if (typeof item === 'string') {
+            const text = item.trim();
+            if (text) normalized.push({ type: 'text', content: text });
+            continue;
+        }
+
+        if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+
+        const type = normalizeLegacyCompatType(item.type);
+        const content = item.content;
+
+        if (!type) {
+            if (typeof content === 'string' && content.trim()) {
+                normalized.push({ type: 'text', content: content.trim() });
+            }
+            continue;
+        }
+
+        if (!LEGACY_COMPAT_SUPPORTED_TYPES.has(type)) {
+            if (typeof content === 'string' && content.trim()) {
+                normalized.push({ type: 'text', content: content.trim() });
+            }
+            continue;
+        }
+
+        const next = { ...item, type };
+        if (typeof next.content === 'string') {
+            const trimmed = next.content.trim();
+            if (!trimmed && type === 'text') continue;
+            next.content = type === 'html' ? next.content : trimmed;
+        }
+        normalized.push(next);
+    }
+
+    return normalized;
+}
+
+function hasValidAiParsedOutput(parsed) {
+    if (!parsed || typeof parsed !== 'object') return false;
+
+    const hasMessages = Array.isArray(parsed.messagesList) && parsed.messagesList.some((msg) => {
+        if (typeof msg === 'string') return !!msg.trim();
+        if (!msg || typeof msg !== 'object') return false;
+        if (typeof msg.content === 'string') return !!msg.content.trim();
+        return msg.content !== undefined && msg.content !== null;
+    });
+
+    const hasActions = Array.isArray(parsed.actions) && parsed.actions.some((action) => {
+        return !!String(action || '').trim();
+    });
+
+    const hasThought = typeof parsed.thoughtContent === 'string'
+        ? !!parsed.thoughtContent.trim()
+        : !!parsed.thoughtContent;
+
+    return hasMessages || hasActions || hasThought;
+}
+
+function buildAiRawOutputPreview(raw, maxChars = 1600) {
+    let text = '';
+    if (typeof raw === 'string') {
+        text = raw;
+    } else if (raw === undefined || raw === null) {
+        text = '';
+    } else {
+        try {
+            text = JSON.stringify(raw);
+        } catch (e) {
+            text = String(raw);
+        }
+    }
+
+    const compact = String(text || '').replace(/\r\n/g, '\n').trim();
+    if (!compact) return '(空)';
+    if (compact.length <= maxChars) return compact;
+    const omitted = compact.length - maxChars;
+    return `${compact.slice(0, maxChars)}\n...[已截断 ${omitted} 字符]`;
+}
+
+function parseAiReplyWithCompat(replyContent, rawReplyForError = replyContent) {
+    const rawPreview = buildAiRawOutputPreview(rawReplyForError);
+
+    if (!STRICT_JSON_ARRAY_REPLY) {
+        const legacyParsed = parseLegacyAiResponseItems(replyContent);
+        if (!hasValidAiParsedOutput(legacyParsed)) {
+            throw new Error(`AI返回JSON数组为空或无有效消息。\nAI原始输出:\n${rawPreview}`);
+        }
+        return {
+            ...legacyParsed,
+            mode: 'legacy_only',
+            strictError: null
+        };
+    }
+
+    let strictError = null;
+    try {
+        const strictItems = parseStrictAiArray(replyContent);
+        const normalized = normalizeStrictAiItems(strictItems);
+        return {
+            ...normalized,
+            mode: 'strict',
+            strictError: null
+        };
+    } catch (err) {
+        strictError = err;
+    }
+
+    try {
+        const legacyParsed = parseLegacyAiResponseItems(replyContent);
+        if (!hasValidAiParsedOutput(legacyParsed)) {
+            throw new Error('旧格式回退未提取到有效消息。');
+        }
+
+        const strictMsg = strictError && strictError.message
+            ? strictError.message
+            : String(strictError || 'unknown');
+        console.warn('[AI Parse Compat] strict parse failed, fallback to legacy parser', {
+            strictError: strictMsg
+        });
+
+        return {
+            ...legacyParsed,
+            mode: 'legacy_fallback',
+            strictError: strictMsg
+        };
+    } catch (legacyError) {
+        const strictMsg = strictError && strictError.message
+            ? strictError.message
+            : String(strictError || '未知错误');
+        const legacyMsg = legacyError && legacyError.message
+            ? legacyError.message
+            : String(legacyError || '未知错误');
+        throw new Error(`严格解析失败: ${strictMsg}；旧格式回退失败: ${legacyMsg}\nAI原始输出:\n${rawPreview}`);
+    }
+}
+
 function isLikelyHtmlSegment(text) {
     if (typeof text !== 'string') return false;
     const source = text.trim();
@@ -2270,23 +2464,41 @@ function parseLegacyAiResponseItems(replyContent) {
 
     const parsedItems = parseMixedAiResponse(replyContent);
     for (const item of parsedItems) {
-        if (item.type === 'thought') {
+        const itemType = normalizeLegacyCompatType(item && item.type);
+
+        if (itemType === 'thought') {
             const t = item.content || '';
             thoughtContent = thoughtContent ? (thoughtContent + ' ' + t) : t;
-        } else if (item.type === 'action') {
-            const cmd = item.content.command;
-            const pl = item.content.payload;
-            let actionStr = `ACTION: ${cmd}`;
-            if (pl) {
-                actionStr += `: ${pl}`;
+        } else if (itemType === 'action') {
+            const actionObj = item && item.content && typeof item.content === 'object' && !Array.isArray(item.content)
+                ? item.content
+                : item;
+            const cmd = String((actionObj && actionObj.command) || '').trim();
+            const pl = actionObj ? actionObj.payload : undefined;
+
+            if (cmd) {
+                let actionStr = `ACTION: ${cmd}`;
+                if (pl !== undefined && pl !== null) {
+                    const payload = typeof pl === 'string'
+                        ? pl.trim()
+                        : (typeof pl === 'number' || typeof pl === 'boolean')
+                            ? String(pl)
+                            : JSON.stringify(pl);
+                    if (payload) actionStr += `: ${payload}`;
+                }
+                actions.push(actionStr);
+            } else if (typeof item.content === 'string' && item.content.trim()) {
+                actions.push(`ACTION: ${item.content.trim()}`);
             }
-            actions.push(actionStr);
         } else {
-            if (item.type === '消息' || item.type === 'text') {
+            const normalizedItem = item && typeof item === 'object'
+                ? { ...item, type: itemType || item.type }
+                : item;
+            if (itemType === 'text') {
                 const subItems = forceSplitMixedContent(item.content);
                 messagesList.push(...subItems);
             } else {
-                messagesList.push(item);
+                messagesList.push(normalizedItem);
             }
         }
     }
@@ -2326,225 +2538,8 @@ function parseLegacyAiResponseItems(replyContent) {
     return {
         actions,
         thoughtContent,
-        messagesList: finalMessages
+        messagesList: normalizeLegacyCompatMessages(finalMessages)
     };
-}
-
-function normalizeLegacyResultToCanonical(legacyParsed) {
-    const canonicalMessages = [];
-    const warnings = [];
-    const canonicalActions = Array.isArray(legacyParsed && legacyParsed.actions)
-        ? legacyParsed.actions
-            .map(action => String(action || '').trim())
-            .filter(Boolean)
-        : [];
-    let thoughtContent = typeof (legacyParsed && legacyParsed.thoughtContent) === 'string'
-        ? legacyParsed.thoughtContent.trim()
-        : '';
-
-    const rawMessages = Array.isArray(legacyParsed && legacyParsed.messagesList)
-        ? legacyParsed.messagesList
-        : [];
-
-    const normalizeType = (rawType) => {
-        const value = String(rawType || '').trim().toLowerCase();
-        if (value === '消息' || value === 'message' || value === 'msg' || value === 'text' || value === '文本') return 'text';
-        if (value === 'html' || value === '网页' || value === '网页代码' || value === 'html代码') return 'html';
-        if (value === '表情包' || value === 'sticker') return 'sticker';
-        if (value === '图片' || value === 'image' || value === 'virtual_image') return 'image';
-        if (value === '语音' || value === 'voice' || value === 'voice_message') return 'voice';
-        if (value === '旁白' || value === 'description') return 'description';
-        if (value === 'thought' || value === '心声' || value === '思考') return 'thought';
-        if (value === 'action' || value === '动作') return 'action';
-        return value;
-    };
-
-    const appendThought = (value) => {
-        const text = String(value || '').trim();
-        if (!text) return;
-        thoughtContent = thoughtContent ? `${thoughtContent} ${text}` : text;
-    };
-
-    for (const rawMsg of rawMessages) {
-        if (!rawMsg) continue;
-
-        if (typeof rawMsg === 'string') {
-            const rawText = rawMsg.trim();
-            if (!rawText) continue;
-            const textType = isLikelyHtmlSegment(rawText) ? 'html' : 'text';
-            canonicalMessages.push({ type: textType, content: rawText });
-            continue;
-        }
-
-        if (typeof rawMsg !== 'object' || Array.isArray(rawMsg)) {
-            warnings.push('legacy message dropped: invalid item type');
-            continue;
-        }
-
-        const normalizedType = normalizeType(rawMsg.type);
-        const content = rawMsg.content;
-
-        if (normalizedType === 'thought') {
-            appendThought(content);
-            continue;
-        }
-
-        if (normalizedType === 'action') {
-            if (content && typeof content === 'object' && !Array.isArray(content)) {
-                const command = String(content.command || '').trim();
-                if (command) {
-                    let actionStr = `ACTION: ${command}`;
-                    const payload = content.payload;
-                    if (payload !== undefined && payload !== null && String(payload).trim()) {
-                        actionStr += `: ${String(payload).trim()}`;
-                    }
-                    canonicalActions.push(actionStr);
-                }
-            }
-            continue;
-        }
-
-        if (normalizedType === 'voice') {
-            const voiceRaw = String(content || '').trim();
-            if (!voiceRaw) continue;
-            let duration = 3;
-            let voiceText = voiceRaw;
-            const parts = voiceRaw.match(/^(\d+)\s+([\s\S]*)$/);
-            if (parts) {
-                duration = Math.max(1, parseInt(parts[1], 10) || 3);
-                voiceText = String(parts[2] || '').trim();
-            }
-            canonicalMessages.push({
-                type: 'voice',
-                duration,
-                content: voiceText || '语音消息'
-            });
-            continue;
-        }
-
-        if (normalizedType === 'sticker' || normalizedType === 'image' || normalizedType === 'description') {
-            const mediaContent = String(content || '').trim();
-            if (!mediaContent) continue;
-            canonicalMessages.push({
-                type: normalizedType === 'description' ? 'description' : normalizedType,
-                content: mediaContent
-            });
-            continue;
-        }
-
-        if (normalizedType === 'html' || normalizedType === 'text' || !normalizedType) {
-            const text = String(content || '').trim();
-            if (!text) continue;
-            const textType = normalizedType === 'html' || isLikelyHtmlSegment(text) ? 'html' : 'text';
-            canonicalMessages.push({ type: textType, content: text });
-            continue;
-        }
-
-        const fallbackText = String(content || '').trim();
-        if (fallbackText) {
-            const fallbackType = isLikelyHtmlSegment(fallbackText) ? 'html' : 'text';
-            canonicalMessages.push({ type: fallbackType, content: fallbackText });
-            warnings.push(`legacy message fallback as ${fallbackType}: ${normalizedType || 'unknown'}`);
-        }
-    }
-
-    return {
-        actions: canonicalActions,
-        thoughtContent: thoughtContent || null,
-        messagesList: canonicalMessages,
-        warnings
-    };
-}
-
-function parseAiReplyWithDualMode(rawReply) {
-    let strictResult = null;
-    let strictError = null;
-    let legacyResult = null;
-    let legacyError = null;
-    const warnings = [];
-
-    try {
-        const strictItems = parseStrictAiArray(rawReply);
-        const normalizedStrict = normalizeStrictAiItems(strictItems);
-        strictResult = {
-            messagesList: mergeAdjacentHtmlSegments(normalizedStrict.messagesList || []),
-            actions: normalizedStrict.actions || [],
-            thoughtContent: normalizedStrict.thoughtContent || null,
-            warnings: []
-        };
-        console.info('[AI PARSE] strict ok', {
-            messages: strictResult.messagesList.length,
-            actions: strictResult.actions.length,
-            thought: !!strictResult.thoughtContent
-        });
-    } catch (err) {
-        strictError = err;
-        console.warn('[AI PARSE] strict failed', err && err.message ? err.message : err);
-    }
-
-    try {
-        const legacyParsed = parseLegacyAiResponseItems(rawReply);
-        const normalizedLegacy = normalizeLegacyResultToCanonical(legacyParsed);
-        legacyResult = {
-            messagesList: mergeAdjacentHtmlSegments(normalizedLegacy.messagesList || []),
-            actions: normalizedLegacy.actions || [],
-            thoughtContent: normalizedLegacy.thoughtContent || null,
-            warnings: normalizedLegacy.warnings || []
-        };
-        const legacyHasContent = legacyResult.messagesList.length > 0 || legacyResult.actions.length > 0 || !!legacyResult.thoughtContent;
-        console.info(`[AI PARSE] legacy ${legacyHasContent ? 'ok' : 'empty'}`, {
-            messages: legacyResult.messagesList.length,
-            actions: legacyResult.actions.length,
-            thought: !!legacyResult.thoughtContent
-        });
-    } catch (err) {
-        legacyError = err;
-        console.warn('[AI PARSE] legacy failed', err && err.message ? err.message : err);
-    }
-
-    const hasContent = (result) => {
-        if (!result) return false;
-        if (Array.isArray(result.messagesList) && result.messagesList.length > 0) return true;
-        if (Array.isArray(result.actions) && result.actions.length > 0) return true;
-        return typeof result.thoughtContent === 'string' && result.thoughtContent.trim().length > 0;
-    };
-
-    const hasLegacySignal = typeof rawReply === 'string' &&
-        /(?:[\[【](?:消息|表情包|发送了表情包|发送了一个表情包|语音|图片|旁白)|^\s*ACTION\s*[:：])/im.test(rawReply);
-
-    const strictHasContent = hasContent(strictResult);
-    const legacyHasContent = hasContent(legacyResult);
-    let selected = null;
-
-    if (legacyHasContent && (strictError || hasLegacySignal)) {
-        selected = { ...legacyResult, source: 'legacy' };
-        if (strictError) warnings.push(`strict failed: ${strictError.message || strictError}`);
-        if (hasLegacySignal) warnings.push('legacy signal detected in raw reply');
-    } else if (strictHasContent) {
-        selected = { ...strictResult, source: 'strict' };
-    } else if (legacyHasContent) {
-        selected = { ...legacyResult, source: 'legacy' };
-    }
-
-    if (!selected) {
-        const strictReason = strictError ? (strictError.message || strictError) : 'strict result empty';
-        const legacyReason = legacyError ? (legacyError.message || legacyError) : 'legacy result empty';
-        throw new Error(`AI协议解析失败: strict=${strictReason}; legacy=${legacyReason}`);
-    }
-
-    selected.warnings = [...(selected.warnings || []), ...warnings];
-    console.info(`[AI PARSE] selected source: ${selected.source}`, {
-        messages: (selected.messagesList || []).length,
-        actions: (selected.actions || []).length,
-        thought: !!selected.thoughtContent
-    });
-    return selected;
-}
-
-function isAiParseProtocolError(message) {
-    const text = String(message || '');
-    if (!text) return false;
-    return /AI协议解析失败|JSON数组|JSON Parse|JSON parse|严格模式拦截|未找到有效的JSON数组|AI返回必须是JSON数组|AI返回为空|AI返回内容不是字符串|第\d+项.*(字段|不能为空|必须|type|content)/i.test(text);
 }
 
 // Fallback legacy parser (kept for compatibility)
@@ -2759,24 +2754,85 @@ async function generateAiReply(instruction = null, targetContactId = null) {
     }
 
     let userPerceptionContext = '';
+    if (contact.userPerception && contact.userPerception.length > 0) {
+        userPerceptionContext = '\n【关于用户的认知】\n';
+        contact.userPerception.forEach(p => {
+            userPerceptionContext += `- ${p}\n`;
+        });
+    }
+
     let importantStateContext = '';
+    if (contact.importantStates && contact.importantStates.length > 0) {
+        importantStateContext = '\n【当前重要状态 (时效性信息)】\n⚠️ 请务必记住以下状态，并在回复中体现：\n';
+        contact.importantStates.forEach(s => {
+            importantStateContext += `- ${s}\n`;
+        });
+    }
+
     let memoryContext = '';
-    if (typeof window.buildMemoryContextForAI === 'function') {
-        const contextPack = window.buildMemoryContextForAI(contact, history || []);
-        userPerceptionContext = contextPack?.userPerceptionContext || '';
-        importantStateContext = contextPack?.importantStateContext || '';
-        memoryContext = contextPack?.memoryContext || '';
-    } else {
-        if (contact.userPerception && contact.userPerception.length > 0) {
-            userPerceptionContext = '\n【关于用户的认知】\n';
-            contact.userPerception.forEach(p => {
-                userPerceptionContext += `- ${p}\n`;
-            });
+    // 增强记忆读取逻辑：结合最近记忆和相关性记忆 (Simple RAG)
+    const contactMemories = window.iphoneSimState.memories.filter(m => m.contactId === contact.id);
+    
+    if (contactMemories.length > 0) {
+        // 1. 获取限制，默认为 5 条
+        const limit = contact.memorySendLimit && contact.memorySendLimit > 0 ? contact.memorySendLimit : 5;
+        
+        // 2. 按时间倒序排序 (最新的在前)
+        const sortedMemories = contactMemories.sort((a, b) => b.time - a.time);
+        
+        // 3. 总是保留最新的几条记忆 (保持短期连贯性)
+        const recentCount = Math.min(3, limit);
+        const recentMemories = sortedMemories.slice(0, recentCount);
+        
+        // 4. 对剩余记忆进行关键词匹配 (Contextual Retrieval)
+        // 提取当前对话上下文中的关键词 (简单的基于最近20条消息的全文检索)
+        const remainingMemories = sortedMemories.slice(recentCount);
+        const relevantMemories = [];
+        
+        if (remainingMemories.length > 0) {
+            const contextText = history.slice(-20).map(m => m.content).join(' ').toLowerCase();
+            
+            if (contextText) {
+                const scored = remainingMemories.map(mem => {
+                    let score = 0;
+                    const content = mem.content.toLowerCase();
+                    
+                    // 简单的双字匹配评分 (Bigram matching score)
+                    // 对于中文环境，这比单词匹配更鲁棒
+                    if (content.length > 1 && contextText.length > 1) {
+                        for (let i = 0; i < content.length - 1; i++) {
+                            const bigram = content.substr(i, 2);
+                            // 排除常见标点
+                            if (/[，。！？、：；\s]/.test(bigram)) continue;
+                            if (contextText.includes(bigram)) score++;
+                        }
+                    }
+                    return { mem, score };
+                });
+                
+                // 按相关性排序
+                scored.sort((a, b) => b.score - a.score);
+                
+                // 取出前 N 条相关记忆 (填补 limit 的剩余空间)
+                const relevantCount = Math.max(0, limit - recentCount);
+                // 只有分数大于0的才算相关
+                const validRelevant = scored.filter(s => s.score > 0).slice(0, relevantCount).map(s => s.mem);
+                relevantMemories.push(...validRelevant);
+            }
         }
-        if (contact.importantStates && contact.importantStates.length > 0) {
-            importantStateContext = '\n【当前重要状态 (时效性信息)】\n';
-            contact.importantStates.forEach(s => {
-                importantStateContext += `- ${s}\n`;
+        
+        // 合并并去重 (理论上 slice 保证了不重复)
+        let finalMemories = [...recentMemories, ...relevantMemories];
+        
+        // 再次按时间正序排列，方便 AI 理解时间线
+        finalMemories.sort((a, b) => a.time - b.time); 
+        
+        if (finalMemories.length > 0) {
+            memoryContext += '\n【历史记忆 (已知事实)】\n⚠️ 注意：以下内容是你们过去的共同经历或已知事实，请勿重复向用户复述，除非用户主动询问或需要回忆。\n';
+            finalMemories.forEach(m => {
+                const date = new Date(m.time);
+                const dateStr = `${date.getFullYear()}年${date.getMonth()+1}月${date.getDate()}日 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                memoryContext += `- [${dateStr}] ${m.content}\n`;
             });
         }
     }
@@ -2940,10 +2996,6 @@ ${momentContext}
 ${icityContext}
 ${lookusContext}
 ${memoryContext}
-【名称一致性规则（高优先级）】
-1. 具体名称（如商品名、礼物名、地点名、项目名、菜品名）必须沿用已知记忆中的规范名称。
-2. 若存在别名，优先使用规范名称；不要臆造或改写名称。
-3. 如无法确认具体名称，请使用泛称（例如“那份外卖/那个礼物/那家店”），不要猜测。
 ${meetingContext}
 ${icityBookContext}
 ${minesweeperContext}
@@ -3491,7 +3543,8 @@ ${contact.showThought ? '- **强制执行**：请务必输出角色的【内心�
             throw new Error('API返回数据格式异常，请检查控制台日志');
         }
 
-        let replyContent = data.choices[0].message.content;
+        const rawReplyContent = data.choices[0].message.content;
+        let replyContent = rawReplyContent;
 
         replyContent = replyContent.replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
                                    .replace(/<think>[\s\S]*?<\/think>/g, '')
@@ -3500,25 +3553,11 @@ ${contact.showThought ? '- **强制执行**：请务必输出角色的【内心�
         let actions = [];
         let thoughtContent = null;
         let messagesList = [];
-
-        if (STRICT_JSON_ARRAY_REPLY) {
-            const parsedResult = parseAiReplyWithDualMode(replyContent);
-            actions = parsedResult.actions || [];
-            thoughtContent = parsedResult.thoughtContent || null;
-            messagesList = parsedResult.messagesList || [];
-            if (parsedResult.source === 'legacy') {
-                console.warn('[AI PARSE] strict->legacy fallback applied');
-            }
-            if (Array.isArray(parsedResult.warnings) && parsedResult.warnings.length > 0) {
-                console.warn('[AI PARSE] warnings', parsedResult.warnings);
-            }
-        } else {
-            const legacyParsed = parseLegacyAiResponseItems(replyContent);
-            const normalizedLegacy = normalizeLegacyResultToCanonical(legacyParsed);
-            actions = normalizedLegacy.actions || [];
-            thoughtContent = normalizedLegacy.thoughtContent || null;
-            messagesList = mergeAdjacentHtmlSegments(normalizedLegacy.messagesList || []);
-        }
+        const parsedReply = parseAiReplyWithCompat(replyContent, rawReplyContent);
+        actions = parsedReply.actions;
+        thoughtContent = parsedReply.thoughtContent;
+        messagesList = parsedReply.messagesList;
+        messagesList = mergeAdjacentHtmlSegments(messagesList);
 
         // 处理指令
         let imageToSend = null;
@@ -3750,25 +3789,14 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
                 let info = recordImportantStateMatch[1].trim();
                 info = info.replace(/^(用户|我|他|她)(:|：|,|，|\s)?/, '').trim();
                 if (info) {
-                    let wrote = false;
-                    if (typeof window.addMemoryRecord === 'function') {
-                        const stateRecord = window.addMemoryRecord({
-                            contactId: contact.id,
-                            content: info,
-                            kind: 'state',
-                            stateType: (typeof window.inferStateType === 'function') ? window.inferStateType(info) : undefined,
-                            source: 'ai_action',
-                            importance: 0.82
-                        });
-                        wrote = !!stateRecord;
-                    }
                     if (!contact.importantStates) contact.importantStates = [];
+                    // 简单查重
                     if (!contact.importantStates.includes(info)) {
                         contact.importantStates.push(info);
-                        if (contact.importantStates.length > 8) contact.importantStates = contact.importantStates.slice(-8);
-                        wrote = true;
-                    }
-                    if (wrote) {
+                        // 保持数量限制，比如最新的 5 条
+                        if (contact.importantStates.length > 5) {
+                            contact.importantStates.shift();
+                        }
                         saveConfig();
                         showChatToast('重要状态已记录');
                     }
@@ -3797,19 +3825,7 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
                         }
                     }
                     if (!isDuplicate) {
-                        if (typeof window.addMemoryRecord === 'function') {
-                            window.addMemoryRecord({
-                                contactId: contact.id,
-                                content: info,
-                                kind: 'fact',
-                                factSubtype: (typeof window.inferFactSubtype === 'function') ? window.inferFactSubtype(info) : 'fact',
-                                source: 'ai_action',
-                                importance: 0.8
-                            });
-                        }
-                        if (!contact.userPerception.some(item => item.includes(info) || info.includes(item))) {
-                            contact.userPerception.push(info);
-                        }
+                        contact.userPerception.push(info);
                         saveConfig();
                         showChatToast('TA记住了');
                     }
@@ -4345,11 +4361,6 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
             });
         }
 
-        if (typeof window.applyNameConsistencyGuard === 'function') {
-            const guarded = window.applyNameConsistencyGuard(messagesList, contact.id);
-            if (Array.isArray(guarded)) messagesList = guarded;
-        }
-
         if (thoughtContent && contact.showThought) {
             updateThoughtBubble(thoughtContent);
         }
@@ -4359,7 +4370,6 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
             const msg = messagesList[i];
             const currentThought = (i === messagesList.length - 1) ? thoughtContent : null;
             const currentReplyTo = (i === 0) ? replyToObj : null;
-            let dropCurrentMsg = false;
 
             // 检查用户是否仍在当前聊天界面
             const isChatOpen = !document.getElementById('chat-screen').classList.contains('hidden');
@@ -4409,7 +4419,7 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
                         sendMessage(stickerUrl, false, 'sticker', msg.content, contactId);
                     } else {
                         // 找不到表情包，直接忽略，不发送文本 fallback，以免破坏沉浸感
-                        console.warn(`[AI STICKER] drop unknown sticker: ${msg.content}`);
+                        console.warn(`Sticker not found: ${msg.content}`);
                     }
                 } else if (msg.type === '语音' || msg.type === 'voice') {
                     let duration = 3;
@@ -4558,8 +4568,8 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
                         contentToSave = stickerUrl;
                         typeToSave = 'sticker';
                     } else {
-                        dropCurrentMsg = true;
-                        console.warn(`[AI STICKER] drop unknown sticker (background): ${msg.content}`);
+                        contentToSave = `[表情包: ${msg.content}]`;
+                        typeToSave = 'text';
                     }
                 } else if (msg.type === '语音' || msg.type === 'voice') {
                     let duration = 3;
@@ -4585,10 +4595,6 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
                     typeToSave = 'virtual_image';
                 } else if (msg.type === '旁白' || msg.type === 'description') {
                     typeToSave = 'description';
-                }
-
-                if (dropCurrentMsg) {
-                    continue;
                 }
 
                 // 保存到历史记录
@@ -4763,13 +4769,6 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
     } catch (error) {
         console.error('AI生成失败:', error);
         const msg = String(error && error.message ? error.message : error || '');
-        if (isAiParseProtocolError(msg)) {
-            console.error('[AI Parse Error] protocol parse failed', {
-                message: msg,
-                rawReplyError: error
-            });
-            return;
-        }
         const isFetchLike = /Failed to fetch|ERR_HTTP2_PROTOCOL_ERROR|NetworkError/i.test(msg);
         const userFacingMsg = isFetchLike
             ? `AI生成失败: ${msg}\n可能是网关拒绝了较大请求体或网络抖动。系统已自动做压缩重试；若仍失败，请稍后重试或降低上下文/世界书体量。`

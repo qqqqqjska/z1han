@@ -2311,64 +2311,6 @@
                     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
                 }
 
-                #memory-app .memory-filter-tabs {
-                    width: 100%;
-                    max-width: 500px;
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 8px;
-                    margin-bottom: 14px;
-                }
-
-                #memory-app .memory-filter-btn {
-                    border: 1px solid rgba(0,0,0,0.14);
-                    background: #fff;
-                    color: #555;
-                    border-radius: 999px;
-                    padding: 6px 12px;
-                    font-size: 12px;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                }
-
-                #memory-app .memory-filter-btn.active {
-                    background: #111;
-                    border-color: #111;
-                    color: #fff;
-                }
-
-                #memory-app .memory-selection-toolbar {
-                    width: 100%;
-                    max-width: 500px;
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 8px;
-                    margin-bottom: 16px;
-                    align-items: center;
-                }
-
-                #memory-app .mini-toolbar-btn {
-                    border: 1px solid rgba(0,0,0,0.15);
-                    background: #fff;
-                    border-radius: 8px;
-                    font-size: 12px;
-                    color: #333;
-                    padding: 6px 10px;
-                    cursor: pointer;
-                }
-
-                #memory-app .mini-toolbar-btn.primary {
-                    background: #1f2937;
-                    border-color: #1f2937;
-                    color: #fff;
-                }
-
-                #memory-app .selected-memory-meta {
-                    margin-left: auto;
-                    font-size: 12px;
-                    color: #666;
-                }
-
                 #memory-app .archive-list {
                     display: flex;
                     flex-direction: column;
@@ -2483,29 +2425,6 @@
                 #memory-app .archive-card:nth-child(3) { animation-delay: 0.3s; z-index: 3;}
                 #memory-app .archive-card:nth-child(4) { animation-delay: 0.4s; z-index: 4;}
 
-                #memory-app .refine-highlights-list {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 10px;
-                    max-height: 260px;
-                    overflow-y: auto;
-                }
-
-                #memory-app .refine-highlight-item {
-                    border: 1px solid rgba(0,0,0,0.12);
-                    border-radius: 10px;
-                    padding: 10px;
-                    background: #fafafa;
-                }
-
-                #memory-app .refine-highlight-item textarea {
-                    border: 1px solid rgba(0,0,0,0.12);
-                    border-radius: 8px;
-                    padding: 8px;
-                    font-size: 13px;
-                    resize: vertical;
-                }
-
                 @keyframes slideIn {
                     from { opacity: 0; transform: translateY(50px) translateX(0); }
                     to { opacity: 1; }
@@ -2531,24 +2450,6 @@
                         <p class="header-desc">(^_−)−☆</p>
                     </div>
 
-                    <div id="memory-filter-tabs" class="memory-filter-tabs">
-                        <button class="memory-filter-btn active" data-filter-mode="all">全部</button>
-                        <button class="memory-filter-btn" data-filter-mode="refined">精炼</button>
-                        <button class="memory-filter-btn" data-filter-mode="short_term">短期</button>
-                        <button class="memory-filter-btn" data-filter-mode="long_term">长期</button>
-                        <button class="memory-filter-btn" data-filter-mode="state">状态</button>
-                        <button class="memory-filter-btn" data-filter-mode="fact">具体信息</button>
-                    </div>
-
-                    <div id="memory-selection-toolbar" class="memory-selection-toolbar" style="display: none;">
-                        <button id="toggle-memory-selection-btn" class="mini-toolbar-btn">退出多选</button>
-                        <button id="select-all-memories-btn" class="mini-toolbar-btn">全选</button>
-                        <button id="clear-selected-memories-btn" class="mini-toolbar-btn">取消</button>
-                        <button id="refine-selected-memories-btn" class="mini-toolbar-btn primary">精炼已选</button>
-                        <button id="open-manual-summary-btn" class="mini-toolbar-btn">区间总结</button>
-                        <span class="selected-memory-meta">已选 <b id="selected-memory-count">0</b> 条</span>
-                    </div>
-
                     <div id="memory-list" class="archive-list">
                         <!-- 记忆卡片列表动态生成 -->
                     </div>
@@ -2570,39 +2471,6 @@
                         <div class="setting-group">
                             <label>记忆内容</label>
                             <textarea id="manual-memory-content" placeholder="输入记忆内容..." style="height: 150px;"></textarea>
-                        </div>
-                        <div class="setting-group">
-                            <label>分类</label>
-                            <select id="manual-memory-kind">
-                                <option value="short_term">短期记忆</option>
-                                <option value="long_term">长期记忆</option>
-                                <option value="state">状态记忆</option>
-                                <option value="fact">具体信息记忆</option>
-                            </select>
-                        </div>
-                        <div class="setting-group">
-                            <label>具体信息子类</label>
-                            <select id="manual-memory-fact-subtype">
-                                <option value="fact">事实</option>
-                                <option value="preference">偏好</option>
-                                <option value="dislike">禁忌</option>
-                                <option value="plan">计划</option>
-                                <option value="named_entity">特定名称</option>
-                            </select>
-                        </div>
-                        <div class="setting-group">
-                            <label>状态类型</label>
-                            <select id="manual-memory-state-type">
-                                <option value="health">健康</option>
-                                <option value="schedule">日程</option>
-                                <option value="emotion">情绪</option>
-                                <option value="relationship">关系</option>
-                                <option value="other">其他</option>
-                            </select>
-                        </div>
-                        <div class="setting-group">
-                            <label>重要度 (0-1)</label>
-                            <input id="manual-memory-importance" type="number" min="0" max="1" step="0.05" placeholder="例如 0.7">
                         </div>
                         <button id="save-manual-memory-btn" class="ios-btn-block">保存</button>
                     </div>
@@ -2660,37 +2528,9 @@
                     <div class="modal-body">
                         <div class="setting-group">
                             <label>发送最近几条记忆给AI</label>
-                            <input type="number" id="modal-memory-send-limit" placeholder="默认12条" min="0">
+                            <input type="number" id="modal-memory-send-limit" placeholder="默认3条" min="0">
                         </div>
                         <button id="save-memory-settings-btn" class="ios-btn-block">保存</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 精炼草稿弹窗 -->
-            <div id="refine-memory-modal" class="modal hidden">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3>精炼记忆草稿</h3>
-                        <button class="close-btn" id="close-refine-memory">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="setting-group">
-                            <label>总结（可编辑）</label>
-                            <textarea id="refine-summary-content" placeholder="精炼总结..." style="height: 110px;"></textarea>
-                        </div>
-                        <div class="setting-group">
-                            <div style="display:flex; justify-content: space-between; align-items: center;">
-                                <label>关键信息（可编辑）</label>
-                                <button type="button" id="add-refine-highlight-btn" class="ios-btn" style="padding: 5px 10px;">新增条目</button>
-                            </div>
-                            <div id="refine-highlights-list" class="refine-highlights-list"></div>
-                        </div>
-                        <div class="setting-group" style="display:flex; align-items:center; gap:8px;">
-                            <input id="refine-delete-source" type="checkbox" checked>
-                            <label for="refine-delete-source" style="margin:0;">提交后删除被精炼源记忆</label>
-                        </div>
-                        <button id="save-refine-memory-btn" class="ios-btn-block">保存精炼结果</button>
                     </div>
                 </div>
             </div>

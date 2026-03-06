@@ -383,17 +383,14 @@ async function generateMeetingSummary(contactId, meeting, injectIntoChat = false
     }
 
     if (summary) {
-        // 1. 添加到记忆（统一写入口）
-        if (typeof window.addMemoryRecord === 'function') {
-            window.addMemoryRecord({
-                contactId: contact.id,
-                content: `【见面回忆】(${meeting.title}) ${summary}`,
-                kind: 'short_term',
-                source: 'meeting',
-                range: '见面剧情',
-                importance: 0.8
-            });
-        }
+        // 1. 添加到记忆
+        window.iphoneSimState.memories.push({
+            id: Date.now(),
+            contactId: contact.id,
+            content: `【见面回忆】(${meeting.title}) ${summary}`,
+            time: Date.now(),
+            range: '见面剧情'
+        });
 
         // 2. 如果需要同步到聊天 (Inject into chat history)
         if (injectIntoChat) {

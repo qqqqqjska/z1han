@@ -24,13 +24,6 @@
         }
         
         window.iphoneSimState.chatHistory[contactId].push(msgData);
-        if (typeof window.extractSpecificInfoFromMessage === 'function') {
-            try {
-                window.extractSpecificInfoFromMessage(msgData, contactId);
-            } catch (extractErr) {
-                console.warn('[memory-extract] typewriter extract failed', extractErr);
-            }
-        }
         
         const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
         if (contact) {
@@ -1528,16 +1521,14 @@ async function summarizeVoiceCall(contactId, startIndex) {
         let summary = data.choices[0].message.content.trim();
         
         if (summary) {
-            if (typeof window.addMemoryRecord === 'function') {
-                window.addMemoryRecord({
-                    contactId: contact.id,
-                    content: `【通话回忆】 ${summary}`,
-                    kind: 'short_term',
-                    source: 'voice_call',
-                    range: '语音通话',
-                    importance: 0.75
-                });
-            }
+            window.iphoneSimState.memories.push({
+                id: Date.now(),
+                contactId: contact.id,
+                content: `【通话回忆】 ${summary}`,
+                time: Date.now(),
+                range: '语音通话'
+            });
+            saveConfig();
             
             console.log('通话总结完成:', summary);
             showNotification('通话总结完成', 2000, 'success');

@@ -513,13 +513,6 @@ function handleSaveContact() {
         messagesSinceLastItinerary: 0,
         lastItineraryIndex: 0,
         userPerception: [],
-        importantStates: [],
-        memoryProfile: {
-            shortTermDays: 7,
-            longTermLimit: 100,
-            aiLimitDefault: 12,
-            namedBackfilled: false
-        },
         thoughtDisplayMode: 'title',
         thoughtPetImage: '',
         thoughtPetSize: 88,
@@ -1840,13 +1833,7 @@ function handleImportCharacterData(e) {
             if (data.memories) {
                 data.memories.forEach(m => {
                     m.contactId = currentContactId;
-                    if (typeof window.addMemoryRecord === 'function') {
-                        window.addMemoryRecord({
-                            ...m,
-                            contactId: currentContactId,
-                            source: m.source || 'migration'
-                        }, { skipSave: true, skipAutoRefine: true });
-                    }
+                    window.iphoneSimState.memories.push(m);
                 });
             }
 
@@ -1958,13 +1945,7 @@ function handleImportCharacterData(e) {
             if (data.memories) {
                 data.memories.forEach(m => {
                     m.contactId = currentContactId;
-                    if (typeof window.addMemoryRecord === 'function') {
-                        window.addMemoryRecord({
-                            ...m,
-                            contactId: currentContactId,
-                            source: m.source || 'migration'
-                        }, { skipSave: true, skipAutoRefine: true });
-                    }
+                    window.iphoneSimState.memories.push(m);
                 });
             }
 

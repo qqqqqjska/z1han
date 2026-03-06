@@ -332,13 +332,6 @@ async function handleAcceptFriend(req, remark) {
         activeReplyEnabled: false,
         autoItineraryEnabled: false,
         userPerception: [],
-        importantStates: [],
-        memoryProfile: {
-            shortTermDays: 7,
-            longTermLimit: 100,
-            aiLimitDefault: 12,
-            namedBackfilled: false
-        },
         thoughtDisplayMode: 'title',
         thoughtPetImage: '',
         thoughtPetSize: 88,

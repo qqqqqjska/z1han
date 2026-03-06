@@ -1523,783 +1523,6 @@ function updateTransferStatus(transferId, status) {
     }
 }
 
-const MEMORY_KIND_LABEL_MAP = {
-    short_term: '短期',
-    long_term: '长期',
-    state: '状态',
-    fact: '具体信息'
-};
-
-const MEMORY_FACT_SUBTYPE_LABEL_MAP = {
-    fact: '事实',
-    preference: '偏好',
-    dislike: '禁忌',
-    plan: '计划',
-    named_entity: '名称'
-};
-
-const MEMORY_STATE_TYPE_LABEL_MAP = {
-    health: '健康',
-    schedule: '日程',
-    emotion: '情绪',
-    relationship: '关系',
-    other: '其他'
-};
-
-let memoryFilterMode = 'all';
-let memorySelectionMode = false;
-let selectedMemoryIds = new Set();
-let currentRefineDraft = null;
-const autoRefineLocks = {};
-
-function escapeMemoryHtml(value) {
-    return String(value || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-function ensureMemoriesArray() {
-    if (!Array.isArray(window.iphoneSimState.memories)) {
-        window.iphoneSimState.memories = [];
-    }
-    return window.iphoneSimState.memories;
-}
-
-function getMemoryTime(record) {
-    const ts = Number(record && (record.updatedAt || record.createdAt || record.time));
-    return Number.isFinite(ts) ? ts : Date.now();
-}
-
-function normalizeMemoryText(text) {
-    return String(text || '')
-        .replace(/\s+/g, ' ')
-        .trim();
-}
-
-function computeBigramSimilarity(a, b) {
-    const left = normalizeMemoryText(a).toLowerCase();
-    const right = normalizeMemoryText(b).toLowerCase();
-    if (!left || !right) return 0;
-    if (left === right) return 1;
-    if (left.includes(right) || right.includes(left)) return 0.9;
-
-    const toBigrams = (text) => {
-        if (text.length < 2) return new Set([text]);
-        const grams = new Set();
-        for (let i = 0; i < text.length - 1; i++) {
-            const gram = text.slice(i, i + 2);
-            if (!/\s/.test(gram)) grams.add(gram);
-        }
-        return grams;
-    };
-
-    const aSet = toBigrams(left);
-    const bSet = toBigrams(right);
-    if (aSet.size === 0 || bSet.size === 0) return 0;
-
-    let intersection = 0;
-    aSet.forEach(item => {
-        if (bSet.has(item)) intersection++;
-    });
-    const union = new Set([...aSet, ...bSet]).size || 1;
-    return intersection / union;
-}
-
-function normalizeEntityName(name) {
-    return String(name || '')
-        .replace(/[“”"《》<>]/g, '')
-        .replace(/\s+/g, '')
-        .trim()
-        .toLowerCase();
-}
-
-function ensureContactMemoryProfile(contact) {
-    if (!contact || typeof contact !== 'object') return;
-    if (!contact.memoryProfile || typeof contact.memoryProfile !== 'object') {
-        contact.memoryProfile = {
-            shortTermDays: 7,
-            longTermLimit: 100,
-            aiLimitDefault: 12,
-            namedBackfilled: false
-        };
-        return;
-    }
-
-    if (!Number.isFinite(Number(contact.memoryProfile.shortTermDays))) contact.memoryProfile.shortTermDays = 7;
-    if (!Number.isFinite(Number(contact.memoryProfile.longTermLimit))) contact.memoryProfile.longTermLimit = 100;
-    if (!Number.isFinite(Number(contact.memoryProfile.aiLimitDefault))) contact.memoryProfile.aiLimitDefault = 12;
-    if (typeof contact.memoryProfile.namedBackfilled !== 'boolean') contact.memoryProfile.namedBackfilled = false;
-}
-
-function inferFactSubtype(content) {
-    const text = String(content || '');
-    if (!text) return 'fact';
-    if (/(喜欢|爱吃|爱喝|偏好|想要|钟爱)/.test(text)) return 'preference';
-    if (/(不喜欢|讨厌|不吃|不喝|忌口|雷点|过敏)/.test(text)) return 'dislike';
-    if (/(下周|明天|后天|计划|打算|准备|安排|要去)/.test(text)) return 'plan';
-    return 'fact';
-}
-
-function inferStateType(content) {
-    const text = String(content || '');
-    if (/(生病|发烧|咳嗽|过敏|生理期|痛经|不舒服|头疼)/.test(text)) return 'health';
-    if (/(考试|出差|旅行|放假|上班|开会|加班|课程|deadline|ddl)/i.test(text)) return 'schedule';
-    if (/(开心|难过|焦虑|emo|紧张|生气|烦|伤心)/.test(text)) return 'emotion';
-    if (/(和好|吵架|冷战|分手|复合|关系)/.test(text)) return 'relationship';
-    return 'other';
-}
-
-function inferEntityType(name, sourceType = '') {
-    const n = String(name || '');
-    const st = String(sourceType || '').toLowerCase();
-    if (st === 'delivery_share' || st === 'order_share' || st === 'order_progress') return 'item';
-    if (st === 'shopping_gift' || st === 'gift_card') return 'gift';
-    if (st === 'product_share') return 'item';
-    if (/(面|饭|奶茶|咖啡|汉堡|披萨|火锅|药|胶囊|片)/.test(n)) return 'food';
-    if (/(礼物|花束|蛋糕|巧克力|手办|耳机|项链|口红|玩偶)/.test(n)) return 'gift';
-    if (/(店|餐厅|酒店|地铁|影院|公园|商场|医院|学校|公司)/.test(n)) return 'place';
-    return 'other';
-}
-
-function getStateDefaultTtlMs(stateType) {
-    const day = 24 * 60 * 60 * 1000;
-    if (stateType === 'emotion') return 3 * day;
-    if (stateType === 'schedule') return 14 * day;
-    if (stateType === 'relationship') return 30 * day;
-    return 7 * day;
-}
-
-function safeParseJson(raw) {
-    if (!raw || typeof raw !== 'string') return null;
-    const trimmed = raw.trim();
-    if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) return null;
-    try {
-        return JSON.parse(trimmed);
-    } catch (e) {
-        return null;
-    }
-}
-
-function pruneLongTermMemories(contactId) {
-    const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
-    if (!contact) return;
-    ensureContactMemoryProfile(contact);
-    const longTermLimit = Math.max(1, Number(contact.memoryProfile.longTermLimit || 100));
-    const memories = ensureMemoriesArray();
-
-    const target = memories
-        .filter(m => String(m.contactId) === String(contactId) && (m.kind === 'long_term' || m.pinned))
-        .sort((a, b) => getMemoryTime(b) - getMemoryTime(a));
-
-    if (target.length <= longTermLimit) return;
-
-    const removable = target
-        .filter(m => !m.pinned)
-        .sort((a, b) => {
-            const ai = Number.isFinite(Number(a.importance)) ? Number(a.importance) : 0;
-            const bi = Number.isFinite(Number(b.importance)) ? Number(b.importance) : 0;
-            if (ai !== bi) return ai - bi;
-            return getMemoryTime(a) - getMemoryTime(b);
-        });
-
-    let toRemoveCount = target.length - longTermLimit;
-    for (const item of removable) {
-        if (toRemoveCount <= 0) break;
-        item.kind = 'fact';
-        item.factSubtype = item.factSubtype || 'fact';
-        item.importance = Math.min(Number(item.importance || 0.5), 0.7);
-        item.tags = Array.from(new Set([...(item.tags || []), 'archived_long_term']));
-        item.updatedAt = Date.now();
-        toRemoveCount--;
-    }
-}
-
-function applyStateExpiry(contactId) {
-    const now = Date.now();
-    let changed = false;
-    ensureMemoriesArray().forEach(memory => {
-        if (String(memory.contactId) !== String(contactId)) return;
-        if (memory.kind !== 'state') return;
-        if (memory.stateActive === false) return;
-        if (memory.endedAt) return;
-        if (Number.isFinite(Number(memory.expiresAt)) && Number(memory.expiresAt) <= now) {
-            memory.stateActive = false;
-            memory.endedAt = now;
-            memory.updatedAt = now;
-            changed = true;
-        }
-    });
-    if (changed) {
-        const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(contactId));
-        if (contact && Array.isArray(contact.importantStates)) {
-            const activeStateTexts = new Set(
-                ensureMemoriesArray()
-                    .filter(m => String(m.contactId) === String(contactId))
-                    .filter(m => m.kind === 'state' && m.stateActive !== false && !m.endedAt && (!m.expiresAt || Number(m.expiresAt) > now))
-                    .map(m => String(m.content))
-            );
-            contact.importantStates = contact.importantStates.filter(text => activeStateTexts.has(String(text)));
-        }
-    }
-    return changed;
-}
-
-function upsertContactEntityIndex(contact, record) {
-    if (!contact || !record || record.factSubtype !== 'named_entity' || !record.exactName) return;
-    if (!Array.isArray(contact.memoryEntityIndex)) contact.memoryEntityIndex = [];
-
-    const normalized = normalizeEntityName(record.exactName);
-    if (!normalized) return;
-
-    let target = contact.memoryEntityIndex.find(item => normalizeEntityName(item.canonicalName) === normalized);
-    if (!target && Array.isArray(record.aliases) && record.aliases.length > 0) {
-        target = contact.memoryEntityIndex.find(item => {
-            const aliases = Array.isArray(item.aliases) ? item.aliases : [];
-            return aliases.some(alias => normalizeEntityName(alias) === normalized);
-        });
-    }
-
-    const now = Date.now();
-    if (!target) {
-        contact.memoryEntityIndex.push({
-            entityId: record.entityId || `entity_${now}_${Math.random().toString(36).slice(2, 8)}`,
-            canonicalName: record.exactName,
-            aliases: Array.from(new Set((record.aliases || []).filter(Boolean))),
-            entityType: record.entityType || 'other',
-            firstSeenAt: Number(record.createdAt || now),
-            lastSeenAt: Number(record.updatedAt || now),
-            lastConfirmedAt: Number(record.updatedAt || now),
-            confidence: Number(record.confidence || 0.9),
-            sourceMessageIds: record.sourceMessageId != null ? [record.sourceMessageId] : []
-        });
-        return;
-    }
-
-    target.lastSeenAt = now;
-    target.lastConfirmedAt = now;
-    target.confidence = Math.max(Number(target.confidence || 0), Number(record.confidence || 0));
-    if (record.entityType) target.entityType = record.entityType;
-    const mergedAliases = new Set([...(target.aliases || []), ...(record.aliases || [])].filter(Boolean));
-    target.aliases = Array.from(mergedAliases);
-    if (record.sourceMessageId != null) {
-        if (!Array.isArray(target.sourceMessageIds)) target.sourceMessageIds = [];
-        if (!target.sourceMessageIds.includes(record.sourceMessageId)) {
-            target.sourceMessageIds.push(record.sourceMessageId);
-        }
-    }
-}
-
-function ensureMemoryRecordV2(input) {
-    const now = Date.now();
-    const raw = input && typeof input === 'object' ? input : {};
-    const content = normalizeMemoryText(raw.content || raw.text || raw.exactName || '');
-    const contactId = raw.contactId != null ? raw.contactId : window.iphoneSimState.currentChatContactId;
-    if (contactId == null) return null;
-    if (!content) return null;
-
-    let kind = raw.kind;
-    if (!kind) {
-        if (raw.stateType || raw.stateActive || raw.endedAt) kind = 'state';
-        else if (raw.factSubtype || raw.exactName) kind = 'fact';
-        else kind = 'short_term';
-    }
-    if (!['short_term', 'long_term', 'state', 'fact'].includes(kind)) kind = 'short_term';
-
-    const createdAt = Number.isFinite(Number(raw.createdAt || raw.time)) ? Number(raw.createdAt || raw.time) : now;
-    const updatedAt = Number.isFinite(Number(raw.updatedAt)) ? Number(raw.updatedAt) : createdAt;
-    const source = raw.source || 'manual';
-
-    const memory = {
-        id: raw.id != null ? raw.id : `${createdAt}_${Math.random().toString(36).slice(2, 6)}`,
-        contactId,
-        content,
-        createdAt,
-        updatedAt,
-        kind,
-        source,
-        importance: Number.isFinite(Number(raw.importance))
-            ? Number(raw.importance)
-            : (kind === 'long_term' ? 0.85 : (kind === 'state' ? 0.7 : 0.5)),
-        pinned: !!raw.pinned,
-        title: raw.title || '',
-        tags: Array.isArray(raw.tags) ? raw.tags : [],
-        range: raw.range || '',
-        refinedFrom: Array.isArray(raw.refinedFrom) ? raw.refinedFrom : []
-    };
-
-    if (kind === 'fact') {
-        memory.factSubtype = raw.factSubtype || (raw.exactName ? 'named_entity' : inferFactSubtype(content));
-    }
-
-    if (kind === 'state') {
-        const stateType = raw.stateType || inferStateType(content);
-        memory.stateType = stateType;
-        memory.stateActive = raw.stateActive !== false && !raw.endedAt;
-        memory.endedAt = Number.isFinite(Number(raw.endedAt)) ? Number(raw.endedAt) : null;
-        if (memory.endedAt) memory.stateActive = false;
-        memory.expiresAt = Number.isFinite(Number(raw.expiresAt))
-            ? Number(raw.expiresAt)
-            : (memory.stateActive ? createdAt + getStateDefaultTtlMs(stateType) : null);
-    }
-
-    if (raw.exactName) memory.exactName = String(raw.exactName).trim();
-    if (raw.entityType) memory.entityType = String(raw.entityType);
-    if (Array.isArray(raw.aliases)) memory.aliases = Array.from(new Set(raw.aliases.map(a => String(a)).filter(Boolean)));
-    if (Number.isFinite(Number(raw.confidence))) memory.confidence = Number(raw.confidence);
-    if (raw.sourceMessageId != null) memory.sourceMessageId = raw.sourceMessageId;
-    if (raw.sourceMessageType != null) memory.sourceMessageType = String(raw.sourceMessageType);
-    if (raw.entityId != null) memory.entityId = String(raw.entityId);
-
-    return memory;
-}
-
-function findDuplicateMemory(record) {
-    const memories = ensureMemoriesArray();
-    if (record.factSubtype === 'named_entity' && record.exactName) {
-        const normalized = normalizeEntityName(record.exactName);
-        const recordType = String(record.entityType || 'other');
-        return memories.find(item => {
-            if (String(item.contactId) !== String(record.contactId)) return false;
-            if (item.kind !== 'fact' || item.factSubtype !== 'named_entity') return false;
-            const itemType = String(item.entityType || 'other');
-            if (itemType !== recordType) return false;
-            const selfName = normalizeEntityName(item.exactName || item.content);
-            if (selfName && selfName === normalized) return true;
-            const aliases = Array.isArray(item.aliases) ? item.aliases : [];
-            return aliases.some(alias => normalizeEntityName(alias) === normalized);
-        });
-    }
-
-    const normalized = normalizeMemoryText(record.content);
-    return memories.find(item =>
-        String(item.contactId) === String(record.contactId) &&
-        item.kind === record.kind &&
-        (item.factSubtype || '') === (record.factSubtype || '') &&
-        (
-            normalizeMemoryText(item.content) === normalized ||
-            normalizeMemoryText(item.content).includes(normalized) ||
-            normalized.includes(normalizeMemoryText(item.content)) ||
-            computeBigramSimilarity(item.content, record.content) >= 0.82
-        )
-    );
-}
-
-function mirrorLegacyMemoryFields(contact, memory) {
-    if (!contact) return;
-    if (!Array.isArray(contact.userPerception)) contact.userPerception = [];
-    if (!Array.isArray(contact.importantStates)) contact.importantStates = [];
-
-    if (memory.kind === 'state' && memory.stateActive !== false) {
-        if (!contact.importantStates.includes(memory.content)) {
-            contact.importantStates.push(memory.content);
-            if (contact.importantStates.length > 8) {
-                contact.importantStates = contact.importantStates.slice(-8);
-            }
-        }
-    }
-
-    if (memory.kind === 'fact' && memory.factSubtype !== 'named_entity') {
-        if (!contact.userPerception.some(item => item.includes(memory.content) || memory.content.includes(item))) {
-            contact.userPerception.push(memory.content);
-            if (contact.userPerception.length > 60) {
-                contact.userPerception = contact.userPerception.slice(-60);
-            }
-        }
-    }
-}
-
-window.addMemoryRecord = function(input, options = {}) {
-    const record = ensureMemoryRecordV2(input);
-    if (!record) return null;
-
-    const memories = ensureMemoriesArray();
-    const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(record.contactId));
-    if (contact) ensureContactMemoryProfile(contact);
-
-    applyStateExpiry(record.contactId);
-
-    const duplicate = findDuplicateMemory(record);
-    if (duplicate) {
-        duplicate.updatedAt = Date.now();
-        duplicate.content = record.content || duplicate.content;
-        duplicate.kind = record.kind || duplicate.kind;
-        duplicate.source = record.source || duplicate.source;
-        duplicate.importance = Math.max(Number(duplicate.importance || 0), Number(record.importance || 0));
-        duplicate.pinned = !!duplicate.pinned || !!record.pinned;
-        if (record.factSubtype) duplicate.factSubtype = record.factSubtype;
-        if (record.stateType) duplicate.stateType = record.stateType;
-        if (record.stateActive !== undefined) duplicate.stateActive = record.stateActive;
-        if (record.expiresAt !== undefined) duplicate.expiresAt = record.expiresAt;
-        if (record.endedAt !== undefined) duplicate.endedAt = record.endedAt;
-        if (record.exactName) duplicate.exactName = record.exactName;
-        if (record.entityType) duplicate.entityType = record.entityType;
-        if (record.entityId) duplicate.entityId = record.entityId;
-        if (Array.isArray(record.aliases) && record.aliases.length > 0) {
-            duplicate.aliases = Array.from(new Set([...(duplicate.aliases || []), ...record.aliases]));
-        }
-        if (Number.isFinite(Number(record.confidence))) {
-            duplicate.confidence = Math.max(Number(duplicate.confidence || 0), Number(record.confidence));
-        }
-        mirrorLegacyMemoryFields(contact, duplicate);
-        upsertContactEntityIndex(contact, duplicate);
-        pruneLongTermMemories(record.contactId);
-        if (!options.skipSave) saveConfig();
-        return duplicate;
-    }
-
-    memories.push(record);
-    mirrorLegacyMemoryFields(contact, record);
-    upsertContactEntityIndex(contact, record);
-    pruneLongTermMemories(record.contactId);
-    if (!options.skipSave) saveConfig();
-
-    if (!options.skipAutoRefine && typeof window.refineMemories === 'function') {
-        const blockedSources = new Set(['migration', 'auto_summary', 'refine_summary']);
-        if (!blockedSources.has(record.source)) {
-            setTimeout(() => {
-                window.refineMemories(record.contactId, 'auto').catch(() => {});
-            }, 80);
-        }
-    }
-
-    return record;
-};
-
-window.applyEntityRenameOverride = function(contactId, oldName, newName) {
-    const oldNorm = normalizeEntityName(oldName);
-    const newNorm = normalizeEntityName(newName);
-    if (!oldNorm || !newNorm) return false;
-    if (oldNorm === newNorm) return false;
-
-    let changed = false;
-    const now = Date.now();
-    ensureMemoriesArray().forEach(memory => {
-        if (String(memory.contactId) !== String(contactId)) return;
-        if (memory.kind !== 'fact' || memory.factSubtype !== 'named_entity') return;
-        const current = normalizeEntityName(memory.exactName || memory.content);
-        const aliases = Array.isArray(memory.aliases) ? memory.aliases : [];
-        const aliasHit = aliases.some(alias => normalizeEntityName(alias) === oldNorm);
-        if (current === oldNorm || aliasHit) {
-            const prev = memory.exactName || memory.content;
-            memory.exactName = newName;
-            memory.content = memory.content.replace(prev, newName);
-            memory.aliases = Array.from(new Set([...(memory.aliases || []), prev].filter(Boolean)));
-            memory.updatedAt = now;
-            changed = true;
-        }
-    });
-
-    const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(contactId));
-    if (contact && Array.isArray(contact.memoryEntityIndex)) {
-        contact.memoryEntityIndex.forEach(entity => {
-            const current = normalizeEntityName(entity.canonicalName);
-            const aliasHit = Array.isArray(entity.aliases) && entity.aliases.some(alias => normalizeEntityName(alias) === oldNorm);
-            if (current === oldNorm || aliasHit) {
-                entity.aliases = Array.from(new Set([...(entity.aliases || []), entity.canonicalName].filter(Boolean)));
-                entity.canonicalName = newName;
-                entity.lastConfirmedAt = now;
-                entity.lastSeenAt = now;
-                changed = true;
-            }
-        });
-    }
-
-    if (changed) saveConfig();
-    return changed;
-};
-
-window.extractSpecificInfoFromMessage = function(message, contactId) {
-    if (!message || contactId == null) return [];
-    const extracted = [];
-    const msgType = String(message.type || 'text');
-    const text = typeof message.content === 'string' ? message.content : '';
-    if (msgType === 'system_event' || msgType === 'live_sync_hidden') return extracted;
-    if (/^\s*\[系统消息\]/.test(text)) return extracted;
-    const payload = safeParseJson(text);
-
-    const addEntity = (name, confidence = 0.9, sourceType = msgType, extra = {}) => {
-        const clean = String(name || '').trim();
-        if (!clean || clean.length < 2 || clean.length > 40) return;
-        const record = window.addMemoryRecord({
-            contactId,
-            content: `具体名称：${clean}`,
-            kind: 'fact',
-            factSubtype: 'named_entity',
-            exactName: clean,
-            entityType: inferEntityType(clean, sourceType),
-            confidence,
-            source: extra.source || 'chat_extract',
-            sourceMessageId: message.id,
-            sourceMessageType: msgType,
-            aliases: extra.aliases || []
-        });
-        if (record) extracted.push(record);
-    };
-
-    const addFact = (factText, subtype) => {
-        const clean = normalizeMemoryText(factText);
-        if (!clean) return;
-        const record = window.addMemoryRecord({
-            contactId,
-            content: clean,
-            kind: 'fact',
-            factSubtype: subtype || inferFactSubtype(clean),
-            source: 'chat_extract',
-            sourceMessageId: message.id,
-            sourceMessageType: msgType,
-            importance: 0.65
-        });
-        if (record) extracted.push(record);
-    };
-
-    try {
-        if (msgType === 'shopping_gift' || msgType === 'delivery_share' || msgType === 'order_share' || msgType === 'order_progress') {
-            const data = payload || {};
-            if (Array.isArray(data.items)) {
-                data.items.forEach(item => {
-                    if (item && item.title) addEntity(item.title, 0.98, msgType);
-                });
-            }
-            if (data.shopName) addEntity(data.shopName, 0.9, msgType);
-        } else if (msgType === 'gift_card') {
-            const data = payload || {};
-            if (data.title) addEntity(data.title, 0.98, msgType);
-        } else if (msgType === 'product_share') {
-            const data = payload || {};
-            const title = data?.product?.title || data?.title;
-            if (title) addEntity(title, 0.98, msgType);
-        }
-    } catch (error) {
-        console.warn('[extractSpecificInfo] structured parse failed', error);
-    }
-
-    if (text) {
-        const renameMatch = text.match(/(?:不是|不叫)\s*[“"'《]?([^“”"'《》\s，。！？,.!?]{1,24})[”"'》]?\s*(?:，|,|而是|是|叫)\s*[“"'《]?([^“”"'《》\s，。！？,.!?]{1,24})[”"'》]?/);
-        if (renameMatch) {
-            window.applyEntityRenameOverride(contactId, renameMatch[1], renameMatch[2]);
-        }
-
-        const quotePatterns = [/《([^》]{2,30})》/g, /“([^”]{2,30})”/g, /"([^"]{2,30})"/g];
-        quotePatterns.forEach(reg => {
-            let match;
-            while ((match = reg.exec(text)) !== null) {
-                addEntity(match[1], 0.75, 'text');
-            }
-        });
-
-        const actionNamePattern = /(?:点了|买了|送了|吃了|喝了|看了|报名了|上了|用了|去了|在)\s*([^\s，。！？,.!?]{2,24})/g;
-        let actionMatch;
-        while ((actionMatch = actionNamePattern.exec(text)) !== null) {
-            const candidate = actionMatch[1];
-            if (candidate && !/^(一下|一个|一点|这个|那个|这里|那里)$/.test(candidate)) {
-                addEntity(candidate, 0.68, 'text');
-            }
-        }
-
-        if (/(喜欢|爱吃|爱喝|偏好)/.test(text)) addFact(text, 'preference');
-        if (/(不喜欢|讨厌|忌口|过敏|雷点)/.test(text)) addFact(text, 'dislike');
-        if (/(下周|明天|后天|计划|打算|准备|安排)/.test(text)) addFact(text, 'plan');
-        if (/(生病|发烧|痛经|考试周|出差|假期|住院|不舒服)/.test(text)) {
-            const stateText = text.length > 120 ? text.slice(0, 120) : text;
-            window.addMemoryRecord({
-                contactId,
-                content: stateText,
-                kind: 'state',
-                stateType: inferStateType(stateText),
-                source: 'chat_extract',
-                sourceMessageId: message.id,
-                sourceMessageType: msgType
-            });
-        }
-    }
-
-    return extracted;
-};
-
-window.buildMemoryContextForAI = function(contact, history = []) {
-    if (!contact) {
-        return { memoryContext: '', importantStateContext: '', userPerceptionContext: '' };
-    }
-    ensureContactMemoryProfile(contact);
-    applyStateExpiry(contact.id);
-
-    const now = Date.now();
-    const memories = ensureMemoriesArray().filter(m => String(m.contactId) === String(contact.id));
-    const shortDays = Math.max(1, Number(contact.memoryProfile.shortTermDays || 7));
-    const shortCutoff = now - shortDays * 24 * 60 * 60 * 1000;
-    const limit = contact.memorySendLimit && contact.memorySendLimit > 0
-        ? contact.memorySendLimit
-        : Math.max(1, Number(contact.memoryProfile.aiLimitDefault || 12));
-
-    const activeStates = memories
-        .filter(m => m.kind === 'state' && m.stateActive !== false && !m.endedAt && (!m.expiresAt || Number(m.expiresAt) > now))
-        .sort((a, b) => getMemoryTime(b) - getMemoryTime(a));
-
-    const recentConversationText = (history || [])
-        .slice(-30)
-        .map(msg => normalizeMemoryText(msg && msg.content ? msg.content : ''))
-        .join(' ')
-        .toLowerCase();
-
-    const scoreShortTermRelevance = (memory) => {
-        const content = normalizeMemoryText(memory.content || '').toLowerCase();
-        if (!content || !recentConversationText) return 0;
-        if (recentConversationText.includes(content) || content.includes(recentConversationText)) return 1;
-        return computeBigramSimilarity(content, recentConversationText);
-    };
-
-    const shortTerm = memories
-        .filter(m => m.kind === 'short_term')
-        .filter(m => {
-            const withinFloor = getMemoryTime(m) >= shortCutoff;
-            if (withinFloor) return true; // 保底7天
-            const relevance = scoreShortTermRelevance(m);
-            return relevance >= 0.16; // 会话热区兜底
-        })
-        .sort((a, b) => {
-            const scoreDiff = scoreShortTermRelevance(b) - scoreShortTermRelevance(a);
-            if (Math.abs(scoreDiff) > 0.0001) return scoreDiff;
-            return getMemoryTime(b) - getMemoryTime(a);
-        });
-
-    const longTerm = memories
-        .filter(m => m.kind === 'long_term' || m.pinned)
-        .sort((a, b) => {
-            const ai = Number(a.importance || 0);
-            const bi = Number(b.importance || 0);
-            if (ai !== bi) return bi - ai;
-            return getMemoryTime(b) - getMemoryTime(a);
-        });
-
-    const namedFacts = memories
-        .filter(m => m.kind === 'fact' && m.factSubtype === 'named_entity' && (m.exactName || m.content))
-        .sort((a, b) => getMemoryTime(b) - getMemoryTime(a));
-
-    const otherFacts = memories
-        .filter(m => m.kind === 'fact' && m.factSubtype !== 'named_entity')
-        .sort((a, b) => getMemoryTime(b) - getMemoryTime(a));
-
-    let remain = limit;
-    const pick = (arr, maxCount) => {
-        if (remain <= 0) return [];
-        const count = Math.min(remain, maxCount, arr.length);
-        remain -= count;
-        return arr.slice(0, count);
-    };
-
-    const pickedState = pick(activeStates, 3);
-    const pickedShort = pick(shortTerm, 4);
-    const pickedLong = pick(longTerm, 3);
-    const pickedNamed = pick(namedFacts, 4);
-    const pickedFacts = pick(otherFacts, Math.max(remain, 0));
-
-    let importantStateContext = '';
-    if (pickedState.length > 0) {
-        importantStateContext += '\n【当前重要状态 (时效性信息)】\n';
-        pickedState.forEach(item => {
-            const typeLabel = MEMORY_STATE_TYPE_LABEL_MAP[item.stateType] || '状态';
-            importantStateContext += `- [${typeLabel}] ${item.content}\n`;
-        });
-    }
-
-    let userPerceptionContext = '';
-    if (pickedFacts.length > 0) {
-        userPerceptionContext += '\n【关于用户的认知】\n';
-        pickedFacts.forEach(item => {
-            const subLabel = MEMORY_FACT_SUBTYPE_LABEL_MAP[item.factSubtype] || '信息';
-            userPerceptionContext += `- [${subLabel}] ${item.content}\n`;
-        });
-    }
-
-    let memoryContext = '';
-    const timelineEntries = [...pickedShort, ...pickedLong].sort((a, b) => getMemoryTime(a) - getMemoryTime(b));
-    if (timelineEntries.length > 0) {
-        memoryContext += '\n【历史记忆 (已知事实)】\n';
-        timelineEntries.forEach(item => {
-            const date = new Date(getMemoryTime(item));
-            const dateStr = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-            const kindLabel = MEMORY_KIND_LABEL_MAP[item.kind] || '记忆';
-            memoryContext += `- [${dateStr}][${kindLabel}] ${item.content}\n`;
-        });
-    }
-
-    if (pickedNamed.length > 0) {
-        memoryContext += '\n【具体名称记忆(严格)】\n';
-        memoryContext += '⚠️ 以下名称必须保持一致，不可擅自改写或猜测；不确定时请用泛称。\n';
-        pickedNamed.forEach(item => {
-            const canonical = item.exactName || item.content;
-            const aliases = Array.isArray(item.aliases) && item.aliases.length > 0 ? ` (别名: ${item.aliases.join(' / ')})` : '';
-            memoryContext += `- ${canonical}${aliases}\n`;
-        });
-    }
-
-    return { memoryContext, importantStateContext, userPerceptionContext };
-};
-
-window.applyNameConsistencyGuard = function(messagesList, contactId) {
-    if (!Array.isArray(messagesList) || contactId == null) return messagesList;
-    const named = ensureMemoriesArray().filter(m =>
-        String(m.contactId) === String(contactId) &&
-        m.kind === 'fact' &&
-        m.factSubtype === 'named_entity' &&
-        (m.exactName || m.content)
-    );
-    if (named.length === 0) return messagesList;
-
-    const aliasBucket = new Map();
-    const appendAlias = (alias, canonical) => {
-        const key = String(alias || '').trim();
-        const value = String(canonical || '').trim();
-        if (!key || !value) return;
-        if (!aliasBucket.has(key)) aliasBucket.set(key, new Set());
-        aliasBucket.get(key).add(value);
-    };
-    named.forEach(item => {
-        const canonical = String(item.exactName || item.content || '').trim();
-        if (!canonical) return;
-        appendAlias(canonical, canonical);
-        const aliases = Array.isArray(item.aliases) ? item.aliases : [];
-        aliases.forEach(alias => {
-            const cleanAlias = String(alias || '').trim();
-            if (cleanAlias) appendAlias(cleanAlias, canonical);
-        });
-    });
-
-    const aliasMap = new Map();
-    aliasBucket.forEach((canonicalSet, alias) => {
-        if (canonicalSet.size === 1) {
-            aliasMap.set(alias, Array.from(canonicalSet)[0]);
-        } else {
-            // 别名对应多个候选时，降级为泛称，避免错误命名
-            aliasMap.set(alias, null);
-        }
-    });
-
-    const escaped = str => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    return messagesList.map(msg => {
-        if (!msg) return msg;
-        const type = String(msg.type || '').toLowerCase();
-        const isTextLike = type === 'text' || type === '消息' || type === '';
-        if (!isTextLike || typeof msg.content !== 'string') return msg;
-
-        let next = msg.content;
-        aliasMap.forEach((canonical, alias) => {
-            if (!alias) return;
-            if (canonical && alias === canonical) return;
-            const re = new RegExp(escaped(alias), 'g');
-            if (re.test(next)) {
-                next = next.replace(re, canonical || '相关事项');
-            }
-        });
-
-        return next === msg.content ? msg : { ...msg, content: next };
-    });
-};
-
 // --- 记忆功能 ---
 
 function openMemoryApp() {
@@ -2310,135 +1533,11 @@ function openMemoryApp() {
     
     const contact = window.iphoneSimState.contacts.find(c => c.id === window.iphoneSimState.currentChatContactId);
     if (!contact) return;
-    ensureContactMemoryProfile(contact);
-    if (applyStateExpiry(contact.id)) saveConfig();
-    
+
     const memoryApp = document.getElementById('memory-app');
     
     renderMemoryList();
     memoryApp.classList.remove('hidden');
-}
-
-function getVisibleMemoryIds() {
-    if (!window.iphoneSimState.currentChatContactId) return [];
-    return ensureMemoriesArray()
-        .filter(m => String(m.contactId) === String(window.iphoneSimState.currentChatContactId))
-        .filter(m => {
-            if (memoryFilterMode === 'short_term') return m.kind === 'short_term';
-            if (memoryFilterMode === 'long_term') return m.kind === 'long_term' || !!m.pinned;
-            if (memoryFilterMode === 'state') return m.kind === 'state';
-            if (memoryFilterMode === 'fact') return m.kind === 'fact';
-            if (memoryFilterMode === 'refined') {
-                return Array.isArray(m.refinedFrom) && m.refinedFrom.length > 0
-                    || m.source === 'auto_summary'
-                    || m.source === 'refine_summary';
-            }
-            return true;
-        })
-        .map(m => String(m.id));
-}
-
-function syncMemoryToolbarUI() {
-    const countEl = document.getElementById('selected-memory-count');
-    if (countEl) countEl.textContent = String(selectedMemoryIds.size);
-
-    const toolbar = document.getElementById('memory-selection-toolbar');
-    if (toolbar) toolbar.style.display = memorySelectionMode ? 'flex' : 'none';
-
-    const toggleBtn = document.getElementById('toggle-memory-selection-btn');
-    if (toggleBtn) toggleBtn.textContent = memorySelectionMode ? '退出多选' : '多选';
-
-    const tabs = document.querySelectorAll('#memory-filter-tabs .memory-filter-btn');
-    tabs.forEach(btn => {
-        const mode = btn.getAttribute('data-filter-mode');
-        btn.classList.toggle('active', mode === memoryFilterMode);
-    });
-}
-
-window.setMemoryFilterMode = function(mode = 'all') {
-    memoryFilterMode = String(mode || 'all');
-    renderMemoryList();
-};
-
-window.toggleMemorySelectionMode = function(forceValue) {
-    memorySelectionMode = typeof forceValue === 'boolean' ? forceValue : !memorySelectionMode;
-    if (!memorySelectionMode) selectedMemoryIds.clear();
-    renderMemoryList();
-};
-
-window.toggleMemorySelection = function(id, checked) {
-    const key = String(id);
-    if (checked) selectedMemoryIds.add(key);
-    else selectedMemoryIds.delete(key);
-    syncMemoryToolbarUI();
-};
-
-window.selectAllVisibleMemories = function() {
-    const ids = getVisibleMemoryIds();
-    ids.forEach(id => selectedMemoryIds.add(String(id)));
-    renderMemoryList();
-};
-
-window.clearSelectedMemories = function() {
-    selectedMemoryIds.clear();
-    renderMemoryList();
-};
-
-window.saveRefineDraftFromModal = async function() {
-    if (!currentRefineDraft) return;
-    const modal = document.getElementById('refine-memory-modal');
-    const summaryEl = document.getElementById('refine-summary-content');
-    const list = document.getElementById('refine-highlights-list');
-    const deleteCheckbox = document.getElementById('refine-delete-source');
-
-    const highlights = [];
-    if (list) {
-        list.querySelectorAll('.refine-highlight-item').forEach(row => {
-            const content = normalizeMemoryText(row.querySelector('[data-key="content"]')?.value || '');
-            if (!content) return;
-            highlights.push({
-                content,
-                targetKind: row.querySelector('[data-key="targetKind"]')?.value || 'fact',
-                factSubtype: row.querySelector('[data-key="factSubtype"]')?.value || undefined,
-                stateType: row.querySelector('[data-key="stateType"]')?.value || undefined,
-                exactName: normalizeMemoryText(row.querySelector('[data-key="exactName"]')?.value || '') || undefined,
-                entityType: row.querySelector('[data-key="entityType"]')?.value || undefined,
-                importance: clamp01(row.querySelector('[data-key="importance"]')?.value, 0.7)
-            });
-        });
-    }
-
-    const payload = {
-        ...currentRefineDraft,
-        summary: normalizeMemoryText(summaryEl?.value || currentRefineDraft.summary || ''),
-        highlights,
-        deleteSources: deleteCheckbox ? !!deleteCheckbox.checked : true
-    };
-
-    const result = await window.commitRefineDraft(payload.contactId, payload, { source: 'refine_summary' });
-    if (result?.ok) {
-        if (modal) modal.classList.add('hidden');
-        currentRefineDraft = null;
-        selectedMemoryIds.clear();
-        memorySelectionMode = false;
-        renderMemoryList();
-        showNotification('精炼并存档完成', 1800, 'success');
-    } else {
-        showNotification('精炼保存失败', 1800, 'error');
-    }
-};
-
-window.closeRefineModal = function() {
-    const modal = document.getElementById('refine-memory-modal');
-    if (modal) modal.classList.add('hidden');
-};
-
-function syncManualMemoryFormByKind() {
-    const kind = String(document.getElementById('manual-memory-kind')?.value || 'short_term');
-    const factGroup = document.getElementById('manual-memory-fact-subtype')?.closest('.setting-group');
-    const stateGroup = document.getElementById('manual-memory-state-type')?.closest('.setting-group');
-    if (factGroup) factGroup.style.display = kind === 'fact' ? 'block' : 'none';
-    if (stateGroup) stateGroup.style.display = kind === 'state' ? 'block' : 'none';
 }
 
 function handleSaveManualMemory() {
@@ -2450,32 +1549,13 @@ function handleSaveManualMemory() {
 
     if (!window.iphoneSimState.currentChatContactId) return;
 
-    const kindEl = document.getElementById('manual-memory-kind');
-    const factSubtypeEl = document.getElementById('manual-memory-fact-subtype');
-    const stateTypeEl = document.getElementById('manual-memory-state-type');
-    const importanceEl = document.getElementById('manual-memory-importance');
-
-    const kind = kindEl ? String(kindEl.value || 'short_term') : 'short_term';
-    const factSubtype = factSubtypeEl ? String(factSubtypeEl.value || '') : '';
-    const stateType = stateTypeEl ? String(stateTypeEl.value || '') : '';
-    const importance = importanceEl && importanceEl.value !== '' ? Number(importanceEl.value) : undefined;
-
-    const saved = window.addMemoryRecord({
+    window.iphoneSimState.memories.push({
+        id: Date.now(),
         contactId: window.iphoneSimState.currentChatContactId,
-        content,
-        kind,
-        factSubtype: kind === 'fact' ? (factSubtype || undefined) : undefined,
-        stateType: kind === 'state' ? (stateType || undefined) : undefined,
-        importance: Number.isFinite(importance) ? Math.max(0, Math.min(1, importance)) : undefined,
-        source: 'manual',
-        pinned: kind === 'long_term'
+        content: content,
+        time: Date.now()
     });
-
-    if (!saved) {
-        alert('记忆保存失败，请检查内容后重试');
-        return;
-    }
-
+    saveConfig();
     renderMemoryList();
     document.getElementById('add-memory-modal').classList.add('hidden');
 }
@@ -2542,21 +1622,7 @@ function renderMemoryList() {
     
     if (!window.iphoneSimState.currentChatContactId) return;
 
-    const now = Date.now();
-    const contactMemories = ensureMemoriesArray()
-        .filter(m => String(m.contactId) === String(window.iphoneSimState.currentChatContactId))
-        .filter(m => {
-            if (memoryFilterMode === 'short_term') return m.kind === 'short_term';
-            if (memoryFilterMode === 'long_term') return m.kind === 'long_term' || !!m.pinned;
-            if (memoryFilterMode === 'state') return m.kind === 'state';
-            if (memoryFilterMode === 'fact') return m.kind === 'fact';
-            if (memoryFilterMode === 'refined') {
-                return Array.isArray(m.refinedFrom) && m.refinedFrom.length > 0
-                    || m.source === 'auto_summary'
-                    || m.source === 'refine_summary';
-            }
-            return true;
-        });
+    const contactMemories = window.iphoneSimState.memories.filter(m => m.contactId === window.iphoneSimState.currentChatContactId);
     
     if (contactMemories.length === 0) {
         if (emptyState) emptyState.style.display = 'flex';
@@ -2565,53 +1631,33 @@ function renderMemoryList() {
     
     if (emptyState) emptyState.style.display = 'none';
 
-    const sortedMemories = [...contactMemories].sort((a, b) => {
-        const diff = getMemoryTime(b) - getMemoryTime(a);
-        if (diff !== 0) return diff;
-        return String(b.id).localeCompare(String(a.id));
-    });
+    const sortedMemories = [...contactMemories].sort((a, b) => b.time - a.time);
 
     sortedMemories.forEach(memory => {
         const item = document.createElement('div');
         item.className = 'archive-card';
-        const selected = selectedMemoryIds.has(String(memory.id));
         
-        const date = new Date(getMemoryTime(memory));
+        const date = new Date(memory.time);
         const timeStr = `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
         
-        let memoryType = MEMORY_KIND_LABEL_MAP[memory.kind] || '短期';
-        if (memory.kind === 'state') {
-            if (memory.stateActive === false || memory.endedAt) memoryType = '状态-已结束';
-            else if (memory.expiresAt && Number(memory.expiresAt) <= now) memoryType = '状态-已过期';
-            else memoryType = '状态-进行中';
-        } else if (memory.kind === 'fact' && memory.factSubtype) {
-            const subLabel = MEMORY_FACT_SUBTYPE_LABEL_MAP[memory.factSubtype] || memory.factSubtype;
-            memoryType = `具体信息/${subLabel}`;
-        } else if (memory.kind === 'long_term' || memory.pinned) {
-            memoryType = memory.pinned ? '长期-置顶' : '长期';
-        }
-
+        // Use type if available, else default to 线上聊天
+        let memoryType = memory.type || '线上聊天';
+        if (memoryType === '线上聊天') memoryType = 'Log'; 
+        
+        // Ensure id is displayed properly
+        let refId = memory.id ? String(memory.id).slice(-4) : '0000';
+        
         let title = memory.title || 'Memory Fragment';
         if (!memory.title && memory.content) {
-            title = memory.content.substring(0, 10);
+            // Fallback if no title stored (old memories)
+            // Use first 7 chars as requested
+            title = memory.content.substring(0, 7); 
         }
-
-        const memoryIdToken = JSON.stringify(String(memory.id));
-        const memoryMenuId = encodeURIComponent(String(memory.id));
-        const selectionMarker = memorySelectionMode ? `
-            <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#666;">
-                <input type="checkbox" onchange="window.toggleMemorySelection(${memoryIdToken}, this.checked)" ${selected ? 'checked' : ''}>
-                选择
-            </label>
-        ` : '';
 
         item.innerHTML = `
             <div class="card-top">
                 <span class="ref-id">REF // ${memory.range || '0000'}</span>
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <span class="status">${memoryType}</span>
-                    ${selectionMarker}
-                </div>
+                <span class="status">${memoryType}</span>
             </div>
             <div class="card-body" onclick="this.querySelector('p').classList.toggle('expanded'); event.stopPropagation();">
                 <h3>${title}</h3>
@@ -2619,13 +1665,10 @@ function renderMemoryList() {
             </div>
             <div class="card-footer">
                 <div class="archive-actions" style="position: relative;">
-                    <span style="cursor: pointer; margin-right: 10px; font-family: monospace; font-size: 10px; border: 1px solid #ccc; padding: 2px 5px; border-radius: 4px;" onclick="event.stopPropagation(); window.toggleMemoryActions(this, ${memoryIdToken})">OPTS</span>
-                    <div class="memory-action-menu" id="memory-action-${memoryMenuId}" style="display: none; position: absolute; left: 0; bottom: 100%; background: white; border: 1px solid #eee; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 5px; z-index: 100;">
-                        <div onclick="event.stopPropagation(); window.editMemory(${memoryIdToken}); window.toggleMemoryActions(null, ${memoryIdToken})" style="padding: 5px 10px; cursor: pointer; white-space: nowrap; font-size: 12px; color: #333; border-bottom: 1px solid #f5f5f5;">编辑</div>
-                        <div onclick="event.stopPropagation(); window.refineMemories(${JSON.stringify(String(window.iphoneSimState.currentChatContactId))}, 'single', [${memoryIdToken}]); window.toggleMemoryActions(null, ${memoryIdToken})" style="padding: 5px 10px; cursor: pointer; white-space: nowrap; font-size: 12px; color: #4a5568; border-bottom: 1px solid #f5f5f5;">精炼</div>
-                        <div onclick="event.stopPropagation(); window.toggleMemoryLongTerm(${memoryIdToken}); window.toggleMemoryActions(null, ${memoryIdToken})" style="padding: 5px 10px; cursor: pointer; white-space: nowrap; font-size: 12px; color: #333; border-bottom: 1px solid #f5f5f5;">${memory.kind === 'long_term' || memory.pinned ? '取消长期' : '设为长期'}</div>
-                        ${memory.kind === 'state' ? `<div onclick="event.stopPropagation(); window.endStateMemory(${memoryIdToken}); window.toggleMemoryActions(null, ${memoryIdToken})" style="padding: 5px 10px; cursor: pointer; white-space: nowrap; font-size: 12px; color: #333; border-bottom: 1px solid #f5f5f5;">结束状态</div>` : ''}
-                        <div onclick="event.stopPropagation(); window.deleteMemory(${memoryIdToken}); window.toggleMemoryActions(null, ${memoryIdToken})" style="padding: 5px 10px; cursor: pointer; white-space: nowrap; font-size: 12px; color: #ff3b30;">删除</div>
+                    <span style="cursor: pointer; margin-right: 10px; font-family: monospace; font-size: 10px; border: 1px solid #ccc; padding: 2px 5px; border-radius: 4px;" onclick="event.stopPropagation(); window.toggleMemoryActions(this, ${memory.id})">OPTS</span>
+                    <div class="memory-action-menu" id="memory-action-${memory.id}" style="display: none; position: absolute; left: 0; bottom: 100%; background: white; border: 1px solid #eee; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 5px; z-index: 100;">
+                        <div onclick="event.stopPropagation(); window.editMemory(${memory.id}); window.toggleMemoryActions(null, ${memory.id})" style="padding: 5px 10px; cursor: pointer; white-space: nowrap; font-size: 12px; color: #333; border-bottom: 1px solid #f5f5f5;">EDIT</div>
+                        <div onclick="event.stopPropagation(); window.deleteMemory(${memory.id}); window.toggleMemoryActions(null, ${memory.id})" style="padding: 5px 10px; cursor: pointer; white-space: nowrap; font-size: 12px; color: #ff3b30;">DELETE</div>
                     </div>
                 </div>
                 <span>DATE: ${timeStr}</span>
@@ -2648,20 +1691,17 @@ function renderMemoryList() {
 
         list.appendChild(item);
     });
-
-    syncMemoryToolbarUI();
 }
 
 window.toggleMemoryActions = function(element, id) {
-    const menuKey = encodeURIComponent(String(id));
     const allMenus = document.querySelectorAll('.memory-action-menu');
     allMenus.forEach(menu => {
-        if (menu.id !== `memory-action-${menuKey}`) {
+        if (menu.id !== `memory-action-${id}`) {
             menu.style.display = 'none';
         }
     });
     
-    const menu = document.getElementById(`memory-action-${menuKey}`);
+    const menu = document.getElementById(`memory-action-${id}`);
     if (menu) {
         menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
     }
@@ -2680,465 +1720,11 @@ window.toggleMemoryActions = function(element, id) {
     }
 };
 
-window.toggleMemoryLongTerm = function(id) {
-    const memory = ensureMemoriesArray().find(m => String(m.id) === String(id));
-    if (!memory) return;
-    const now = Date.now();
-    const isLong = memory.kind === 'long_term' || memory.pinned;
-    if (isLong) {
-        memory.pinned = false;
-        if (memory.kind === 'long_term') {
-            memory.kind = 'short_term';
-            memory.importance = Math.min(Number(memory.importance || 0.5), 0.7);
-        }
-    } else {
-        memory.kind = 'long_term';
-        memory.pinned = true;
-        memory.importance = Math.max(Number(memory.importance || 0.5), 0.85);
-    }
-    memory.updatedAt = now;
-    pruneLongTermMemories(memory.contactId);
-    saveConfig();
-    renderMemoryList();
-};
-
-window.endStateMemory = function(id) {
-    const memory = ensureMemoriesArray().find(m => String(m.id) === String(id));
-    if (!memory || memory.kind !== 'state') return;
-    const now = Date.now();
-    memory.stateActive = false;
-    memory.endedAt = now;
-    memory.updatedAt = now;
-    const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(memory.contactId));
-    if (contact && Array.isArray(contact.importantStates)) {
-        contact.importantStates = contact.importantStates.filter(item => String(item) !== String(memory.content));
-    }
-    saveConfig();
-    renderMemoryList();
-};
-
-function clamp01(value, fallback = 0.5) {
-    const num = Number(value);
-    if (!Number.isFinite(num)) return fallback;
-    return Math.max(0, Math.min(1, num));
-}
-
-function buildLocalRefineHighlights(records) {
-    const output = [];
-    const pushItem = (item) => {
-        const content = normalizeMemoryText(item.content);
-        if (!content) return;
-        const duplicate = output.find(existing =>
-            computeBigramSimilarity(existing.content, content) >= 0.9 &&
-            String(existing.targetKind || '') === String(item.targetKind || '')
-        );
-        if (duplicate) return;
-        output.push({ ...item, content });
-    };
-
-    records.forEach(record => {
-        const content = normalizeMemoryText(record.content);
-        if (!content) return;
-        if (record.kind === 'state') {
-            pushItem({
-                content,
-                targetKind: 'state',
-                stateType: record.stateType || inferStateType(content),
-                importance: clamp01(record.importance, 0.72)
-            });
-            return;
-        }
-        if (record.kind === 'fact') {
-            const isNamed = record.factSubtype === 'named_entity' || !!record.exactName;
-            pushItem({
-                content,
-                targetKind: 'fact',
-                factSubtype: isNamed ? 'named_entity' : (record.factSubtype || inferFactSubtype(content)),
-                exactName: isNamed ? (record.exactName || content.replace(/^具体名称[:：]\s*/, '')) : undefined,
-                entityType: isNamed ? (record.entityType || inferEntityType(record.exactName || content, record.sourceMessageType || 'text')) : undefined,
-                importance: clamp01(record.importance, isNamed ? 0.92 : 0.78)
-            });
-            return;
-        }
-
-        if (record.kind === 'long_term' || record.pinned) {
-            pushItem({
-                content,
-                targetKind: 'long_term',
-                importance: clamp01(record.importance, 0.86),
-                pinned: !!record.pinned
-            });
-            return;
-        }
-
-        // short_term / legacy fallback route
-        if (/(生病|发烧|痛经|考试周|出差|住院|不舒服|情绪|焦虑|加班|请假)/.test(content)) {
-            pushItem({
-                content,
-                targetKind: 'state',
-                stateType: inferStateType(content),
-                importance: 0.72
-            });
-        } else if (/(喜欢|爱吃|偏好|不喜欢|讨厌|忌口|计划|打算|安排|下周|明天|后天)/.test(content)) {
-            pushItem({
-                content,
-                targetKind: 'fact',
-                factSubtype: inferFactSubtype(content),
-                importance: 0.76
-            });
-        } else {
-            pushItem({
-                content,
-                targetKind: 'long_term',
-                importance: 0.7
-            });
-        }
-    });
-
-    return output.slice(0, 12);
-}
-
-async function tryBuildAiRefineDraft(contact, records) {
-    if (!contact || !Array.isArray(records) || records.length === 0) return null;
-    const settings = window.iphoneSimState.aiSettings2?.url
-        ? window.iphoneSimState.aiSettings2
-        : window.iphoneSimState.aiSettings;
-    if (!settings || !settings.url || !settings.key) return null;
-
-    const payloadLines = records.map((record, index) => {
-        const when = new Date(getMemoryTime(record)).toISOString();
-        return `${index + 1}. [${record.kind || 'short_term'}][${when}] ${record.content}`;
-    }).join('\n');
-
-    const systemPrompt = '你是记忆精炼助手。请将输入记忆压缩为简洁总结，并输出结构化 highlights。仅输出 JSON。';
-    const userPrompt = `请输出 JSON，格式如下：
-{
-  "summary": "字符串",
-  "highlights": [
-    {"content":"字符串","targetKind":"state|short_term|long_term|fact","factSubtype":"fact|preference|dislike|plan|named_entity","stateType":"health|schedule|emotion|relationship|other","importance":0.0-1.0,"exactName":"可选","entityType":"可选"}
-  ]
-}
-
-联系人：${contact.name || '联系人'}
-待精炼记忆：
-${payloadLines}`;
-
-    try {
-        let fetchUrl = settings.url;
-        if (!fetchUrl.endsWith('/chat/completions')) {
-            fetchUrl = fetchUrl.endsWith('/') ? fetchUrl + 'chat/completions' : fetchUrl + '/chat/completions';
-        }
-        const response = await fetch(fetchUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${settings.key}`
-            },
-            body: JSON.stringify({
-                model: settings.model,
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userPrompt }
-                ],
-                temperature: 0.2
-            })
-        });
-        if (!response.ok) return null;
-        const data = await response.json();
-        const raw = String(data?.choices?.[0]?.message?.content || '').trim();
-        if (!raw) return null;
-        const start = raw.indexOf('{');
-        const end = raw.lastIndexOf('}');
-        if (start < 0 || end <= start) return null;
-        const parsed = JSON.parse(raw.slice(start, end + 1));
-        if (!parsed || typeof parsed !== 'object') return null;
-        const summary = normalizeMemoryText(parsed.summary || '');
-        const highlightsRaw = Array.isArray(parsed.highlights) ? parsed.highlights : [];
-        const highlights = highlightsRaw
-            .map(item => ({
-                content: normalizeMemoryText(item.content || ''),
-                targetKind: ['short_term', 'long_term', 'state', 'fact'].includes(item.targetKind) ? item.targetKind : 'fact',
-                factSubtype: item.factSubtype,
-                stateType: item.stateType,
-                importance: clamp01(item.importance, 0.7),
-                exactName: item.exactName ? String(item.exactName).trim() : undefined,
-                entityType: item.entityType ? String(item.entityType).trim() : undefined
-            }))
-            .filter(item => item.content);
-        if (!summary && highlights.length === 0) return null;
-        return { summary, highlights };
-    } catch (error) {
-        console.warn('[memory-refine] ai draft failed, fallback to local', error);
-        return null;
-    }
-}
-
-window.buildRefineDraft = async function(contactId, selectedIds = []) {
-    if (contactId == null) return null;
-    const selectedSet = new Set((selectedIds || []).map(id => String(id)));
-    const sourceRecords = ensureMemoriesArray()
-        .filter(record => String(record.contactId) === String(contactId) && selectedSet.has(String(record.id)))
-        .sort((a, b) => getMemoryTime(a) - getMemoryTime(b));
-    if (sourceRecords.length === 0) return null;
-
-    const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(contactId));
-    const aiDraft = await tryBuildAiRefineDraft(contact, sourceRecords);
-    const localHighlights = buildLocalRefineHighlights(sourceRecords);
-    const highlights = (aiDraft && Array.isArray(aiDraft.highlights) && aiDraft.highlights.length > 0)
-        ? aiDraft.highlights
-        : localHighlights;
-
-    let summary = '';
-    if (aiDraft && aiDraft.summary) {
-        summary = aiDraft.summary;
-    } else {
-        const snippets = sourceRecords
-            .map(item => normalizeMemoryText(item.content).replace(/^【[^】]+】/, ''))
-            .filter(Boolean)
-            .slice(0, 6);
-        summary = `精炼了${sourceRecords.length}条记忆：${snippets.join('；')}`;
-        if (summary.length > 220) summary = summary.slice(0, 220) + '...';
-    }
-
-    return {
-        contactId,
-        selectedIds: Array.from(selectedSet),
-        sourceCount: sourceRecords.length,
-        summary,
-        highlights,
-        deleteSources: true,
-        generatedAt: Date.now()
-    };
-};
-
-window.commitRefineDraft = async function(contactId, draft, options = {}) {
-    if (contactId == null || !draft || typeof draft !== 'object') {
-        return { ok: false, error: 'invalid_draft' };
-    }
-
-    const memoriesBackup = JSON.parse(JSON.stringify(ensureMemoriesArray()));
-    const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(contactId));
-    const contactBackup = contact ? {
-        userPerception: JSON.parse(JSON.stringify(contact.userPerception || [])),
-        importantStates: JSON.parse(JSON.stringify(contact.importantStates || [])),
-        memoryEntityIndex: JSON.parse(JSON.stringify(contact.memoryEntityIndex || []))
-    } : null;
-
-    const selectedSet = new Set((draft.selectedIds || []).map(id => String(id)));
-    const refinedFrom = Array.from(selectedSet);
-    const saveSource = options.source || (draft.mode === 'auto' ? 'auto_summary' : 'refine_summary');
-
-    try {
-        const createdIds = [];
-        const summaryText = normalizeMemoryText(draft.summary || '');
-        if (summaryText) {
-            const summaryRecord = window.addMemoryRecord({
-                contactId,
-                content: summaryText,
-                title: '精炼总结',
-                kind: 'long_term',
-                source: saveSource,
-                importance: 0.9,
-                tags: ['refined_summary'],
-                refinedFrom
-            }, { skipSave: true, skipAutoRefine: true });
-            if (summaryRecord) createdIds.push(String(summaryRecord.id));
-        }
-
-        const highlights = Array.isArray(draft.highlights) ? draft.highlights : [];
-        highlights.forEach(item => {
-            const content = normalizeMemoryText(item.content || '');
-            if (!content) return;
-            const targetKind = ['short_term', 'long_term', 'state', 'fact'].includes(item.targetKind)
-                ? item.targetKind
-                : 'fact';
-            const base = {
-                contactId,
-                content,
-                kind: targetKind,
-                source: saveSource,
-                importance: clamp01(item.importance, targetKind === 'long_term' ? 0.82 : 0.72),
-                refinedFrom
-            };
-            if (targetKind === 'fact') {
-                base.factSubtype = item.factSubtype || (item.exactName ? 'named_entity' : inferFactSubtype(content));
-                if (base.factSubtype === 'named_entity') {
-                    base.exactName = item.exactName || content.replace(/^具体名称[:：]\s*/, '');
-                    base.entityType = item.entityType || inferEntityType(base.exactName, 'text');
-                    base.confidence = clamp01(item.confidence, 0.88);
-                }
-            } else if (targetKind === 'state') {
-                base.stateType = item.stateType || inferStateType(content);
-                base.stateActive = item.stateActive !== false;
-                base.expiresAt = item.stateActive === false ? null : Date.now() + getStateDefaultTtlMs(base.stateType);
-            } else if (targetKind === 'long_term') {
-                base.pinned = !!item.pinned;
-            }
-
-            const created = window.addMemoryRecord(base, { skipSave: true, skipAutoRefine: true });
-            if (created) createdIds.push(String(created.id));
-        });
-
-        let deletedCount = 0;
-        if (draft.deleteSources !== false && selectedSet.size > 0) {
-            const before = ensureMemoriesArray().length;
-            window.iphoneSimState.memories = ensureMemoriesArray()
-                .filter(record => !(String(record.contactId) === String(contactId) && selectedSet.has(String(record.id))));
-            deletedCount = before - window.iphoneSimState.memories.length;
-        }
-
-        saveConfig();
-        if (window.iphoneSimState.currentChatContactId === contactId) {
-            renderMemoryList();
-        }
-        return {
-            ok: true,
-            createdCount: createdIds.length,
-            deletedCount
-        };
-    } catch (error) {
-        window.iphoneSimState.memories = memoriesBackup;
-        if (contact && contactBackup) {
-            contact.userPerception = contactBackup.userPerception;
-            contact.importantStates = contactBackup.importantStates;
-            contact.memoryEntityIndex = contactBackup.memoryEntityIndex;
-        }
-        console.error('[memory-refine] commit failed, rolled back', error);
-        return { ok: false, error: error.message || 'commit_failed' };
-    }
-};
-
-window.refineMemories = async function(contactId, mode = 'auto', selectedIds = []) {
-    const finalContactId = contactId != null ? contactId : window.iphoneSimState.currentChatContactId;
-    if (finalContactId == null) return null;
-    const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(finalContactId));
-    if (!contact) return null;
-    ensureContactMemoryProfile(contact);
-
-    let ids = Array.isArray(selectedIds) ? selectedIds.map(id => String(id)) : [];
-    if (mode === 'single' && ids.length === 0) return null;
-
-    if (mode === 'batch' && ids.length === 0) {
-        showNotification('请先选择要精炼的记忆', 1600);
-        return null;
-    }
-
-    if (mode === 'auto') {
-        if (autoRefineLocks[finalContactId]) return null;
-        autoRefineLocks[finalContactId] = true;
-        try {
-            const now = Date.now();
-            const shortDays = Math.max(1, Number(contact.memoryProfile.shortTermDays || 7));
-            const shortCutoff = now - shortDays * 24 * 60 * 60 * 1000;
-            const candidates = ensureMemoriesArray()
-                .filter(record => String(record.contactId) === String(finalContactId))
-                .filter(record => record.kind === 'short_term')
-                .filter(record => getMemoryTime(record) >= shortCutoff)
-                .filter(record => !['auto_summary', 'refine_summary', 'migration'].includes(String(record.source || '')))
-                .sort((a, b) => getMemoryTime(b) - getMemoryTime(a));
-            if (candidates.length < 3) return null;
-            ids = candidates.slice(0, 6).map(item => String(item.id));
-            const autoDraft = await window.buildRefineDraft(finalContactId, ids);
-            if (!autoDraft) return null;
-            autoDraft.mode = 'auto';
-            autoDraft.deleteSources = false; // short-term 保底，不在自动精炼里删源
-            return window.commitRefineDraft(finalContactId, autoDraft, { source: 'auto_summary' });
-        } finally {
-            autoRefineLocks[finalContactId] = false;
-        }
-    }
-
-    const draft = await window.buildRefineDraft(finalContactId, ids);
-    if (!draft) {
-        showNotification('未找到可精炼的记忆', 1600);
-        return null;
-    }
-    draft.mode = mode;
-
-    // 如果页面已接入精炼弹窗，则保留草稿让 UI 编辑；否则直接提交。
-    const refineModal = document.getElementById('refine-memory-modal');
-    if (refineModal) {
-        currentRefineDraft = draft;
-        const summaryEl = document.getElementById('refine-summary-content');
-        const deleteCheckbox = document.getElementById('refine-delete-source');
-        if (summaryEl) summaryEl.value = draft.summary || '';
-        if (deleteCheckbox) deleteCheckbox.checked = draft.deleteSources !== false;
-        const list = document.getElementById('refine-highlights-list');
-        if (list) {
-            list.innerHTML = '';
-            draft.highlights.forEach((item, idx) => {
-                const row = document.createElement('div');
-                row.className = 'refine-highlight-item';
-                row.innerHTML = `
-                    <div style="display:flex; gap:8px; margin-bottom:6px;">
-                        <select data-key="targetKind" style="flex:1;">
-                            <option value="fact">具体信息</option>
-                            <option value="state">状态</option>
-                            <option value="long_term">长期</option>
-                            <option value="short_term">短期</option>
-                        </select>
-                        <input data-key="importance" type="number" min="0" max="1" step="0.05" style="width:80px;" value="${clamp01(item.importance, 0.7)}">
-                    </div>
-                    <div style="display:flex; gap:8px; margin-bottom:6px;">
-                        <select data-key="factSubtype" style="flex:1;">
-                            <option value="fact">事实</option>
-                            <option value="preference">偏好</option>
-                            <option value="dislike">禁忌</option>
-                            <option value="plan">计划</option>
-                            <option value="named_entity">特定名称</option>
-                        </select>
-                        <select data-key="stateType" style="flex:1;">
-                            <option value="other">状态类型</option>
-                            <option value="health">健康</option>
-                            <option value="schedule">日程</option>
-                            <option value="emotion">情绪</option>
-                            <option value="relationship">关系</option>
-                        </select>
-                    </div>
-                    <div style="display:flex; gap:8px; margin-bottom:6px;">
-                        <input data-key="exactName" type="text" style="flex:1;" placeholder="特定名称(可选)">
-                        <select data-key="entityType" style="width:120px;">
-                            <option value="">实体类型</option>
-                            <option value="item">物品</option>
-                            <option value="food">食物</option>
-                            <option value="gift">礼物</option>
-                            <option value="place">地点</option>
-                            <option value="person">人物</option>
-                            <option value="other">其他</option>
-                        </select>
-                    </div>
-                    <textarea data-key="content" style="height:64px; width:100%; margin-bottom:6px;"></textarea>
-                `;
-                const kindSel = row.querySelector('select[data-key="targetKind"]');
-                if (kindSel) kindSel.value = item.targetKind || 'fact';
-                const factSubtypeSel = row.querySelector('select[data-key="factSubtype"]');
-                if (factSubtypeSel) factSubtypeSel.value = item.factSubtype || 'fact';
-                const stateTypeSel = row.querySelector('select[data-key="stateType"]');
-                if (stateTypeSel) stateTypeSel.value = item.stateType || 'other';
-                const exactNameEl = row.querySelector('input[data-key="exactName"]');
-                if (exactNameEl) exactNameEl.value = item.exactName || '';
-                const entityTypeSel = row.querySelector('select[data-key="entityType"]');
-                if (entityTypeSel) entityTypeSel.value = item.entityType || '';
-                const contentEl = row.querySelector('textarea[data-key="content"]');
-                if (contentEl) contentEl.value = item.content || '';
-                row.dataset.index = String(idx);
-                list.appendChild(row);
-            });
-        }
-        refineModal.classList.remove('hidden');
-        return { ok: true, draftOnly: true };
-    }
-
-    const result = await window.commitRefineDraft(finalContactId, draft, { source: 'refine_summary' });
-    if (result?.ok) showNotification('记忆精炼完成', 1500, 'success');
-    return result;
-};
-
 window.editMemory = function(id) {
-    const memory = ensureMemoriesArray().find(m => String(m.id) === String(id));
+    const memory = window.iphoneSimState.memories.find(m => m.id === id);
     if (!memory) return;
 
-    currentEditingMemoryId = String(id);
+    currentEditingMemoryId = id;
     document.getElementById('edit-memory-content').value = memory.content;
     document.getElementById('edit-memory-modal').classList.remove('hidden');
 };
@@ -3152,10 +1738,9 @@ function handleSaveEditedMemory() {
         return;
     }
 
-    const memory = ensureMemoriesArray().find(m => String(m.id) === String(currentEditingMemoryId));
+    const memory = window.iphoneSimState.memories.find(m => m.id === currentEditingMemoryId);
     if (memory) {
         memory.content = content;
-        memory.updatedAt = Date.now();
         saveConfig();
         renderMemoryList();
         document.getElementById('edit-memory-modal').classList.add('hidden');
@@ -3165,7 +1750,7 @@ function handleSaveEditedMemory() {
 
 window.deleteMemory = function(id) {
     if (confirm('确定要删除这条记忆吗？')) {
-        window.iphoneSimState.memories = ensureMemoriesArray().filter(m => String(m.id) !== String(id));
+        window.iphoneSimState.memories = window.iphoneSimState.memories.filter(m => m.id !== id);
         saveConfig();
         renderMemoryList();
     }
@@ -3266,14 +1851,14 @@ async function generateSummary(contact, messages, range) {
         let summary = data.choices[0].message.content.trim();
 
         if (summary && summary !== '无' && summary !== '无。') {
-            window.addMemoryRecord({
+            window.iphoneSimState.memories.push({
+                id: Date.now(),
                 contactId: contact.id,
                 content: summary,
-                kind: 'short_term',
-                source: 'auto_summary',
-                range: range,
-                importance: 0.72
+                time: Date.now(),
+                range: range
             });
+            saveConfig();
             
             if (!document.getElementById('memory-app').classList.contains('hidden')) {
                 renderMemoryList();
@@ -5155,16 +3740,6 @@ function setupAppsListeners() {
     const closeEditMemoryBtn = document.getElementById('close-edit-memory');
     const saveEditedMemoryBtn = document.getElementById('save-edited-memory-btn');
     const closeMemoryBtn = document.getElementById('close-memory-app');
-    const memoryFilterBtns = document.querySelectorAll('#memory-filter-tabs .memory-filter-btn');
-    const toggleMemorySelectionBtn = document.getElementById('toggle-memory-selection-btn');
-    const selectAllMemoriesBtn = document.getElementById('select-all-memories-btn');
-    const clearSelectedMemoriesBtn = document.getElementById('clear-selected-memories-btn');
-    const refineSelectedMemoriesBtn = document.getElementById('refine-selected-memories-btn');
-    const openManualSummaryBtn = document.getElementById('open-manual-summary-btn');
-    const closeRefineMemoryBtn = document.getElementById('close-refine-memory');
-    const saveRefineMemoryBtn = document.getElementById('save-refine-memory-btn');
-    const addRefineHighlightBtn = document.getElementById('add-refine-highlight-btn');
-    const manualMemoryKind = document.getElementById('manual-memory-kind');
 
     if (closeMemoryBtn) closeMemoryBtn.addEventListener('click', () => document.getElementById('memory-app').classList.add('hidden'));
     if (closeEditMemoryBtn) closeEditMemoryBtn.addEventListener('click', () => editMemoryModal.classList.add('hidden'));
@@ -5172,115 +3747,18 @@ function setupAppsListeners() {
 
     if (addMemoryBtn) addMemoryBtn.addEventListener('click', () => {
         document.getElementById('manual-memory-content').value = '';
-        const kindEl = document.getElementById('manual-memory-kind');
-        const factSubtypeEl = document.getElementById('manual-memory-fact-subtype');
-        const stateTypeEl = document.getElementById('manual-memory-state-type');
-        const importanceEl = document.getElementById('manual-memory-importance');
-        if (kindEl) kindEl.value = 'short_term';
-        if (factSubtypeEl) factSubtypeEl.value = 'fact';
-        if (stateTypeEl) stateTypeEl.value = 'other';
-        if (importanceEl) importanceEl.value = '';
-        syncManualMemoryFormByKind();
         addMemoryModal.classList.remove('hidden');
     });
     if (closeAddMemoryBtn) closeAddMemoryBtn.addEventListener('click', () => addMemoryModal.classList.add('hidden'));
     if (saveManualMemoryBtn) saveManualMemoryBtn.addEventListener('click', handleSaveManualMemory);
 
-    if (manualSummaryBtn) manualSummaryBtn.addEventListener('click', async () => {
-        if (!memorySelectionMode) {
-            window.toggleMemorySelectionMode(true);
-            showNotification('已进入批量精炼模式，请选择记忆', 1800);
-            return;
-        }
-        const ids = Array.from(selectedMemoryIds);
-        if (ids.length === 0) {
-            showNotification('请先选择要精炼的记忆', 1600);
-            return;
-        }
-        await window.refineMemories(window.iphoneSimState.currentChatContactId, 'batch', ids);
-    });
+    if (manualSummaryBtn) manualSummaryBtn.addEventListener('click', openManualSummary);
     if (closeManualSummaryBtn) closeManualSummaryBtn.addEventListener('click', () => manualSummaryModal.classList.add('hidden'));
     if (doManualSummaryBtn) doManualSummaryBtn.addEventListener('click', handleManualSummary);
-    if (openManualSummaryBtn) openManualSummaryBtn.addEventListener('click', openManualSummary);
 
     if (memorySettingsBtn) memorySettingsBtn.addEventListener('click', openMemorySettings);
     if (closeMemorySettingsBtn) closeMemorySettingsBtn.addEventListener('click', () => memorySettingsModal.classList.add('hidden'));
     if (saveMemorySettingsBtn) saveMemorySettingsBtn.addEventListener('click', handleSaveMemorySettings);
-    if (manualMemoryKind) manualMemoryKind.addEventListener('change', syncManualMemoryFormByKind);
-
-    if (memoryFilterBtns && memoryFilterBtns.length > 0) {
-        memoryFilterBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                const mode = btn.getAttribute('data-filter-mode') || 'all';
-                window.setMemoryFilterMode(mode);
-            });
-        });
-    }
-    if (toggleMemorySelectionBtn) toggleMemorySelectionBtn.addEventListener('click', () => window.toggleMemorySelectionMode());
-    if (selectAllMemoriesBtn) selectAllMemoriesBtn.addEventListener('click', () => window.selectAllVisibleMemories());
-    if (clearSelectedMemoriesBtn) clearSelectedMemoriesBtn.addEventListener('click', () => window.clearSelectedMemories());
-    if (refineSelectedMemoriesBtn) {
-        refineSelectedMemoriesBtn.addEventListener('click', async () => {
-            const ids = Array.from(selectedMemoryIds);
-            if (ids.length === 0) {
-                showNotification('请先选择记忆', 1600);
-                return;
-            }
-            await window.refineMemories(window.iphoneSimState.currentChatContactId, 'batch', ids);
-        });
-    }
-    if (closeRefineMemoryBtn) closeRefineMemoryBtn.addEventListener('click', window.closeRefineModal);
-    if (saveRefineMemoryBtn) saveRefineMemoryBtn.addEventListener('click', window.saveRefineDraftFromModal);
-    if (addRefineHighlightBtn) {
-        addRefineHighlightBtn.addEventListener('click', () => {
-            const list = document.getElementById('refine-highlights-list');
-            if (!list) return;
-            const row = document.createElement('div');
-            row.className = 'refine-highlight-item';
-            row.innerHTML = `
-                <div style="display:flex; gap:8px; margin-bottom:6px;">
-                    <select data-key="targetKind" style="flex:1;">
-                        <option value="fact">具体信息</option>
-                        <option value="state">状态</option>
-                        <option value="long_term">长期</option>
-                        <option value="short_term">短期</option>
-                    </select>
-                    <input data-key="importance" type="number" min="0" max="1" step="0.05" style="width:80px;" value="0.7">
-                </div>
-                <div style="display:flex; gap:8px; margin-bottom:6px;">
-                    <select data-key="factSubtype" style="flex:1;">
-                        <option value="fact">事实</option>
-                        <option value="preference">偏好</option>
-                        <option value="dislike">禁忌</option>
-                        <option value="plan">计划</option>
-                        <option value="named_entity">特定名称</option>
-                    </select>
-                    <select data-key="stateType" style="flex:1;">
-                        <option value="other">状态类型</option>
-                        <option value="health">健康</option>
-                        <option value="schedule">日程</option>
-                        <option value="emotion">情绪</option>
-                        <option value="relationship">关系</option>
-                    </select>
-                </div>
-                <div style="display:flex; gap:8px; margin-bottom:6px;">
-                    <input data-key="exactName" type="text" style="flex:1;" placeholder="特定名称(可选)">
-                    <select data-key="entityType" style="width:120px;">
-                        <option value="">实体类型</option>
-                        <option value="item">物品</option>
-                        <option value="food">食物</option>
-                        <option value="gift">礼物</option>
-                        <option value="place">地点</option>
-                        <option value="person">人物</option>
-                        <option value="other">其他</option>
-                    </select>
-                </div>
-                <textarea data-key="content" style="height:64px; width:100%; margin-bottom:6px;" placeholder="输入提取的重要信息"></textarea>
-            `;
-            list.appendChild(row);
-        });
-    }
-    syncManualMemoryFormByKind();
 
     const closeLocationBtn = document.getElementById('close-location-app');
     const itinerarySettingsBtn = document.getElementById('itinerary-settings-btn');

@@ -93,7 +93,6 @@ const state = {
     },
     moments: [], // { id, contactId, content, images: [], time, likes: [], comments: [] }
     memories: [], // { id, contactId, content, time }
-    memorySchemaVersion: 2,
     defaultVirtualImageUrl: '',
     wallet: {
         balance: 0.00,
@@ -505,189 +504,6 @@ function saveConfig() {
     }
 }
 
-function buildDefaultMemoryProfile() {
-    return {
-        shortTermDays: 7,
-        longTermLimit: 100,
-        aiLimitDefault: 12,
-        namedBackfilled: false
-    };
-}
-
-function normalizeMemoryText(text) {
-    return String(text || '')
-        .replace(/\s+/g, ' ')
-        .trim();
-}
-
-function migrateMemoriesToV2() {
-    try {
-        if (!Array.isArray(state.memories)) state.memories = [];
-        if (!Array.isArray(state.contacts)) state.contacts = [];
-
-        const now = Date.now();
-        const dayMs = 24 * 60 * 60 * 1000;
-        const validKinds = new Set(['short_term', 'long_term', 'state', 'fact']);
-        const validSources = new Set([
-            'manual',
-            'auto_summary',
-            'meeting',
-            'voice_call',
-            'forum',
-            'ai_action',
-            'migration',
-            'chat_extract',
-            'refine_summary'
-        ]);
-
-        state.memories = state.memories.map((raw, index) => {
-            const m = raw && typeof raw === 'object' ? { ...raw } : {};
-            const ts = Number(m.createdAt || m.updatedAt || m.time || now);
-            const safeTs = Number.isFinite(ts) ? ts : now;
-            const content = normalizeMemoryText(m.content || m.text || '');
-            const kind = validKinds.has(m.kind)
-                ? m.kind
-                : (m.stateActive || m.stateType ? 'state' : (m.factSubtype || m.exactName ? 'fact' : 'short_term'));
-            const source = validSources.has(m.source) ? m.source : 'manual';
-
-            const migrated = {
-                id: m.id != null ? m.id : `${safeTs}_${index}`,
-                contactId: m.contactId,
-                content: content,
-                createdAt: Number.isFinite(Number(m.createdAt)) ? Number(m.createdAt) : safeTs,
-                updatedAt: Number.isFinite(Number(m.updatedAt)) ? Number(m.updatedAt) : safeTs,
-                kind,
-                source,
-                importance: Number.isFinite(Number(m.importance)) ? Number(m.importance) : (kind === 'long_term' ? 0.85 : 0.5),
-                pinned: !!m.pinned,
-                title: m.title || '',
-                tags: Array.isArray(m.tags) ? m.tags : [],
-                range: m.range || '',
-                refinedFrom: Array.isArray(m.refinedFrom) ? m.refinedFrom : []
-            };
-
-            if (kind === 'fact') {
-                migrated.factSubtype = m.factSubtype || (m.exactName ? 'named_entity' : 'fact');
-            }
-
-            if (kind === 'state') {
-                const stateType = m.stateType || 'other';
-                let expiresAt = Number.isFinite(Number(m.expiresAt)) ? Number(m.expiresAt) : null;
-                if (!expiresAt && !m.endedAt) {
-                    let ttl = 7 * dayMs;
-                    if (stateType === 'emotion') ttl = 3 * dayMs;
-                    if (stateType === 'schedule') ttl = 14 * dayMs;
-                    if (stateType === 'relationship') ttl = 30 * dayMs;
-                    expiresAt = safeTs + ttl;
-                }
-                migrated.stateType = stateType;
-                migrated.stateActive = m.stateActive !== false && !m.endedAt;
-                migrated.expiresAt = expiresAt;
-                migrated.endedAt = Number.isFinite(Number(m.endedAt)) ? Number(m.endedAt) : null;
-            }
-
-            if (m.exactName) migrated.exactName = String(m.exactName);
-            if (m.entityType) migrated.entityType = String(m.entityType);
-            if (Array.isArray(m.aliases)) migrated.aliases = m.aliases.map(a => String(a)).filter(Boolean);
-            if (Number.isFinite(Number(m.confidence))) migrated.confidence = Number(m.confidence);
-            if (m.sourceMessageId != null) migrated.sourceMessageId = m.sourceMessageId;
-            if (m.sourceMessageType != null) migrated.sourceMessageType = String(m.sourceMessageType);
-            if (m.entityId) migrated.entityId = String(m.entityId);
-
-            return migrated;
-        });
-
-        for (const contact of state.contacts) {
-            if (!contact || typeof contact !== 'object') continue;
-            if (!Array.isArray(contact.userPerception)) contact.userPerception = [];
-            if (!Array.isArray(contact.importantStates)) contact.importantStates = [];
-            if (!contact.memoryProfile || typeof contact.memoryProfile !== 'object') {
-                contact.memoryProfile = buildDefaultMemoryProfile();
-            } else {
-                const defaults = buildDefaultMemoryProfile();
-                Object.keys(defaults).forEach(key => {
-                    if (contact.memoryProfile[key] === undefined || contact.memoryProfile[key] === null) {
-                        contact.memoryProfile[key] = defaults[key];
-                    }
-                });
-            }
-        }
-
-        if (state.memorySchemaVersion !== 2) {
-            const memoryIndex = new Set(
-                state.memories.map(m => `${String(m.contactId)}|${m.kind}|${normalizeMemoryText(m.content)}`)
-            );
-
-            for (const contact of state.contacts) {
-                if (!contact || typeof contact !== 'object') continue;
-                const cid = contact.id;
-                if (cid == null) continue;
-
-                if (Array.isArray(contact.importantStates)) {
-                    contact.importantStates.forEach((item, i) => {
-                        const content = normalizeMemoryText(item);
-                        if (!content) return;
-                        const key = `${String(cid)}|state|${content}`;
-                        if (memoryIndex.has(key)) return;
-                        const createdAt = now - (contact.importantStates.length - i) * 1000;
-                        state.memories.push({
-                            id: `${cid}_state_${i}_${createdAt}`,
-                            contactId: cid,
-                            content,
-                            createdAt,
-                            updatedAt: createdAt,
-                            kind: 'state',
-                            stateType: 'other',
-                            stateActive: true,
-                            expiresAt: createdAt + 7 * dayMs,
-                            endedAt: null,
-                            source: 'migration',
-                            importance: 0.7,
-                            pinned: false,
-                            title: '',
-                            tags: [],
-                            range: '',
-                            refinedFrom: []
-                        });
-                        memoryIndex.add(key);
-                    });
-                }
-
-                if (Array.isArray(contact.userPerception)) {
-                    contact.userPerception.forEach((item, i) => {
-                        const content = normalizeMemoryText(item);
-                        if (!content) return;
-                        const key = `${String(cid)}|fact|${content}`;
-                        if (memoryIndex.has(key)) return;
-                        const createdAt = now - (contact.userPerception.length - i) * 1000;
-                        state.memories.push({
-                            id: `${cid}_fact_${i}_${createdAt}`,
-                            contactId: cid,
-                            content,
-                            createdAt,
-                            updatedAt: createdAt,
-                            kind: 'fact',
-                            factSubtype: 'fact',
-                            source: 'migration',
-                            importance: 0.6,
-                            pinned: false,
-                            title: '',
-                            tags: [],
-                            range: '',
-                            refinedFrom: []
-                        });
-                        memoryIndex.add(key);
-                    });
-                }
-            }
-        }
-
-        state.memorySchemaVersion = 2;
-    } catch (error) {
-        console.error('[memory migrate] failed:', error);
-    }
-}
-
 async function loadConfig() {
     try {
         let loadedState = await localforage.getItem('iphoneSimConfig');
@@ -743,7 +559,6 @@ async function loadConfig() {
             if (!state.userPersonas) state.userPersonas = [];
             if (!state.moments) state.moments = [];
             if (!state.memories) state.memories = [];
-            if (!state.memorySchemaVersion) state.memorySchemaVersion = 1;
             if (!state.defaultVirtualImageUrl) state.defaultVirtualImageUrl = '';
             if (state.showStatusBar === undefined) state.showStatusBar = true;
             if (!state.iconColors) state.iconColors = {};
@@ -807,8 +622,6 @@ async function loadConfig() {
             if (state.currentStickerCategoryId !== 'all' && !state.stickerCategories.find(c => c.id === state.currentStickerCategoryId)) {
                 state.currentStickerCategoryId = 'all';
             }
-
-            migrateMemoriesToV2();
         }
     } catch (e) {
         console.error('Operation failed. See details below.', e);

@@ -487,13 +487,6 @@ function sendMessage(text, isUser, type = 'text', description = null, targetCont
     }
     
     window.iphoneSimState.chatHistory[contactId].push(msg);
-    if (typeof window.extractSpecificInfoFromMessage === 'function') {
-        try {
-            window.extractSpecificInfoFromMessage(msg, contactId);
-        } catch (extractErr) {
-            console.warn('[memory-extract] sendMessage extract failed', extractErr);
-        }
-    }
 
     if (!isUser && type === 'music_listen_invite' && typeof window.openMusicListenInvitePrompt === 'function') {
         try {

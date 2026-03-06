@@ -544,17 +544,17 @@
                 summaryText = String(data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '').trim();
                 if (!summaryText) throw new Error('empty summary');
 
-                if (typeof window.addMemoryRecord === 'function') {
-                    window.addMemoryRecord({
-                        contactId,
-                        content: `【直播连线总结】${summaryText}`,
-                        kind: 'short_term',
-                        source: 'forum',
-                        title: '直播连线总结',
-                        range: `${room.host || '我方'} vs ${(room.pk.opponent && room.pk.opponent.name) || '对方'}`,
-                        importance: 0.78
-                    });
-                }
+                if (!window.iphoneSimState.memories) window.iphoneSimState.memories = [];
+                window.iphoneSimState.memories.push({
+                    id: Date.now(),
+                    contactId,
+                    content: `【直播连线总结】${summaryText}`,
+                    time: Date.now(),
+                    type: '直播',
+                    title: '直播连线总结',
+                    range: `${room.host || '我方'} vs ${(room.pk.opponent && room.pk.opponent.name) || '对方'}`
+                });
+                if (typeof saveConfig === 'function') saveConfig();
                 window.syncForumEventToChat(contactId, `[直播连线总结] ${summaryText}`, 'system', 'live_sync_hidden');
             } catch (err) {
                 const msg = (err && err.message) ? err.message : '未知错误';
