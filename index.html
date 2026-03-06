@@ -2365,6 +2365,8 @@
                     border-bottom: 1px solid rgba(0,0,0,0.1);
                     padding-bottom: 15px;
                     margin-bottom: 15px;
+                    align-items: center;
+                    gap: 8px;
                 }
 
                 #memory-app .ref-id {
@@ -2380,6 +2382,312 @@
                     border: 1px solid var(--text-dark);
                     padding: 3px 8px;
                     border-radius: 20px;
+                }
+
+                #memory-app .memory-filter-bar {
+                    width: 100%;
+                    max-width: 500px;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    margin: -25px 0 20px;
+                }
+
+                #memory-app .memory-filter-btn {
+                    border: 1px solid rgba(0,0,0,0.12);
+                    background: rgba(255,255,255,0.8);
+                    border-radius: 16px;
+                    padding: 6px 10px;
+                    font-size: 11px;
+                    letter-spacing: 0.5px;
+                    color: #666;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+
+                #memory-app .memory-filter-btn.is-active {
+                    background: #111;
+                    color: #fff;
+                    border-color: #111;
+                }
+
+                #memory-app .memory-tag-wrap {
+                    display: flex;
+                    gap: 5px;
+                    flex-wrap: wrap;
+                    justify-content: flex-end;
+                }
+
+                #memory-app .memory-tag-badge {
+                    border: 1px solid #ddd;
+                    border-radius: 999px;
+                    padding: 2px 8px;
+                    font-size: 9px;
+                    letter-spacing: 0.6px;
+                    color: #666;
+                    background: #fff;
+                }
+
+                #memory-app .memory-tag-badge.tag-state {
+                    border-color: #ff9f0a;
+                    color: #c26c00;
+                    background: #fff8ec;
+                }
+
+                #memory-app .memory-tag-badge.tag-fact {
+                    border-color: #4c8bf5;
+                    color: #2257b5;
+                    background: #f2f7ff;
+                }
+
+                #memory-app .memory-tag-badge.tag-refined {
+                    border-color: #7f56d9;
+                    color: #6c43ca;
+                    background: #f7f2ff;
+                }
+
+                #memory-app .memory-tag-badge.tag-short_term {
+                    border-color: #10b981;
+                    color: #067a57;
+                    background: #eefcf6;
+                }
+
+                #memory-app .memory-tag-badge.tag-long_term {
+                    border-color: #64748b;
+                    color: #334155;
+                    background: #f8fafc;
+                }
+
+                #memory-app .memory-state-pill {
+                    border: 1px solid #ddd;
+                    border-radius: 999px;
+                    padding: 2px 8px;
+                    font-size: 9px;
+                    letter-spacing: 0.6px;
+                    color: #666;
+                }
+
+                #memory-app .memory-state-pill.active {
+                    border-color: #ff9f0a;
+                    color: #c26c00;
+                    background: #fff8ec;
+                }
+
+                #memory-app .memory-state-pill.expired {
+                    border-color: #999;
+                    color: #777;
+                    background: #f7f7f7;
+                }
+
+                #memory-app .memory-state-pill.resolved {
+                    border-color: #10b981;
+                    color: #067a57;
+                    background: #eefcf6;
+                }
+
+                #memory-app .memory-candidate-panel {
+                    width: 100%;
+                    max-width: 500px;
+                    background: rgba(255,255,255,0.85);
+                    border: 1px solid rgba(0,0,0,0.08);
+                    border-radius: 10px;
+                    padding: 14px;
+                    margin-bottom: 20px;
+                }
+
+                #memory-app .memory-candidate-header {
+                    font-size: 12px;
+                    color: #666;
+                    letter-spacing: 0.4px;
+                    margin-bottom: 10px;
+                }
+
+                #memory-app .memory-candidate-card {
+                    border: 1px solid rgba(0,0,0,0.08);
+                    border-radius: 8px;
+                    background: #fff;
+                    padding: 10px;
+                    margin-bottom: 8px;
+                }
+
+                #memory-app .memory-candidate-content {
+                    font-size: 13px;
+                    color: #333;
+                    line-height: 1.5;
+                    margin-bottom: 8px;
+                    white-space: pre-wrap;
+                }
+
+                #memory-app .memory-candidate-meta {
+                    font-size: 11px;
+                    color: #888;
+                    margin-bottom: 8px;
+                }
+
+                #memory-app .memory-candidate-actions {
+                    display: flex;
+                    gap: 8px;
+                }
+
+                #memory-app .memory-candidate-actions button {
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    background: #fff;
+                    padding: 4px 8px;
+                    font-size: 11px;
+                    cursor: pointer;
+                }
+
+                #memory-app .memory-candidate-actions .approve-btn {
+                    border-color: #10b981;
+                    color: #067a57;
+                    background: #eefcf6;
+                }
+
+                #memory-app .memory-candidate-actions .reject-btn {
+                    border-color: #ef4444;
+                    color: #b91c1c;
+                    background: #fff1f1;
+                }
+
+                #memory-app .memory-setting-hint {
+                    margin-top: 6px;
+                    font-size: 12px;
+                    color: #7c7c7c;
+                    line-height: 1.45;
+                }
+
+                #memory-app .memory-fact-tip {
+                    margin-bottom: 10px;
+                    border: 1px solid #dbeafe;
+                    border-radius: 10px;
+                    background: #f5f9ff;
+                    padding: 10px 12px;
+                    font-size: 12px;
+                    color: #1e3a8a;
+                }
+
+                #memory-app .memory-refine-toolbar {
+                    display: flex;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    margin-bottom: 12px;
+                    padding: 8px;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 10px;
+                    background: #fafafa;
+                }
+
+                #memory-app .memory-refine-toolbar .summary {
+                    flex: 1;
+                    font-size: 12px;
+                    color: #666;
+                }
+
+                #memory-app .memory-refine-toolbar button {
+                    border: 1px solid #d1d5db;
+                    background: #fff;
+                    color: #374151;
+                    border-radius: 8px;
+                    padding: 6px 10px;
+                    font-size: 12px;
+                    cursor: pointer;
+                }
+
+                #memory-app .memory-refine-toolbar button.primary {
+                    border-color: #2563eb;
+                    color: #1d4ed8;
+                    background: #eff6ff;
+                }
+
+                #memory-app .memory-refine-toolbar button:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+
+                #memory-app .memory-refine-shortcuts {
+                    display: inline-flex;
+                    gap: 6px;
+                    flex-wrap: wrap;
+                }
+
+                #memory-app .memory-refine-shortcuts button {
+                    padding: 5px 8px;
+                    font-size: 11px;
+                }
+
+                #memory-app .memory-select-wrap {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    margin-right: 8px;
+                    font-size: 11px;
+                    color: #555;
+                }
+
+                #memory-app .memory-refine-confirm-summary {
+                    font-size: 13px;
+                    color: #444;
+                    line-height: 1.6;
+                    margin-bottom: 14px;
+                }
+
+                #memory-app .memory-refine-confirm-actions {
+                    display: flex;
+                    gap: 8px;
+                }
+
+                #memory-app .memory-refine-confirm-actions button {
+                    flex: 1;
+                }
+
+                #memory-app .memory-tags-input {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    margin-top: 8px;
+                }
+
+                #memory-app .memory-tag-option {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    font-size: 12px;
+                    color: #666;
+                    padding: 4px 8px;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 12px;
+                }
+
+                #memory-app .memory-state-options {
+                    margin-top: 10px;
+                    padding: 10px;
+                    border: 1px dashed #d1d5db;
+                    border-radius: 8px;
+                    background: #fafafa;
+                }
+
+                #memory-app .memory-state-options-row {
+                    display: flex;
+                    gap: 10px;
+                    align-items: center;
+                    margin-bottom: 8px;
+                }
+
+                #memory-app .memory-state-options-row label {
+                    font-size: 12px;
+                    color: #666;
+                    min-width: 70px;
+                }
+
+                #memory-app .memory-state-options-row select,
+                #memory-app .memory-state-options-row input {
+                    flex: 1;
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    padding: 6px 8px;
+                    font-size: 12px;
                 }
 
                 #memory-app .card-body h3 {
@@ -2450,6 +2758,37 @@
                         <p class="header-desc">(^_−)−☆</p>
                     </div>
 
+                    <div id="memory-filter-bar" class="memory-filter-bar">
+                        <button class="memory-filter-btn is-active" data-filter="all">全部</button>
+                        <button class="memory-filter-btn" data-filter="refined">精炼</button>
+                        <button class="memory-filter-btn" data-filter="short_term">短期</button>
+                        <button class="memory-filter-btn" data-filter="long_term">长期</button>
+                        <button class="memory-filter-btn" data-filter="state">状态</button>
+                        <button class="memory-filter-btn" data-filter="fact">具体信息</button>
+                        <button class="memory-filter-btn" data-filter="candidate">待确认</button>
+                    </div>
+
+                    <div id="memory-refine-toolbar" class="memory-refine-toolbar">
+                        <button id="memory-select-toggle-btn">开启多选</button>
+                        <div class="memory-refine-shortcuts">
+                            <button id="memory-select-all-btn">全选当前筛选</button>
+                            <button id="memory-select-recent-btn">最近10条</button>
+                            <button id="memory-select-invert-btn">反选</button>
+                            <button id="memory-select-clear-btn">清空</button>
+                        </div>
+                        <div class="summary" id="memory-refine-summary">已选 0 条记忆，可一键精炼归档</div>
+                        <button id="memory-refine-selected-btn" class="primary" disabled>精炼归档</button>
+                    </div>
+
+                    <div class="memory-fact-tip">
+                        具体信息说明：涉及“番茄牛肉面、白玫瑰花束”这类具体名称时，后续回复必须逐字一致，不可改写。
+                    </div>
+
+                    <div id="memory-candidate-panel" class="memory-candidate-panel" style="display: none;">
+                        <div class="memory-candidate-header">待确认记忆 (<span id="memory-candidate-count">0</span>)</div>
+                        <div id="memory-candidate-list"></div>
+                    </div>
+
                     <div id="memory-list" class="archive-list">
                         <!-- 记忆卡片列表动态生成 -->
                     </div>
@@ -2472,6 +2811,32 @@
                             <label>记忆内容</label>
                             <textarea id="manual-memory-content" placeholder="输入记忆内容..." style="height: 150px;"></textarea>
                         </div>
+                        <div class="setting-group">
+                            <label>记忆标签</label>
+                            <div id="manual-memory-tags" class="memory-tags-input">
+                                <label class="memory-tag-option"><input type="checkbox" value="short_term">短期</label>
+                                <label class="memory-tag-option"><input type="checkbox" value="long_term" checked>长期</label>
+                                <label class="memory-tag-option"><input type="checkbox" value="state">状态</label>
+                                <label class="memory-tag-option"><input type="checkbox" value="fact">具体信息</label>
+                                <label class="memory-tag-option"><input type="checkbox" value="refined">精炼</label>
+                            </div>
+                        </div>
+                        <div id="manual-memory-state-options" class="memory-state-options" style="display: none;">
+                            <div class="memory-state-options-row">
+                                <label>状态类型</label>
+                                <select id="manual-memory-state-reason">
+                                    <option value="health">健康</option>
+                                    <option value="exam">考试</option>
+                                    <option value="travel">出行</option>
+                                    <option value="emotion">情绪</option>
+                                    <option value="other">其他</option>
+                                </select>
+                            </div>
+                            <div class="memory-state-options-row" style="margin-bottom: 0;">
+                                <label>有效天数</label>
+                                <input type="number" id="manual-memory-state-ttl" min="1" value="7">
+                            </div>
+                        </div>
                         <button id="save-manual-memory-btn" class="ios-btn-block">保存</button>
                     </div>
                 </div>
@@ -2488,6 +2853,32 @@
                         <div class="setting-group">
                             <label>记忆内容</label>
                             <textarea id="edit-memory-content" placeholder="输入记忆内容..." style="height: 150px;"></textarea>
+                        </div>
+                        <div class="setting-group">
+                            <label>记忆标签</label>
+                            <div id="edit-memory-tags" class="memory-tags-input">
+                                <label class="memory-tag-option"><input type="checkbox" value="short_term">短期</label>
+                                <label class="memory-tag-option"><input type="checkbox" value="long_term" checked>长期</label>
+                                <label class="memory-tag-option"><input type="checkbox" value="state">状态</label>
+                                <label class="memory-tag-option"><input type="checkbox" value="fact">具体信息</label>
+                                <label class="memory-tag-option"><input type="checkbox" value="refined">精炼</label>
+                            </div>
+                        </div>
+                        <div id="edit-memory-state-options" class="memory-state-options" style="display: none;">
+                            <div class="memory-state-options-row">
+                                <label>状态类型</label>
+                                <select id="edit-memory-state-reason">
+                                    <option value="health">健康</option>
+                                    <option value="exam">考试</option>
+                                    <option value="travel">出行</option>
+                                    <option value="emotion">情绪</option>
+                                    <option value="other">其他</option>
+                                </select>
+                            </div>
+                            <div class="memory-state-options-row" style="margin-bottom: 0;">
+                                <label>有效天数</label>
+                                <input type="number" id="edit-memory-state-ttl" min="1" value="7">
+                            </div>
                         </div>
                         <button id="save-edited-memory-btn" class="ios-btn-block">保存修改</button>
                     </div>
@@ -2511,9 +2902,9 @@
                             <input type="number" id="summary-end-index" placeholder="例如: 10" min="1">
                         </div>
                         <div style="font-size: 12px; color: #888; margin-bottom: 15px;">
-                            将总结指定范围内的聊天记录。当前共有 <span id="total-chat-count">0</span> 条消息。
+                            将对指定范围做详细总结。当前共有 <span id="total-chat-count">0</span> 条消息。
                         </div>
-                        <button id="do-manual-summary-btn" class="ios-btn-block">开始总结</button>
+                        <button id="do-manual-summary-btn" class="ios-btn-block">开始详细总结</button>
                     </div>
                 </div>
             </div>
@@ -2527,10 +2918,66 @@
                     </div>
                     <div class="modal-body">
                         <div class="setting-group">
-                            <label>发送最近几条记忆给AI</label>
+                            <label>每次回复最多带入几条记忆（0=不带入）</label>
                             <input type="number" id="modal-memory-send-limit" placeholder="默认3条" min="0">
+                            <div class="memory-setting-hint">建议 5~8，太多会让回复啰嗦。</div>
+                        </div>
+                        <div class="setting-group">
+                            <label>自动记忆方式</label>
+                            <select id="modal-memory-extract-mode">
+                                <option value="hybrid">混合确认</option>
+                                <option value="auto">全自动</option>
+                                <option value="manual">手动优先</option>
+                            </select>
+                            <div class="memory-setting-hint">混合确认：先放待确认，再由你决定是否存档。全自动：系统自动存档。手动优先：只在你手动操作时存档。</div>
+                        </div>
+                        <div class="setting-group">
+                            <label>带入比例（短期/长期/状态/具体信息/精炼/总数）</label>
+                            <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;">
+                                <input type="number" id="modal-memory-quota-short-term" min="0" placeholder="短期">
+                                <input type="number" id="modal-memory-quota-long-term" min="0" placeholder="长期">
+                                <input type="number" id="modal-memory-quota-state" min="0" placeholder="状态">
+                                <input type="number" id="modal-memory-quota-fact" min="0" placeholder="信息">
+                                <input type="number" id="modal-memory-quota-refined" min="0" placeholder="精炼">
+                                <input type="number" id="modal-memory-quota-max-total" min="1" placeholder="总量">
+                            </div>
+                            <div class="memory-setting-hint">比如“状态=2”表示最多带入 2 条状态记忆。</div>
+                        </div>
+                        <div class="setting-group">
+                            <label>状态TTL天数 (健/考/行/情/其)</label>
+                            <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px;">
+                                <input type="number" id="modal-memory-ttl-health" min="1" placeholder="健康">
+                                <input type="number" id="modal-memory-ttl-exam" min="1" placeholder="考试">
+                                <input type="number" id="modal-memory-ttl-travel" min="1" placeholder="出行">
+                                <input type="number" id="modal-memory-ttl-emotion" min="1" placeholder="情绪">
+                                <input type="number" id="modal-memory-ttl-other" min="1" placeholder="其他">
+                            </div>
+                        </div>
+                        <div class="setting-group">
+                            <label>相似内容合并强度（越高越严格）</label>
+                            <input type="number" id="modal-memory-dedupe-threshold" min="0.3" max="0.99" step="0.01">
+                            <div class="memory-setting-hint">推荐 0.7~0.85，避免重复记忆越积越多。</div>
                         </div>
                         <button id="save-memory-settings-btn" class="ios-btn-block">保存</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="memory-refine-confirm-modal" class="modal hidden">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>精炼归档确认</h3>
+                        <button class="close-btn" id="close-memory-refine-confirm">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="memory-refine-confirm-summary">
+                            已选择 <span id="memory-refine-selected-count-modal">0</span> 条记忆。
+                            将生成 1 条精炼总览，并提取关键名称为具体信息记忆存档。
+                        </div>
+                        <div class="memory-refine-confirm-actions">
+                            <button id="cancel-memory-refine-confirm">取消</button>
+                            <button id="confirm-memory-refine-btn" class="ios-btn-block">确认精炼归档</button>
+                        </div>
                     </div>
                 </div>
             </div>

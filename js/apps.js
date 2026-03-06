@@ -3,6 +3,9 @@
 let postMomentImages = [];
 let currentEditingPersonaId = null;
 let currentEditingMemoryId = null;
+let currentMemoryFilter = 'all';
+let memorySelectMode = false;
+let selectedMemoryIds = new Set();
 
 // --- 朋友圈功能 ---
 
@@ -1525,6 +1528,1749 @@ function updateTransferStatus(transferId, status) {
 
 // --- 记忆功能 ---
 
+const MEMORY_VALID_TAGS = ['refined', 'short_term', 'long_term', 'state', 'fact'];
+const MEMORY_FILTER_TO_TAG = {
+    refined: 'refined',
+    short_term: 'short_term',
+    long_term: 'long_term',
+    state: 'state',
+    fact: 'fact'
+};
+const MEMORY_TAG_LABELS = {
+    refined: 'REFINED',
+    short_term: 'SHORT',
+    long_term: 'LONG',
+    state: 'STATE',
+    fact: 'FACT'
+};
+const FACT_SOURCE_TYPES = ['delivery_share', 'shopping_gift', 'gift_card', 'user_explicit_text', 'refine_extract'];
+const CANDIDATE_SOURCE_LABELS = {
+    auto_summary: '自动总结',
+    call_summary: '通话总结',
+    ai_action: '聊天动作'
+};
+const STATE_REASON_LABELS = {
+    health: '健康',
+    exam: '考试',
+    travel: '出行',
+    emotion: '情绪',
+    other: '其他'
+};
+const STATE_TENSE_KEYWORDS = ['正在', '最近', '这几天', '目前', '本周', '这段时间', '刚开始'];
+const STATE_RULE_KEYWORDS = {
+    health: ['生病', '发烧', '感冒', '不舒服', '疼', '生理期', '例假'],
+    exam: ['考试周', '期末', '备考', '复习', '答辩', 'ddl', 'deadline'],
+    travel: ['出差', '外地', '旅行', '旅游', '高铁', '飞机', '赶路'],
+    emotion: ['焦虑', '低落', '压力大', '崩', 'emo', '情绪不好']
+};
+const STATE_RESOLVE_KEYWORDS = [
+    '好了',
+    '恢复了',
+    '结束了',
+    '过去了',
+    '不疼了',
+    '不发烧了',
+    '考完了',
+    '回来了'
+];
+const STATE_RESOLVE_REASON_HINTS = {
+    exam: ['考完了', '答辩完', 'ddl结束', 'deadline过了', '期末结束'],
+    travel: ['回来了', '到家了', '回到家', '出差结束', '旅程结束'],
+    health: ['好了', '恢复了', '不发烧了', '不疼了', '退烧了', '痊愈'],
+    emotion: ['好多了', '不焦虑了', '不emo了', '缓过来了', '心情好了']
+};
+const STATE_NEGATIVE_PATTERNS = [
+    /并没有/,
+    /没有/,
+    /不是/,
+    /没在/,
+    /不在/,
+    /没生病/,
+    /没发烧/,
+    /没感冒/,
+    /不焦虑/,
+    /不难受/,
+    /不出差/,
+    /不考试/,
+    /\bnot\b/i
+];
+const STATE_GUESS_PATTERNS = [/是不是/, /你在不在/, /我猜/, /\bguess\b/i, /\bmaybe\b/i];
+const STATE_GENERIC_EXCLUDE_PATTERNS = [/有点忙/, /有点累/, /有点困/, /太忙了/];
+const STATE_EXTRACT_PROCESSED_MSG_LIMIT = 500;
+const processedStateExtractMessageIds = new Set();
+
+function escapeHtml(text) {
+    return String(text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function normalizeStateExtractText(text) {
+    const normalizedWidth = String(text || '').replace(/[\uFF01-\uFF5E]/g, ch => {
+        return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+    }).replace(/\u3000/g, ' ');
+    return normalizedWidth
+        .replace(/\u3000/g, ' ')
+        .replace(/[，。！？；：]/g, match => ({ '，': ',', '。': '.', '！': '!', '？': '?', '；': ';', '：': ':' }[match] || match))
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function collectMatchedKeywords(sourceText, keywords = []) {
+    const text = String(sourceText || '').toLowerCase();
+    return keywords.filter(keyword => text.includes(String(keyword).toLowerCase()));
+}
+
+function containsAnyKeyword(sourceText, keywords = []) {
+    return collectMatchedKeywords(sourceText, keywords).length > 0;
+}
+
+function stripStateLeadingSubject(text) {
+    return String(text || '')
+        .replace(/^(我|用户|我这边|我这儿|本人|最近我|这几天我|目前我)\s*/g, '')
+        .replace(/^(现在|最近|这几天|目前|本周|这段时间)\s*/g, '')
+        .trim();
+}
+
+function inferResolveReasonType(matchedKeywords = []) {
+    const normalizedHits = Array.isArray(matchedKeywords)
+        ? matchedKeywords.map(item => String(item || '').toLowerCase())
+        : [];
+    if (normalizedHits.length === 0) return 'other';
+    const reasonOrder = ['health', 'exam', 'travel', 'emotion'];
+    for (const reason of reasonOrder) {
+        const hints = Array.isArray(STATE_RESOLVE_REASON_HINTS[reason]) ? STATE_RESOLVE_REASON_HINTS[reason] : [];
+        const loweredHints = hints.map(item => String(item || '').toLowerCase());
+        if (normalizedHits.some(hit => loweredHints.some(hint => hit.includes(hint) || hint.includes(hit)))) {
+            return reason;
+        }
+    }
+    return 'other';
+}
+
+function formatDateTimeForMemory(ts = Date.now()) {
+    const date = new Date(ts);
+    return `${date.getFullYear()}年${String(date.getMonth() + 1).padStart(2, '0')}月${String(date.getDate()).padStart(2, '0')}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function capProcessedStateMessageSet(msgId) {
+    if (!msgId) return;
+    processedStateExtractMessageIds.add(msgId);
+    if (processedStateExtractMessageIds.size <= STATE_EXTRACT_PROCESSED_MSG_LIMIT) return;
+    const removeCount = processedStateExtractMessageIds.size - STATE_EXTRACT_PROCESSED_MSG_LIMIT;
+    const iterator = processedStateExtractMessageIds.values();
+    for (let i = 0; i < removeCount; i++) {
+        const first = iterator.next();
+        if (first.done) break;
+        processedStateExtractMessageIds.delete(first.value);
+    }
+}
+
+function parseJsonFromPossibleText(rawText) {
+    const text = String(rawText || '').trim();
+    if (!text) return null;
+    const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    try {
+        return JSON.parse(cleaned);
+    } catch (error) {
+        const match = cleaned.match(/\{[\s\S]*\}/);
+        if (!match) return null;
+        try {
+            return JSON.parse(match[0]);
+        } catch (error2) {
+            return null;
+        }
+    }
+}
+
+function normalizeExactNames(names) {
+    if (!Array.isArray(names)) return [];
+    const set = new Set();
+    const result = [];
+    names.forEach(name => {
+        const text = String(name || '').trim().replace(/\s+/g, ' ');
+        if (!text) return;
+        const key = text.toLowerCase();
+        if (set.has(key)) return;
+        set.add(key);
+        result.push(text);
+    });
+    return result;
+}
+
+function splitNamesByJoiners(raw) {
+    const source = String(raw || '').trim();
+    if (!source) return [];
+    let parts = source
+        .split(/(?:、|，|,|\/|\\|\s和\s|\s及\s|\s还有\s)/)
+        .map(item => item.trim())
+        .filter(Boolean);
+    if (parts.length <= 1 && source.includes('和') && !source.includes('和牛')) {
+        const byHe = source.split('和').map(item => item.trim()).filter(Boolean);
+        if (byHe.length > 1 && byHe.every(item => item.length >= 2 && item.length <= 20)) {
+            parts = byHe;
+        }
+    }
+    return parts.length > 1 ? parts : [source];
+}
+
+function cleanupExtractedName(text) {
+    let value = String(text || '').trim();
+    if (!value) return '';
+    value = value.replace(/^[“"'‘’「『]+|[”"'’」』]+$/g, '').trim();
+    value = value.replace(/^(?:了)?(?:一(?:份|碗|杯|盒|束|袋|套|件|张|份儿)|一个|一杯|一份|一碗|一盒|一束|一袋|一套|一件|一张)/, '').trim();
+    value = value.replace(/^(?:个|份|杯|碗|盒|束|袋|套|件|张)/, '').trim();
+    value = value.replace(/(?:给你|给你们|给你点的|给你买的|给你送的)$/g, '').trim();
+    if (value.length > 40) return '';
+    if (/^(?:东西|礼物|外卖|吃的|喝的|饭|餐|那个|这个|它|这份|那份|些东西)$/.test(value)) return '';
+    return value;
+}
+
+function buildExactNamesKey(names) {
+    const normalized = normalizeExactNames(names);
+    if (normalized.length === 0) return '';
+    return normalized.map(item => item.toLowerCase()).sort().join('||');
+}
+
+function extractNamesFromFactContent(content) {
+    const text = String(content || '').trim();
+    if (!text) return [];
+    const directMatch = text.match(/具体名称[:：]\s*(.+)$/);
+    if (!directMatch || !directMatch[1]) return [];
+    const raw = directMatch[1].trim();
+    if (!raw) return [];
+    const parts = raw.split(/(?:\/|、|，|,)/).map(item => cleanupExtractedName(item)).filter(Boolean);
+    return normalizeExactNames(parts);
+}
+
+function getMemoryExactNames(memory) {
+    if (!memory || typeof memory !== 'object') return [];
+    if (memory.factMeta && Array.isArray(memory.factMeta.exactNames) && memory.factMeta.exactNames.length > 0) {
+        return normalizeExactNames(memory.factMeta.exactNames);
+    }
+    return extractNamesFromFactContent(memory.content);
+}
+
+function normalizeSceneText(sceneText) {
+    let text = String(sceneText || '').replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    text = text.replace(/[，。！？!?；;]+$/g, '');
+    if (text.length > 80) text = `${text.slice(0, 80)}...`;
+    return text;
+}
+
+function extractSceneTextFromFactContent(content) {
+    const text = String(content || '').trim();
+    if (!text) return '';
+    const match = text.match(/^(.+?)[，,]\s*具体名称[:：]/);
+    if (!match || !match[1]) return '';
+    return normalizeSceneText(match[1]);
+}
+
+function inferFactSceneBySource(sourceType, actor = 'user') {
+    const safeActor = actor === 'contact' ? 'contact' : 'user';
+    const subject = safeActor === 'contact' ? '联系人' : '用户';
+    const target = safeActor === 'contact' ? '用户' : '联系人';
+    if (sourceType === 'delivery_share') return `${subject}给${target}点过外卖`;
+    if (sourceType === 'shopping_gift') return `${subject}给${target}送过礼物`;
+    if (sourceType === 'gift_card') return `${subject}给${target}分享过礼品卡`;
+    if (sourceType === 'refine_extract') return '从多条历史记忆中提炼出的关键事实';
+    return `${subject}在聊天中明确提到过具体名称`;
+}
+
+function inferFactSceneFromText(text, actor = 'user') {
+    const raw = String(text || '');
+    const safeActor = actor === 'contact' ? 'contact' : 'user';
+    const subject = safeActor === 'contact' ? '联系人' : '用户';
+    const target = safeActor === 'contact' ? '用户' : '联系人';
+    if (/点了|下单了|外卖/.test(raw)) return `${subject}给${target}点过外卖`;
+    if (/送了|买了|礼物|花束|蛋糕|手办|耳机|口红|奶茶|零食/.test(raw)) return `${subject}给${target}送过礼物`;
+    if (/礼品卡|卡券|代金券|红包封面/.test(raw)) return `${subject}给${target}分享过礼品卡`;
+    return `${subject}在聊天中明确提到过具体名称`;
+}
+
+function buildFactSceneText(sourceType, extraMeta = {}) {
+    const safeSourceType = FACT_SOURCE_TYPES.includes(sourceType) ? sourceType : 'user_explicit_text';
+    const safeActor = extraMeta.actor === 'contact' ? 'contact' : 'user';
+    const provided = normalizeSceneText(extraMeta.sceneText);
+    if (provided) return provided;
+    if (safeSourceType === 'user_explicit_text') {
+        const fromText = normalizeSceneText(inferFactSceneFromText(extraMeta.sourceText, safeActor));
+        if (fromText) return fromText;
+    }
+    return normalizeSceneText(inferFactSceneBySource(safeSourceType, safeActor));
+}
+
+function buildFactMemoryContent(names, sourceType, extraMeta = {}) {
+    const exactNames = normalizeExactNames(Array.isArray(names) ? names : []);
+    if (exactNames.length === 0) return '';
+    const sceneText = buildFactSceneText(sourceType, extraMeta);
+    const namesText = exactNames.join(' / ');
+    if (!sceneText) return `用户提到具体名称：${namesText}`;
+    return `${sceneText}，具体名称：${namesText}`;
+}
+
+function buildFactMemoryReadableContent(memory) {
+    const names = getMemoryExactNames(memory);
+    if (names.length === 0) return String((memory && memory.content) || '');
+    const sceneText = normalizeSceneText(
+        (memory && memory.factMeta && memory.factMeta.sceneText)
+            ? memory.factMeta.sceneText
+            : extractSceneTextFromFactContent(memory && memory.content)
+    );
+    if (!sceneText) return `用户提到具体名称：${names.join(' / ')}`;
+    return `${sceneText}，具体名称：${names.join(' / ')}`;
+}
+
+function normalizeFactMeta(meta, fallbackSourceType = 'user_explicit_text') {
+    if (!meta || typeof meta !== 'object') return null;
+    const safeSourceType = FACT_SOURCE_TYPES.includes(meta.sourceType) ? meta.sourceType : fallbackSourceType;
+    const exactNames = normalizeExactNames(meta.exactNames);
+    if (exactNames.length === 0) return null;
+    const next = {
+        sourceType: safeSourceType,
+        exactNames
+    };
+    if (meta.sourceMsgId !== undefined && meta.sourceMsgId !== null && String(meta.sourceMsgId).trim()) {
+        next.sourceMsgId = String(meta.sourceMsgId).trim();
+    }
+    if (meta.sourceRange !== undefined && meta.sourceRange !== null && String(meta.sourceRange).trim()) {
+        next.sourceRange = String(meta.sourceRange).trim();
+    }
+    const sceneText = normalizeSceneText(meta.sceneText);
+    if (sceneText) next.sceneText = sceneText;
+    return next;
+}
+
+function mergeFactMeta(previous, incoming, fallbackSourceType = 'user_explicit_text') {
+    const prev = normalizeFactMeta(previous, fallbackSourceType);
+    const next = normalizeFactMeta(incoming, fallbackSourceType);
+    if (!prev && !next) return null;
+    if (!prev) return next;
+    if (!next) return prev;
+    const mergedNames = normalizeExactNames([...(prev.exactNames || []), ...(next.exactNames || [])]);
+    const merged = {
+        sourceType: FACT_SOURCE_TYPES.includes(next.sourceType) ? next.sourceType : prev.sourceType,
+        exactNames: mergedNames
+    };
+    merged.sourceMsgId = next.sourceMsgId || prev.sourceMsgId;
+    merged.sourceRange = next.sourceRange || prev.sourceRange;
+    merged.sceneText = next.sceneText || prev.sceneText;
+    if (!merged.sourceMsgId) delete merged.sourceMsgId;
+    if (!merged.sourceRange) delete merged.sourceRange;
+    if (!merged.sceneText) delete merged.sceneText;
+    return merged;
+}
+
+function normalizeRefinedMeta(meta) {
+    if (!meta || typeof meta !== 'object') return null;
+    const selectedMemoryIds = Array.isArray(meta.selectedMemoryIds)
+        ? meta.selectedMemoryIds.map(id => Number(id)).filter(id => Number.isFinite(id))
+        : [];
+    const keyFactsCount = clampInt(meta.keyFactsCount, 0, 0, 9999);
+    if (selectedMemoryIds.length === 0 && keyFactsCount === 0) return null;
+    return {
+        selectedMemoryIds: Array.from(new Set(selectedMemoryIds)),
+        keyFactsCount
+    };
+}
+
+function mergeRefinedMeta(previous, incoming) {
+    const prev = normalizeRefinedMeta(previous);
+    const next = normalizeRefinedMeta(incoming);
+    if (!prev && !next) return null;
+    if (!prev) return next;
+    if (!next) return prev;
+    return {
+        selectedMemoryIds: Array.from(new Set([...(prev.selectedMemoryIds || []), ...(next.selectedMemoryIds || [])])),
+        keyFactsCount: Math.max(clampInt(prev.keyFactsCount, 0, 0, 9999), clampInt(next.keyFactsCount, 0, 0, 9999))
+    };
+}
+
+function normalizeStateExtractMeta(meta) {
+    if (!meta || typeof meta !== 'object') return null;
+    const matchedKeywords = Array.isArray(meta.matchedKeywords)
+        ? meta.matchedKeywords.map(item => String(item || '').trim()).filter(Boolean).slice(0, 20)
+        : [];
+    return {
+        ruleScore: clampFloat(meta.ruleScore, 0.62, 0, 1),
+        aiConfidence: Number.isFinite(Number(meta.aiConfidence)) ? clampFloat(meta.aiConfidence, 0.75, 0, 1) : null,
+        finalConfidence: clampFloat(meta.finalConfidence, 0.75, 0, 1),
+        matchedKeywords,
+        detector: ['rule_plus_ai', 'rule_only_fallback'].includes(meta.detector) ? meta.detector : 'rule_only_fallback'
+    };
+}
+
+function mergeStateExtractMeta(previous, incoming) {
+    const prev = normalizeStateExtractMeta(previous);
+    const next = normalizeStateExtractMeta(incoming);
+    if (!prev && !next) return null;
+    if (!prev) return next;
+    if (!next) return prev;
+    return {
+        ruleScore: Math.max(prev.ruleScore, next.ruleScore),
+        aiConfidence: next.aiConfidence === null ? prev.aiConfidence : next.aiConfidence,
+        finalConfidence: Math.max(prev.finalConfidence, next.finalConfidence),
+        matchedKeywords: Array.from(new Set([...(prev.matchedKeywords || []), ...(next.matchedKeywords || [])])).slice(0, 20),
+        detector: next.detector || prev.detector
+    };
+}
+
+function formatCandidateMetaText(candidate) {
+    const sourceLabel = CANDIDATE_SOURCE_LABELS[candidate.source] || '自动提取';
+    const confidence = (Number(candidate.confidence || 0) * 100).toFixed(0);
+    const date = new Date(candidate.createdAt || Date.now());
+    const timeText = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+    const reasonText = String(candidate.reason || '').trim();
+    const reasonPart = reasonText ? `，原因：${reasonText}` : '';
+    return `来源：${sourceLabel}，可信度约 ${confidence}%${reasonPart}（${timeText}）`;
+}
+
+function ensureMemoryCollections() {
+    if (!Array.isArray(window.iphoneSimState.memories)) window.iphoneSimState.memories = [];
+    if (!Array.isArray(window.iphoneSimState.memoryCandidates)) window.iphoneSimState.memoryCandidates = [];
+}
+
+function getDefaultMemorySettingsRuntime() {
+    if (typeof window.createDefaultMemorySettingsV2 === 'function') {
+        return window.createDefaultMemorySettingsV2();
+    }
+    return {
+        extractMode: 'hybrid',
+        injectQuota: { short_term: 2, long_term: 2, state: 2, fact: 2, refined: 1, maxTotal: 7 },
+        stateTtlDays: { health: 7, exam: 14, travel: 10, emotion: 3, other: 7 },
+        dedupeThreshold: 0.75,
+        stateExtractV2: {
+            enabled: true,
+            strategy: 'rule_plus_ai',
+            thresholds: { accept: 0.78, borderline: 0.60, resolve: 0.72 },
+            ai: { timeoutMs: 4500, maxTokens: 180, temperature: 0.1 }
+        }
+    };
+}
+
+function clampInt(value, fallback, min = 0, max = 999) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, Math.floor(n)));
+}
+
+function clampFloat(value, fallback, min = 0, max = 1) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, n));
+}
+
+function ensureMemorySettingsV2() {
+    const defaults = getDefaultMemorySettingsRuntime();
+    const raw = window.iphoneSimState.memorySettingsV2 && typeof window.iphoneSimState.memorySettingsV2 === 'object'
+        ? window.iphoneSimState.memorySettingsV2
+        : {};
+    const inject = raw.injectQuota && typeof raw.injectQuota === 'object' ? raw.injectQuota : {};
+    const ttl = raw.stateTtlDays && typeof raw.stateTtlDays === 'object' ? raw.stateTtlDays : {};
+    const stateExtract = raw.stateExtractV2 && typeof raw.stateExtractV2 === 'object' ? raw.stateExtractV2 : {};
+    const thresholds = stateExtract.thresholds && typeof stateExtract.thresholds === 'object' ? stateExtract.thresholds : {};
+    const ai = stateExtract.ai && typeof stateExtract.ai === 'object' ? stateExtract.ai : {};
+    const normalized = {
+        extractMode: ['hybrid', 'auto', 'manual'].includes(raw.extractMode) ? raw.extractMode : defaults.extractMode,
+        injectQuota: {
+            short_term: clampInt(inject.short_term, defaults.injectQuota.short_term, 0, 50),
+            long_term: clampInt(inject.long_term, defaults.injectQuota.long_term, 0, 50),
+            state: clampInt(inject.state, defaults.injectQuota.state, 0, 50),
+            fact: clampInt(inject.fact, defaults.injectQuota.fact, 0, 50),
+            refined: clampInt(inject.refined, defaults.injectQuota.refined, 0, 50),
+            maxTotal: clampInt(inject.maxTotal, defaults.injectQuota.maxTotal, 1, 100)
+        },
+        stateTtlDays: {
+            health: clampInt(ttl.health, defaults.stateTtlDays.health, 1, 365),
+            exam: clampInt(ttl.exam, defaults.stateTtlDays.exam, 1, 365),
+            travel: clampInt(ttl.travel, defaults.stateTtlDays.travel, 1, 365),
+            emotion: clampInt(ttl.emotion, defaults.stateTtlDays.emotion, 1, 365),
+            other: clampInt(ttl.other, defaults.stateTtlDays.other, 1, 365)
+        },
+        dedupeThreshold: clampFloat(raw.dedupeThreshold, defaults.dedupeThreshold, 0.3, 0.99),
+        stateExtractV2: {
+            enabled: stateExtract.enabled === undefined ? true : !!stateExtract.enabled,
+            strategy: ['rule_plus_ai', 'rule_only'].includes(stateExtract.strategy)
+                ? stateExtract.strategy
+                : defaults.stateExtractV2.strategy,
+            thresholds: {
+                accept: clampFloat(thresholds.accept, defaults.stateExtractV2.thresholds.accept, 0.3, 0.99),
+                borderline: clampFloat(thresholds.borderline, defaults.stateExtractV2.thresholds.borderline, 0.3, 0.99),
+                resolve: clampFloat(thresholds.resolve, defaults.stateExtractV2.thresholds.resolve, 0.3, 0.99)
+            },
+            ai: {
+                timeoutMs: clampInt(ai.timeoutMs, defaults.stateExtractV2.ai.timeoutMs, 500, 15000),
+                maxTokens: clampInt(ai.maxTokens, defaults.stateExtractV2.ai.maxTokens, 60, 800),
+                temperature: clampFloat(ai.temperature, defaults.stateExtractV2.ai.temperature, 0, 1)
+            }
+        }
+    };
+    if (normalized.stateExtractV2.thresholds.borderline > normalized.stateExtractV2.thresholds.accept) {
+        normalized.stateExtractV2.thresholds.borderline = normalized.stateExtractV2.thresholds.accept;
+    }
+    window.iphoneSimState.memorySettingsV2 = normalized;
+    return normalized;
+}
+
+function normalizeMemoryTags(tags, fallback = 'long_term') {
+    const next = Array.isArray(tags) ? tags : (typeof tags === 'string' ? tags.split(',') : []);
+    const normalized = Array.from(new Set(
+        next.map(tag => String(tag || '').trim().toLowerCase()).filter(tag => MEMORY_VALID_TAGS.includes(tag))
+    ));
+    if (normalized.length === 0) normalized.push(fallback);
+    return normalized;
+}
+
+function inferStateReasonType(text) {
+    const value = String(text || '').toLowerCase();
+    if (/period|sick|ill|hospital|fever|health/.test(value)) return 'health';
+    if (/exam|test|quiz|final|deadline/.test(value)) return 'exam';
+    if (/travel|trip|flight|train|away|business/.test(value)) return 'travel';
+    if (/anxious|sad|emo|stress|panic|mood|emotion|happy/.test(value)) return 'emotion';
+    return 'other';
+}
+
+function makeStateMeta(reasonType = 'other', startAt = Date.now(), expiresAt = null) {
+    const settings = ensureMemorySettingsV2();
+    const safeReason = ['health', 'exam', 'travel', 'emotion', 'other'].includes(reasonType) ? reasonType : 'other';
+    const ttlDays = clampInt(settings.stateTtlDays[safeReason], settings.stateTtlDays.other, 1, 365);
+    const safeStart = Number.isFinite(Number(startAt)) ? Number(startAt) : Date.now();
+    const safeExpires = Number.isFinite(Number(expiresAt)) ? Number(expiresAt) : (safeStart + ttlDays * 24 * 60 * 60 * 1000);
+    return {
+        phase: Date.now() > safeExpires ? 'expired' : 'active',
+        startAt: safeStart,
+        expiresAt: safeExpires,
+        resolvedAt: null,
+        reasonType: safeReason
+    };
+}
+
+function normalizeStateMetaForMemory(memory) {
+    if (!memory || !Array.isArray(memory.memoryTags) || !memory.memoryTags.includes('state')) return false;
+    const prev = memory.stateMeta && typeof memory.stateMeta === 'object' ? memory.stateMeta : null;
+    if (!prev) {
+        memory.stateMeta = makeStateMeta(inferStateReasonType(memory.content), memory.time || Date.now(), null);
+        return true;
+    }
+    const reasonType = ['health', 'exam', 'travel', 'emotion', 'other'].includes(prev.reasonType)
+        ? prev.reasonType
+        : inferStateReasonType(memory.content);
+    const startAt = Number.isFinite(Number(prev.startAt)) ? Number(prev.startAt) : (Number(memory.time) || Date.now());
+    const normalized = makeStateMeta(reasonType, startAt, prev.expiresAt);
+    normalized.phase = prev.phase === 'resolved' ? 'resolved' : normalized.phase;
+    normalized.resolvedAt = Number.isFinite(Number(prev.resolvedAt)) ? Number(prev.resolvedAt) : null;
+    const changed = JSON.stringify(prev) !== JSON.stringify(normalized);
+    memory.stateMeta = normalized;
+    return changed;
+}
+
+window.extractStateMemoryByRule = function(text) {
+    const rawText = String(text || '').trim();
+    if (!rawText) return null;
+    const normalized = normalizeStateExtractText(rawText);
+    if (!normalized) return null;
+    const lowered = normalized.toLowerCase();
+
+    const resolveMatches = collectMatchedKeywords(lowered, STATE_RESOLVE_KEYWORDS);
+    const isResolve = resolveMatches.length > 0;
+    const hasNegative = STATE_NEGATIVE_PATTERNS.some(pattern => pattern.test(normalized) || pattern.test(lowered));
+    const isGuessOrQuestion = STATE_GUESS_PATTERNS.some(pattern => pattern.test(normalized) || pattern.test(lowered));
+
+    if (isGuessOrQuestion) return null;
+    if (hasNegative && !isResolve) return null;
+
+    const tenseMatches = collectMatchedKeywords(normalized, STATE_TENSE_KEYWORDS);
+    const reasonHits = { health: [], exam: [], travel: [], emotion: [] };
+    Object.keys(STATE_RULE_KEYWORDS).forEach(reason => {
+        reasonHits[reason] = collectMatchedKeywords(lowered, STATE_RULE_KEYWORDS[reason]);
+    });
+    const allReasonMatches = [];
+    Object.keys(reasonHits).forEach(key => {
+        reasonHits[key].forEach(item => allReasonMatches.push(item));
+    });
+    const hasStatusKeyword = allReasonMatches.length > 0;
+    if (!hasStatusKeyword && !isResolve) return null;
+
+    if (!hasStatusKeyword && isResolve) {
+        const resolveReasonType = inferResolveReasonType(resolveMatches);
+        return {
+            matched: true,
+            rawText,
+            normalizedText: stripStateLeadingSubject(normalized) || normalized,
+            reasonType: resolveReasonType,
+            isResolve: true,
+            ruleScore: resolveReasonType === 'other' ? 0.7 : 0.74,
+            matchedKeywords: resolveMatches.slice(0, 10)
+        };
+    }
+
+    let reasonType = 'other';
+    let maxReasonCount = 0;
+    Object.keys(reasonHits).forEach(reason => {
+        const count = reasonHits[reason].length;
+        if (count > maxReasonCount) {
+            maxReasonCount = count;
+            reasonType = reason;
+        }
+    });
+    if (maxReasonCount === 0) reasonType = 'other';
+    if (isResolve && reasonType === 'other') {
+        reasonType = inferResolveReasonType(resolveMatches);
+    }
+
+    if (!isResolve && reasonType === 'other') return null;
+    if (STATE_GENERIC_EXCLUDE_PATTERNS.some(pattern => pattern.test(normalized)) && tenseMatches.length === 0 && !isResolve) {
+        return null;
+    }
+
+    let ruleScore = maxReasonCount > 0 ? 0.62 : 0.58;
+    if (tenseMatches.length > 0) ruleScore += 0.12;
+    if (maxReasonCount >= 2) ruleScore += 0.05;
+    if (isResolve) ruleScore += 0.05;
+    if (reasonType === 'other') ruleScore -= 0.08;
+    ruleScore = clampFloat(ruleScore, 0.62, 0.4, 0.95);
+
+    const normalizedText = stripStateLeadingSubject(normalized) || normalized;
+    const matchedKeywords = Array.from(new Set([
+        ...tenseMatches,
+        ...allReasonMatches,
+        ...resolveMatches
+    ])).slice(0, 16);
+
+    return {
+        matched: true,
+        rawText,
+        normalizedText,
+        reasonType,
+        isResolve,
+        ruleScore,
+        matchedKeywords
+    };
+};
+
+window.classifyStateMemoryWithAI = async function(text, ruleResult, contactId) {
+    const settings = ensureMemorySettingsV2();
+    const stateExtract = settings.stateExtractV2 || {};
+    if (stateExtract.strategy !== 'rule_plus_ai') return null;
+
+    const aiSettings = window.iphoneSimState.aiSettings2.url
+        ? window.iphoneSimState.aiSettings2
+        : window.iphoneSimState.aiSettings;
+    if (!aiSettings || !aiSettings.url || !aiSettings.key) return null;
+
+    let fetchUrl = aiSettings.url;
+    if (!fetchUrl.endsWith('/chat/completions')) {
+        fetchUrl = fetchUrl.endsWith('/') ? `${fetchUrl}chat/completions` : `${fetchUrl}/chat/completions`;
+    }
+
+    const timeoutMs = clampInt(stateExtract.ai && stateExtract.ai.timeoutMs, 4500, 500, 15000);
+    const maxTokens = clampInt(stateExtract.ai && stateExtract.ai.maxTokens, 180, 60, 800);
+    const temperature = clampFloat(stateExtract.ai && stateExtract.ai.temperature, 0.1, 0, 1);
+    const contact = window.iphoneSimState.contacts.find(item => item && item.id === contactId);
+    const contactName = contact && contact.name ? contact.name : '联系人';
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const response = await fetch(fetchUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${aiSettings.key}`
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
+                model: aiSettings.model,
+                messages: [
+                    {
+                        role: 'system',
+                        content: `你是状态记忆判定器。你必须只输出 JSON，不要输出任何额外文本。
+任务：判断输入文本是否应记为用户状态记忆。
+输出格式：
+{
+  "is_state": true,
+  "reason_type": "health|exam|travel|emotion|other",
+  "is_resolve": false,
+  "normalized_content": "标准化状态描述",
+  "confidence": 0.84,
+  "reason": "简短判定依据"
+}
+规则：
+1) confidence 范围 0~1。
+2) normalized_content 必须简短具体，不要臆造。
+3) 如不是状态信息，is_state=false。`
+                    },
+                    {
+                        role: 'user',
+                        content: `联系人：${contactName}
+原文：${String(text || '')}
+规则初筛：${JSON.stringify({
+    reasonType: ruleResult && ruleResult.reasonType ? ruleResult.reasonType : 'other',
+    isResolve: !!(ruleResult && ruleResult.isResolve),
+    ruleScore: ruleResult && Number.isFinite(Number(ruleResult.ruleScore)) ? Number(ruleResult.ruleScore) : 0.62
+})}`
+                    }
+                ],
+                temperature,
+                max_tokens: maxTokens
+            })
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        const content = String(data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '').trim();
+        const parsed = parseJsonFromPossibleText(content);
+        if (!parsed || typeof parsed !== 'object') return null;
+
+        const safeReasonType = ['health', 'exam', 'travel', 'emotion', 'other'].includes(parsed.reason_type)
+            ? parsed.reason_type
+            : (ruleResult && ruleResult.reasonType ? ruleResult.reasonType : 'other');
+        const normalizedContent = String(parsed.normalized_content || (ruleResult && ruleResult.normalizedText) || '').trim();
+        const confidence = clampFloat(parsed.confidence, ruleResult && ruleResult.ruleScore ? ruleResult.ruleScore : 0.62, 0, 1);
+        return {
+            isState: !!parsed.is_state,
+            reasonType: safeReasonType,
+            isResolve: !!parsed.is_resolve,
+            normalizedContent: normalizedContent || String(text || '').trim(),
+            confidence,
+            reason: String(parsed.reason || '').trim()
+        };
+    } catch (error) {
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
+window.resolveActiveStateMemory = function(contactId, reasonType, text) {
+    const cid = Number(contactId);
+    if (!Number.isFinite(cid)) return null;
+    const activeStates = getContactMemories(cid)
+        .filter(memory => {
+            const tags = normalizeMemoryTags(memory.memoryTags, 'long_term');
+            if (!tags.includes('state')) return false;
+            normalizeStateMetaForMemory(memory);
+            return memory.stateMeta && memory.stateMeta.phase === 'active';
+        });
+    if (activeStates.length === 0) return null;
+
+    const validReason = ['health', 'exam', 'travel', 'emotion', 'other'].includes(reasonType) ? reasonType : 'other';
+    const sameReasonPool = activeStates.filter(memory => {
+        return memory.stateMeta && memory.stateMeta.reasonType === validReason;
+    });
+    const pool = sameReasonPool.length > 0 ? sameReasonPool : activeStates;
+
+    const compareText = String(text || '').trim();
+    let best = null;
+    let bestScore = -1;
+    pool.forEach(memory => {
+        const sim = compareText ? diceSimilarity(memory.content, compareText) : 0;
+        const freshnessBoost = 1 - Math.min(1, Math.max(0, (Date.now() - (Number(memory.time) || Date.now())) / (14 * 24 * 60 * 60 * 1000)));
+        const score = sim * 0.7 + freshnessBoost * 0.3;
+        if (score > bestScore) {
+            best = memory;
+            bestScore = score;
+        }
+    });
+    if (!best) return null;
+    if (sameReasonPool.length === 0 && bestScore < 0.18) return null;
+
+    best.stateMeta = best.stateMeta || makeStateMeta(validReason, best.time || Date.now(), null);
+    best.stateMeta.reasonType = validReason;
+    best.stateMeta.phase = 'resolved';
+    best.stateMeta.resolvedAt = Date.now();
+    best.time = Date.now();
+    syncLegacyPerceptionAndState(cid);
+    return best;
+};
+
+window.tryExtractStateMemoryFromMessage = async function(contactId, msg, isUser) {
+    const cid = Number(contactId);
+    if (!Number.isFinite(cid) || !msg || !isUser) return null;
+    if (String(msg.type || '') !== 'text') return null;
+    const text = String(msg.content || '').trim();
+    if (!text || text.includes('ACTION:') || text.startsWith('[')) return null;
+
+    const settings = ensureMemorySettingsV2();
+    const stateExtract = settings.stateExtractV2 || {};
+    if (stateExtract.enabled === false) return null;
+
+    const msgId = msg.id ? String(msg.id) : '';
+    if (msgId && processedStateExtractMessageIds.has(msgId)) return null;
+    if (msgId) capProcessedStateMessageSet(msgId);
+
+    const ruleResult = window.extractStateMemoryByRule(text);
+    if (!ruleResult || !ruleResult.matched) return null;
+
+    const aiResult = await window.classifyStateMemoryWithAI(text, ruleResult, cid);
+    const detector = aiResult ? 'rule_plus_ai' : 'rule_only_fallback';
+    const aiConfidence = aiResult && Number.isFinite(Number(aiResult.confidence))
+        ? clampFloat(aiResult.confidence, null, 0, 1)
+        : null;
+    const reasonType = aiResult && aiResult.reasonType ? aiResult.reasonType : ruleResult.reasonType;
+    const isResolve = aiResult ? !!aiResult.isResolve : !!ruleResult.isResolve;
+    const isState = aiResult ? !!aiResult.isState : true;
+    const normalizedContent = String(
+        (aiResult && aiResult.normalizedContent)
+            ? aiResult.normalizedContent
+            : (ruleResult.normalizedText || text)
+    ).trim();
+
+    let finalConfidence = 0;
+    if (aiConfidence === null) {
+        const fallbackPenalty = (ruleResult.isResolve && ruleResult.reasonType && ruleResult.reasonType !== 'other')
+            ? 0.02
+            : 0.08;
+        finalConfidence = clampFloat(ruleResult.ruleScore - fallbackPenalty, ruleResult.ruleScore, 0, 1);
+    } else {
+        finalConfidence = clampFloat(ruleResult.ruleScore * 0.45 + aiConfidence * 0.55, ruleResult.ruleScore, 0, 1);
+    }
+
+    const thresholds = stateExtract.thresholds || {};
+    const acceptThreshold = clampFloat(thresholds.accept, 0.78, 0.3, 0.99);
+    const borderlineThreshold = clampFloat(thresholds.borderline, 0.6, 0.3, 0.99);
+    const resolveThreshold = clampFloat(thresholds.resolve, 0.72, 0.3, 0.99);
+    const extractMode = settings.extractMode || 'hybrid';
+
+    if (aiResult && !isState) return null;
+    if (finalConfidence < borderlineThreshold) return null;
+
+    if (isResolve) {
+        if (extractMode === 'manual') {
+            showNotification('手动模式：检测到状态结束，请手动更新', 2200);
+            return null;
+        }
+        if (finalConfidence >= resolveThreshold) {
+            const resolved = window.resolveActiveStateMemory(cid, reasonType, normalizedContent);
+            if (resolved) {
+                saveConfig();
+                const memoryApp = document.getElementById('memory-app');
+                if (memoryApp && !memoryApp.classList.contains('hidden')) renderMemoryList();
+                showNotification('状态已自动更新为已结束', 1400, 'success');
+                return { resolved: true, memory: resolved };
+            }
+        }
+        return null;
+    }
+
+    if (extractMode === 'auto' && finalConfidence < acceptThreshold) {
+        return null;
+    }
+
+    const now = Date.now();
+    const reasonLabel = STATE_REASON_LABELS[reasonType] || '其他';
+    const candidateReason = `自动状态识别（规则${aiResult ? '+AI' : ''}）：${reasonLabel}类，可信度${Math.round(finalConfidence * 100)}%`;
+    const created = createMemoryCandidate(cid, {
+        content: `用户当前状态：${normalizedContent}，识别时间：${formatDateTimeForMemory(now)}`,
+        suggestedTags: ['state'],
+        source: 'ai_action',
+        confidence: finalConfidence,
+        reason: candidateReason,
+        stateMeta: makeStateMeta(reasonType, now, null),
+        stateExtractMeta: {
+            ruleScore: clampFloat(ruleResult.ruleScore, 0.62, 0, 1),
+            aiConfidence,
+            finalConfidence,
+            matchedKeywords: Array.isArray(ruleResult.matchedKeywords) ? ruleResult.matchedKeywords.slice(0, 20) : [],
+            detector
+        }
+    });
+
+    if (!created && extractMode === 'manual') {
+        showNotification('手动模式：检测到状态信息，请手动确认', 2200);
+        return null;
+    }
+    if (created && created.status === 'pending') {
+        showNotification('状态记忆待确认', 1500, 'success');
+    } else if (created) {
+        showNotification('状态记忆已记录', 1500, 'success');
+    }
+    return created;
+};
+
+function normalizeTextForSimilarity(text) {
+    return String(text || '')
+        .toLowerCase()
+        .replace(/[\s.,!?;:，。！？、；：“”"'`~!@#$%^&*()_+=\-[\]{}<>\\/|]+/g, '');
+}
+
+function buildBigrams(text) {
+    const normalized = normalizeTextForSimilarity(text);
+    if (normalized.length < 2) return [normalized];
+    const arr = [];
+    for (let i = 0; i < normalized.length - 1; i++) {
+        arr.push(normalized.slice(i, i + 2));
+    }
+    return arr;
+}
+
+function diceSimilarity(textA, textB) {
+    const a = buildBigrams(textA);
+    const b = buildBigrams(textB);
+    if (!a.length && !b.length) return 1;
+    if (!a.length || !b.length) return 0;
+    const counts = new Map();
+    a.forEach(item => counts.set(item, (counts.get(item) || 0) + 1));
+    let overlap = 0;
+    b.forEach(item => {
+        const n = counts.get(item) || 0;
+        if (n > 0) {
+            overlap++;
+            counts.set(item, n - 1);
+        }
+    });
+    return (2 * overlap) / (a.length + b.length);
+}
+
+function computeMemoryRelevance(content, contextText) {
+    const c = normalizeTextForSimilarity(content);
+    const h = normalizeTextForSimilarity(contextText);
+    if (!c || !h) return 0;
+    const bigrams = buildBigrams(c);
+    if (!bigrams.length) return 0;
+    let hit = 0;
+    bigrams.forEach(bg => {
+        if (!bg) return;
+        if (h.includes(bg)) hit++;
+    });
+    return hit / bigrams.length;
+}
+
+function getContactMemories(contactId, includeAll = false) {
+    ensureMemoryCollections();
+    return window.iphoneSimState.memories.filter(memory => {
+        if (!memory || memory.contactId !== contactId) return false;
+        if (includeAll) return true;
+        return (memory.reviewStatus || 'approved') === 'approved';
+    });
+}
+
+function getPendingCandidates(contactId) {
+    ensureMemoryCollections();
+    return window.iphoneSimState.memoryCandidates.filter(candidate =>
+        candidate && candidate.contactId === contactId && candidate.status === 'pending'
+    );
+}
+
+function syncLegacyPerceptionAndState(contactId) {
+    const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
+    if (!contact) return;
+    const memories = getContactMemories(contactId).slice().sort((a, b) => (b.time || 0) - (a.time || 0));
+    const importantStates = [];
+    const userPerception = [];
+    memories.forEach(memory => {
+        const tags = normalizeMemoryTags(memory.memoryTags, 'long_term');
+        if (tags.includes('state')) {
+            normalizeStateMetaForMemory(memory);
+            if (memory.stateMeta && memory.stateMeta.phase === 'active' && !importantStates.includes(memory.content)) {
+                importantStates.push(memory.content);
+            }
+        }
+        if (tags.includes('fact') && !userPerception.includes(memory.content)) {
+            userPerception.push(memory.content);
+        }
+    });
+    contact.importantStates = importantStates.slice(0, 5);
+    contact.userPerception = userPerception.slice(0, 40);
+}
+
+function createOrMergeApprovedMemory(payload) {
+    ensureMemoryCollections();
+    const settings = ensureMemorySettingsV2();
+    const contactId = payload && payload.contactId;
+    const content = String((payload && payload.content) || '').trim();
+    if (!contactId || !content) return { created: false, memory: null };
+
+    const tags = normalizeMemoryTags(payload.memoryTags, content.startsWith('【通话回忆】') ? 'short_term' : 'long_term');
+    const source = payload.source || 'manual';
+    const confidence = clampFloat(payload.confidence, 0.8, 0, 1);
+    const dedupeThreshold = clampFloat(settings.dedupeThreshold, 0.75, 0.3, 0.99);
+    const now = Date.now();
+    const inferredNames = tags.includes('fact') ? extractNamesFromFactContent(content) : [];
+    const inferredSceneText = tags.includes('fact') ? extractSceneTextFromFactContent(content) : '';
+    const factMetaPayload = normalizeFactMeta(payload.factMeta, 'user_explicit_text')
+        || (inferredNames.length > 0
+            ? normalizeFactMeta({
+                sourceType: 'user_explicit_text',
+                exactNames: inferredNames,
+                sceneText: inferredSceneText || inferFactSceneBySource('user_explicit_text', 'user')
+            }, 'user_explicit_text')
+            : null);
+    const refinedMetaPayload = normalizeRefinedMeta(payload.refinedMeta);
+    const factKeyPayload = tags.includes('fact') && factMetaPayload ? buildExactNamesKey(factMetaPayload.exactNames) : '';
+
+    let duplicate = null;
+    let bestScore = 0;
+    const approvedMemories = getContactMemories(contactId);
+
+    if (factKeyPayload) {
+        const exactHit = approvedMemories.find(memory => {
+            const existingTags = normalizeMemoryTags(memory.memoryTags, 'long_term');
+            if (!existingTags.includes('fact')) return false;
+            return buildExactNamesKey(getMemoryExactNames(memory)) === factKeyPayload;
+        });
+        if (exactHit) {
+            duplicate = exactHit;
+            bestScore = 1;
+        }
+    }
+
+    approvedMemories.forEach(memory => {
+        if (duplicate && memory.id === duplicate.id) return;
+        const existingTags = normalizeMemoryTags(memory.memoryTags, 'long_term');
+        const hasOverlap = tags.some(tag => existingTags.includes(tag));
+        if (!hasOverlap) return;
+        const score = diceSimilarity(memory.content, content);
+        if (score >= dedupeThreshold && score > bestScore) {
+            bestScore = score;
+            duplicate = memory;
+        }
+    });
+
+    if (duplicate) {
+        duplicate.content = content.length >= String(duplicate.content || '').length ? content : duplicate.content;
+        duplicate.time = Math.max(Number(duplicate.time) || 0, Number(payload.time) || now);
+        duplicate.title = payload.title || duplicate.title;
+        duplicate.range = payload.range || duplicate.range;
+        duplicate.type = payload.type || duplicate.type;
+        duplicate.source = source || duplicate.source;
+        duplicate.confidence = Math.max(clampFloat(duplicate.confidence, 0.6, 0, 1), confidence);
+        duplicate.reviewStatus = 'approved';
+        duplicate.memoryTags = Array.from(new Set([...normalizeMemoryTags(duplicate.memoryTags, 'long_term'), ...tags]));
+        if (payload.refinedFrom && Array.isArray(payload.refinedFrom)) {
+            const oldRefs = Array.isArray(duplicate.refinedFrom) ? duplicate.refinedFrom : [];
+            duplicate.refinedFrom = Array.from(new Set([...oldRefs, ...payload.refinedFrom]));
+        }
+        if (duplicate.memoryTags.includes('state')) {
+            if (payload.stateMeta && typeof payload.stateMeta === 'object') {
+                duplicate.stateMeta = Object.assign({}, payload.stateMeta);
+            }
+            normalizeStateMetaForMemory(duplicate);
+        } else {
+            delete duplicate.stateMeta;
+        }
+        const mergedFactMeta = mergeFactMeta(duplicate.factMeta, factMetaPayload, 'user_explicit_text');
+        if (mergedFactMeta) {
+            duplicate.factMeta = mergedFactMeta;
+        } else if (!duplicate.memoryTags.includes('fact')) {
+            delete duplicate.factMeta;
+        }
+        const mergedRefinedMeta = mergeRefinedMeta(duplicate.refinedMeta, refinedMetaPayload);
+        if (mergedRefinedMeta) {
+            duplicate.refinedMeta = mergedRefinedMeta;
+        } else if (!duplicate.memoryTags.includes('refined')) {
+            delete duplicate.refinedMeta;
+        }
+        syncLegacyPerceptionAndState(contactId);
+        return { created: false, memory: duplicate };
+    }
+
+    const memory = {
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        contactId: contactId,
+        content: content,
+        time: Number(payload.time) || now,
+        title: payload.title || '',
+        range: payload.range || '',
+        type: payload.type || '',
+        memoryTags: tags,
+        source: source,
+        confidence: confidence,
+        reviewStatus: 'approved'
+    };
+    if (payload.refinedFrom && Array.isArray(payload.refinedFrom)) {
+        memory.refinedFrom = payload.refinedFrom.slice(0);
+    }
+    if (factMetaPayload && memory.memoryTags.includes('fact')) {
+        memory.factMeta = factMetaPayload;
+    }
+    if (refinedMetaPayload && memory.memoryTags.includes('refined')) {
+        memory.refinedMeta = refinedMetaPayload;
+    }
+    if (memory.memoryTags.includes('state')) {
+        memory.stateMeta = payload.stateMeta && typeof payload.stateMeta === 'object'
+            ? Object.assign({}, payload.stateMeta)
+            : makeStateMeta(inferStateReasonType(content), memory.time, null);
+        normalizeStateMetaForMemory(memory);
+    }
+    window.iphoneSimState.memories.push(memory);
+    syncLegacyPerceptionAndState(contactId);
+    return { created: true, memory: memory };
+}
+
+function createMemoryCandidate(contactId, payload = {}) {
+    ensureMemoryCollections();
+    const settings = ensureMemorySettingsV2();
+    if (!contactId) return null;
+    const content = String(payload.content || '').trim();
+    if (!content) return null;
+
+    const tags = normalizeMemoryTags(payload.suggestedTags || payload.memoryTags, 'long_term');
+    const source = ['auto_summary', 'call_summary', 'ai_action'].includes(payload.source) ? payload.source : 'auto_summary';
+    const confidence = clampFloat(payload.confidence, 0.75, 0, 1);
+    const extractMode = settings.extractMode || 'hybrid';
+    const now = Date.now();
+    const inferredNames = tags.includes('fact') ? extractNamesFromFactContent(content) : [];
+    const inferredSceneText = tags.includes('fact') ? extractSceneTextFromFactContent(content) : '';
+    const factMetaPayload = normalizeFactMeta(payload.factMeta, 'user_explicit_text')
+        || (inferredNames.length > 0
+            ? normalizeFactMeta({
+                sourceType: 'user_explicit_text',
+                exactNames: inferredNames,
+                sceneText: inferredSceneText || inferFactSceneBySource('user_explicit_text', 'user')
+            }, 'user_explicit_text')
+            : null);
+    const stateExtractMetaPayload = normalizeStateExtractMeta(payload.stateExtractMeta);
+    const factKeyPayload = tags.includes('fact') && factMetaPayload ? buildExactNamesKey(factMetaPayload.exactNames) : '';
+
+    if (extractMode === 'manual') {
+        return null;
+    }
+
+    const dedupeThreshold = clampFloat(settings.dedupeThreshold, 0.75, 0.3, 0.99);
+    const pending = getPendingCandidates(contactId);
+    if (factKeyPayload) {
+        const exactPending = pending.find(existing => {
+            const candidateTags = normalizeMemoryTags(existing.suggestedTags, 'long_term');
+            if (!candidateTags.includes('fact')) return false;
+            return buildExactNamesKey(getMemoryExactNames(existing)) === factKeyPayload;
+        });
+        if (exactPending) {
+            exactPending.content = content.length > String(exactPending.content || '').length ? content : exactPending.content;
+            exactPending.suggestedTags = Array.from(new Set([...normalizeMemoryTags(exactPending.suggestedTags, 'long_term'), ...tags]));
+            exactPending.confidence = Math.max(clampFloat(exactPending.confidence, 0.6, 0, 1), confidence);
+            exactPending.reason = payload.reason || exactPending.reason;
+            exactPending.range = payload.range || exactPending.range;
+            exactPending.createdAt = now;
+            exactPending.factMeta = mergeFactMeta(exactPending.factMeta, factMetaPayload, 'user_explicit_text');
+            if (payload.stateMeta && typeof payload.stateMeta === 'object') {
+                exactPending.stateMeta = Object.assign({}, payload.stateMeta);
+            } else if (exactPending.suggestedTags.includes('state') && !exactPending.stateMeta) {
+                exactPending.stateMeta = makeStateMeta(inferStateReasonType(exactPending.content), now, null);
+            }
+            exactPending.stateExtractMeta = mergeStateExtractMeta(exactPending.stateExtractMeta, stateExtractMetaPayload);
+            saveConfig();
+            const memoryApp = document.getElementById('memory-app');
+            if (memoryApp && !memoryApp.classList.contains('hidden')) renderMemoryList();
+            return exactPending;
+        }
+    }
+    for (const existing of pending) {
+        const score = diceSimilarity(existing.content, content);
+        if (score >= dedupeThreshold) {
+            existing.content = content.length > String(existing.content || '').length ? content : existing.content;
+            existing.suggestedTags = Array.from(new Set([...normalizeMemoryTags(existing.suggestedTags, 'long_term'), ...tags]));
+            existing.confidence = Math.max(clampFloat(existing.confidence, 0.6, 0, 1), confidence);
+            existing.reason = payload.reason || existing.reason;
+            existing.range = payload.range || existing.range;
+            existing.createdAt = now;
+            existing.factMeta = mergeFactMeta(existing.factMeta, factMetaPayload, 'user_explicit_text');
+            if (payload.stateMeta && typeof payload.stateMeta === 'object') {
+                existing.stateMeta = Object.assign({}, payload.stateMeta);
+            } else if (existing.suggestedTags.includes('state') && !existing.stateMeta) {
+                existing.stateMeta = makeStateMeta(inferStateReasonType(existing.content), now, null);
+            }
+            existing.stateExtractMeta = mergeStateExtractMeta(existing.stateExtractMeta, stateExtractMetaPayload);
+            saveConfig();
+            const memoryApp = document.getElementById('memory-app');
+            if (memoryApp && !memoryApp.classList.contains('hidden')) renderMemoryList();
+            return existing;
+        }
+    }
+
+    if (extractMode === 'auto') {
+        const created = createOrMergeApprovedMemory({
+            contactId: contactId,
+            content: content,
+            memoryTags: tags,
+            source: source,
+            confidence: confidence,
+            range: payload.range || '',
+            stateMeta: payload.stateMeta || (tags.includes('state') ? makeStateMeta(inferStateReasonType(content), now, null) : null),
+            factMeta: factMetaPayload
+        });
+        saveConfig();
+        const memoryApp = document.getElementById('memory-app');
+        if (memoryApp && !memoryApp.classList.contains('hidden')) renderMemoryList();
+        return created.memory;
+    }
+
+    const candidate = {
+        id: `mc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        contactId: contactId,
+        content: content,
+        title: payload.title || '',
+        suggestedTags: tags,
+        source: source,
+        confidence: confidence,
+        createdAt: now,
+        range: payload.range || '',
+        reason: payload.reason || '',
+        stateMeta: payload.stateMeta && typeof payload.stateMeta === 'object'
+            ? Object.assign({}, payload.stateMeta)
+            : (tags.includes('state') ? makeStateMeta(inferStateReasonType(content), now, null) : null),
+        factMeta: factMetaPayload,
+        stateExtractMeta: stateExtractMetaPayload,
+        status: 'pending'
+    };
+    window.iphoneSimState.memoryCandidates.push(candidate);
+    saveConfig();
+    const memoryApp = document.getElementById('memory-app');
+    if (memoryApp && !memoryApp.classList.contains('hidden')) renderMemoryList();
+    return candidate;
+}
+
+function approveMemoryCandidate(candidateId, overrides = {}) {
+    ensureMemoryCollections();
+    const candidate = window.iphoneSimState.memoryCandidates.find(item => item.id === candidateId);
+    if (!candidate || candidate.status !== 'pending') return null;
+    const memory = createOrMergeApprovedMemory({
+        contactId: candidate.contactId,
+        content: overrides.content || candidate.content,
+        title: overrides.title || candidate.title || '',
+        memoryTags: overrides.memoryTags || candidate.suggestedTags,
+        source: candidate.source || 'auto_summary',
+        confidence: clampFloat(overrides.confidence, candidate.confidence, 0, 1),
+        range: overrides.range || candidate.range || '',
+        stateMeta: overrides.stateMeta || candidate.stateMeta || null,
+        factMeta: overrides.factMeta || candidate.factMeta || null
+    });
+    candidate.status = 'approved';
+    saveConfig();
+    renderMemoryList();
+    return memory.memory;
+}
+
+function rejectMemoryCandidate(candidateId) {
+    ensureMemoryCollections();
+    const candidate = window.iphoneSimState.memoryCandidates.find(item => item.id === candidateId);
+    if (!candidate || candidate.status !== 'pending') return;
+    candidate.status = 'rejected';
+    saveConfig();
+    renderMemoryList();
+}
+
+window.getMemorySettingsV2 = ensureMemorySettingsV2;
+window.createMemoryCandidate = createMemoryCandidate;
+window.createOrMergeApprovedMemory = createOrMergeApprovedMemory;
+window.approveMemoryCandidate = approveMemoryCandidate;
+window.rejectMemoryCandidate = rejectMemoryCandidate;
+window.syncLegacyPerceptionAndState = syncLegacyPerceptionAndState;
+
+function buildLegacyMemoryContext(contact, history) {
+    const memories = getContactMemories(contact.id).sort((a, b) => (b.time || 0) - (a.time || 0));
+    if (memories.length === 0) return '';
+    const limit = contact.memorySendLimit && contact.memorySendLimit > 0 ? contact.memorySendLimit : 5;
+    const contextText = history.slice(-20).map(item => String(item.content || '')).join(' ').toLowerCase();
+    const recentCount = Math.min(3, limit);
+    const recent = memories.slice(0, recentCount);
+    const remaining = memories.slice(recentCount);
+    const relevant = remaining
+        .map(memory => ({ memory, score: computeMemoryRelevance(memory.content, contextText) }))
+        .filter(item => item.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, Math.max(0, limit - recentCount))
+        .map(item => item.memory);
+    const finalList = [...recent, ...relevant].sort((a, b) => (a.time || 0) - (b.time || 0));
+    if (finalList.length === 0) return '';
+    let output = '\n【历史记忆 (已知事实)】\n⚠️ 注意：以下内容是你们过去的共同经历或已知事实，请勿重复向用户复述，除非用户主动询问或需要回忆。\n';
+    finalList.forEach(memory => {
+        const date = new Date(memory.time || Date.now());
+        const dateStr = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+        output += `- [${dateStr}] ${memory.content}\n`;
+    });
+    return output;
+}
+
+function buildMemoryContextByPolicy(contact, history) {
+    if (!contact || !contact.id) return '';
+    const settings = ensureMemorySettingsV2();
+    const all = getContactMemories(contact.id).map(memory => {
+        const clone = memory;
+        clone.memoryTags = normalizeMemoryTags(clone.memoryTags, clone.content && clone.content.startsWith('【通话回忆】') ? 'short_term' : 'long_term');
+        if (clone.memoryTags.includes('state')) normalizeStateMetaForMemory(clone);
+        return clone;
+    });
+    if (all.length === 0) return '';
+
+    const historyText = history.slice(-20).map(item => String(item.content || '')).join(' ');
+    const now = Date.now();
+    const quotaBase = Object.assign({}, settings.injectQuota, contact.memoryInjectQuota || {});
+    let maxTotal = clampInt(quotaBase.maxTotal, 7, 1, 100);
+    if (contact.memorySendLimit && contact.memorySendLimit > 0) {
+        maxTotal = Math.min(maxTotal, clampInt(contact.memorySendLimit, maxTotal, 1, 100));
+    }
+
+    const withScore = all.map(memory => {
+        const relevance = computeMemoryRelevance(memory.content, historyText);
+        const freshness = 1 - Math.min(1, Math.max(0, (now - (Number(memory.time) || now)) / (30 * 24 * 60 * 60 * 1000)));
+        const confidence = clampFloat(memory.confidence, 0.7, 0, 1);
+        const score = 0.55 * relevance + 0.25 * freshness + 0.20 * confidence;
+        return { memory, relevance, freshness, confidence, score };
+    });
+
+    const stateList = withScore
+        .filter(item => item.memory.memoryTags.includes('state'))
+        .filter(item => !item.memory.stateMeta || item.memory.stateMeta.phase === 'active')
+        .sort((a, b) => b.score - a.score)
+        .slice(0, clampInt(quotaBase.state, 2, 0, 50));
+    const shortList = withScore
+        .filter(item => item.memory.memoryTags.includes('short_term'))
+        .sort((a, b) => (b.freshness + b.relevance) - (a.freshness + a.relevance))
+        .slice(0, clampInt(quotaBase.short_term, 2, 0, 50));
+    const longList = withScore
+        .filter(item => item.memory.memoryTags.includes('long_term'))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, clampInt(quotaBase.long_term, 2, 0, 50));
+    const factList = withScore
+        .filter(item => item.memory.memoryTags.includes('fact'))
+        .sort((a, b) => (b.relevance + b.confidence) - (a.relevance + a.confidence))
+        .slice(0, clampInt(quotaBase.fact, 2, 0, 50));
+    const refinedList = withScore
+        .filter(item => item.memory.memoryTags.includes('refined'))
+        .sort((a, b) => (b.memory.time || 0) - (a.memory.time || 0))
+        .slice(0, clampInt(quotaBase.refined, 1, 0, 50));
+
+    let selected = [
+        ...stateList.map(item => ({ bucket: 'state', item })),
+        ...shortList.map(item => ({ bucket: 'short_term', item })),
+        ...longList.map(item => ({ bucket: 'long_term', item })),
+        ...factList.map(item => ({ bucket: 'fact', item })),
+        ...refinedList.map(item => ({ bucket: 'refined', item }))
+    ];
+    if (selected.length === 0) return buildLegacyMemoryContext(contact, history);
+
+    if (selected.length > maxTotal) {
+        selected = selected.sort((a, b) => b.item.score - a.item.score).slice(0, maxTotal);
+    }
+
+    const sections = { state: [], short_term: [], long_term: [], fact: [], refined: [] };
+    selected.forEach(entry => sections[entry.bucket].push(entry.item.memory));
+
+    const buildSection = (title, list) => {
+        if (!list || list.length === 0) return '';
+        let text = `\n【${title}】\n`;
+        if (title === '具体信息') {
+            const mergedNames = [];
+            list.forEach(memory => {
+                getMemoryExactNames(memory).forEach(name => mergedNames.push(name));
+            });
+            const exactNames = normalizeExactNames(mergedNames);
+            if (exactNames.length > 0) {
+                text += `- 关键名称：${exactNames.join(' / ')}\n`;
+                text += '- 规则：涉及这些名称时必须逐字一致，不得改写或混淆。\n';
+            }
+        }
+        list.sort((a, b) => (a.time || 0) - (b.time || 0)).forEach(memory => {
+            const date = new Date(memory.time || Date.now());
+            const dateStr = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            const lineContent = title === '具体信息'
+                ? buildFactMemoryReadableContent(memory)
+                : String(memory.content || '');
+            text += `- [${dateStr}] ${lineContent}\n`;
+        });
+        return text;
+    };
+
+    let output = '';
+    output += buildSection('状态记忆', sections.state);
+    output += buildSection('短期记忆', sections.short_term);
+    output += buildSection('长期记忆', sections.long_term);
+    output += buildSection('具体信息', sections.fact);
+    output += buildSection('精炼记忆', sections.refined);
+    if (!output.trim()) {
+        return buildLegacyMemoryContext(contact, history);
+    }
+    return output;
+}
+
+window.buildMemoryContextByPolicy = buildMemoryContextByPolicy;
+
+function pruneSelectedMemoryIds(contactId) {
+    const idSet = new Set(
+        getContactMemories(contactId)
+            .filter(memory => memory && Number.isFinite(Number(memory.id)))
+            .map(memory => Number(memory.id))
+    );
+    selectedMemoryIds = new Set(
+        Array.from(selectedMemoryIds).filter(id => idSet.has(Number(id)))
+    );
+}
+
+function getSortedMemoriesForCurrentFilter(memories) {
+    const filterTag = MEMORY_FILTER_TO_TAG[currentMemoryFilter] || null;
+    const filtered = filterTag
+        ? memories.filter(memory => normalizeMemoryTags(memory.memoryTags, 'long_term').includes(filterTag))
+        : memories;
+    return filtered.sort((a, b) => (b.time || 0) - (a.time || 0));
+}
+
+function getSelectableMemoryIdsForCurrentFilter(contactId, limitCount = null) {
+    if (!contactId || currentMemoryFilter === 'candidate') return [];
+    const sorted = getSortedMemoriesForCurrentFilter(getContactMemories(contactId).slice());
+    const limited = Number.isFinite(Number(limitCount)) && Number(limitCount) > 0
+        ? sorted.slice(0, Number(limitCount))
+        : sorted;
+    return limited
+        .map(memory => Number(memory.id))
+        .filter(id => Number.isFinite(id));
+}
+
+function updateMemoryRefineToolbar() {
+    const selectToggleBtn = document.getElementById('memory-select-toggle-btn');
+    const selectAllBtn = document.getElementById('memory-select-all-btn');
+    const selectRecentBtn = document.getElementById('memory-select-recent-btn');
+    const selectInvertBtn = document.getElementById('memory-select-invert-btn');
+    const selectClearBtn = document.getElementById('memory-select-clear-btn');
+    const selectedSummary = document.getElementById('memory-refine-summary');
+    const refineBtn = document.getElementById('memory-refine-selected-btn');
+    const contactId = window.iphoneSimState.currentChatContactId;
+    const currentFilter = currentMemoryFilter;
+    const canSelect = !!contactId && currentFilter !== 'candidate';
+    const selectedCount = selectedMemoryIds.size;
+    const selectableCount = canSelect ? getSelectableMemoryIdsForCurrentFilter(contactId).length : 0;
+
+    if (selectToggleBtn) {
+        selectToggleBtn.textContent = memorySelectMode ? '退出多选' : '开启多选';
+        selectToggleBtn.disabled = !canSelect;
+    }
+    if (selectAllBtn) selectAllBtn.disabled = !canSelect || selectableCount === 0;
+    if (selectRecentBtn) selectRecentBtn.disabled = !canSelect || selectableCount === 0;
+    if (selectInvertBtn) selectInvertBtn.disabled = !canSelect || selectableCount === 0;
+    if (selectClearBtn) selectClearBtn.disabled = !memorySelectMode || selectedCount === 0;
+    if (selectedSummary) {
+        selectedSummary.textContent = memorySelectMode
+            ? `已选 ${selectedCount}/${selectableCount} 条记忆，可一键精炼归档`
+            : '已关闭多选，可开启后批量精炼归档';
+    }
+    if (refineBtn) {
+        refineBtn.disabled = !memorySelectMode || selectedCount === 0 || !canSelect;
+    }
+}
+
+function resetMemorySelection() {
+    selectedMemoryIds = new Set();
+    memorySelectMode = false;
+    updateMemoryRefineToolbar();
+}
+
+window.toggleMemorySelectMode = function(forceMode) {
+    const contactId = window.iphoneSimState.currentChatContactId;
+    if (!contactId || currentMemoryFilter === 'candidate') return;
+    memorySelectMode = typeof forceMode === 'boolean' ? forceMode : !memorySelectMode;
+    if (!memorySelectMode) {
+        selectedMemoryIds = new Set();
+    } else {
+        pruneSelectedMemoryIds(contactId);
+    }
+    renderMemoryList();
+};
+
+window.toggleMemorySelection = function(id, checked) {
+    const numericId = Number(id);
+    if (!Number.isFinite(numericId)) return;
+    if (checked) {
+        selectedMemoryIds.add(numericId);
+    } else {
+        selectedMemoryIds.delete(numericId);
+    }
+    updateMemoryRefineToolbar();
+};
+
+window.selectAllMemoriesForRefine = function() {
+    const contactId = window.iphoneSimState.currentChatContactId;
+    if (!contactId || currentMemoryFilter === 'candidate') return;
+    memorySelectMode = true;
+    selectedMemoryIds = new Set(getSelectableMemoryIdsForCurrentFilter(contactId));
+    renderMemoryList();
+};
+
+window.selectRecentMemoriesForRefine = function(count = 10) {
+    const contactId = window.iphoneSimState.currentChatContactId;
+    if (!contactId || currentMemoryFilter === 'candidate') return;
+    const safeCount = clampInt(count, 10, 1, 100);
+    memorySelectMode = true;
+    selectedMemoryIds = new Set(getSelectableMemoryIdsForCurrentFilter(contactId, safeCount));
+    renderMemoryList();
+};
+
+window.invertMemorySelectionForRefine = function() {
+    const contactId = window.iphoneSimState.currentChatContactId;
+    if (!contactId || currentMemoryFilter === 'candidate') return;
+    memorySelectMode = true;
+    const visibleIds = getSelectableMemoryIdsForCurrentFilter(contactId);
+    const next = new Set();
+    visibleIds.forEach(id => {
+        if (!selectedMemoryIds.has(id)) next.add(id);
+    });
+    selectedMemoryIds = next;
+    renderMemoryList();
+};
+
+window.clearMemorySelectionForRefine = function() {
+    selectedMemoryIds = new Set();
+    updateMemoryRefineToolbar();
+    renderMemoryList();
+};
+
+window.extractSpecificNamesFromStructuredMessage = function(type, content, msgId) {
+    const safeType = String(type || '').trim();
+    if (!['shopping_gift', 'delivery_share', 'gift_card'].includes(safeType)) return [];
+
+    let payload = content;
+    if (typeof payload === 'string') {
+        try {
+            payload = JSON.parse(payload);
+        } catch (error) {
+            payload = null;
+        }
+    }
+    if (!payload || typeof payload !== 'object') return [];
+
+    const names = [];
+    if ((safeType === 'shopping_gift' || safeType === 'delivery_share') && Array.isArray(payload.items)) {
+        payload.items.forEach(item => {
+            const title = item && typeof item === 'object' ? String(item.title || '').trim() : '';
+            if (title) names.push(title);
+        });
+    }
+    if (safeType === 'gift_card') {
+        const title = String(payload.title || '').trim();
+        if (title) names.push(title);
+    }
+    return normalizeExactNames(names);
+};
+
+window.extractSpecificNamesFromUserText = function(text) {
+    const raw = String(text || '').trim();
+    if (!raw) return [];
+    const names = [];
+
+    const quoteRegex = /[“"「『]([^“”"「」『』]{1,40})[”"」』]/g;
+    let quoteMatch;
+    while ((quoteMatch = quoteRegex.exec(raw)) !== null) {
+        const cleaned = cleanupExtractedName(quoteMatch[1]);
+        if (cleaned) names.push(cleaned);
+    }
+
+    const actionRegex = /(?:给你(?:点了|买了|送了|下单了)|我(?:刚|刚刚|今天|已经|又)?(?:给你)?(?:点了|买了|送了|下单了)|(?:点了|买了|送了|下单了|给你点了))\s*([^，。！？!\?\n]{1,40})/g;
+    let actionMatch;
+    while ((actionMatch = actionRegex.exec(raw)) !== null) {
+        splitNamesByJoiners(actionMatch[1]).forEach(part => {
+            const cleaned = cleanupExtractedName(part);
+            if (cleaned) names.push(cleaned);
+        });
+    }
+
+    return normalizeExactNames(names);
+};
+
+window.createFactMemoryCandidateFromNames = function(contactId, names, sourceType = 'user_explicit_text', extraMeta = {}) {
+    const cid = Number(contactId);
+    if (!Number.isFinite(cid)) return null;
+    const exactNames = normalizeExactNames(Array.isArray(names) ? names : []);
+    if (exactNames.length === 0) return null;
+
+    const safeSourceType = FACT_SOURCE_TYPES.includes(sourceType) ? sourceType : 'user_explicit_text';
+    const safeActor = extraMeta.actor === 'contact' ? 'contact' : 'user';
+    const sceneText = buildFactSceneText(safeSourceType, Object.assign({}, extraMeta, { actor: safeActor }));
+    const content = buildFactMemoryContent(exactNames, safeSourceType, Object.assign({}, extraMeta, { actor: safeActor, sceneText }));
+    const reason = extraMeta.reason || `${sceneText || '检测到具体场景'}，提取名称：${exactNames.join(' / ')}`;
+    const sourceRange = extraMeta.sourceRange !== undefined && extraMeta.sourceRange !== null
+        ? String(extraMeta.sourceRange)
+        : '';
+    const sourceMsgId = extraMeta.sourceMsgId !== undefined && extraMeta.sourceMsgId !== null
+        ? String(extraMeta.sourceMsgId)
+        : '';
+    const confidence = clampFloat(extraMeta.confidence, 0.9, 0, 1);
+
+    const result = createMemoryCandidate(cid, {
+        content,
+        suggestedTags: ['fact'],
+        source: 'ai_action',
+        confidence,
+        reason,
+        range: sourceRange,
+        factMeta: {
+            sourceType: safeSourceType,
+            exactNames,
+            sourceMsgId,
+            sourceRange,
+            sceneText
+        }
+    });
+
+    if (!result && ensureMemorySettingsV2().extractMode === 'manual' && extraMeta.notifyOnManual) {
+        showNotification('手动模式：检测到具体名称，请手动添加', 2200);
+    }
+    return result;
+};
+
+async function callRefineMemoryBatchModel(contact, selectedMemories) {
+    const settings = window.iphoneSimState.aiSettings2.url ? window.iphoneSimState.aiSettings2 : window.iphoneSimState.aiSettings;
+    if (!settings || !settings.url || !settings.key) return null;
+
+    const records = selectedMemories.map(memory => {
+        const date = new Date(memory.time || Date.now());
+        const timeText = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+        return `#${memory.id} [${timeText}] ${memory.content}`;
+    }).join('\n');
+
+    let fetchUrl = settings.url;
+    if (!fetchUrl.endsWith('/chat/completions')) {
+        fetchUrl = fetchUrl.endsWith('/') ? `${fetchUrl}chat/completions` : `${fetchUrl}/chat/completions`;
+    }
+
+    const response = await fetch(fetchUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${settings.key}`
+        },
+        body: JSON.stringify({
+            model: settings.model,
+            messages: [
+                {
+                    role: 'system',
+                    content: `你是记忆精炼助手。输入是同一联系人的多条记忆，请输出严格 JSON：
+{
+  "refined_summary": "1-2句总览",
+  "key_facts": [{"name":"关键名称","reason":"提取原因"}]
+}
+要求：
+1) 只输出 JSON，不要 Markdown。
+2) key_facts.name 只保留原文中的具体名称，不要改写、不要近义替换。
+3) 如果没有可提取名称，key_facts 返回空数组。`
+                },
+                {
+                    role: 'user',
+                    content: `联系人：${contact && contact.name ? contact.name : '未知联系人'}\n记忆列表：\n${records}`
+                }
+            ],
+            temperature: 0.2
+        })
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const content = String(data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '').trim();
+    if (!content) return null;
+
+    const cleaned = content.replace(/```json/gi, '').replace(/```/g, '').trim();
+    try {
+        return JSON.parse(cleaned);
+    } catch (error) {
+        const match = cleaned.match(/\{[\s\S]*\}/);
+        if (!match) return null;
+        try {
+            return JSON.parse(match[0]);
+        } catch (error2) {
+            return null;
+        }
+    }
+}
+
+window.refineSelectedMemories = async function(contactId, selectedIds) {
+    const cid = Number(contactId);
+    if (!Number.isFinite(cid)) return null;
+    const uniqueIds = Array.from(new Set((Array.isArray(selectedIds) ? selectedIds : []).map(id => Number(id)).filter(id => Number.isFinite(id))));
+    if (uniqueIds.length === 0) {
+        showNotification('请先选择要精炼的记忆', 1800);
+        return null;
+    }
+
+    const selectedMemories = getContactMemories(cid)
+        .filter(memory => uniqueIds.includes(Number(memory.id)))
+        .sort((a, b) => (a.time || 0) - (b.time || 0));
+    if (selectedMemories.length === 0) {
+        showNotification('没有可精炼的记忆', 1800);
+        return null;
+    }
+
+    const contact = window.iphoneSimState.contacts.find(item => item.id === cid);
+    showNotification('正在精炼归档...', 1500);
+
+    let result = null;
+    try {
+        result = await callRefineMemoryBatchModel(contact, selectedMemories);
+    } catch (error) {
+        console.warn('refineSelectedMemories model call failed', error);
+    }
+
+    let refinedSummary = '';
+    if (result && typeof result.refined_summary === 'string') {
+        refinedSummary = result.refined_summary.trim();
+    }
+    if (!refinedSummary) {
+        refinedSummary = selectedMemories.map(memory => String(memory.content || '').trim()).filter(Boolean).slice(0, 2).join('；');
+        if (refinedSummary.length > 140) refinedSummary = `${refinedSummary.slice(0, 140)}...`;
+    }
+    if (!refinedSummary) {
+        showNotification('精炼失败，请稍后重试', 1800);
+        return null;
+    }
+
+    const rawKeyFacts = Array.isArray(result && result.key_facts) ? result.key_facts : [];
+    const extractedNames = normalizeExactNames(
+        rawKeyFacts
+            .map(item => {
+                if (typeof item === 'string') return item;
+                if (item && typeof item === 'object') return item.name;
+                return '';
+            })
+            .filter(Boolean)
+    );
+    const fallbackNameBuffer = [];
+    selectedMemories.forEach(memory => {
+        getMemoryExactNames(memory).forEach(name => fallbackNameBuffer.push(name));
+    });
+    const fallbackNames = normalizeExactNames(fallbackNameBuffer);
+    const finalNames = extractedNames.length > 0 ? extractedNames : fallbackNames;
+
+    createOrMergeApprovedMemory({
+        contactId: cid,
+        content: refinedSummary,
+        memoryTags: ['refined'],
+        source: 'refine',
+        confidence: 0.9,
+        refinedFrom: uniqueIds,
+        refinedMeta: {
+            selectedMemoryIds: uniqueIds,
+            keyFactsCount: finalNames.length
+        }
+    });
+
+    finalNames.forEach(name => {
+        const factSceneText = buildFactSceneText('refine_extract', {
+            actor: 'user',
+            sceneText: '从用户选择的历史记忆中提炼出的关键事实'
+        });
+        createOrMergeApprovedMemory({
+            contactId: cid,
+            content: buildFactMemoryContent([name], 'refine_extract', {
+                actor: 'user',
+                sceneText: factSceneText
+            }),
+            memoryTags: ['fact'],
+            source: 'refine',
+            confidence: 0.88,
+            factMeta: {
+                sourceType: 'refine_extract',
+                exactNames: [name],
+                sourceRange: uniqueIds.join('-'),
+                sceneText: factSceneText
+            }
+        });
+    });
+
+    syncLegacyPerceptionAndState(cid);
+    saveConfig();
+    resetMemorySelection();
+    renderMemoryList();
+    showNotification(`精炼归档完成：总览 1 条，关键名称 ${finalNames.length} 条`, 2200, 'success');
+    return {
+        refinedSummary,
+        keyFacts: finalNames
+    };
+};
+
 function openMemoryApp() {
     if (!window.iphoneSimState.currentChatContactId) {
         alert('请先进入一个聊天窗口');
@@ -1533,6 +3279,12 @@ function openMemoryApp() {
     
     const contact = window.iphoneSimState.contacts.find(c => c.id === window.iphoneSimState.currentChatContactId);
     if (!contact) return;
+
+    ensureMemoryCollections();
+    ensureMemorySettingsV2();
+    syncLegacyPerceptionAndState(contact.id);
+    resetMemorySelection();
+    pruneSelectedMemoryIds(contact.id);
 
     const memoryApp = document.getElementById('memory-app');
     
@@ -1549,11 +3301,45 @@ function handleSaveManualMemory() {
 
     if (!window.iphoneSimState.currentChatContactId) return;
 
-    window.iphoneSimState.memories.push({
-        id: Date.now(),
+    const checkedTags = Array.from(document.querySelectorAll('#manual-memory-tags input[type="checkbox"]:checked'))
+        .map(input => input.value);
+    const tags = normalizeMemoryTags(checkedTags, 'long_term');
+    let stateMeta = null;
+    if (tags.includes('state')) {
+        const reason = document.getElementById('manual-memory-state-reason')
+            ? document.getElementById('manual-memory-state-reason').value
+            : 'other';
+        const ttlDays = document.getElementById('manual-memory-state-ttl')
+            ? clampInt(document.getElementById('manual-memory-state-ttl').value, 7, 1, 365)
+            : 7;
+        const start = Date.now();
+        stateMeta = makeStateMeta(reason, start, start + ttlDays * 24 * 60 * 60 * 1000);
+    }
+    let factMeta = null;
+    if (tags.includes('fact') && typeof window.extractSpecificNamesFromUserText === 'function') {
+        const names = window.extractSpecificNamesFromUserText(content);
+        if (Array.isArray(names) && names.length > 0) {
+            const sceneText = buildFactSceneText('user_explicit_text', {
+                actor: 'user',
+                sourceText: content
+            });
+            factMeta = {
+                sourceType: 'user_explicit_text',
+                exactNames: normalizeExactNames(names),
+                sceneText
+            };
+        }
+    }
+
+    createOrMergeApprovedMemory({
         contactId: window.iphoneSimState.currentChatContactId,
         content: content,
-        time: Date.now()
+        time: Date.now(),
+        memoryTags: tags,
+        source: 'manual',
+        confidence: 1,
+        stateMeta: stateMeta,
+        factMeta: factMeta
     });
     saveConfig();
     renderMemoryList();
@@ -1588,9 +3374,14 @@ async function handleManualSummary() {
     const range = `${start}-${end}`;
     
     document.getElementById('manual-summary-modal').classList.add('hidden');
-    showNotification('正在手动总结...');
+    showNotification('正在生成详细总结...');
     
-    await generateSummary(contact, messagesToSummarize, range);
+    await generateSummary(contact, messagesToSummarize, range, {
+        autoExtract: false,
+        source: 'manual',
+        suggestedTags: ['long_term'],
+        reason: '手动详细总结'
+    });
 }
 
 function openMemorySettings() {
@@ -1598,6 +3389,34 @@ function openMemorySettings() {
     const contact = window.iphoneSimState.contacts.find(c => c.id === window.iphoneSimState.currentChatContactId);
     
     document.getElementById('modal-memory-send-limit').value = contact.memorySendLimit || '';
+    const settings = ensureMemorySettingsV2();
+    const extractModeEl = document.getElementById('modal-memory-extract-mode');
+    if (extractModeEl) extractModeEl.value = settings.extractMode || 'hybrid';
+    const map = [
+        ['short_term', 'modal-memory-quota-short-term'],
+        ['long_term', 'modal-memory-quota-long-term'],
+        ['state', 'modal-memory-quota-state'],
+        ['fact', 'modal-memory-quota-fact'],
+        ['refined', 'modal-memory-quota-refined'],
+        ['maxTotal', 'modal-memory-quota-max-total']
+    ];
+    map.forEach(([key, id]) => {
+        const el = document.getElementById(id);
+        if (el) el.value = settings.injectQuota[key] || '';
+    });
+    const ttlMap = [
+        ['health', 'modal-memory-ttl-health'],
+        ['exam', 'modal-memory-ttl-exam'],
+        ['travel', 'modal-memory-ttl-travel'],
+        ['emotion', 'modal-memory-ttl-emotion'],
+        ['other', 'modal-memory-ttl-other']
+    ];
+    ttlMap.forEach(([key, id]) => {
+        const el = document.getElementById(id);
+        if (el) el.value = settings.stateTtlDays[key] || '';
+    });
+    const dedupeEl = document.getElementById('modal-memory-dedupe-threshold');
+    if (dedupeEl) dedupeEl.value = settings.dedupeThreshold;
     document.getElementById('memory-settings-modal').classList.remove('hidden');
 }
 
@@ -1607,6 +3426,42 @@ function handleSaveMemorySettings() {
     
     const limit = parseInt(document.getElementById('modal-memory-send-limit').value);
     contact.memorySendLimit = isNaN(limit) ? 0 : limit;
+
+    const settings = ensureMemorySettingsV2();
+    const extractModeEl = document.getElementById('modal-memory-extract-mode');
+    if (extractModeEl && ['hybrid', 'auto', 'manual'].includes(extractModeEl.value)) {
+        settings.extractMode = extractModeEl.value;
+    }
+    const quotaMap = [
+        ['short_term', 'modal-memory-quota-short-term'],
+        ['long_term', 'modal-memory-quota-long-term'],
+        ['state', 'modal-memory-quota-state'],
+        ['fact', 'modal-memory-quota-fact'],
+        ['refined', 'modal-memory-quota-refined'],
+        ['maxTotal', 'modal-memory-quota-max-total']
+    ];
+    quotaMap.forEach(([key, id]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        settings.injectQuota[key] = clampInt(el.value, settings.injectQuota[key], key === 'maxTotal' ? 1 : 0, 100);
+    });
+    const ttlMap = [
+        ['health', 'modal-memory-ttl-health'],
+        ['exam', 'modal-memory-ttl-exam'],
+        ['travel', 'modal-memory-ttl-travel'],
+        ['emotion', 'modal-memory-ttl-emotion'],
+        ['other', 'modal-memory-ttl-other']
+    ];
+    ttlMap.forEach(([key, id]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        settings.stateTtlDays[key] = clampInt(el.value, settings.stateTtlDays[key], 1, 365);
+    });
+    const dedupeEl = document.getElementById('modal-memory-dedupe-threshold');
+    if (dedupeEl) {
+        settings.dedupeThreshold = clampFloat(dedupeEl.value, settings.dedupeThreshold, 0.3, 0.99);
+    }
+    window.iphoneSimState.memorySettingsV2 = settings;
     
     saveConfig();
     document.getElementById('memory-settings-modal').classList.add('hidden');
@@ -1616,131 +3471,266 @@ function handleSaveMemorySettings() {
 function renderMemoryList() {
     const list = document.getElementById('memory-list');
     const emptyState = document.getElementById('memory-empty');
+    const filterButtons = document.querySelectorAll('#memory-filter-bar .memory-filter-btn');
+    const candidatePanel = document.getElementById('memory-candidate-panel');
+    const candidateList = document.getElementById('memory-candidate-list');
+    const candidateCount = document.getElementById('memory-candidate-count');
     if (!list) return;
 
     list.innerHTML = '';
-    
-    if (!window.iphoneSimState.currentChatContactId) return;
+    if (candidateList) candidateList.innerHTML = '';
+    filterButtons.forEach(btn => {
+        btn.classList.toggle('is-active', btn.dataset.filter === currentMemoryFilter);
+    });
 
-    const contactMemories = window.iphoneSimState.memories.filter(m => m.contactId === window.iphoneSimState.currentChatContactId);
-    
-    if (contactMemories.length === 0) {
-        if (emptyState) emptyState.style.display = 'flex';
+    const contactId = window.iphoneSimState.currentChatContactId;
+    if (!contactId) {
+        updateMemoryRefineToolbar();
         return;
     }
-    
-    if (emptyState) emptyState.style.display = 'none';
 
-    const sortedMemories = [...contactMemories].sort((a, b) => b.time - a.time);
+    ensureMemoryCollections();
+    pruneSelectedMemoryIds(contactId);
+    const contactMemories = getContactMemories(contactId).slice();
+    let stateChanged = false;
+    contactMemories.forEach(memory => {
+        if (normalizeStateMetaForMemory(memory)) stateChanged = true;
+    });
+    if (stateChanged) {
+        syncLegacyPerceptionAndState(contactId);
+        saveConfig();
+    }
+
+    const pendingCandidates = getPendingCandidates(contactId).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    if (candidateCount) candidateCount.textContent = String(pendingCandidates.length);
+    if (candidatePanel) {
+        if (pendingCandidates.length === 0 && currentMemoryFilter !== 'candidate') {
+            candidatePanel.style.display = 'none';
+        } else {
+            candidatePanel.style.display = '';
+        }
+    }
+    if (candidateList) {
+        pendingCandidates.forEach(candidate => {
+            const item = document.createElement('div');
+            item.className = 'memory-candidate-card';
+            const tags = normalizeMemoryTags(candidate.suggestedTags, 'long_term')
+                .map(tag => `<span class="memory-tag-badge tag-${tag}">${MEMORY_TAG_LABELS[tag] || tag}</span>`)
+                .join('');
+            item.innerHTML = `
+                <div class="memory-candidate-content">${escapeHtml(candidate.content || '')}</div>
+                <div class="memory-tag-wrap" style="justify-content: flex-start; margin-bottom: 6px;">${tags}</div>
+                <div class="memory-candidate-meta">${escapeHtml(formatCandidateMetaText(candidate))}</div>
+                <div class="memory-candidate-actions">
+                    <button class="approve-btn" onclick="window.approveMemoryCandidate('${candidate.id}'); showNotification('已存档', 1200, 'success');">存档</button>
+                    <button onclick="window.editAndApproveMemoryCandidate('${candidate.id}')">改一下再存档</button>
+                    <button class="reject-btn" onclick="window.rejectMemoryCandidate('${candidate.id}')">不保存</button>
+                </div>
+            `;
+            candidateList.appendChild(item);
+        });
+    }
+
+    if (currentMemoryFilter === 'candidate') {
+        if (emptyState) {
+            emptyState.style.display = pendingCandidates.length > 0 ? 'none' : 'flex';
+            emptyState.textContent = pendingCandidates.length > 0 ? '' : '暂无待确认记忆';
+        }
+        updateMemoryRefineToolbar();
+        return;
+    }
+
+    const sortedMemories = getSortedMemoriesForCurrentFilter(contactMemories);
+
+    if (sortedMemories.length === 0) {
+        if (emptyState) {
+            emptyState.style.display = 'flex';
+            emptyState.textContent = '暂无记忆';
+        }
+        updateMemoryRefineToolbar();
+        return;
+    }
+    if (emptyState) emptyState.style.display = 'none';
 
     sortedMemories.forEach(memory => {
         const item = document.createElement('div');
         item.className = 'archive-card';
-        
-        const date = new Date(memory.time);
-        const timeStr = `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
-        
-        // Use type if available, else default to 线上聊天
-        let memoryType = memory.type || '线上聊天';
-        if (memoryType === '线上聊天') memoryType = 'Log'; 
-        
-        // Ensure id is displayed properly
-        let refId = memory.id ? String(memory.id).slice(-4) : '0000';
-        
-        let title = memory.title || 'Memory Fragment';
-        if (!memory.title && memory.content) {
-            // Fallback if no title stored (old memories)
-            // Use first 7 chars as requested
-            title = memory.content.substring(0, 7); 
+        const date = new Date(memory.time || Date.now());
+        const timeStr = `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+        const memoryType = memory.type && memory.type !== '线上聊天' ? memory.type : 'Log';
+        const title = memory.title || String(memory.content || '').slice(0, 12) || 'Memory Fragment';
+        const tags = normalizeMemoryTags(memory.memoryTags, memory.content && memory.content.startsWith('【通话回忆】') ? 'short_term' : 'long_term');
+        const refText = memory.range || (memory.id ? String(memory.id).slice(-4) : '0000');
+        let stateBadge = '';
+        if (tags.includes('state')) {
+            const phase = memory.stateMeta && memory.stateMeta.phase ? memory.stateMeta.phase : 'active';
+            stateBadge = `<span class="memory-state-pill ${phase}">STATE-${String(phase).toUpperCase()}</span>`;
         }
+        const tagHtml = tags.map(tag => `<span class="memory-tag-badge tag-${tag}">${MEMORY_TAG_LABELS[tag] || tag}</span>`).join('');
+        const selected = selectedMemoryIds.has(Number(memory.id));
+        const selectControl = memorySelectMode
+            ? `<label class="memory-select-wrap" title="选择用于精炼归档">
+                    <input type="checkbox" ${selected ? 'checked' : ''} onclick="event.stopPropagation(); window.toggleMemorySelection('${String(memory.id)}', this.checked)">
+                    <span>选择</span>
+               </label>`
+            : '';
 
         item.innerHTML = `
             <div class="card-top">
-                <span class="ref-id">REF // ${memory.range || '0000'}</span>
-                <span class="status">${memoryType}</span>
+                <div style="display: flex; align-items: center;">${selectControl}<span class="ref-id">REF // ${refText}</span></div>
+                <div class="memory-tag-wrap">${stateBadge}${tagHtml}<span class="status">${memoryType}</span></div>
             </div>
             <div class="card-body" onclick="this.querySelector('p').classList.toggle('expanded'); event.stopPropagation();">
-                <h3>${title}</h3>
-                <p>${memory.content}</p>
+                <h3>${escapeHtml(title)}</h3>
+                <p>${escapeHtml(memory.content || '')}</p>
             </div>
             <div class="card-footer">
                 <div class="archive-actions" style="position: relative;">
                     <span style="cursor: pointer; margin-right: 10px; font-family: monospace; font-size: 10px; border: 1px solid #ccc; padding: 2px 5px; border-radius: 4px;" onclick="event.stopPropagation(); window.toggleMemoryActions(this, ${memory.id})">OPTS</span>
                     <div class="memory-action-menu" id="memory-action-${memory.id}" style="display: none; position: absolute; left: 0; bottom: 100%; background: white; border: 1px solid #eee; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 5px; z-index: 100;">
                         <div onclick="event.stopPropagation(); window.editMemory(${memory.id}); window.toggleMemoryActions(null, ${memory.id})" style="padding: 5px 10px; cursor: pointer; white-space: nowrap; font-size: 12px; color: #333; border-bottom: 1px solid #f5f5f5;">EDIT</div>
+                        <div onclick="event.stopPropagation(); window.retagMemory(${memory.id}); window.toggleMemoryActions(null, ${memory.id})" style="padding: 5px 10px; cursor: pointer; white-space: nowrap; font-size: 12px; color: #333; border-bottom: 1px solid #f5f5f5;">RETAG</div>
+                        <div onclick="event.stopPropagation(); window.refineMemory(${memory.id}); window.toggleMemoryActions(null, ${memory.id})" style="padding: 5px 10px; cursor: pointer; white-space: nowrap; font-size: 12px; color: #333; border-bottom: 1px solid #f5f5f5;">REFINE</div>
+                        ${tags.includes('state') ? `<div onclick="event.stopPropagation(); window.resolveStateMemory(${memory.id}); window.toggleMemoryActions(null, ${memory.id})" style="padding: 5px 10px; cursor: pointer; white-space: nowrap; font-size: 12px; color: #333; border-bottom: 1px solid #f5f5f5;">RESOLVE</div>
+                        <div onclick="event.stopPropagation(); window.extendStateMemory(${memory.id}); window.toggleMemoryActions(null, ${memory.id})" style="padding: 5px 10px; cursor: pointer; white-space: nowrap; font-size: 12px; color: #333; border-bottom: 1px solid #f5f5f5;">EXTEND</div>` : ''}
                         <div onclick="event.stopPropagation(); window.deleteMemory(${memory.id}); window.toggleMemoryActions(null, ${memory.id})" style="padding: 5px 10px; cursor: pointer; white-space: nowrap; font-size: 12px; color: #ff3b30;">DELETE</div>
                     </div>
                 </div>
                 <span>DATE: ${timeStr}</span>
             </div>
         `;
-        
+
         item.addEventListener('click', function(e) {
             if (e.target.closest('.archive-actions') || e.target.closest('.memory-action-menu')) return;
-            
             const isActive = this.classList.contains('is-active');
-            
-            document.querySelectorAll('.archive-card').forEach(card => {
-                card.classList.remove('is-active');
-            });
-            
-            if (!isActive) {
-                this.classList.add('is-active');
-            }
+            document.querySelectorAll('.archive-card').forEach(card => card.classList.remove('is-active'));
+            if (!isActive) this.classList.add('is-active');
         });
 
         list.appendChild(item);
     });
+    updateMemoryRefineToolbar();
 }
 
 window.toggleMemoryActions = function(element, id) {
     const allMenus = document.querySelectorAll('.memory-action-menu');
     allMenus.forEach(menu => {
-        if (menu.id !== `memory-action-${id}`) {
-            menu.style.display = 'none';
-        }
+        if (menu.id !== `memory-action-${id}`) menu.style.display = 'none';
     });
-    
     const menu = document.getElementById(`memory-action-${id}`);
-    if (menu) {
-        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-    }
-    
-    // Close when clicking outside
-    if (menu && menu.style.display === 'block') {
-        const closeMenu = function(e) {
-            if (!menu.contains(e.target) && (!element || !element.contains(e.target))) {
-                menu.style.display = 'none';
-                document.removeEventListener('click', closeMenu);
-            }
-        };
-        setTimeout(() => {
-            document.addEventListener('click', closeMenu);
-        }, 0);
-    }
+    if (!menu) return;
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    if (menu.style.display !== 'block') return;
+    const closeMenu = function(e) {
+        if (!menu.contains(e.target) && (!element || !element.contains(e.target))) {
+            menu.style.display = 'none';
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
 };
 
 window.editMemory = function(id) {
     const memory = window.iphoneSimState.memories.find(m => m.id === id);
     if (!memory) return;
-
     currentEditingMemoryId = id;
-    document.getElementById('edit-memory-content').value = memory.content;
+    document.getElementById('edit-memory-content').value = memory.content || '';
+    const editTagCheckboxes = document.querySelectorAll('#edit-memory-tags input[type="checkbox"]');
+    const tags = normalizeMemoryTags(memory.memoryTags, 'long_term');
+    editTagCheckboxes.forEach(input => {
+        input.checked = tags.includes(input.value);
+    });
+    const stateBlock = document.getElementById('edit-memory-state-options');
+    if (stateBlock) stateBlock.style.display = tags.includes('state') ? '' : 'none';
+    if (tags.includes('state')) {
+        normalizeStateMetaForMemory(memory);
+        const reasonInput = document.getElementById('edit-memory-state-reason');
+        if (reasonInput) reasonInput.value = (memory.stateMeta && memory.stateMeta.reasonType) || 'other';
+        const ttlInput = document.getElementById('edit-memory-state-ttl');
+        if (ttlInput && memory.stateMeta && memory.stateMeta.expiresAt && memory.stateMeta.startAt) {
+            const ttl = Math.max(1, Math.round((memory.stateMeta.expiresAt - memory.stateMeta.startAt) / (24 * 60 * 60 * 1000)));
+            ttlInput.value = ttl;
+        }
+    }
     document.getElementById('edit-memory-modal').classList.remove('hidden');
+};
+
+window.editAndApproveMemoryCandidate = function(candidateId) {
+    const candidate = window.iphoneSimState.memoryCandidates.find(item => item.id === candidateId);
+    if (!candidate || candidate.status !== 'pending') return;
+    const edited = prompt('改一下内容再存档：', candidate.content || '');
+    if (edited === null) return;
+    const text = String(edited).trim();
+    if (!text) return alert('内容不能为空');
+    const overrides = { content: text };
+    const candidateTags = normalizeMemoryTags(candidate.suggestedTags, 'long_term');
+    if (candidateTags.includes('fact')) {
+        const extracted = window.extractSpecificNamesFromUserText ? window.extractSpecificNamesFromUserText(text) : [];
+        const fallback = getMemoryExactNames(candidate);
+        const exactNames = normalizeExactNames(extracted.length > 0 ? extracted : fallback);
+        if (exactNames.length > 0) {
+            overrides.factMeta = {
+                sourceType: (candidate.factMeta && FACT_SOURCE_TYPES.includes(candidate.factMeta.sourceType))
+                    ? candidate.factMeta.sourceType
+                    : 'user_explicit_text',
+                exactNames,
+                sourceMsgId: candidate.factMeta && candidate.factMeta.sourceMsgId ? candidate.factMeta.sourceMsgId : '',
+                sourceRange: candidate.factMeta && candidate.factMeta.sourceRange ? candidate.factMeta.sourceRange : ''
+            };
+        }
+    }
+    approveMemoryCandidate(candidateId, overrides);
+    showNotification('已存档', 1200, 'success');
 };
 
 function handleSaveEditedMemory() {
     if (!currentEditingMemoryId) return;
-
     const content = document.getElementById('edit-memory-content').value.trim();
     if (!content) {
         alert('记忆内容不能为空');
         return;
     }
-
     const memory = window.iphoneSimState.memories.find(m => m.id === currentEditingMemoryId);
     if (memory) {
         memory.content = content;
+        const tags = Array.from(document.querySelectorAll('#edit-memory-tags input[type="checkbox"]:checked')).map(input => input.value);
+        memory.memoryTags = normalizeMemoryTags(tags, 'long_term');
+        if (memory.memoryTags.includes('state')) {
+            const reason = document.getElementById('edit-memory-state-reason')
+                ? document.getElementById('edit-memory-state-reason').value
+                : inferStateReasonType(memory.content);
+            const ttl = document.getElementById('edit-memory-state-ttl')
+                ? clampInt(document.getElementById('edit-memory-state-ttl').value, 7, 1, 365)
+                : 7;
+            const startAt = memory.stateMeta && Number.isFinite(Number(memory.stateMeta.startAt))
+                ? Number(memory.stateMeta.startAt)
+                : Date.now();
+            memory.stateMeta = makeStateMeta(reason, startAt, startAt + ttl * 24 * 60 * 60 * 1000);
+        } else {
+            delete memory.stateMeta;
+        }
+        if (memory.memoryTags.includes('fact')) {
+            if (!memory.factMeta || !Array.isArray(memory.factMeta.exactNames) || memory.factMeta.exactNames.length === 0) {
+                const inferred = window.extractSpecificNamesFromUserText ? window.extractSpecificNamesFromUserText(memory.content) : [];
+                if (Array.isArray(inferred) && inferred.length > 0) {
+                    const sceneText = buildFactSceneText('user_explicit_text', {
+                        actor: 'user',
+                        sourceText: memory.content
+                    });
+                    memory.factMeta = {
+                        sourceType: 'user_explicit_text',
+                        exactNames: normalizeExactNames(inferred),
+                        sceneText
+                    };
+                }
+            }
+        } else {
+            delete memory.factMeta;
+        }
+        if (!memory.memoryTags.includes('refined')) {
+            delete memory.refinedMeta;
+        }
+        syncLegacyPerceptionAndState(memory.contactId);
         saveConfig();
         renderMemoryList();
         document.getElementById('edit-memory-modal').classList.add('hidden');
@@ -1749,11 +3739,75 @@ function handleSaveEditedMemory() {
 }
 
 window.deleteMemory = function(id) {
-    if (confirm('确定要删除这条记忆吗？')) {
-        window.iphoneSimState.memories = window.iphoneSimState.memories.filter(m => m.id !== id);
-        saveConfig();
-        renderMemoryList();
+    if (!confirm('确定要删除这条记忆吗？')) return;
+    window.iphoneSimState.memories = window.iphoneSimState.memories.filter(m => m.id !== id);
+    selectedMemoryIds.delete(Number(id));
+    const contactId = window.iphoneSimState.currentChatContactId;
+    if (contactId) syncLegacyPerceptionAndState(contactId);
+    saveConfig();
+    renderMemoryList();
+};
+
+window.retagMemory = function(id) {
+    const memory = window.iphoneSimState.memories.find(m => m.id === id);
+    if (!memory) return;
+    const current = normalizeMemoryTags(memory.memoryTags, 'long_term').join(', ');
+    const input = prompt('输入标签（refined, short_term, long_term, state, fact）\n逗号分隔：', current);
+    if (input === null) return;
+    const tags = normalizeMemoryTags(String(input).split(','), 'long_term');
+    memory.memoryTags = tags;
+    if (tags.includes('state')) {
+        memory.stateMeta = memory.stateMeta || makeStateMeta(inferStateReasonType(memory.content), memory.time || Date.now(), null);
+        normalizeStateMetaForMemory(memory);
+    } else {
+        delete memory.stateMeta;
     }
+    if (!tags.includes('fact')) {
+        delete memory.factMeta;
+    }
+    if (!tags.includes('refined')) {
+        delete memory.refinedMeta;
+    }
+    syncLegacyPerceptionAndState(memory.contactId);
+    saveConfig();
+    renderMemoryList();
+};
+
+window.resolveStateMemory = function(id) {
+    const memory = window.iphoneSimState.memories.find(m => m.id === id);
+    if (!memory) return;
+    memory.memoryTags = normalizeMemoryTags(memory.memoryTags, 'state');
+    if (!memory.memoryTags.includes('state')) memory.memoryTags.push('state');
+    memory.stateMeta = memory.stateMeta || makeStateMeta(inferStateReasonType(memory.content), memory.time || Date.now(), null);
+    memory.stateMeta.phase = 'resolved';
+    memory.stateMeta.resolvedAt = Date.now();
+    syncLegacyPerceptionAndState(memory.contactId);
+    saveConfig();
+    renderMemoryList();
+};
+
+window.extendStateMemory = function(id) {
+    const memory = window.iphoneSimState.memories.find(m => m.id === id);
+    if (!memory) return;
+    const addDaysInput = prompt('延长状态有效期（天）：', '3');
+    if (addDaysInput === null) return;
+    const addDays = clampInt(addDaysInput, 3, 1, 365);
+    memory.memoryTags = normalizeMemoryTags(memory.memoryTags, 'state');
+    if (!memory.memoryTags.includes('state')) memory.memoryTags.push('state');
+    memory.stateMeta = memory.stateMeta || makeStateMeta(inferStateReasonType(memory.content), memory.time || Date.now(), null);
+    const base = Number(memory.stateMeta.expiresAt) || Date.now();
+    memory.stateMeta.expiresAt = base + addDays * 24 * 60 * 60 * 1000;
+    if (memory.stateMeta.phase === 'resolved') memory.stateMeta.phase = 'active';
+    normalizeStateMetaForMemory(memory);
+    syncLegacyPerceptionAndState(memory.contactId);
+    saveConfig();
+    renderMemoryList();
+};
+
+window.refineMemory = async function(id) {
+    const memory = window.iphoneSimState.memories.find(m => m.id === id);
+    if (!memory) return;
+    await window.refineSelectedMemories(memory.contactId, [memory.id]);
 };
 
 async function checkAndSummarize(contactId) {
@@ -1776,12 +3830,17 @@ async function checkAndSummarize(contactId) {
         contact.lastSummaryIndex = history.length;
         saveConfig();
 
-        showNotification('正在总结...');
-        await generateSummary(contact, messagesToSummarize, range);
+        showNotification('正在生成详细总结...');
+        await generateSummary(contact, messagesToSummarize, range, {
+            autoExtract: true,
+            source: 'auto_summary',
+            suggestedTags: ['long_term'],
+            reason: '聊天自动详细总结'
+        });
     }
 }
 
-async function generateSummary(contact, messages, range) {
+async function generateSummary(contact, messages, range, options = {}) {
     const settings = window.iphoneSimState.aiSettings2.url ? window.iphoneSimState.aiSettings2 : window.iphoneSimState.aiSettings;
     if (!settings.url || !settings.key) {
         console.log('未配置副API，无法自动总结');
@@ -1791,7 +3850,8 @@ async function generateSummary(contact, messages, range) {
 
     const textMessages = messages.filter(m => m.type === 'text' && !m.content.startsWith('['));
     if (textMessages.length === 0) {
-        document.getElementById('summary-notification').classList.add('hidden');
+        const summaryEl = document.getElementById('summary-notification');
+        if (summaryEl) summaryEl.classList.add('hidden');
         return;
     }
 
@@ -1809,17 +3869,29 @@ async function generateSummary(contact, messages, range) {
     const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
+    const detailModeHint = options.autoExtract === false
+        ? '当前是用户主动发起的手动总结，请覆盖更完整的上下文。'
+        : '当前是自动总结，请在保证完整的前提下控制冗余。';
     const systemPrompt = `你是一个即时通讯软件的聊天记录总结助手。
-请阅读以下聊天记录，并提取出其中重要的信息、事实、用户偏好或发生的事件，生成一条简练的“记忆”。
-记忆应该是陈述句，包含关键信息。
-请务必总结 ${userName} 和 ${contact.name} 聊天的具体内容，不要只总结重要信息。
-如果聊天记录中没有值得记忆的重要信息（例如只是简单的问候或无意义的对话），请返回 "无"。
-不要包含“聊天记录显示”、“用户说”等前缀，直接陈述事实。
+请阅读以下聊天记录，生成一条“详细记忆”，用于后续长期记忆检索。
 
-【重要要求】：
-请务必在记忆中包含事情发生的具体时间点（YYYY年MM月DD日 HH:mm）。
-请将聊天中的相对时间（如“今天”、“刚才”、“昨天”）根据当前参考时间转换为绝对时间。
-参考时间：${dateStr} ${timeStr}`;
+${detailModeHint}
+
+输出要求（严格执行）：
+1. 输出 3~4 行中文，不要使用 Markdown 列表，不要输出 JSON。
+2. 每行使用固定前缀（至少前三行）：
+【时间与背景】...
+【关键经过】...
+【结果与状态】...
+可选第四行： 【后续关注】...
+3. 长度建议 120~260 字，信息要具体，不要只写一句泛化结论。
+4. 至少包含一个明确时间点（YYYY年MM月DD日 HH:mm），并将“今天/刚才/昨天”等相对时间换算成绝对时间。
+5. 涉及具体名称（如礼物名、餐品名、地点名、人名）必须逐字保留，不得改写。
+6. 只能基于聊天内容，不得杜撰。若确实没有可记忆内容，返回“无”。
+7. 不要出现“聊天记录显示”“用户说”这类提示语，直接陈述事实。
+
+参考时间：${dateStr} ${timeStr}
+对话双方：${userName} 与 ${contact.name}`;
 
     try {
         let fetchUrl = settings.url;
@@ -1839,7 +3911,8 @@ async function generateSummary(contact, messages, range) {
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: chatText }
                 ],
-                temperature: 0.5
+                temperature: 0.35,
+                max_tokens: 420
             })
         });
 
@@ -1851,20 +3924,45 @@ async function generateSummary(contact, messages, range) {
         let summary = data.choices[0].message.content.trim();
 
         if (summary && summary !== '无' && summary !== '无。') {
-            window.iphoneSimState.memories.push({
-                id: Date.now(),
-                contactId: contact.id,
-                content: summary,
-                time: Date.now(),
-                range: range
-            });
+            const autoExtract = options.autoExtract !== false;
+            if (autoExtract) {
+                const candidate = createMemoryCandidate(contact.id, {
+                    content: summary,
+                    suggestedTags: Array.isArray(options.suggestedTags) ? options.suggestedTags : ['long_term'],
+                    source: options.source || 'auto_summary',
+                    confidence: clampFloat(options.confidence, 0.78, 0, 1),
+                    range: range,
+                    reason: options.reason || '自动提取'
+                });
+                if (candidate && candidate.status === 'pending') {
+                    showNotification('已加入待确认记忆', 2000, 'success');
+                } else if (candidate) {
+                    showNotification('已提取记忆', 2000, 'success');
+                } else {
+                    const mode = ensureMemorySettingsV2().extractMode;
+                    if (mode === 'manual') {
+                        showNotification('手动模式：未自动写入记忆', 2200);
+                    } else {
+                        showNotification('已提取记忆', 2000, 'success');
+                    }
+                }
+            } else {
+                createOrMergeApprovedMemory({
+                    contactId: contact.id,
+                    content: summary,
+                    time: Date.now(),
+                    range: range,
+                    source: options.source || 'manual',
+                    memoryTags: Array.isArray(options.suggestedTags) ? options.suggestedTags : ['long_term'],
+                    confidence: clampFloat(options.confidence, 0.9, 0, 1)
+                });
+                showNotification('总结完成', 2000, 'success');
+            }
             saveConfig();
             
             if (!document.getElementById('memory-app').classList.contains('hidden')) {
                 renderMemoryList();
             }
-            
-            showNotification('总结完成', 2000, 'success');
         } else {
             showNotification('未提取到重要信息', 2000);
         }
@@ -3740,13 +5838,136 @@ function setupAppsListeners() {
     const closeEditMemoryBtn = document.getElementById('close-edit-memory');
     const saveEditedMemoryBtn = document.getElementById('save-edited-memory-btn');
     const closeMemoryBtn = document.getElementById('close-memory-app');
+    const memoryFilterBtns = document.querySelectorAll('#memory-filter-bar .memory-filter-btn');
+    const memorySelectToggleBtn = document.getElementById('memory-select-toggle-btn');
+    const memorySelectAllBtn = document.getElementById('memory-select-all-btn');
+    const memorySelectRecentBtn = document.getElementById('memory-select-recent-btn');
+    const memorySelectInvertBtn = document.getElementById('memory-select-invert-btn');
+    const memorySelectClearBtn = document.getElementById('memory-select-clear-btn');
+    const memoryRefineSelectedBtn = document.getElementById('memory-refine-selected-btn');
+    const memoryRefineConfirmModal = document.getElementById('memory-refine-confirm-modal');
+    const closeMemoryRefineConfirmBtn = document.getElementById('close-memory-refine-confirm');
+    const cancelMemoryRefineConfirmBtn = document.getElementById('cancel-memory-refine-confirm');
+    const confirmMemoryRefineBtn = document.getElementById('confirm-memory-refine-btn');
+    const memoryRefineSelectedCountModal = document.getElementById('memory-refine-selected-count-modal');
+    const manualStateTagInput = document.querySelector('#manual-memory-tags input[value="state"]');
+    const editStateTagInput = document.querySelector('#edit-memory-tags input[value="state"]');
+    const manualStateOptions = document.getElementById('manual-memory-state-options');
+    const editStateOptions = document.getElementById('edit-memory-state-options');
 
-    if (closeMemoryBtn) closeMemoryBtn.addEventListener('click', () => document.getElementById('memory-app').classList.add('hidden'));
-    if (closeEditMemoryBtn) closeEditMemoryBtn.addEventListener('click', () => editMemoryModal.classList.add('hidden'));
+    if (closeMemoryBtn) closeMemoryBtn.addEventListener('click', () => {
+        document.getElementById('memory-app').classList.add('hidden');
+        resetMemorySelection();
+        if (memoryRefineConfirmModal) memoryRefineConfirmModal.classList.add('hidden');
+    });
+    if (closeEditMemoryBtn) closeEditMemoryBtn.addEventListener('click', () => {
+        editMemoryModal.classList.add('hidden');
+        currentEditingMemoryId = null;
+    });
     if (saveEditedMemoryBtn) saveEditedMemoryBtn.addEventListener('click', handleSaveEditedMemory);
+
+    if (manualStateTagInput && manualStateOptions) {
+        manualStateTagInput.addEventListener('change', () => {
+            manualStateOptions.style.display = manualStateTagInput.checked ? '' : 'none';
+        });
+    }
+    if (editStateTagInput && editStateOptions) {
+        editStateTagInput.addEventListener('change', () => {
+            editStateOptions.style.display = editStateTagInput.checked ? '' : 'none';
+        });
+    }
+
+    if (memoryFilterBtns && memoryFilterBtns.length > 0) {
+        memoryFilterBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentMemoryFilter = btn.dataset.filter || 'all';
+                if (currentMemoryFilter === 'candidate' && memorySelectMode) {
+                    memorySelectMode = false;
+                    selectedMemoryIds = new Set();
+                }
+                renderMemoryList();
+            });
+        });
+    }
+
+    if (memorySelectToggleBtn) {
+        memorySelectToggleBtn.addEventListener('click', () => {
+            window.toggleMemorySelectMode();
+        });
+    }
+    if (memorySelectAllBtn) {
+        memorySelectAllBtn.addEventListener('click', () => {
+            window.selectAllMemoriesForRefine();
+        });
+    }
+    if (memorySelectRecentBtn) {
+        memorySelectRecentBtn.addEventListener('click', () => {
+            window.selectRecentMemoriesForRefine(10);
+        });
+    }
+    if (memorySelectInvertBtn) {
+        memorySelectInvertBtn.addEventListener('click', () => {
+            window.invertMemorySelectionForRefine();
+        });
+    }
+    if (memorySelectClearBtn) {
+        memorySelectClearBtn.addEventListener('click', () => {
+            window.clearMemorySelectionForRefine();
+        });
+    }
+
+    if (memoryRefineSelectedBtn) {
+        memoryRefineSelectedBtn.addEventListener('click', () => {
+            if (!memorySelectMode || selectedMemoryIds.size === 0) {
+                showNotification('请先选择要精炼的记忆', 1600);
+                return;
+            }
+            if (memoryRefineSelectedCountModal) {
+                memoryRefineSelectedCountModal.textContent = String(selectedMemoryIds.size);
+            }
+            if (memoryRefineConfirmModal) {
+                memoryRefineConfirmModal.classList.remove('hidden');
+            }
+        });
+    }
+
+    if (closeMemoryRefineConfirmBtn) {
+        closeMemoryRefineConfirmBtn.addEventListener('click', () => {
+            if (memoryRefineConfirmModal) memoryRefineConfirmModal.classList.add('hidden');
+        });
+    }
+    if (cancelMemoryRefineConfirmBtn) {
+        cancelMemoryRefineConfirmBtn.addEventListener('click', () => {
+            if (memoryRefineConfirmModal) memoryRefineConfirmModal.classList.add('hidden');
+        });
+    }
+    if (confirmMemoryRefineBtn) {
+        confirmMemoryRefineBtn.addEventListener('click', async () => {
+            const contactId = window.iphoneSimState.currentChatContactId;
+            if (!contactId) return;
+            const selectedIds = Array.from(selectedMemoryIds);
+            if (memoryRefineConfirmModal) memoryRefineConfirmModal.classList.add('hidden');
+            await window.refineSelectedMemories(contactId, selectedIds);
+        });
+    }
+    if (memoryRefineConfirmModal) {
+        memoryRefineConfirmModal.addEventListener('click', (event) => {
+            if (event.target === memoryRefineConfirmModal) {
+                memoryRefineConfirmModal.classList.add('hidden');
+            }
+        });
+    }
 
     if (addMemoryBtn) addMemoryBtn.addEventListener('click', () => {
         document.getElementById('manual-memory-content').value = '';
+        document.querySelectorAll('#manual-memory-tags input[type="checkbox"]').forEach(input => {
+            input.checked = input.value === 'long_term';
+        });
+        if (manualStateOptions) manualStateOptions.style.display = 'none';
+        const manualStateReason = document.getElementById('manual-memory-state-reason');
+        const manualStateTtl = document.getElementById('manual-memory-state-ttl');
+        if (manualStateReason) manualStateReason.value = 'other';
+        if (manualStateTtl) manualStateTtl.value = '7';
         addMemoryModal.classList.remove('hidden');
     });
     if (closeAddMemoryBtn) closeAddMemoryBtn.addEventListener('click', () => addMemoryModal.classList.add('hidden'));

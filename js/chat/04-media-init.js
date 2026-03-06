@@ -1521,17 +1521,36 @@ async function summarizeVoiceCall(contactId, startIndex) {
         let summary = data.choices[0].message.content.trim();
         
         if (summary) {
-            window.iphoneSimState.memories.push({
-                id: Date.now(),
-                contactId: contact.id,
-                content: `【通话回忆】 ${summary}`,
-                time: Date.now(),
-                range: '语音通话'
-            });
-            saveConfig();
-            
+            const memoryContent = `【通话回忆】 ${summary}`;
+            if (typeof window.createMemoryCandidate === 'function') {
+                const created = window.createMemoryCandidate(contact.id, {
+                    content: memoryContent,
+                    suggestedTags: ['short_term'],
+                    source: 'call_summary',
+                    confidence: 0.8,
+                    range: '语音通话',
+                    reason: '语音通话总结'
+                });
+                saveConfig();
+                if (created && created.status === 'pending') {
+                    showNotification('通话总结已加入待确认', 2000, 'success');
+                } else if (created) {
+                    showNotification('通话总结完成', 2000, 'success');
+                } else {
+                    showNotification('手动模式：未自动写入记忆', 2200);
+                }
+            } else {
+                window.iphoneSimState.memories.push({
+                    id: Date.now(),
+                    contactId: contact.id,
+                    content: memoryContent,
+                    time: Date.now(),
+                    range: '语音通话'
+                });
+                saveConfig();
+                showNotification('通话总结完成', 2000, 'success');
+            }
             console.log('通话总结完成:', summary);
-            showNotification('通话总结完成', 2000, 'success');
         }
 
     } catch (error) {
@@ -2338,7 +2357,9 @@ async function generateVoiceCallAiReply() {
     }
 
     let memoryContext = '';
-    if (contact.memorySendLimit && contact.memorySendLimit > 0) {
+    if (typeof window.buildMemoryContextByPolicy === 'function') {
+        memoryContext = window.buildMemoryContextByPolicy(contact, history);
+    } else if (contact.memorySendLimit && contact.memorySendLimit > 0) {
         const contactMemories = window.iphoneSimState.memories.filter(m => m.contactId === contact.id);
         if (contactMemories.length > 0) {
             const recentMemories = contactMemories.sort((a, b) => b.time - a.time).slice(0, contact.memorySendLimit);
