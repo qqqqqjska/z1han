@@ -1,4 +1,4 @@
-window.refreshAiImage = async function(msgId, event) {
+﻿window.refreshAiImage = async function(msgId, event) {
     if (event) event.stopPropagation();
 
     const contactId = window.iphoneSimState.currentChatContactId;
@@ -2416,33 +2416,6 @@ async function generateAiReply(instruction = null, targetContactId = null) {
 
     const history = window.iphoneSimState.chatHistory[contactId] || [];
 
-    if (window.isScreenSharing && typeof window.executeScreenShareUserTextActions === 'function') {
-        const pendingUserTextMessages = [];
-        for (let index = history.length - 1; index >= 0; index -= 1) {
-            const message = history[index];
-            if (!message) continue;
-            if (message.role === 'assistant') break;
-            if (message.role === 'user' && message.type === 'text' && typeof message.content === 'string' && message.content.trim()) {
-                pendingUserTextMessages.push(message);
-            }
-        }
-
-        for (const pendingMessage of pendingUserTextMessages.reverse()) {
-            if (pendingMessage._screenShareActionsHandled) continue;
-            try {
-                const actionResult = await window.executeScreenShareUserTextActions(pendingMessage.content);
-                if (actionResult && actionResult.executed) {
-                    pendingMessage._screenShareActionsHandled = true;
-                    console.log('[ScreenShare Debug] executed inferred user actions before AI reply', {
-                        messageId: pendingMessage.id,
-                        ...actionResult
-                    });
-                }
-            } catch (screenActionError) {
-                console.warn('Failed to execute inferred screen-share user actions.', screenActionError);
-            }
-        }
-    }
     
     // Check for Truth or Dare triggers
     if (!targetContactId && window.currentMiniGame === 'truth_dare') {

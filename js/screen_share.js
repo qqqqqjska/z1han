@@ -117,7 +117,7 @@ window.startScreenShare = function() {
             id: Date.now() + Math.random().toString(36).substr(2, 9),
             time: Date.now(),
             role: 'system',
-            content: '[系统]: 屏幕共享已开启。你可以继续使用 ACTION: SCREEN_TAP: 目标名称，也可以直接给出高层导航目标，例如“看我的相册”“看方亦楷的朋友圈”“打开测试的聊天”。系统会自动拆成连续点击。',
+            content: '[系统]: 屏幕共享已开启。如需操作屏幕，请在回复里输出 ACTION: SCREEN_TAP: 目标名称。你也可以输出高层导航目标，例如“相册”“方亦楷的朋友圈”“测试的聊天”，系统会自动拆成连续点击。不要假设自己已经点击成功，只有输出 ACTION 后系统才会执行。',
             type: 'text'
         });
         if (window.saveConfig) window.saveConfig();
@@ -257,6 +257,8 @@ const screenTargets = {
     '退出购物': '#close-shopping-app',
     '退出icity': '#close-icity-app, #icity-app button[onclick*="classList.add(\'hidden\')"]',
     '退出手机': '#close-phone-app',
+    '退出照片': '#album-photo-close-btn',
+    '收藏照片': '#album-photo-favorite-btn',
     '主屏幕': '.home-indicator',
     '桌面': '.home-indicator'
 };
@@ -297,6 +299,8 @@ const CANONICAL_SCREEN_TARGET_ALIASES = {
     '通讯录': ['通讯录', '联系人列表', 'contacts'],
     '聊天列表': ['聊天列表', '消息列表', '列表'],
     '朋友圈': ['朋友圈'],
+    '退出照片': ['退出照片', '关闭照片', '关闭图片', '退出图片', '关闭当前照片', 'closephoto', 'closephotodetail'],
+    '收藏照片': ['收藏照片', '收藏这张照片', '点爱心', '点击爱心', '爱心', '喜欢这张照片', 'favoritephoto', 'favorite', 'likephoto'],
     '主屏幕': ['主屏幕', '桌面', 'home']
 };
 
@@ -1155,6 +1159,10 @@ function getSpecialScreenActionTarget(targetDesc, context = getScreenNavigationC
             return findFirstVisibleElement('#wechat-app .wechat-tab-item[data-tab="moments"]');
         case '通讯录':
             return findFirstVisibleElement('#wechat-app .wechat-tab-item[data-tab="addressbook"]');
+        case '收藏照片':
+            return findFirstVisibleElement('#album-photo-favorite-btn');
+        case '退出照片':
+            return findFirstVisibleElement('#album-photo-close-btn');
         case '退出相册':
         case '退出论坛':
         case '退出购物':
@@ -1380,7 +1388,7 @@ function getAlbumScreenShareSummaryText(snapshot) {
     const visibleCount = Array.isArray(snapshot.items) ? snapshot.items.length : 0;
     switch (snapshot.view) {
         case 'photo_detail':
-            return `相册当前在图片详情页，可见图片 ${snapshot.currentPhoto ? 1 : 0} 张${snapshot.detailSourceText ? `，左上角来源文本=${snapshot.detailSourceText}` : ''}`;
+            return `相册当前在图片详情页，可见图片 ${snapshot.currentPhoto ? 1 : 0} 张${snapshot.detailSourceText ? `，左上角来源文本=${snapshot.detailSourceText}` : ''}，可执行的按钮包括：退出照片、收藏照片`;
         case 'album_detail':
             return `相册当前在相册详情页，当前相册=${snapshot.activeAlbumName || snapshot.title || '未命名相册'}，可见图片 ${visibleCount} 张`;
         case 'albums_grid':
@@ -1418,7 +1426,7 @@ function buildAlbumScreenShareMultimodalContent(snapshot) {
 
     const content = [{
         type: 'text',
-        text: '下面是当前相册界面的可见图片/相册内容。若你需要继续操作，请先基于这些可见对象判断，再输出类似 ACTION: SCREEN_TAP: 图片1 或 ACTION: SCREEN_TAP: 相册1 的动作。'
+        text: '下面是当前相册界面的可见图片/相册内容。若你需要继续操作，请先基于这些可见对象判断，再输出类似 ACTION: SCREEN_TAP: 图片1、ACTION: SCREEN_TAP: 相册1、ACTION: SCREEN_TAP: 退出照片、ACTION: SCREEN_TAP: 收藏照片 的动作。'
     }];
 
     const seenKeys = new Set();
