@@ -1,4 +1,4 @@
-﻿function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type = 'text', targetContactId = null) {
+function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type = 'text', targetContactId = null) {
     return new Promise(resolve => {
         const contactId = targetContactId || window.iphoneSimState.currentChatContactId;
         if (!contactId) {
@@ -45,6 +45,18 @@
         }
 
         saveConfig();
+
+        if (window.syncToFloatingChat && window.isScreenSharing) {
+            console.log('[ScreenShare Debug] sync assistant reply to floating', {
+                contactId,
+                type,
+                preview: String(text || '').slice(0, 120)
+            });
+            window.syncToFloatingChat({ content: text, type: type, role: 'assistant' }, contactId);
+            if (typeof window.loadFloatingChatHistory === 'function') {
+                window.loadFloatingChatHistory();
+            }
+        }
         
         if (window.iphoneSimState.currentChatContactId === contactId) {
             appendMessageToUI(text, false, type, null, replyTo, msgData.id, msgData.time);
@@ -1470,28 +1482,74 @@ async function summarizeVoiceCall(contactId, startIndex) {
 
     const history = window.iphoneSimState.chatHistory[contactId] || [];
     const callMessages = history.slice(startIndex);
-    
-    const callContent = callMessages
-        .filter(m => m.type === 'voice_call_text')
+
+    let userName = '用户';
+    if (contact.userPersonaId) {
+        const p = Array.isArray(window.iphoneSimState.userPersonas)
+            ? window.iphoneSimState.userPersonas.find(item => item.id === contact.userPersonaId)
+            : null;
+        if (p && p.name) userName = p.name;
+    } else if (window.iphoneSimState.userProfile && window.iphoneSimState.userProfile.name) {
+        userName = window.iphoneSimState.userProfile.name;
+    }
+
+    const actorNames = typeof resolveSummaryActorNames === 'function'
+        ? resolveSummaryActorNames(contact, userName)
+        : { userLabel: userName || '用户', contactLabel: contact.name || '联系人' };
+    userName = actorNames.userLabel;
+    const contactLabel = actorNames.contactLabel;
+
+    const callTextMessages = callMessages
+        .filter(m => m && m.type === 'voice_call_text')
         .map(m => {
-            let text = m.content;
+            let text = String(m.content || '');
             try {
-                const data = JSON.parse(m.content);
+                const data = JSON.parse(text);
                 if (typeof data.text === 'string') text = data.text;
-            } catch(e) {}
-            return `${m.role === 'user' ? '用户' : contact.name}: ${text}`;
+            } catch (e) {}
+            return {
+                role: m.role,
+                time: m.time,
+                content: String(text || '').trim()
+            };
         })
+        .filter(m => m.content);
+
+    const callContent = callTextMessages
+        .map(m => `${m.role === 'user' ? userName : contactLabel}: ${m.content}`)
         .join('\n');
 
     if (!callContent) return;
 
+    const totalMessageCount = callMessages.length;
+    const lengthRange = typeof getSummaryLengthRangeByCount === 'function'
+        ? getSummaryLengthRangeByCount(totalMessageCount, 'call')
+        : { count: Math.max(1, totalMessageCount), target: 120, min: 90, max: 260 };
+    console.log('[summary-length-call]', {
+        count: lengthRange.count,
+        target: lengthRange.target,
+        min: lengthRange.min,
+        max: lengthRange.max,
+        source: 'call_summary'
+    });
+
     showNotification('正在总结通话...');
 
-    const systemPrompt = `你是一个通话记录总结助手。
-请阅读以下一段语音通话的文字记录，并生成一段简练的通话摘要。
-摘要应该是陈述句，概括聊了什么主要内容。
-不要包含“通话记录显示”、“用户说”等前缀，直接陈述事实。
-请将摘要控制在 100 字以内。`;
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const systemPrompt = typeof buildStructuredSummaryPrompt === 'function'
+        ? buildStructuredSummaryPrompt({
+            channel: 'call',
+            userLabel: userName,
+            contactLabel,
+            range: lengthRange,
+            dateStr,
+            timeStr,
+            totalMessageCount,
+            detailModeHint: '当前是通话总结，请输出时间线提要：优先具体事件链、当前状态与下一步，并尽量摘录原话短句。'
+        })
+        : `你是一个通话记录总结助手。请返回严格JSON，包含 context/timeline_events/current_state/next_actions/time_points/quote_snippets。`;
 
     try {
         let fetchUrl = settings.url;
@@ -1511,19 +1569,73 @@ async function summarizeVoiceCall(contactId, startIndex) {
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: callContent }
                 ],
-                temperature: 0.5
+                temperature: 0.35,
+                max_tokens: 520
             })
         });
 
         if (!response.ok) throw new Error(`API Error: ${response.status}`);
 
         const data = await response.json();
-        let summary = data.choices[0].message.content.trim();
+        let rawSummary = typeof extractChatResponseText === 'function'
+            ? extractChatResponseText(data)
+            : '';
+        if (!rawSummary && data && Array.isArray(data.choices) && data.choices[0] && data.choices[0].message) {
+            rawSummary = String(data.choices[0].message.content || '').trim();
+        }
+        if (!rawSummary) {
+            const apiErrorMsg = typeof extractApiErrorMessage === 'function'
+                ? extractApiErrorMessage(data)
+                : '';
+            if (apiErrorMsg) throw new Error(`通话总结接口异常: ${apiErrorMsg}`);
+            throw new Error('通话总结接口返回为空或格式不兼容');
+        }
+
+        let structuredPayload = null;
+        let summary = rawSummary;
+        if (typeof buildNarrativeSummaryFromStructuredResponse === 'function') {
+            const structured = buildNarrativeSummaryFromStructuredResponse(
+                rawSummary,
+                contact,
+                callTextMessages,
+                lengthRange,
+                userName,
+                {
+                    channel: 'call',
+                    rangeLabel: '语音通话',
+                    totalMessageCount,
+                    dateStr,
+                    timeStr,
+                    detailModeHint: '当前是通话总结，请输出时间线提要：优先具体事件链、当前状态与下一步，并尽量摘录原话短句。'
+                }
+            );
+            structuredPayload = structured.payload;
+            summary = structured.paragraph || rawSummary;
+        }
+
+        if (typeof ensureDetailedSummaryText === 'function') {
+            summary = ensureDetailedSummaryText(summary, contact, callTextMessages, lengthRange, userName, {
+                channel: 'call',
+                rangeLabel: '语音通话',
+                totalMessageCount,
+                structuredPayload
+            });
+        }
+        summary = String(summary || '').trim();
         
-        if (summary) {
+        if (summary && summary !== '无' && summary !== '无。') {
+            const summaryTitle = typeof buildMemoryDisplayTitle === 'function'
+                ? buildMemoryDisplayTitle({
+                    title: '',
+                    content: summary,
+                    structuredSummary: structuredPayload,
+                    memoryTags: ['short_term']
+                })
+                : '';
             const memoryContent = `【通话回忆】 ${summary}`;
             if (typeof window.createMemoryCandidate === 'function') {
                 const created = window.createMemoryCandidate(contact.id, {
+                    title: summaryTitle,
                     content: memoryContent,
                     suggestedTags: ['short_term'],
                     source: 'call_summary',
@@ -2358,7 +2470,7 @@ async function generateVoiceCallAiReply() {
 
     let memoryContext = '';
     if (typeof window.buildMemoryContextByPolicy === 'function') {
-        memoryContext = window.buildMemoryContextByPolicy(contact, history);
+        memoryContext = window.buildMemoryContextByPolicy(contact, history, 'voice-call');
     } else if (contact.memorySendLimit && contact.memorySendLimit > 0) {
         const contactMemories = window.iphoneSimState.memories.filter(m => m.contactId === contact.id);
         if (contactMemories.length > 0) {
@@ -3489,7 +3601,7 @@ function handleSaveEditedChatMessage() {
 }
 
 // 初始化监听器
-function openAiMoments() {
+function openWechatMomentsTab() {
     const momentsTab = document.querySelector('#wechat-app .wechat-tab-item[data-tab="moments"]');
     if (momentsTab) {
         momentsTab.click();
@@ -3583,6 +3695,7 @@ function setupChatListeners() {
         }
         const pet = document.getElementById('thought-pet');
         if (pet) pet.classList.add('hidden');
+        window.iphoneSimState.currentAiProfileContactId = null;
         window.iphoneSimState.currentChatContactId = null;
     });
 
@@ -3826,7 +3939,8 @@ function setupChatListeners() {
         currentAiProfileSendMsgBtn.parentNode.replaceChild(newBtn, currentAiProfileSendMsgBtn);
         
         newBtn.addEventListener('click', () => {
-            openMeetingsScreen(window.iphoneSimState.currentChatContactId);
+            const contactId = window.iphoneSimState.currentAiProfileContactId || window.iphoneSimState.currentChatContactId;
+            openMeetingsScreen(contactId);
         });
     }
 
@@ -3834,7 +3948,12 @@ function setupChatListeners() {
     const closeRelationSelectBtn = document.getElementById('close-relation-select');
     const aiMomentsEntry = document.getElementById('ai-moments-entry');
 
-    if (closeAiProfileBtn) closeAiProfileBtn.addEventListener('click', () => aiProfileScreen.classList.add('hidden'));
+    if (closeAiProfileBtn) {
+        closeAiProfileBtn.addEventListener('click', () => {
+            aiProfileScreen.classList.add('hidden');
+            window.iphoneSimState.currentAiProfileContactId = null;
+        });
+    }
     if (aiProfileMoreBtn) aiProfileMoreBtn.addEventListener('click', openChatSettings);
     
 
@@ -3844,7 +3963,7 @@ function setupChatListeners() {
     if (aiRelationItem) aiRelationItem.addEventListener('click', openRelationSelect);
     if (closeRelationSelectBtn) closeRelationSelectBtn.addEventListener('click', () => relationSelectModal.classList.add('hidden'));
     
-    if (aiMomentsEntry) aiMomentsEntry.addEventListener('click', openAiMoments);
+    if (aiMomentsEntry) aiMomentsEntry.addEventListener('click', window.openAiMoments);
 
     if (chatSettingsBtn) chatSettingsBtn.addEventListener('click', openChatSettings);
     if (closeChatSettingsBtn) closeChatSettingsBtn.addEventListener('click', () => chatSettingsScreen.classList.add('hidden'));
@@ -3964,7 +4083,7 @@ function setupChatListeners() {
                     return;
                 }
 
-                if (item.id === 'chat-more-photo-btn' || item.id === 'chat-more-camera-btn' || item.id === 'chat-more-transfer-btn' || item.id === 'chat-more-memory-btn' || item.id === 'chat-more-location-btn' || item.id === 'chat-more-regenerate-btn' || item.id === 'chat-more-voice-btn' || item.id === 'chat-more-video-call-btn') return;
+                if (item.id === 'chat-more-photo-btn' || item.id === 'chat-more-camera-btn' || item.id === 'chat-more-transfer-btn' || item.id === 'chat-more-memory-btn' || item.id === 'chat-more-location-btn' || item.id === 'chat-more-regenerate-btn' || item.id === 'chat-more-voice-btn' || item.id === 'chat-more-video-call-btn' || item.id === 'chat-more-screen-share-btn') return;
                 
                 e.stopPropagation();
                 const label = item.querySelector('.more-label').textContent;

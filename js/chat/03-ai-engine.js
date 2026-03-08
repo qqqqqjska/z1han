@@ -1,4 +1,4 @@
-﻿window.refreshAiImage = async function(msgId, event) {
+window.refreshAiImage = async function(msgId, event) {
     if (event) event.stopPropagation();
 
     const contactId = window.iphoneSimState.currentChatContactId;
@@ -1471,12 +1471,30 @@ function showContextMenu(targetEl, msgData) {
     const oldMenu = document.querySelector('.context-menu');
     if (oldMenu) oldMenu.remove();
 
+    const currentContactId = window.iphoneSimState.currentChatContactId;
+    const currentHistory = currentContactId && window.iphoneSimState.chatHistory
+        ? window.iphoneSimState.chatHistory[currentContactId]
+        : null;
+    const fullMsg = Array.isArray(currentHistory) && msgData.msgId
+        ? currentHistory.find(m => m && m.id === msgData.msgId)
+        : null;
+    const canSaveAiImageToAlbum = !!(
+        !msgData.isUser &&
+        fullMsg &&
+        fullMsg.role === 'assistant' &&
+        msgData.type === 'image' &&
+        typeof fullMsg.content === 'string' &&
+        fullMsg.content.trim() &&
+        fullMsg.novelaiPrompt
+    );
+
     const menu = document.createElement('div');
     menu.className = 'context-menu';
     menu.innerHTML = `
         <div class="context-menu-item" id="menu-quote">引用</div>
         <div class="context-menu-item" id="menu-copy">复制</div>
         ${(msgData.type === 'image' || msgData.type === 'sticker' || msgData.type === 'virtual_image') ? '<div class="context-menu-item" id="menu-set-avatar">设为头像</div>' : ''}
+        ${canSaveAiImageToAlbum ? '<div class="context-menu-item" id="menu-save-to-album">保存到相册</div>' : ''}
         <div class="context-menu-item" id="menu-edit">编辑</div>
         <div class="context-menu-item" id="menu-delete" style="color: #ff3b30;">删除</div>
     `;
@@ -1487,30 +1505,34 @@ function showContextMenu(targetEl, msgData) {
     const menuRect = menu.getBoundingClientRect();
     const targetRect = targetEl.getBoundingClientRect();
     const gap = 10;
+    const edgePadding = 8;
     
     let left, top;
     const scrollX = window.scrollX;
     const scrollY = window.scrollY;
+    const viewportLeft = scrollX + edgePadding;
+    const viewportRight = scrollX + window.innerWidth - edgePadding;
+    const viewportTop = scrollY + edgePadding;
+    const viewportBottom = scrollY + window.innerHeight - edgePadding;
 
     if (msgData.isUser) {
         left = targetRect.left - menuRect.width - gap + scrollX;
+        if (left < viewportLeft) {
+            left = targetRect.right + gap + scrollX;
+        }
     } else {
         left = targetRect.right + gap + scrollX;
+        if (left + menuRect.width > viewportRight) {
+            left = targetRect.left - menuRect.width - gap + scrollX;
+        }
     }
-    
-    top = targetRect.top + scrollY;
-    
-    if (left < 0 || left + menuRect.width > window.innerWidth) {
-         left = targetRect.left + (targetRect.width - menuRect.width) / 2 + scrollX;
-         top = targetRect.top - menuRect.height - gap + scrollY;
-         
-         if (top < scrollY) {
-             top = targetRect.bottom + gap + scrollY;
-         }
-    }
-    
-    if (left < 0) left = 10;
-    if (left + menuRect.width > window.innerWidth) left = window.innerWidth - menuRect.width - 10;
+
+    top = targetRect.top + ((targetRect.height - menuRect.height) / 2) + scrollY;
+
+    if (left < viewportLeft) left = viewportLeft;
+    if (left + menuRect.width > viewportRight) left = viewportRight - menuRect.width;
+    if (top < viewportTop) top = viewportTop;
+    if (top + menuRect.height > viewportBottom) top = viewportBottom - menuRect.height;
 
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
@@ -1565,6 +1587,40 @@ function showContextMenu(targetEl, msgData) {
                 // Maybe just a toast?
                 if (window.showChatToast) window.showChatToast('头像已更新');
                 else alert('头像已更新');
+            }
+        };
+    }
+
+    const saveToAlbumBtn = menu.querySelector('#menu-save-to-album');
+    if (saveToAlbumBtn) {
+        saveToAlbumBtn.onclick = async () => {
+            menu.remove();
+
+            if (!fullMsg || !fullMsg.content) {
+                alert('找不到可保存的图片');
+                return;
+            }
+
+            if (typeof window.savePhotoToAlbumLibrary !== 'function') {
+                alert('相册功能未加载');
+                return;
+            }
+
+            try {
+                const contact = window.iphoneSimState.contacts.find(c => c.id === window.iphoneSimState.currentChatContactId);
+                const sourceLabel = contact ? `Saved from ${contact.remark || contact.name}` : 'Saved from Chat';
+                const result = await window.savePhotoToAlbumLibrary(fullMsg.content, {
+                    location: sourceLabel
+                });
+
+                if (typeof window.showChatToast === 'function') {
+                    window.showChatToast(result && result.duplicate ? '这张图片已经在相册里了' : '已保存到相册');
+                } else {
+                    alert(result && result.duplicate ? '这张图片已经在相册里了' : '已保存到相册');
+                }
+            } catch (error) {
+                console.error('Save AI image to album failed:', error);
+                alert(`保存失败: ${error.message}`);
             }
         };
     }
@@ -1627,6 +1683,7 @@ function showContextMenu(targetEl, msgData) {
 
 function handleQuote(msgData) {
     window.iphoneSimState.replyingToMsg = msgData;
+    const chatScreen = document.getElementById('chat-screen');
     const replyBar = document.getElementById('reply-bar');
     document.getElementById('reply-name').textContent = msgData.name;
     
@@ -1640,6 +1697,7 @@ function handleQuote(msgData) {
     
     document.getElementById('reply-text').textContent = previewText;
     replyBar.classList.remove('hidden');
+    if (chatScreen) chatScreen.classList.add('replying');
     
     const chatInput = document.getElementById('chat-input');
     if (chatInput) chatInput.focus();
@@ -1647,7 +1705,9 @@ function handleQuote(msgData) {
 
 function cancelQuote() {
     window.iphoneSimState.replyingToMsg = null;
+    const chatScreen = document.getElementById('chat-screen');
     document.getElementById('reply-bar').classList.add('hidden');
+    if (chatScreen) chatScreen.classList.remove('replying');
 }
 
 function scrollToBottom() {
@@ -2005,6 +2065,168 @@ function parseMixedAiResponse(content) {
     return results;
 }
 
+function extractTextFromAiResponsePart(part) {
+    if (part === null || part === undefined) return '';
+    if (typeof part === 'string') return part;
+
+    if (Array.isArray(part)) {
+        return part.map(item => extractTextFromAiResponsePart(item)).filter(Boolean).join('\n');
+    }
+
+    if (typeof part !== 'object') return '';
+
+    if (typeof part.text === 'string') return part.text;
+    if (part.text && typeof part.text.value === 'string') return part.text.value;
+    if (typeof part.value === 'string') return part.value;
+    if (typeof part.content === 'string') return part.content;
+    if (typeof part.output_text === 'string') return part.output_text;
+
+    if (Array.isArray(part.content)) {
+        return part.content.map(item => extractTextFromAiResponsePart(item)).filter(Boolean).join('\n');
+    }
+
+    return '';
+}
+
+function extractReplyContentFromAiResponse(data) {
+    const choice = data && Array.isArray(data.choices) ? data.choices[0] : null;
+    const message = choice && choice.message ? choice.message : null;
+
+    const candidates = [
+        { source: 'choices[0].message.content', value: message ? message.content : null },
+        { source: 'choices[0].text', value: choice ? choice.text : null },
+        { source: 'choices[0].delta.content', value: choice && choice.delta ? choice.delta.content : null },
+        { source: 'output_text', value: data ? data.output_text : null },
+        { source: 'output[0].content', value: data && Array.isArray(data.output) && data.output[0] ? data.output[0].content : null }
+    ];
+
+    for (const candidate of candidates) {
+        const text = extractTextFromAiResponsePart(candidate.value).trim();
+        if (text) {
+            return {
+                content: text,
+                source: candidate.source
+            };
+        }
+    }
+
+    return {
+        content: '',
+        source: null
+    };
+}
+
+function normalizeAiRequestImageUrl(url) {
+    const rawUrl = String(url || '').trim();
+    if (!rawUrl) return '';
+    if (rawUrl.startsWith('data:image')) return rawUrl;
+    if (rawUrl.startsWith('//')) return `https:${rawUrl}`;
+
+    try {
+        return new URL(rawUrl, window.location.href).href;
+    } catch (error) {
+        return rawUrl;
+    }
+}
+
+function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+async function convertAiRequestImageUrlToDataUrl(url) {
+    const normalizedUrl = normalizeAiRequestImageUrl(url);
+    if (!normalizedUrl || normalizedUrl.startsWith('data:image')) return normalizedUrl;
+
+    if (!window.__aiRequestImageCache) {
+        window.__aiRequestImageCache = new Map();
+    }
+
+    const cache = window.__aiRequestImageCache;
+    if (cache.has(normalizedUrl)) {
+        return cache.get(normalizedUrl);
+    }
+
+    const pendingTask = (async () => {
+        const response = await fetch(normalizedUrl);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        let dataUrl = await blobToDataUrl(blob);
+
+        if (typeof compressBase64 === 'function' && typeof dataUrl === 'string' && dataUrl.startsWith('data:image')) {
+            try {
+                dataUrl = await compressBase64(dataUrl, 768, 0.72);
+            } catch (compressionError) {
+                console.warn('[AI Debug] image compression skipped for request part', compressionError);
+            }
+        }
+
+        return dataUrl;
+    })();
+
+    cache.set(normalizedUrl, pendingTask);
+
+    try {
+        const result = await pendingTask;
+        cache.set(normalizedUrl, Promise.resolve(result));
+        return result;
+    } catch (error) {
+        cache.delete(normalizedUrl);
+        throw error;
+    }
+}
+
+async function normalizeAiRequestMessageImages(messages) {
+    if (!Array.isArray(messages)) return;
+
+    let totalImageCount = 0;
+    let convertedCount = 0;
+    let failedCount = 0;
+
+    for (const message of messages) {
+        if (!message || !Array.isArray(message.content)) continue;
+
+        for (const part of message.content) {
+            if (!part || part.type !== 'image_url' || !part.image_url) continue;
+
+            totalImageCount += 1;
+            const originalUrl = part.image_url.url;
+            const normalizedUrl = normalizeAiRequestImageUrl(originalUrl);
+            if (normalizedUrl && normalizedUrl !== originalUrl) {
+                part.image_url.url = normalizedUrl;
+            }
+
+            if (!normalizedUrl || normalizedUrl.startsWith('data:image')) continue;
+
+            try {
+                part.image_url.url = await convertAiRequestImageUrlToDataUrl(normalizedUrl);
+                convertedCount += 1;
+            } catch (error) {
+                failedCount += 1;
+                console.warn('[AI Debug] failed to convert request image to data URL', {
+                    url: normalizedUrl,
+                    error: error && error.message ? error.message : String(error)
+                });
+            }
+        }
+    }
+
+    if (totalImageCount > 0) {
+        console.log('[AI Debug] normalized request images', {
+            totalImageCount,
+            convertedCount,
+            failedCount
+        });
+    }
+}
+
 // Helper to force split text containing stickers/images
 function forceSplitMixedContent(content) {
     if (typeof content !== 'string') {
@@ -2193,6 +2415,34 @@ async function generateAiReply(instruction = null, targetContactId = null) {
     }
 
     const history = window.iphoneSimState.chatHistory[contactId] || [];
+
+    if (window.isScreenSharing && typeof window.executeScreenShareUserTextActions === 'function') {
+        const pendingUserTextMessages = [];
+        for (let index = history.length - 1; index >= 0; index -= 1) {
+            const message = history[index];
+            if (!message) continue;
+            if (message.role === 'assistant') break;
+            if (message.role === 'user' && message.type === 'text' && typeof message.content === 'string' && message.content.trim()) {
+                pendingUserTextMessages.push(message);
+            }
+        }
+
+        for (const pendingMessage of pendingUserTextMessages.reverse()) {
+            if (pendingMessage._screenShareActionsHandled) continue;
+            try {
+                const actionResult = await window.executeScreenShareUserTextActions(pendingMessage.content);
+                if (actionResult && actionResult.executed) {
+                    pendingMessage._screenShareActionsHandled = true;
+                    console.log('[ScreenShare Debug] executed inferred user actions before AI reply', {
+                        messageId: pendingMessage.id,
+                        ...actionResult
+                    });
+                }
+            } catch (screenActionError) {
+                console.warn('Failed to execute inferred screen-share user actions.', screenActionError);
+            }
+        }
+    }
     
     // Check for Truth or Dare triggers
     if (!targetContactId && window.currentMiniGame === 'truth_dare') {
@@ -2284,11 +2534,10 @@ async function generateAiReply(instruction = null, targetContactId = null) {
         }
     }
 
-    let userPerceptionContext = '';
     let importantStateContext = '';
     let memoryContext = '';
     if (typeof window.buildMemoryContextByPolicy === 'function') {
-        memoryContext = window.buildMemoryContextByPolicy(contact, history);
+        memoryContext = window.buildMemoryContextByPolicy(contact, history, 'chat-text');
     } else {
         const contactMemories = window.iphoneSimState.memories.filter(m => m.contactId === contact.id);
         if (contactMemories.length > 0) {
@@ -2396,6 +2645,50 @@ async function generateAiReply(instruction = null, targetContactId = null) {
         forumLiveInstruction = '\n【论坛直播指令】\n当你希望在论坛开直播时，请在回复中输出：\nACTION: START_FORUM_LIVE: 标题\n可选扩展（按 `|` 分隔）：\nACTION: START_FORUM_LIVE: 标题 | 画面描述 | [{"username":"网名","content":"评论"}] | 图片URL\n如未提供画面描述/评论，系统会根据聊天上下文自动生成。\n';
     }
 
+    let transferDecisionContext = '';
+    try {
+        const pendingTransferMap = new Map();
+        history.forEach(msg => {
+            if (!msg || msg.type !== 'transfer' || msg.role !== 'user') return;
+            let transferData = null;
+            try {
+                transferData = typeof msg.content === 'string' ? JSON.parse(msg.content) : msg.content;
+            } catch (error) {
+                transferData = null;
+            }
+            if (!transferData || !transferData.id) return;
+
+            const transferId = String(transferData.id);
+            const status = String(transferData.status || 'pending').toLowerCase();
+            if (status !== 'pending') {
+                pendingTransferMap.delete(transferId);
+                return;
+            }
+
+            pendingTransferMap.set(transferId, transferData);
+        });
+
+        const pendingTransfers = Array.from(pendingTransferMap.values());
+        if (pendingTransfers.length > 0) {
+            const lines = [];
+            lines.push('\n【待处理转账】');
+            lines.push('只有当下列待处理转账存在时，你才可以使用 ACCEPT_TRANSFER 或 RETURN_TRANSFER 指令。');
+            pendingTransfers.forEach(data => {
+                const amount = Number.isFinite(Number(data.amount))
+                    ? Number(data.amount).toFixed(2)
+                    : String(data.amount || '0.00');
+                const remark = String(data.remark || '转账').trim() || '转账';
+                lines.push(`- transferId=${data.id}，金额=¥${amount}，备注=${remark}`);
+                lines.push(`  收款示例：{"type":"action","command":"ACCEPT_TRANSFER","payload":"${data.id}"}`);
+                lines.push(`  退回示例：{"type":"action","command":"RETURN_TRANSFER","payload":"${data.id}"}`);
+            });
+            lines.push('如果上面没有待处理转账，或这些转账已经处理完，就不要输出这两个指令。');
+            transferDecisionContext = lines.join('\n') + '\n';
+        }
+    } catch (e) {
+        transferDecisionContext = '';
+    }
+
     let musicTogetherContext = '';
     if (typeof window.musicV2GetChatMusicContext === 'function') {
         try {
@@ -2458,7 +2751,6 @@ ${contact.persona || '无'}
 
 聊天风格：${contact.style || '正常'}
 ${userPromptInfo}
-${userPerceptionContext}
 ${importantStateContext}
 ${momentContext}
 ${icityContext}
@@ -2469,13 +2761,14 @@ ${icityBookContext}
 ${minesweeperContext}
 ${witchGameContext}
 ${forumLiveInstruction}
+${transferDecisionContext}
 ${musicTogetherContext}
 ${timeContext}
 ${itineraryContext}
 
 你必须完全沉浸在角色中，绝对不能透露你是AI或语言模型。你的回复必须像一个真实的${contact.name}在使用微信聊天。
 你拥有“微信朋友圈”“微信转账”“亲属卡”功能。
-如果回复涉及【具体信息】中的名称，必须逐字使用原词。
+如果回复涉及【状态记忆】，必须严格区分“用户状态”和“联系人状态”，不要混淆主体。
 
 ${contact.showThought ? `
 【⚡️强制要求：内心独白⚡️】
@@ -2529,6 +2822,35 @@ ${contact.showThought ? `
   {"type": "action", "command": "POST_MOMENT", "payload": "今天心情真好"}
 ]
 
+【活人感与主动行为规则】
+为了让聊天更像真实的人，而不是被动问答机，你可以在合适的时候偶尔主动做一些生活化动作，但必须自然、克制、符合关系和当下情境。
+
+可偶尔主动使用的动作包括：
+- 主动转账：例如发红包感、报销、请奶茶、哄人、补偿、节日表示心意。
+- 主动发照片：例如分享自拍、眼前的景色、晚饭、宠物、正在做的事。
+- 主动发朋友圈：例如记录当下心情、日常碎片、见闻、吐槽、开心时刻。
+- 主动发语音：例如情绪更强、懒得打字、撒娇、解释事情、刚醒/在路上时。
+- 主动点外卖或送礼物：例如照顾用户情绪、庆祝、道歉、补偿、关心对方吃饭。
+- 主动引用回复：这是一种很真实的聊天习惯，尤其适合接住用户刚说过的某一句、某个细节、某个情绪点。
+
+主动行为使用原则：
+1. 这些动作是“偶尔主动”，不是每轮都做，也不要一次回复里堆很多动作。
+2. 主动动作要像关系中的真实反应，而不是为了展示功能硬塞。
+3. 相比转账、送礼、点外卖这类较重动作，更轻的主动行为（引用回复、发照片、发语音、发朋友圈）可以更常见。
+4. 如果当前聊天里有明确可接的话题、细节、吐槽、情绪、计划、回忆，优先考虑用引用回复来接话，会更像真人。
+5. 如果没有明确动机，就正常聊天，不要为了“活人感”强行触发动作。
+
+【引用回复优先规则】
+- 当你是在回应用户上一条或上几条消息里的某个具体细节、某句话、某个情绪点、某个问题时，优先考虑先输出：
+  {"type":"action","command":"QUOTE_MESSAGE","payload":"消息内容摘要"}
+  然后再输出正常 text/voice/sticker。
+- QUOTE_MESSAGE 的使用频率可以明显高于其他主动动作；只要场景合适，就可以多用。
+- 尤其在以下场景，优先使用引用回复：
+  1. 用户一条消息里信息很多，你只想接其中一个点。
+  2. 用户在连续发很多条消息，你要明确自己在回哪一句。
+  3. 用户在吐槽、撒娇、委屈、分享日常、发计划、发长文时。
+  4. 你想先接住一句话，再顺势调侃、安慰、追问、夸赞或延展话题。
+
 【指令说明 (请封装为 type="action")】
 - 发朋友圈 -> command: "POST_MOMENT", payload: "内容" (注意：朋友圈是公开的社交动态，类似于微信朋友圈)
 - 发 iCity 日记 -> command: "POST_ICITY_DIARY", payload: "内容" (注意：iCity 是更私密、情绪化的日记，类似于微博/Instagram/小红书，用来记录心情、碎碎念或emo时刻)
@@ -2543,8 +2865,6 @@ ${contact.showThought ? `
 - 拨打语音通话 -> command: "START_VOICE_CALL", payload: ""
 - 拨打视频通话 -> command: "START_VIDEO_CALL", payload: ""
 - 转账 -> command: "TRANSFER", payload: "金额 备注" (例如 "88.88 节日快乐")
-- 接收转账 -> command: "ACCEPT_TRANSFER", payload: "ID" (当收到转账且决定接受时，必须使用此指令，否则转账状态不会更新)
-- 退回转账 -> command: "RETURN_TRANSFER", payload: "ID"
 - 亲属卡决策 -> command: "FAMILY_CARD_DECISION", payload: "cardId | 同意/拒绝 | 月额度数字"
   *规则*：同意时必须给出月额度；拒绝时额度可留空或0。
 - 支付代付请求 -> command: "PAY_FOR_REQUEST", payload: "requestId" (当用户发送了代付请求时，你可以选择帮他支付。requestId在代付消息的JSON中)
@@ -2552,8 +2872,8 @@ ${contact.showThought ? `
 - 送礼物给用户 -> command: "SEND_GIFT", payload: "物品名称 | 价格 | 备注" (例如 "一束鲜花 | 52.0 | 节日快乐")
 - 点外卖给用户 -> command: "SEND_DELIVERY", payload: "餐品名称 | 价格 | 备注" (例如 "炸鸡啤酒 | 35.0 | 趁热吃")
 - 发起一起听邀请 -> command: "MUSIC_SEND_INVITE", payload: "歌曲关键词(可选；当用户当前正在听歌时可留空)"
-- 一起听邀请决策 -> command: "MUSIC_INVITE_DECISION", payload: "inviteId | 同意/拒绝" (例如 "invite_123 | 同意")
 - 引用回复 -> command: "QUOTE_MESSAGE", payload: "消息内容摘要"
+  *建议*：这是增强真实聊天感的重要动作。只要你是在接用户某个具体点，优先考虑使用它。
 - 更改资料 -> 
   - command: "UPDATE_NAME", payload: "新网名"
   - command: "UPDATE_WXID", payload: "新微信号"
@@ -2564,37 +2884,34 @@ ${contact.showThought ? `
 - 拼多多砍价助力 -> command: "PDD_BARGAIN_HELP", payload: "商品ID" (从用户的分享链接中获取)
   *说明*：当用户发送砍价链接时，如果决定帮他砍一刀，请输出此指令。
 
-【记忆提取指令】
-在对话过程中，当你注意到用户提到关于自己的新信息时（如喜好、习惯、特征、经历等），请将其记录下来。
-但必须注意：如果这个信息已经包含在用户当前选择的身份描述中，就不要记录。
+【临时决策类指令规则】
+- ACCEPT_TRANSFER / RETURN_TRANSFER / MUSIC_INVITE_DECISION 这类“决策型指令”不是常驻可用指令。
+- 只有当上方状态区明确出现对应的待处理事项和 ID 时，才允许使用它们。
+- 如果上方没有明确给出对应待处理事项，就不要猜测，不要主动编造这些指令。
 
-检查步骤：
-1. 获取当前用户身份描述（当前联系人的userPersonaId对应的aiPrompt）
-2. 如果要记录的信息已经在该身份描述中明确提到过，则跳过
-3. 如果要记录的信息与身份描述中的信息本质相同（只是表述不同），也跳过
-4. 只有全新的、身份描述中没有的信息才记录
+【同轮状态提取指令】
+本次回复除了输出可见消息外，还要在同一个 JSON 数组中按需输出状态动作，用于一次性完成状态提取和聊天回复。不要等待系统二次识别，也不要为拆分出的每条 text 重复输出状态动作。
 
-记录格式：{"type": "action", "command": "RECORD_USER_INFO", "payload": "信息内容"}
-示例：{"type": "action", "command": "RECORD_USER_INFO", "payload": "用户喜欢在周末爬山"}
+可用格式：
+- {"type": "action", "command": "RECORD_USER_STATE", "payload": "reasonType | 标准化状态内容"}
+- {"type": "action", "command": "RESOLVE_USER_STATE", "payload": "reasonType | 状态结束描述"}
+- {"type": "action", "command": "RECORD_CONTACT_STATE", "payload": "reasonType | 标准化状态内容"}
+- {"type": "action", "command": "RESOLVE_CONTACT_STATE", "payload": "reasonType | 状态结束描述"}
+- 兼容旧格式：{"type": "action", "command": "RECORD_IMPORTANT_STATE", "payload": "状态内容"}，等价于 RECORD_USER_STATE
 
-注意事项：
-1. 只记录客观事实，不要记录推测或假设
-2. 确保信息简洁明了，一条信息一句话
-3. 避免重复记录已有信息
-4. 信息可以是用户的任何方面：喜好、厌恶、习惯、特征、经历、能力等
-5. 必须严格检查是否已在身份描述中存在
+示例：
+- {"type": "action", "command": "RECORD_USER_STATE", "payload": "exam | 用户正在期末周，最近在复习"}
+- {"type": "action", "command": "RESOLVE_USER_STATE", "payload": "health | 用户发烧已经好了"}
+- {"type": "action", "command": "RECORD_CONTACT_STATE", "payload": "travel | 我这几天在出差"}
+- {"type": "action", "command": "RESOLVE_CONTACT_STATE", "payload": "emotion | 我已经缓过来了"}
 
-【重要状态记录指令】
-除了普通记忆，你还可以记录用户的当前状态、时效性信息（如生理期、生病、考试周、出差、假期等）或你们关系的重大变化。
-这类信息非常重要，你必须时刻记住，直到它过期或改变。
-
-记录格式：{"type": "action", "command": "RECORD_IMPORTANT_STATE", "payload": "状态内容"}
-示例：{"type": "action", "command": "RECORD_IMPORTANT_STATE", "payload": "用户正在生理期，身体不适"}
-
-注意：
-1. 只记录有时效性或非常重要的状态。
-2. 避免记录琐碎的日常（如“用户刚才在吃饭”）。
-3. 如果状态已经结束（通过对话推断），请不要再重复记录，或者可以通过新状态覆盖旧状态（系统会自动追加，你只需记录新的）。
+规则：
+1. reasonType 只能是 health|exam|travel|emotion|other。
+2. 如果用户最近尚未被你回应的消息里出现了“用户本人当前状态”，可输出一条 RECORD_USER_STATE 或 RESOLVE_USER_STATE。
+3. 如果你这次准备发送的回复里自然体现了你自己的当前状态，可输出一条 RECORD_CONTACT_STATE 或 RESOLVE_CONTACT_STATE。
+4. 每个对象（用户/联系人）本轮最多输出一条记录动作和一条结束动作；不确定就不要输出。
+5. 只记录有时效性或明显重要的状态，避免琐碎瞬时行为（如“刚在吃饭”）。
+6. 状态动作是隐藏的系统动作，不要在可见文本里解释“我帮你记录了状态”。
 
 ${contact.showThought ? '- **强制执行**：请务必输出角色的【内心独白】(心声)。格式：{"type": "thought", "content": "..."}。\n  *注意*：这是角色的心理活动，不是AI的思考过程。绝不要暴露你是AI，不要分析任务指令，而是描写角色此刻的真实想法。' : '- 如果需要输出角色的内心独白（心声），请使用格式：{"type": "thought", "content": "..."}'}
 
@@ -2604,10 +2921,12 @@ ${contact.showThought ? '- **强制执行**：请务必输出角色的【内心�
 3. 正常回复应该自然，不要机械地说“我点赞了”或“我收钱了”。
 4. 如果不想执行操作，就不要输出 action 指令。
 5. 发送图片时，请提供详细的画面描述。
-5. 一次回复中最多只能发起一笔转账。
-6. 你有权限更改自己的资料卡信息（网名、微信号、签名），当用户要求或你自己想改时可以使用。
-7. **内心独白**是角色的心理活动，用户可见（如果开启了显示）。${contact.showThought ? '当前已开启显示，请务必输出，且作为第一条。' : ''}
-8. 当对方消息带有“引用回复”关系时，请优先根据被引用消息理解对方在回应什么。
+6. 一次回复中最多只能发起一笔转账。
+7. 你有权限更改自己的资料卡信息（网名、微信号、签名），当用户要求或你自己想改时可以使用。
+8. **内心独白**是角色的心理活动，用户可见（如果开启了显示）。${contact.showThought ? '当前已开启显示，请务必输出，且作为第一条。' : ''}
+9. 当对方消息带有“引用回复”关系时，请优先根据被引用消息理解对方在回应什么。
+10. 为了增强活人感，可以偶尔主动发照片、朋友圈、语音、引用回复、点外卖、送礼物、转账，但一定要符合关系、时机和情绪，不要滥用。
+11. 在适合回应具体句子或具体细节时，QUOTE_MESSAGE 的优先级高于普通平铺直叙回复，可以多使用。
 
 请回复对方的消息。`;
 
@@ -2909,6 +3228,88 @@ ${contact.showThought ? '- **强制执行**：请务必输出角色的【内心�
         })
     ];
 
+    if (typeof window.getScreenShareAiContextMessages === 'function') {
+        try {
+            const screenShareContext = window.getScreenShareAiContextMessages();
+            if (screenShareContext && (screenShareContext.summaryText || screenShareContext.multimodalContent)) {
+                let lastUserMsgIndex = -1;
+                for (let i = messages.length - 1; i >= 0; i--) {
+                    if (messages[i].role === 'user') {
+                        lastUserMsgIndex = i;
+                        break;
+                    }
+                }
+
+                const screenShareImageParts = Array.isArray(screenShareContext.multimodalContent)
+                    ? screenShareContext.multimodalContent.filter(part => part && part.type === 'image_url')
+                    : [];
+
+                console.log('[ScreenShare Debug] screen share context ready for request', {
+                    hasSummaryText: !!screenShareContext.summaryText,
+                    summaryText: screenShareContext.summaryText || null,
+                    multimodalPartCount: Array.isArray(screenShareContext.multimodalContent)
+                        ? screenShareContext.multimodalContent.length
+                        : 0,
+                    imageUrlCount: screenShareImageParts.length,
+                    imageUrls: screenShareImageParts.map(part => part.image_url && part.image_url.url),
+                    lastUserMsgIndex
+                });
+
+                const screenShareParts = [];
+                if (screenShareContext.summaryText) {
+                    screenShareParts.push({
+                        type: 'text',
+                        text: `${screenShareContext.summaryText}。以下是当前共享屏幕里相册前台的可见内容，请直接结合这些图片回答。`
+                    });
+                }
+                if (Array.isArray(screenShareContext.multimodalContent)) {
+                    screenShareParts.push(...screenShareContext.multimodalContent);
+                }
+
+                if (screenShareParts.length > 0) {
+                    if (lastUserMsgIndex !== -1) {
+                        const originalContent = messages[lastUserMsgIndex].content;
+                        const mergedContent = Array.isArray(originalContent)
+                            ? [...originalContent]
+                            : [{ type: 'text', text: String(originalContent || '') }];
+
+                        mergedContent.push({
+                            type: 'text',
+                            text: '【当前共享屏幕补充】'
+                        });
+                        mergedContent.push(...screenShareParts);
+                        messages[lastUserMsgIndex].content = mergedContent;
+                    } else {
+                        messages.push({
+                            role: 'user',
+                            content: screenShareParts
+                        });
+                    }
+
+                    const attachedMessage = lastUserMsgIndex !== -1
+                        ? messages[lastUserMsgIndex]
+                        : messages[messages.length - 1];
+                    const attachedImageParts = Array.isArray(attachedMessage.content)
+                        ? attachedMessage.content.filter(part => part && part.type === 'image_url')
+                        : [];
+
+                    console.log('[ScreenShare Debug] attached screen share context to message', {
+                        targetRole: attachedMessage.role,
+                        contentIsArray: Array.isArray(attachedMessage.content),
+                        targetImageUrlCount: attachedImageParts.length,
+                        targetImageUrls: attachedImageParts.map(part => part.image_url && part.image_url.url)
+                    });
+                } else {
+                    console.log('[ScreenShare Debug] screen share parts empty after build');
+                }
+            } else {
+                console.log('[ScreenShare Debug] no screen share context available for this request');
+            }
+        } catch (error) {
+            console.warn('Failed to build screen share AI context messages.', error);
+        }
+    }
+
     if (instruction) {
         messages.push({
             role: 'system',
@@ -2927,6 +3328,43 @@ ${contact.showThought ? '- **强制执行**：请务必输出角色的【内心�
         }
 
         const cleanKey = settings.key ? settings.key.replace(/[^\x00-\x7F]/g, "").trim() : '';
+        await normalizeAiRequestMessageImages(messages);
+        const outgoingImageParts = messages.reduce((list, message, index) => {
+            if (Array.isArray(message.content)) {
+                message.content.forEach(part => {
+                    if (part && part.type === 'image_url') {
+                        list.push({
+                            messageIndex: index,
+                            role: message.role,
+                            url: part.image_url && part.image_url.url
+                        });
+                    }
+                });
+            }
+            return list;
+        }, []);
+        let lastUserMessage = null;
+        for (let i = messages.length - 1; i >= 0; i--) {
+            if (messages[i].role === 'user') {
+                lastUserMessage = messages[i];
+                break;
+            }
+        }
+        console.log('[ScreenShare Debug] outgoing AI request summary', {
+            fetchUrl,
+            model: settings.model,
+            messageCount: messages.length,
+            outgoingImageUrlCount: outgoingImageParts.length,
+            outgoingImages: outgoingImageParts,
+            lastUserContentType: Array.isArray(lastUserMessage && lastUserMessage.content)
+                ? 'multimodal'
+                : typeof (lastUserMessage && lastUserMessage.content),
+            lastUserContentPreview: Array.isArray(lastUserMessage && lastUserMessage.content)
+                ? lastUserMessage.content.map(part => part && part.type === 'image_url'
+                    ? { type: 'image_url', url: part.image_url && part.image_url.url }
+                    : { type: part && part.type ? part.type : typeof part, text: part && part.text ? String(part.text).slice(0, 120) : '' })
+                : String((lastUserMessage && lastUserMessage.content) || '').slice(0, 240)
+        });
         const response = await fetch(fetchUrl, {
             method: 'POST',
             headers: {
@@ -2952,12 +3390,27 @@ ${contact.showThought ? '- **强制执行**：请务必输出角色的【内心�
             throw new Error(`API Error: ${data.error.message || JSON.stringify(data.error)}`);
         }
 
-        if (!data.choices || !data.choices.length || !data.choices[0].message) {
+        if (!data.choices || !data.choices.length) {
             console.error('Invalid API response structure:', data);
             throw new Error('API返回数据格式异常，请检查控制台日志');
         }
 
-        let replyContent = data.choices[0].message.content;
+        const extractedReply = extractReplyContentFromAiResponse(data);
+        console.log('[AI Debug] extracted reply content', {
+            source: extractedReply.source,
+            length: extractedReply.content.length,
+            preview: extractedReply.content.slice(0, 240)
+        });
+
+        if (!extractedReply.content) {
+            console.warn('AI response contained no displayable content:', data);
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('这次 AI 没有返回可显示的回复，请重试', 2500);
+            }
+            return;
+        }
+
+        let replyContent = extractedReply.content;
 
         replyContent = replyContent.replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
                                    .replace(/<think>[\s\S]*?<\/think>/g, '')
@@ -3058,10 +3511,10 @@ ${contact.showThought ? '- **强制执行**：请务必输出角色的【内心�
         let imageToSend = null;
         let hasTransferred = false;
         
-const momentRegex = /ACTION:\s*POST_MOMENT:\s*(.*?)(?:\n|$)/;
-const forumPostRegex = /ACTION:\s*POST_FORUM:\s*(.*?)(?:\n|$)/;
-const startForumLiveRegex = /ACTION:\s*START_FORUM_LIVE:\s*(.*?)(?:\n|$)/;
-const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
+        const momentRegex = /ACTION:\s*POST_MOMENT:\s*(.*?)(?:\n|$)/;
+        const forumPostRegex = /ACTION:\s*POST_FORUM:\s*(.*?)(?:\n|$)/;
+        const startForumLiveRegex = /ACTION:\s*START_FORUM_LIVE:\s*(.*?)(?:\n|$)/;
+        const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
         const editIcityBookRegex = /ACTION:\s*EDIT_ICITY_BOOK:\s*(.*?)(?:\n|$)/;
         const likeRegex = /ACTION:\s*LIKE_MOMENT(?:\s*|$)/;
         const commentRegex = /ACTION:\s*COMMENT_MOMENT:\s*(.*?)(?:\n|$)/;
@@ -3082,12 +3535,17 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
         const updateSignatureRegex = /ACTION:\s*UPDATE_SIGNATURE:\s*(.*?)(?:\n|$)/;
         const updateAvatarRegex = /ACTION:\s*UPDATE_AVATAR(?:\s*|$)/;
         const quoteMessageRegex = /ACTION:\s*QUOTE_MESSAGE:\s*(.*?)(?:\n|$)/;
-        const recordUserInfoRegex = /ACTION:\s*RECORD_USER_INFO:\s*(.*?)(?:\n|$)/;
+        const recordUserStateRegex = /ACTION:\s*RECORD_USER_STATE:\s*(.*?)(?:\n|$)/;
+        const resolveUserStateRegex = /ACTION:\s*RESOLVE_USER_STATE:\s*(.*?)(?:\n|$)/;
+        const recordContactStateRegex = /ACTION:\s*RECORD_CONTACT_STATE:\s*(.*?)(?:\n|$)/;
+        const resolveContactStateRegex = /ACTION:\s*RESOLVE_CONTACT_STATE:\s*(.*?)(?:\n|$)/;
         const sendVoiceRegex = /ACTION:\s*SEND_VOICE:\s*(\d+)\s*(.*?)(?:\n|$)/;
         const msClickRegex = /ACTION:\s*MINESWEEPER_CLICK:\s*(\d+)\s*,\s*(\d+)(?:\n|$)/;
         const msFlagRegex = /ACTION:\s*MINESWEEPER_FLAG:\s*(\d+)\s*,\s*(\d+)(?:\n|$)/;
         const witchGuessRegex = /ACTION:\s*WITCH_GUESS:\s*(\d+)\s*,\s*(\d+)(?:\n|$)/;
+
         const recordImportantStateRegex = /ACTION:\s*RECORD_IMPORTANT_STATE:\s*(.*?)(?:\n|$)/;
+        const screenTapRegex = /ACTION:\s*SCREEN_TAP:\s*(.*?)(?:\n|$)/;
         const pddCashHelpRegex = /ACTION:\s*PDD_CASH_HELP(?:\s*|$)/;
         const pddBargainHelpRegex = /ACTION:\s*PDD_BARGAIN_HELP:\s*(.*?)(?:\n|$)/;
         const musicSendInviteRegex = /ACTION:\s*MUSIC_SEND_INVITE(?:\s*:\s*(.*?))?(?:\n|$)/;
@@ -3108,6 +3566,109 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
         let hasMusicInviteSent = false;
         let hasMusicInviteDecision = false;
 
+        const inlineStateActionSpecs = [
+            { regex: recordUserStateRegex, owner: 'user', mode: 'record', command: 'RECORD_USER_STATE' },
+            { regex: resolveUserStateRegex, owner: 'user', mode: 'resolve', command: 'RESOLVE_USER_STATE' },
+            { regex: recordContactStateRegex, owner: 'contact', mode: 'record', command: 'RECORD_CONTACT_STATE' },
+            { regex: resolveContactStateRegex, owner: 'contact', mode: 'resolve', command: 'RESOLVE_CONTACT_STATE' },
+            { regex: recordImportantStateRegex, owner: 'user', mode: 'record', command: 'RECORD_IMPORTANT_STATE' }
+        ];
+
+        const normalizeInlineStateActionContent = (text) => String(text || '')
+            .toLowerCase()
+            .replace(/\s+/g, '')
+            .replace(/[，。！？、,.!?:;"'“”‘’（）()【】\[\]{}<>《》\-—_]/g, '');
+
+        const areInlineStateActionsSimilar = (left, right) => {
+            if (!left || !right) return false;
+            if (left.owner !== right.owner) return false;
+            if (left.reasonType !== right.reasonType) return false;
+            const leftText = normalizeInlineStateActionContent(left.content);
+            const rightText = normalizeInlineStateActionContent(right.content);
+            if (!leftText || !rightText) return false;
+            return leftText === rightText || leftText.includes(rightText) || rightText.includes(leftText);
+        };
+
+        const collectInlineStateActions = (segments) => {
+            const collected = [];
+            const strippedSegments = Array.isArray(segments) ? segments.map(segment => {
+                let processedSegment = segment;
+                inlineStateActionSpecs.forEach(spec => {
+                    let stateMatch;
+                    while ((stateMatch = processedSegment.match(spec.regex)) !== null) {
+                        const parsed = typeof window.parseInlineStatePayload === 'function'
+                            ? window.parseInlineStatePayload(stateMatch[1])
+                            : null;
+                        if (parsed && parsed.content) {
+                            collected.push({
+                                mode: spec.mode,
+                                owner: spec.owner,
+                                command: spec.command,
+                                reasonType: parsed.reasonType || 'other',
+                                content: parsed.content
+                            });
+                        }
+                        processedSegment = processedSegment.replace(stateMatch[0], '');
+                    }
+                });
+                return processedSegment;
+            }) : [];
+            return {
+                collected,
+                strippedSegments
+            };
+        };
+
+        const finalizeInlineStateActions = (stateActions) => {
+            const deduped = [];
+            const seen = new Set();
+
+            (Array.isArray(stateActions) ? stateActions : []).forEach(action => {
+                if (!action || !action.content) return;
+                const dedupeKey = [
+                    action.mode,
+                    action.owner,
+                    action.reasonType || 'other',
+                    normalizeInlineStateActionContent(action.content)
+                ].join('|');
+                if (seen.has(dedupeKey)) return;
+                seen.add(dedupeKey);
+                deduped.push(action);
+            });
+
+            const finalized = [];
+            ['user', 'contact'].forEach(owner => {
+                const ownerActions = deduped.filter(action => action.owner === owner);
+                const resolveAction = ownerActions.find(action => action.mode === 'resolve') || null;
+                const recordAction = ownerActions.find(action => action.mode === 'record') || null;
+
+                if (resolveAction) finalized.push(resolveAction);
+                if (recordAction && (!resolveAction || !areInlineStateActionsSimilar(resolveAction, recordAction))) {
+                    finalized.push(recordAction);
+                }
+            });
+            return finalized;
+        };
+
+        const inlineStateResult = collectInlineStateActions(actions);
+        actions = inlineStateResult.strippedSegments.filter(segment => String(segment || '').trim());
+        const inlineStateActions = finalizeInlineStateActions(inlineStateResult.collected);
+
+        if (typeof window.applyInlineStateResolve === 'function') {
+            inlineStateActions
+                .filter(action => action.mode === 'resolve')
+                .forEach(action => {
+                    window.applyInlineStateResolve(contact.id, action.owner, action.reasonType, action.content);
+                });
+        }
+        if (typeof window.applyInlineStateRecord === 'function') {
+            inlineStateActions
+                .filter(action => action.mode === 'record')
+                .forEach(action => {
+                    window.applyInlineStateRecord(contact.id, action.owner, action.reasonType, action.content);
+                });
+        }
+
         for (let i = 0; i < actions.length; i++) {
             let segment = actions[i];
             let processedSegment = segment;
@@ -3127,6 +3688,15 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
                     setTimeout(() => window.processPddHelp('bargain', prodId), 1000);
                 }
                 processedSegment = processedSegment.replace(pddBargainHelpMatch[0], '');
+            }
+
+            let screenTapMatch;
+            while ((screenTapMatch = processedSegment.match(screenTapRegex)) !== null) {
+                const targetDesc = (screenTapMatch[1] || '').trim();
+                if (targetDesc && typeof window.executeAIScreenAction === 'function') {
+                    window.executeAIScreenAction('SCREEN_TAP', targetDesc);
+                }
+                processedSegment = processedSegment.replace(screenTapMatch[0], '');
             }
 
             const handleMusicTogetherAction = async (actionName, actionPayload) => {
@@ -3277,72 +3847,6 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
                     if (handled) hasMusicInviteDecision = true;
                 }
                 processedSegment = processedSegment.replace(musicInviteDecisionMatch[0], '');
-            }
-
-            let recordImportantStateMatch;
-            while ((recordImportantStateMatch = processedSegment.match(recordImportantStateRegex)) !== null) {
-                let info = recordImportantStateMatch[1].trim();
-                info = info.replace(/^(用户|我|他|她)(:|：|,|，|\s)?/, '').trim();
-                if (info) {
-                    // 与文本直提状态并存：action 路径继续保留，最终统一走候选/去重管道。
-                    if (typeof window.createMemoryCandidate === 'function') {
-                        const created = window.createMemoryCandidate(contact.id, {
-                            content: info,
-                            suggestedTags: ['state'],
-                            source: 'ai_action',
-                            confidence: 0.86,
-                            reason: 'AI动作记录'
-                        });
-                        if (created) {
-                            if (created.status === 'pending') {
-                                showChatToast('状态记忆待确认');
-                            } else {
-                                showChatToast('重要状态已记录');
-                            }
-                        }
-                    }
-                }
-                processedSegment = processedSegment.replace(recordImportantStateMatch[0], '');
-            }
-
-            let recordUserInfoMatch;
-            while ((recordUserInfoMatch = processedSegment.match(recordUserInfoRegex)) !== null) {
-                let info = recordUserInfoMatch[1].trim();
-                info = info.replace(/^(用户|我|他|她)(:|：|,|，|\s)?/, '').trim();
-                if (info) {
-                    let userAiPrompt = '';
-                    if (contact.userPersonaId) {
-                        const p = window.iphoneSimState.userPersonas.find(p => p.id === contact.userPersonaId);
-                        if (p) userAiPrompt = p.aiPrompt || '';
-                    }
-                    let isDuplicate = false;
-                    if (!contact.userPerception) contact.userPerception = [];
-                    if (contact.userPerception.some(item => item.includes(info) || info.includes(item))) {
-                        isDuplicate = true;
-                    }
-                    if (!isDuplicate && userAiPrompt) {
-                        if (userAiPrompt.toLowerCase().includes(info.toLowerCase())) {
-                            isDuplicate = true;
-                        }
-                    }
-                    if (!isDuplicate && typeof window.createMemoryCandidate === 'function') {
-                        const created = window.createMemoryCandidate(contact.id, {
-                            content: info,
-                            suggestedTags: ['fact'],
-                            source: 'ai_action',
-                            confidence: 0.82,
-                            reason: 'AI动作记录'
-                        });
-                        if (created) {
-                            if (created.status === 'pending') {
-                                showChatToast('记忆待确认');
-                            } else {
-                                showChatToast('TA记住了');
-                            }
-                        }
-                    }
-                }
-                processedSegment = processedSegment.replace(recordUserInfoMatch[0], '');
             }
 
             let quoteMessageMatch;
@@ -3786,19 +4290,7 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
                     };
                     
                     setTimeout(() => {
-                        const sentMsg = sendMessage(JSON.stringify(giftData), false, 'shopping_gift', null, contact.id);
-                        if (typeof window.extractSpecificNamesFromStructuredMessage === 'function' && typeof window.createFactMemoryCandidateFromNames === 'function') {
-                            const names = window.extractSpecificNamesFromStructuredMessage('shopping_gift', giftData, sentMsg && sentMsg.id);
-                            if (Array.isArray(names) && names.length > 0) {
-                                window.createFactMemoryCandidateFromNames(contact.id, names, 'shopping_gift', {
-                                    sourceMsgId: sentMsg && sentMsg.id ? String(sentMsg.id) : '',
-                                    reason: `结构化礼物消息中出现具体名称：${names.join(' / ')}`,
-                                    sceneText: '联系人给用户送过礼物',
-                                    actor: 'contact',
-                                    notifyOnManual: false
-                                });
-                            }
-                        }
+                        sendMessage(JSON.stringify(giftData), false, 'shopping_gift', null, contact.id);
                     }, 1000);
                 }
                 processedSegment = processedSegment.replace(sendGiftMatch[0], '');
@@ -3832,19 +4324,7 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
                     };
                     
                     setTimeout(() => {
-                        const sentMsg = sendMessage(JSON.stringify(deliveryData), false, 'delivery_share', null, contact.id);
-                        if (typeof window.extractSpecificNamesFromStructuredMessage === 'function' && typeof window.createFactMemoryCandidateFromNames === 'function') {
-                            const names = window.extractSpecificNamesFromStructuredMessage('delivery_share', deliveryData, sentMsg && sentMsg.id);
-                            if (Array.isArray(names) && names.length > 0) {
-                                window.createFactMemoryCandidateFromNames(contact.id, names, 'delivery_share', {
-                                    sourceMsgId: sentMsg && sentMsg.id ? String(sentMsg.id) : '',
-                                    reason: `结构化外卖消息中出现具体名称：${names.join(' / ')}`,
-                                    sceneText: '联系人给用户点过外卖',
-                                    actor: 'contact',
-                                    notifyOnManual: false
-                                });
-                            }
-                        }
+                        sendMessage(JSON.stringify(deliveryData), false, 'delivery_share', null, contact.id);
                     }, 1000);
                 }
                 processedSegment = processedSegment.replace(sendDeliveryMatch[0], '');
@@ -4156,6 +4636,22 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
 
                 window.iphoneSimState.chatHistory[contact.id].push(msgData);
                 saveConfig();
+
+                if (window.syncToFloatingChat && window.isScreenSharing) {
+                    console.log('[ScreenShare Debug] sync background assistant reply to floating', {
+                        contactId: contact.id,
+                        type: typeToSave,
+                        preview: String(contentToSave || '').slice(0, 120)
+                    });
+                    window.syncToFloatingChat({
+                        content: contentToSave,
+                        type: typeToSave,
+                        role: 'assistant'
+                    }, contact.id);
+                    if (typeof window.loadFloatingChatHistory === 'function') {
+                        window.loadFloatingChatHistory();
+                    }
+                }
                 
                 // 触发通知
                 let notificationText = contentToSave;
@@ -4303,10 +4799,12 @@ const icityDiaryRegex = /ACTION:\s*POST_ICITY_DIARY:\s*(.*?)(?:\n|$)/;
 
     } catch (error) {
         console.error('AI生成失败:', error);
-        // 显示具体的错误信息
-        alert(`AI生成失败: ${error.message}\n请检查配置和API状态`);
-        // 同时在聊天界面显示系统消息
-        appendMessageToUI(`[系统错误]: AI生成失败 - ${error.message}`, false, 'text', null, null, null, null, false);
+        const errorMessage = `AI生成失败: ${error.message}，请检查配置和API状态`;
+        if (typeof window.showChatToast === 'function') {
+            window.showChatToast(errorMessage, 3500);
+        } else {
+            alert(`AI生成失败: ${error.message}\n请检查配置和API状态`);
+        }
     } finally {
         const currentContact = window.iphoneSimState.contacts.find(c => c.id === window.iphoneSimState.currentChatContactId);
         if (currentContact) {
@@ -4431,4 +4929,3 @@ function optimizePromptForNovelAI(text) {
 
     return processed;
 }
-

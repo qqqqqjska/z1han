@@ -5,9 +5,20 @@ function createDefaultMemorySettingsV2() {
             short_term: 2,
             long_term: 2,
             state: 2,
-            fact: 2,
             refined: 1,
             maxTotal: 7
+        },
+        injectRecentDays: {
+            short_term: 3,
+            long_term: 30,
+            state: 14,
+            refined: 30
+        },
+        injectImportanceMin: {
+            short_term: 0.5,
+            long_term: 0.5,
+            state: 0.5,
+            refined: 0.5
         },
         stateTtlDays: {
             health: 7,
@@ -20,6 +31,7 @@ function createDefaultMemorySettingsV2() {
         stateExtractV2: {
             enabled: true,
             strategy: 'rule_plus_ai',
+            debugConsole: true,
             thresholds: {
                 accept: 0.78,
                 borderline: 0.60,
@@ -38,6 +50,8 @@ function normalizeMemorySettingsV2(raw) {
     const defaults = createDefaultMemorySettingsV2();
     const src = raw && typeof raw === 'object' ? raw : {};
     const inject = src.injectQuota && typeof src.injectQuota === 'object' ? src.injectQuota : {};
+    const recentDays = src.injectRecentDays && typeof src.injectRecentDays === 'object' ? src.injectRecentDays : {};
+    const importanceMin = src.injectImportanceMin && typeof src.injectImportanceMin === 'object' ? src.injectImportanceMin : {};
     const ttl = src.stateTtlDays && typeof src.stateTtlDays === 'object' ? src.stateTtlDays : {};
     const stateExtract = src.stateExtractV2 && typeof src.stateExtractV2 === 'object' ? src.stateExtractV2 : {};
     const stateThresholds = stateExtract.thresholds && typeof stateExtract.thresholds === 'object'
@@ -62,9 +76,20 @@ function normalizeMemorySettingsV2(raw) {
             short_term: toInt(inject.short_term, defaults.injectQuota.short_term),
             long_term: toInt(inject.long_term, defaults.injectQuota.long_term),
             state: toInt(inject.state, defaults.injectQuota.state),
-            fact: toInt(inject.fact, defaults.injectQuota.fact),
             refined: toInt(inject.refined, defaults.injectQuota.refined),
             maxTotal: toInt(inject.maxTotal, defaults.injectQuota.maxTotal, 1, 100)
+        },
+        injectRecentDays: {
+            short_term: toInt(recentDays.short_term, defaults.injectRecentDays.short_term, 0, 3650),
+            long_term: toInt(recentDays.long_term, defaults.injectRecentDays.long_term, 0, 3650),
+            state: toInt(recentDays.state, defaults.injectRecentDays.state, 0, 3650),
+            refined: toInt(recentDays.refined, defaults.injectRecentDays.refined, 0, 3650)
+        },
+        injectImportanceMin: {
+            short_term: toFloat(importanceMin.short_term, defaults.injectImportanceMin.short_term, 0.1, 1),
+            long_term: toFloat(importanceMin.long_term, defaults.injectImportanceMin.long_term, 0.1, 1),
+            state: toFloat(importanceMin.state, defaults.injectImportanceMin.state, 0.1, 1),
+            refined: toFloat(importanceMin.refined, defaults.injectImportanceMin.refined, 0.1, 1)
         },
         stateTtlDays: {
             health: toInt(ttl.health, defaults.stateTtlDays.health, 1, 365),
@@ -79,6 +104,7 @@ function normalizeMemorySettingsV2(raw) {
             strategy: ['rule_plus_ai', 'rule_only'].includes(stateExtract.strategy)
                 ? stateExtract.strategy
                 : defaults.stateExtractV2.strategy,
+            debugConsole: stateExtract.debugConsole === undefined ? defaults.stateExtractV2.debugConsole : !!stateExtract.debugConsole,
             thresholds: {
                 accept: toFloat(stateThresholds.accept, defaults.stateExtractV2.thresholds.accept, 0.3, 0.99),
                 borderline: toFloat(stateThresholds.borderline, defaults.stateExtractV2.thresholds.borderline, 0.3, 0.99),
@@ -107,6 +133,20 @@ function inferStateReasonTypeFromText(text) {
     return 'other';
 }
 
+function normalizeStateOwnerValue(owner, fallback = 'user') {
+    return owner === 'contact' ? 'contact' : fallback;
+}
+
+function inferStateOwnerFromText(text, fallback = 'user') {
+    const value = String(text || '').trim();
+    if (!value) return normalizeStateOwnerValue(fallback, 'user');
+    if (/^(\u8054\u7cfb\u4eba|\u5bf9\u65b9)\u5f53\u524d\u72b6\u6001[:\uff1a]/.test(value)) return 'contact';
+    if (/^(\u7528\u6237|\u6211)\u5f53\u524d\u72b6\u6001[:\uff1a]/.test(value)) return 'user';
+    if (/^(\u4ed6|\u5979|\u5bf9\u65b9|\u8054\u7cfb\u4eba)(\u6700\u8fd1|\u8fd9\u51e0\u5929|\u76ee\u524d|\u672c\u5468|\u6b63\u5728|\u5728|\u521a)/.test(value)) return 'contact';
+    if (/^(\u6211|\u6211\u8fd9\u8fb9|\u672c\u4eba|\u6700\u8fd1\u6211|\u8fd9\u51e0\u5929\u6211|\u76ee\u524d\u6211|\u672c\u5468\u6211)(\u6b63\u5728|\u5728|\u6700\u8fd1|\u8fd9\u51e0\u5929|\u76ee\u524d|\u672c\u5468|\u521a)?/.test(value)) return 'user';
+    return normalizeStateOwnerValue(fallback, 'user');
+}
+
 function inferLegacyMemoryTags(memory) {
     if (!memory || typeof memory !== 'object') return ['long_term'];
     if (Array.isArray(memory.memoryTags) && memory.memoryTags.length > 0) return memory.memoryTags;
@@ -115,46 +155,79 @@ function inferLegacyMemoryTags(memory) {
     return ['long_term'];
 }
 
+const DEFAULT_MEMORY_IMPORTANCE_BY_TAG = {
+    short_term: 0.65,
+    long_term: 0.7,
+    state: 0.8,
+    refined: 0.78
+};
+
+function normalizeMemoryImportanceValueCore(value, fallback = 0.7) {
+    const parsed = Number(value);
+    const safe = Number.isFinite(parsed) ? parsed : fallback;
+    const clamped = Math.max(0.1, Math.min(1, safe));
+    return Math.round(clamped * 100) / 100;
+}
+
+function getImportanceFallbackByTagsCore(tags) {
+    const list = Array.isArray(tags) ? tags : [];
+    if (list.includes('state')) return DEFAULT_MEMORY_IMPORTANCE_BY_TAG.state;
+    if (list.includes('refined')) return DEFAULT_MEMORY_IMPORTANCE_BY_TAG.refined;
+    if (list.includes('short_term')) return DEFAULT_MEMORY_IMPORTANCE_BY_TAG.short_term;
+    return DEFAULT_MEMORY_IMPORTANCE_BY_TAG.long_term;
+}
+
+function normalizeMemoryTagsCore(tags, fallback = 'long_term') {
+    const validTags = ['refined', 'short_term', 'long_term', 'state'];
+    const safeFallback = validTags.includes(String(fallback || '').trim().toLowerCase())
+        ? String(fallback || '').trim().toLowerCase()
+        : 'long_term';
+    const next = Array.isArray(tags) ? tags : (typeof tags === 'string' ? tags.split(',') : []);
+    const normalized = Array.from(new Set(
+        next
+            .map(tag => String(tag || '').trim().toLowerCase())
+            .map(tag => tag === 'fact' ? 'long_term' : tag)
+            .filter(tag => validTags.includes(tag))
+    ));
+    if (normalized.length === 0) normalized.push(safeFallback);
+    return normalized;
+}
+
 function normalizeStateMeta(memory, settings) {
     const now = Date.now();
-    const ttlConfig = (settings && settings.stateTtlDays) || createDefaultMemorySettingsV2().stateTtlDays;
     const tags = Array.isArray(memory.memoryTags) ? memory.memoryTags : [];
     if (!tags.includes('state')) return false;
 
     const prevMeta = memory.stateMeta && typeof memory.stateMeta === 'object' ? memory.stateMeta : {};
+    const stateOwner = normalizeStateOwnerValue(
+        prevMeta.owner || memory.stateOwner || inferStateOwnerFromText(memory.content, 'user'),
+        'user'
+    );
     const reasonType = ['health', 'exam', 'travel', 'emotion', 'other'].includes(prevMeta.reasonType)
         ? prevMeta.reasonType
         : inferStateReasonTypeFromText(memory.content);
     const startAt = Number.isFinite(Number(prevMeta.startAt))
         ? Number(prevMeta.startAt)
         : (Number.isFinite(Number(memory.time)) ? Number(memory.time) : now);
-    let expiresAt = prevMeta.expiresAt;
-    if (expiresAt === undefined || expiresAt === null || !Number.isFinite(Number(expiresAt))) {
-        const ttlDays = Number(ttlConfig[reasonType]) || Number(ttlConfig.other) || 7;
-        expiresAt = startAt + ttlDays * 24 * 60 * 60 * 1000;
-    } else {
-        expiresAt = Number(expiresAt);
-    }
     const resolvedAt = Number.isFinite(Number(prevMeta.resolvedAt)) ? Number(prevMeta.resolvedAt) : null;
 
     let phase = prevMeta.phase;
-    if (!['active', 'expired', 'resolved'].includes(phase)) {
+    if (!['active', 'resolved'].includes(phase)) {
         phase = 'active';
-    }
-    if (phase !== 'resolved' && expiresAt && now > expiresAt) {
-        phase = 'expired';
     }
 
     const nextMeta = {
         phase: phase,
         startAt: startAt,
-        expiresAt: expiresAt,
+        expiresAt: null,
         resolvedAt: resolvedAt,
-        reasonType: reasonType
+        reasonType: reasonType,
+        owner: stateOwner
     };
 
     const changed = JSON.stringify(prevMeta) !== JSON.stringify(nextMeta);
     memory.stateMeta = nextMeta;
+    memory.stateOwner = stateOwner;
     return changed;
 }
 
@@ -177,8 +250,22 @@ function migrateMemorySchemaV2() {
     state.memories.forEach(memory => {
         if (!memory || typeof memory !== 'object') return;
         const nextTags = inferLegacyMemoryTags(memory);
-        if (!Array.isArray(memory.memoryTags) || memory.memoryTags.length === 0) {
-            memory.memoryTags = nextTags;
+        const normalizedTags = normalizeMemoryTagsCore(
+            Array.isArray(memory.memoryTags) && memory.memoryTags.length > 0 ? memory.memoryTags : nextTags,
+            nextTags.includes('short_term') ? 'short_term' : 'long_term'
+        );
+        if (
+            !Array.isArray(memory.memoryTags) ||
+            memory.memoryTags.length !== normalizedTags.length ||
+            memory.memoryTags.some((tag, index) => tag !== normalizedTags[index])
+        ) {
+            memory.memoryTags = normalizedTags;
+            changed = true;
+        }
+        const memoryImportanceFallback = getImportanceFallbackByTagsCore(memory.memoryTags);
+        const normalizedImportance = normalizeMemoryImportanceValueCore(memory.importance, memoryImportanceFallback);
+        if (!Number.isFinite(Number(memory.importance)) || Number(memory.importance) !== normalizedImportance) {
+            memory.importance = normalizedImportance;
             changed = true;
         }
         if (memory.reviewStatus !== 'approved') {
@@ -191,6 +278,10 @@ function migrateMemorySchemaV2() {
         }
         if (!Number.isFinite(Number(memory.confidence))) {
             memory.confidence = 0.7;
+            changed = true;
+        }
+        if (memory.factMeta) {
+            delete memory.factMeta;
             changed = true;
         }
         if (normalizeStateMeta(memory, settings)) changed = true;
@@ -222,14 +313,17 @@ function migrateMemorySchemaV2() {
                     memoryTags: ['state'],
                     source: 'ai_action',
                     confidence: 0.8,
+                    importance: DEFAULT_MEMORY_IMPORTANCE_BY_TAG.state,
                     reviewStatus: 'approved',
                     stateMeta: {
                         phase: 'active',
                         startAt: now,
-                        expiresAt: now + (Number(settings.stateTtlDays.other) || 7) * 24 * 60 * 60 * 1000,
+                        expiresAt: null,
                         resolvedAt: null,
-                        reasonType: 'other'
-                    }
+                        reasonType: 'other',
+                        owner: 'user'
+                    },
+                    stateOwner: 'user'
                 };
                 state.memories.push(stateMemory);
                 existingByContact[cid].add(text);
@@ -246,9 +340,10 @@ function migrateMemorySchemaV2() {
                     contactId: cid,
                     content: text,
                     time: now,
-                    memoryTags: ['fact'],
+                    memoryTags: ['long_term'],
                     source: 'ai_action',
                     confidence: 0.8,
+                    importance: DEFAULT_MEMORY_IMPORTANCE_BY_TAG.long_term,
                     reviewStatus: 'approved'
                 });
                 existingByContact[cid].add(text);
@@ -259,8 +354,19 @@ function migrateMemorySchemaV2() {
 
     state.memoryCandidates.forEach(candidate => {
         if (!candidate || typeof candidate !== 'object') return;
-        if (!Array.isArray(candidate.suggestedTags) || candidate.suggestedTags.length === 0) {
-            candidate.suggestedTags = ['long_term'];
+        const normalizedTags = normalizeMemoryTagsCore(candidate.suggestedTags, 'long_term');
+        if (
+            !Array.isArray(candidate.suggestedTags) ||
+            candidate.suggestedTags.length !== normalizedTags.length ||
+            candidate.suggestedTags.some((tag, index) => tag !== normalizedTags[index])
+        ) {
+            candidate.suggestedTags = normalizedTags;
+            changed = true;
+        }
+        const candidateImportanceFallback = getImportanceFallbackByTagsCore(candidate.suggestedTags);
+        const normalizedCandidateImportance = normalizeMemoryImportanceValueCore(candidate.importance, candidateImportanceFallback);
+        if (!Number.isFinite(Number(candidate.importance)) || Number(candidate.importance) !== normalizedCandidateImportance) {
+            candidate.importance = normalizedCandidateImportance;
             changed = true;
         }
         if (!['pending', 'approved', 'rejected'].includes(candidate.status)) {
@@ -270,6 +376,35 @@ function migrateMemorySchemaV2() {
         if (!Number.isFinite(Number(candidate.confidence))) {
             candidate.confidence = 0.7;
             changed = true;
+        }
+        if (candidate.factMeta) {
+            delete candidate.factMeta;
+            changed = true;
+        }
+        const tags = Array.isArray(candidate.suggestedTags) ? candidate.suggestedTags : [];
+        if (tags.includes('state')) {
+            const owner = normalizeStateOwnerValue(
+                (candidate.stateMeta && candidate.stateMeta.owner) || candidate.stateOwner || inferStateOwnerFromText(candidate.content, 'user'),
+                'user'
+            );
+            if (candidate.stateOwner !== owner) {
+                candidate.stateOwner = owner;
+                changed = true;
+            }
+            if (!candidate.stateMeta || typeof candidate.stateMeta !== 'object') {
+                candidate.stateMeta = {
+                    phase: 'active',
+                    startAt: now,
+                    expiresAt: null,
+                    resolvedAt: null,
+                    reasonType: inferStateReasonTypeFromText(candidate.content),
+                    owner
+                };
+                changed = true;
+            } else if (candidate.stateMeta.owner !== owner) {
+                candidate.stateMeta.owner = owner;
+                changed = true;
+            }
         }
     });
 
@@ -415,6 +550,7 @@ const state = {
         bgImage: ''
     },
     icityDiaries: [], // { id, content, visibility, time, likes, comments }
+    icityFriendsPosts: [], // { id, contactId, content, time, visibility, likes, comments }
     stickerCategories: [], // { id, name, list: [{ url, desc }] }
     currentStickerCategoryId: 'all',
     isStickerManageMode: false,
@@ -425,10 +561,100 @@ const state = {
     selectedMessages: new Set(),
     enableSystemNotifications: false,
     enableBackgroundAudio: false,
-    shoppingProducts: []
+    shoppingProducts: [],
+    albumData: null
 };
 
 window.iphoneSimState = state;
+
+function normalizeAutoPostTextValue(text) {
+    return String(text || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\u00A0/g, ' ')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\s*\n\s*/g, '\n')
+        .trim();
+}
+
+function normalizeMomentImagesForFingerprint(images) {
+    if (!Array.isArray(images) || images.length === 0) return '';
+    return images.map(img => {
+        if (typeof img === 'string') return img.trim();
+        if (img && typeof img === 'object') {
+            return String(img.src || img.url || img.description || img.desc || '').trim();
+        }
+        return '';
+    }).filter(Boolean).join('|');
+}
+
+function getMomentFingerprint(moment) {
+    if (!moment || String(moment.contactId || '') === 'me') return '';
+    const contactId = String(moment.contactId || '').trim();
+    const contentKey = normalizeAutoPostTextValue(moment.content);
+    const imageKey = normalizeMomentImagesForFingerprint(moment.images);
+    if (!contactId || (!contentKey && !imageKey)) return '';
+    return `moment::${contactId}::${contentKey}::${imageKey}`;
+}
+
+function getIcityFriendPostFingerprint(post) {
+    if (!post) return '';
+    const ownerKey = String(post.contactId || post.handle || post.name || '').trim();
+    const contentKey = normalizeAutoPostTextValue(post.content);
+    if (!ownerKey || !contentKey) return '';
+    return `icity::${ownerKey}::${contentKey}`;
+}
+
+function dedupeCollectionByFingerprint(items, getFingerprint) {
+    if (!Array.isArray(items) || typeof getFingerprint !== 'function') {
+        return { changed: false, items: Array.isArray(items) ? items.slice() : [] };
+    }
+
+    const seen = new Set();
+    const deduped = [];
+    let changed = false;
+
+    // Walk from old to new so we keep the earliest/original post and drop later duplicates.
+    for (let i = items.length - 1; i >= 0; i--) {
+        const item = items[i];
+        const fingerprint = getFingerprint(item);
+        if (fingerprint && seen.has(fingerprint)) {
+            changed = true;
+            continue;
+        }
+        if (fingerprint) seen.add(fingerprint);
+        deduped.unshift(item);
+    }
+
+    if (deduped.length !== items.length) changed = true;
+    return { changed, items: deduped };
+}
+
+function sanitizeAutoGeneratedSocialContent() {
+    let changed = false;
+
+    if (Array.isArray(state.moments)) {
+        const dedupedMoments = dedupeCollectionByFingerprint(state.moments, getMomentFingerprint);
+        if (dedupedMoments.changed) {
+            state.moments = dedupedMoments.items;
+            changed = true;
+        }
+    }
+
+    if (Array.isArray(state.icityFriendsPosts)) {
+        const dedupedIcityPosts = dedupeCollectionByFingerprint(state.icityFriendsPosts, getIcityFriendPostFingerprint);
+        if (dedupedIcityPosts.changed) {
+            state.icityFriendsPosts = dedupedIcityPosts.items;
+            changed = true;
+        }
+    }
+
+    return changed;
+}
+
+window.normalizeAutoPostTextValue = normalizeAutoPostTextValue;
+window.getMomentFingerprint = getMomentFingerprint;
+window.getIcityFriendPostFingerprint = getIcityFriendPostFingerprint;
+window.sanitizeAutoGeneratedSocialContent = sanitizeAutoGeneratedSocialContent;
 
 window.appInitFunctions = [];
 
@@ -441,6 +667,7 @@ const knownApps = {
     'theme-app': { name: 'Theme', icon: 'fas fa-paint-brush', color: '#5856D6' },
     'shopping-app': { name: 'Shop', icon: 'fas fa-shopping-bag', color: '#FF9500' },
     'forum-app': { name: 'Forum', icon: 'fas fa-comments', color: '#30B0C7' },
+    'album-app': { name: 'Album', icon: 'fas fa-images', color: '#5AC8FA' },
     'phone-app': { name: 'Phone', icon: 'fas fa-mobile-alt', color: '#34C759' },
     'bank-app': { name: 'Bank', icon: 'fas fa-building-columns', color: '#1E66F5' },
     'icity-app': { name: 'iCity', icon: 'fas fa-city', color: '#000000' },
@@ -840,6 +1067,7 @@ async function loadConfig() {
             if (!state.worldbook) state.worldbook = [];
             if (!state.userPersonas) state.userPersonas = [];
             if (!state.moments) state.moments = [];
+            if (!state.icityFriendsPosts) state.icityFriendsPosts = [];
             if (!state.memories) state.memories = [];
             if (!state.memoryCandidates) state.memoryCandidates = [];
             state.memorySettingsV2 = normalizeMemorySettingsV2(state.memorySettingsV2);
@@ -864,6 +1092,12 @@ async function loadConfig() {
                 ],
                 lyricsFile: ''
             };
+            if (!state.albumData || typeof state.albumData !== 'object') {
+                state.albumData = null;
+            } else {
+                if (!Array.isArray(state.albumData.recentSections)) state.albumData.recentSections = [];
+                if (!Array.isArray(state.albumData.albums)) state.albumData.albums = [];
+            }
             if (!state.bankApp) state.bankApp = {
                 initialized: false,
                 cashBalance: 0.00,
@@ -908,7 +1142,8 @@ async function loadConfig() {
             }
 
             const memoryMigrationChanged = migrateMemorySchemaV2();
-            if (memoryMigrationChanged) {
+            const socialContentSanitized = sanitizeAutoGeneratedSocialContent();
+            if (memoryMigrationChanged || socialContentSanitized) {
                 saveConfig();
             }
         }
@@ -1118,6 +1353,8 @@ async function init() {
     } catch (e) {
         console.error('Operation failed. See details below.', e);
     }
+
+    if (window.reloadAlbumAppState) window.reloadAlbumAppState();
 
     if (window.updateLookusUi) window.updateLookusUi();
 
