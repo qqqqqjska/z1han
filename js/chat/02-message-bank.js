@@ -648,6 +648,9 @@ function sendMessage(text, isUser, type = 'text', description = null, targetCont
     }
     
     window.iphoneSimState.chatHistory[contactId].push(msg);
+    if (type === 'text' && window.FloraEngine && typeof window.FloraEngine.analyzeChat === 'function') {
+        window.FloraEngine.analyzeChat(text, !isUser, { contactId, type });
+    }
     if (!isUser && type === 'text' && window.WhisperChallenge && typeof window.WhisperChallenge.checkAiMessage === 'function') {
         window.WhisperChallenge.checkAiMessage(text, { contactId, type });
     }

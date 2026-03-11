@@ -25,6 +25,9 @@
 }
 
 #garden-app .garden-app-title-avatar {
+    appearance: none;
+    border: none;
+    padding: 0;
     width: 34px;
     height: 34px;
     border-radius: 50%;
@@ -36,6 +39,27 @@
     font-size: 17px;
     box-shadow: 0 8px 18px rgba(245, 158, 11, 0.25);
     flex-shrink: 0;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+#garden-app .garden-app-title-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#garden-app .garden-app-title-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#garden-app .garden-app-title-avatar:active {
+    transform: scale(0.96);
 }
 
 #garden-app .garden-app-title-text {
@@ -45,6 +69,25 @@
     overflow: hidden;
     text-overflow: ellipsis;
     color: #6b4f1d;
+    max-width: 168px;
+    padding: 4px 10px;
+    border-radius: 14px;
+    cursor: text;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#garden-app .garden-app-title-text:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+#garden-app .garden-app-title-text.is-editing {
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.16);
+    white-space: normal;
+}
+
+#garden-app .garden-app-title-text.is-editing:focus {
+    outline: none;
 }
 
 #garden-app .garden-app-header-actions {
@@ -78,6 +121,173 @@
 #garden-app .garden-app-header-btn:disabled {
     opacity: 0.4;
     box-shadow: none;
+}
+
+#garden-app .garden-contact-sheet {
+    position: absolute;
+    inset: 0;
+    z-index: 45;
+}
+
+#garden-app .garden-contact-sheet[hidden] {
+    display: none;
+}
+
+#garden-app .garden-contact-sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(17, 24, 39, 0.28);
+    opacity: 0;
+    transition: opacity 0.22s ease;
+}
+
+#garden-app .garden-contact-sheet-panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 10px 16px calc(24px + env(safe-area-inset-bottom));
+    border-radius: 24px 24px 0 0;
+    background: rgba(255, 252, 245, 0.97);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow: 0 -16px 40px rgba(104, 78, 33, 0.16);
+    transform: translateY(100%);
+    transition: transform 0.22s ease;
+}
+
+#garden-app .garden-contact-sheet.is-open .garden-contact-sheet-backdrop {
+    opacity: 1;
+}
+
+#garden-app .garden-contact-sheet.is-open .garden-contact-sheet-panel {
+    transform: translateY(0);
+}
+
+#garden-app .garden-contact-sheet-handle {
+    width: 42px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.45);
+    margin: 0 auto 12px;
+}
+
+#garden-app .garden-contact-sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+#garden-app .garden-contact-sheet-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #6b4f1d;
+}
+
+#garden-app .garden-contact-sheet-close {
+    appearance: none;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.85);
+    color: #8b5a2b;
+    font-size: 22px;
+    line-height: 1;
+}
+
+#garden-app .garden-contact-sheet-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: min(320px, 48vh);
+    overflow-y: auto;
+}
+
+#garden-app .garden-contact-sheet-item {
+    appearance: none;
+    border: none;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.92);
+    color: #4a5568;
+    text-align: left;
+    box-shadow: 0 10px 24px rgba(245, 158, 11, 0.08);
+}
+
+#garden-app .garden-contact-sheet-item.is-active {
+    background: linear-gradient(135deg, #fff7d6, #fff1c1);
+    box-shadow: 0 10px 24px rgba(245, 158, 11, 0.14);
+}
+
+#garden-app .garden-contact-sheet-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #fff;
+    flex-shrink: 0;
+}
+
+#garden-app .garden-contact-sheet-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#garden-app .garden-contact-sheet-avatar-fallback {
+    font-size: 15px;
+    font-weight: 700;
+}
+
+#garden-app .garden-contact-sheet-meta {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+#garden-app .garden-contact-sheet-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #4a3a1d;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#garden-app .garden-contact-sheet-sub,
+#garden-app .garden-contact-sheet-empty {
+    font-size: 12px;
+    color: #8e8e93;
+}
+
+#garden-app .garden-contact-sheet-check {
+    color: #d97706;
+    font-size: 16px;
+    font-weight: 800;
+    opacity: 0;
+}
+
+#garden-app .garden-contact-sheet-item.is-active .garden-contact-sheet-check {
+    opacity: 1;
+}
+
+#garden-app .garden-contact-sheet-empty {
+    padding: 16px;
+    text-align: center;
 }
 
 #garden-app .garden-app-header-btn.is-active,
@@ -343,6 +553,11 @@
     color: #8e8e93;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#garden-app .garden-flora-toggle-btn[disabled] {
+    cursor: default;
+    opacity: 0.7;
 }
 
 #garden-app .garden-flora-toggle-btn.is-active {

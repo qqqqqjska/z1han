@@ -24,6 +24,9 @@ function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type 
         }
         
         window.iphoneSimState.chatHistory[contactId].push(msgData);
+        if (type === 'text' && window.FloraEngine && typeof window.FloraEngine.analyzeChat === 'function') {
+            window.FloraEngine.analyzeChat(text, true, { contactId, type });
+        }
         
         const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
         if (contact) {

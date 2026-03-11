@@ -1,6 +1,11 @@
 (function () {
     'use strict';
 
+    const GARDEN_TITLE_STORAGE_KEY = 'garden_app_custom_title_v1';
+    const GARDEN_LAYOUT_STORAGE_KEY = 'garden_app_contact_layouts_v1';
+    const GARDEN_TITLE_DEFAULT = '\u840c\u5ba0\u76f8\u4f34\u7684\u5bb6';
+    const GARDEN_TITLE_MAX_LENGTH = 20;
+
     const PANEL_TABS = [
         {
             key: 'pet',
@@ -191,7 +196,9 @@
         tabsEl: null,
         panelContentEl: null,
         floraState: 'healthy',
-        floraOpen: false
+        floraOpen: false,
+        currentGardenContactId: null,
+        gardenLayouts: null
     };
 
     let screenEl;
@@ -201,6 +208,7 @@
     let viewEls;
     let navBtns;
     let editorHost;
+    let titleTextEl;
     let floraScreenEl;
     let floraAppEl;
     let floraBackBtn;
@@ -217,6 +225,7 @@
         togglePanelBtn = document.getElementById('garden-toggle-panel-btn');
         saveBtn = document.getElementById('garden-save-btn');
         editorHost = document.getElementById('garden-editor-host');
+        titleTextEl = document.querySelector('#garden-app .garden-app-title-text');
         viewEls = Array.from(document.querySelectorAll('#garden-app .garden-app-view'));
         navBtns = Array.from(document.querySelectorAll('#garden-app .garden-bottom-nav-btn'));
         floraScreenEl = document.getElementById('garden-flora-screen');
@@ -232,6 +241,8 @@
         }
 
         closeBtn.addEventListener('click', closeApp);
+        bindGardenTitleEditing();
+        syncGardenTitle();
         togglePanelBtn.addEventListener('click', () => {
             if (state.currentView !== 'home') return;
             setDrawerOpen(!state.drawerOpen);
@@ -243,14 +254,370 @@
         if (floraBackBtn) {
             floraBackBtn.addEventListener('click', closeFloraScreen);
         }
-        floraToggleBtns.forEach((btn) => {
-            btn.addEventListener('click', () => setFloraState(btn.dataset.floraState));
-        });
+        window.addEventListener('moodflora:statechange', handleFloraStateEvent);
+        window.addEventListener('moodflora:contactchange', handleFloraContactEvent);
 
         initEditor();
-        setFloraState(state.floraState);
+        syncGardenLayoutFromActiveContact();
+        syncFloraFromEngine();
         switchView('home');
         state.initialized = true;
+    }
+
+    function sanitizeGardenTitle(value) {
+        if (typeof value !== 'string') return '';
+        return value.replace(/\s+/g, ' ').trim().slice(0, GARDEN_TITLE_MAX_LENGTH);
+    }
+
+    function readGardenTitle() {
+        try {
+            return sanitizeGardenTitle(window.localStorage.getItem(GARDEN_TITLE_STORAGE_KEY) || '');
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function writeGardenTitle(value) {
+        try {
+            window.localStorage.setItem(GARDEN_TITLE_STORAGE_KEY, value);
+        } catch (error) {
+            console.warn('[garden-app] title-save-failed', error);
+        }
+    }
+
+    function applyGardenTitle(value) {
+        if (!titleTextEl) return;
+        const nextTitle = sanitizeGardenTitle(value) || GARDEN_TITLE_DEFAULT;
+        titleTextEl.textContent = nextTitle;
+        titleTextEl.setAttribute('title', nextTitle);
+    }
+
+    function syncGardenTitle() {
+        if (!titleTextEl) return;
+        applyGardenTitle(readGardenTitle() || titleTextEl.textContent || GARDEN_TITLE_DEFAULT);
+    }
+
+    function moveCaretToEnd(el) {
+        if (!el || !window.getSelection || !document.createRange) return;
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(false);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+
+    function finishGardenTitleEditing(commit = true) {
+        if (!titleTextEl || !titleTextEl.classList.contains('is-editing')) return;
+
+        const previousTitle = titleTextEl.dataset.previousTitle || GARDEN_TITLE_DEFAULT;
+        const currentTitle = sanitizeGardenTitle(titleTextEl.textContent);
+
+        titleTextEl.contentEditable = 'false';
+        titleTextEl.classList.remove('is-editing');
+
+        if (!commit) {
+            applyGardenTitle(previousTitle);
+            delete titleTextEl.dataset.previousTitle;
+            return;
+        }
+
+        const nextTitle = currentTitle || previousTitle || GARDEN_TITLE_DEFAULT;
+        applyGardenTitle(nextTitle);
+        writeGardenTitle(nextTitle);
+        delete titleTextEl.dataset.previousTitle;
+        vibrate(10);
+    }
+
+    function startGardenTitleEditing() {
+        if (!titleTextEl || titleTextEl.classList.contains('is-editing')) return;
+
+        titleTextEl.dataset.previousTitle = sanitizeGardenTitle(titleTextEl.textContent) || GARDEN_TITLE_DEFAULT;
+        titleTextEl.contentEditable = 'true';
+        titleTextEl.spellcheck = false;
+        titleTextEl.classList.add('is-editing');
+        titleTextEl.focus();
+        moveCaretToEnd(titleTextEl);
+    }
+
+    function bindGardenTitleEditing() {
+        if (!titleTextEl || titleTextEl.dataset.editBound === 'true') return;
+
+        titleTextEl.dataset.editBound = 'true';
+        titleTextEl.setAttribute('role', 'textbox');
+        titleTextEl.setAttribute('aria-label', '\u7f16\u8f91\u5bb6\u56ed\u6807\u9898');
+
+        titleTextEl.addEventListener('click', (event) => {
+            event.stopPropagation();
+            startGardenTitleEditing();
+        });
+
+        titleTextEl.addEventListener('blur', () => {
+            finishGardenTitleEditing(true);
+        });
+
+        titleTextEl.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                finishGardenTitleEditing(true);
+                return;
+            }
+
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                finishGardenTitleEditing(false);
+            }
+        });
+
+        titleTextEl.addEventListener('input', () => {
+            if (!titleTextEl.classList.contains('is-editing')) return;
+            const sanitizedText = sanitizeGardenTitle(titleTextEl.textContent);
+            if (titleTextEl.textContent !== sanitizedText) {
+                titleTextEl.textContent = sanitizedText;
+                moveCaretToEnd(titleTextEl);
+            }
+        });
+    }
+
+    function createEmptyGardenLayoutStore() {
+        return {
+            contacts: {}
+        };
+    }
+
+    function createDefaultGardenLayout() {
+        return {
+            wall: {
+                background: '',
+                backgroundSize: '',
+                backgroundColor: ''
+            },
+            floor: {
+                background: '',
+                backgroundSize: '',
+                backgroundColor: ''
+            },
+            items: []
+        };
+    }
+
+    function sanitizeGardenSurface(rawSurface) {
+        const surface = rawSurface && typeof rawSurface === 'object' ? rawSurface : {};
+        return {
+            background: typeof surface.background === 'string' ? surface.background : '',
+            backgroundSize: typeof surface.backgroundSize === 'string' ? surface.backgroundSize : '',
+            backgroundColor: typeof surface.backgroundColor === 'string' ? surface.backgroundColor : ''
+        };
+    }
+
+    function sanitizeGardenItem(rawItem) {
+        if (!rawItem || typeof rawItem !== 'object') return null;
+        if (typeof rawItem.type !== 'string' || !SHAPE_GENERATORS[rawItem.type]) return null;
+
+        const placement = rawItem.placement === 'wall' ? 'wall' : 'floor';
+        const item = {
+            type: rawItem.type,
+            placement,
+            left: typeof rawItem.left === 'string' ? rawItem.left : (placement === 'wall' ? '50%' : '50%'),
+            top: typeof rawItem.top === 'string' ? rawItem.top : (placement === 'wall' ? '30%' : '80%')
+        };
+
+        if (rawItem.portal === 'flora' || rawItem.type === 'flora_portal_plant') {
+            item.fixed = true;
+            item.portal = 'flora';
+        }
+
+        return item;
+    }
+
+    function sanitizeGardenLayout(rawLayout) {
+        const layout = rawLayout && typeof rawLayout === 'object' ? rawLayout : {};
+        return {
+            wall: sanitizeGardenSurface(layout.wall),
+            floor: sanitizeGardenSurface(layout.floor),
+            items: Array.isArray(layout.items)
+                ? layout.items.map(sanitizeGardenItem).filter(Boolean)
+                : []
+        };
+    }
+
+    function readGardenLayouts() {
+        if (state.gardenLayouts) return state.gardenLayouts;
+
+        const emptyStore = createEmptyGardenLayoutStore();
+
+        try {
+            const raw = window.localStorage.getItem(GARDEN_LAYOUT_STORAGE_KEY);
+            if (!raw) {
+                state.gardenLayouts = emptyStore;
+                return state.gardenLayouts;
+            }
+
+            const parsed = JSON.parse(raw);
+            const store = createEmptyGardenLayoutStore();
+            const contacts = parsed && parsed.contacts && typeof parsed.contacts === 'object' ? parsed.contacts : {};
+            Object.keys(contacts).forEach((contactId) => {
+                store.contacts[contactId] = sanitizeGardenLayout(contacts[contactId]);
+            });
+            state.gardenLayouts = store;
+            return state.gardenLayouts;
+        } catch (error) {
+            console.warn('[garden-app] layout-read-failed', error);
+            state.gardenLayouts = emptyStore;
+            return state.gardenLayouts;
+        }
+    }
+
+    function writeGardenLayouts() {
+        if (!state.gardenLayouts) return;
+        try {
+            window.localStorage.setItem(GARDEN_LAYOUT_STORAGE_KEY, JSON.stringify(state.gardenLayouts));
+        } catch (error) {
+            console.warn('[garden-app] layout-write-failed', error);
+        }
+    }
+
+    function resolveGardenContactId(explicitContactId = null) {
+        if (explicitContactId) return String(explicitContactId);
+        if (window.FloraEngine && typeof window.FloraEngine.getSnapshot === 'function') {
+            const snapshot = window.FloraEngine.getSnapshot();
+            if (snapshot && snapshot.contactId) {
+                return String(snapshot.contactId);
+            }
+        }
+        if (window.iphoneSimState && window.iphoneSimState.currentChatContactId) {
+            return String(window.iphoneSimState.currentChatContactId);
+        }
+        return '__default__';
+    }
+
+    function getStoredGardenLayout(contactId) {
+        const store = readGardenLayouts();
+        const resolvedContactId = resolveGardenContactId(contactId);
+        return store.contacts[resolvedContactId] ? sanitizeGardenLayout(store.contacts[resolvedContactId]) : null;
+    }
+
+    function serializeSurface(targetEl) {
+        if (!targetEl) {
+            return sanitizeGardenSurface(null);
+        }
+        return {
+            background: targetEl.style.background || '',
+            backgroundSize: targetEl.style.backgroundSize || '',
+            backgroundColor: targetEl.style.backgroundColor || ''
+        };
+    }
+
+    function applySurface(targetEl, surface) {
+        if (!targetEl) return;
+        const nextSurface = sanitizeGardenSurface(surface);
+        targetEl.style.background = nextSurface.background || '';
+        targetEl.style.backgroundSize = nextSurface.backgroundSize || '';
+        targetEl.style.backgroundColor = nextSurface.backgroundColor || '';
+    }
+
+    function createItemSnapshot(itemEl) {
+        if (!itemEl || !itemEl.dataset || !itemEl.dataset.itemType) return null;
+
+        const isPortalFlora = itemEl.dataset.portal === 'flora' || itemEl.dataset.itemType === 'flora_portal_plant';
+        if (itemEl.dataset.fixed === 'true' && !isPortalFlora) {
+            return null;
+        }
+
+        const snapshot = {
+            type: itemEl.dataset.itemType,
+            placement: itemEl.dataset.placement === 'wall' ? 'wall' : 'floor',
+            left: itemEl.style.left || '50%',
+            top: itemEl.style.top || (itemEl.dataset.placement === 'wall' ? '30%' : '80%')
+        };
+
+        if (isPortalFlora) {
+            snapshot.fixed = true;
+            snapshot.portal = 'flora';
+        }
+
+        return snapshot;
+    }
+
+    function collectCurrentGardenLayout() {
+        const layout = createDefaultGardenLayout();
+        if (!state.roomEl) {
+            return layout;
+        }
+
+        layout.wall = serializeSurface(state.wallEl);
+        layout.floor = serializeSurface(state.floorEl);
+        layout.items = Array.from(state.roomEl.querySelectorAll('.item-container'))
+            .map(createItemSnapshot)
+            .filter(Boolean);
+
+        return sanitizeGardenLayout(layout);
+    }
+
+    function clearRoomItems() {
+        if (!state.roomEl) return;
+        Array.from(state.roomEl.querySelectorAll('.item-container')).forEach((itemEl) => {
+            if (itemEl.petInterval) clearInterval(itemEl.petInterval);
+            itemEl.remove();
+        });
+    }
+
+    function buildItemOptionsFromSnapshot(itemSnapshot) {
+        const options = {
+            left: itemSnapshot.left,
+            top: itemSnapshot.top
+        };
+
+        if (itemSnapshot.portal === 'flora' || itemSnapshot.type === 'flora_portal_plant') {
+            options.fixed = true;
+            options.portal = 'flora';
+            options.ariaLabel = '\u6253\u5f00\u5fc3\u60c5\u7eff\u690d';
+            options.className = 'is-fixed-portal';
+            options.onClick = openFloraScreen;
+        }
+
+        return options;
+    }
+
+    function applyGardenLayout(layout) {
+        if (!state.roomEl) return;
+
+        const nextLayout = sanitizeGardenLayout(layout);
+        clearRoomItems();
+        applySurface(state.wallEl, nextLayout.wall);
+        applySurface(state.floorEl, nextLayout.floor);
+
+        nextLayout.items.forEach((itemSnapshot) => {
+            createRoomItem(itemSnapshot.type, itemSnapshot.placement, buildItemOptionsFromSnapshot(itemSnapshot));
+        });
+
+        ensureFixedFloraPlant();
+        syncFloraFromEngine();
+    }
+
+    function persistGardenLayoutForContact(contactId = null) {
+        if (!state.roomEl) return;
+
+        const resolvedContactId = resolveGardenContactId(contactId || state.currentGardenContactId);
+        const store = readGardenLayouts();
+        store.contacts[resolvedContactId] = collectCurrentGardenLayout();
+        state.gardenLayouts = store;
+        writeGardenLayouts();
+    }
+
+    function restoreGardenLayoutForContact(contactId = null) {
+        const resolvedContactId = resolveGardenContactId(contactId);
+        const layout = getStoredGardenLayout(resolvedContactId) || createDefaultGardenLayout();
+        state.currentGardenContactId = resolvedContactId;
+        applyGardenLayout(layout);
+    }
+
+    function syncGardenLayoutFromActiveContact() {
+        const activeContactId = resolveGardenContactId();
+        if (state.currentGardenContactId && state.currentGardenContactId !== activeContactId) {
+            persistGardenLayoutForContact(state.currentGardenContactId);
+        }
+        restoreGardenLayoutForContact(activeContactId);
     }
 
     function initEditor() {
@@ -383,6 +750,7 @@
         const item = document.createElement('div');
         item.className = `item-container${options.className ? ` ${options.className}` : ''}`;
         item.innerHTML = SHAPE_GENERATORS[type];
+        item.dataset.itemType = type;
         item.dataset.placement = placement;
         item.style.left = options.left || '50%';
         item.style.top = options.top || (placement === 'wall' ? '30%' : '80%');
@@ -425,10 +793,14 @@
         item.addEventListener('dblclick', function (dblEvent) {
             dblEvent.stopPropagation();
             if (this.dataset.fixed === 'true') return;
+            const removedContactId = state.currentGardenContactId;
             if (this.petInterval) clearInterval(this.petInterval);
             this.style.animation = 'popOut 0.3s forwards';
             vibrate(20);
-            setTimeout(() => this.remove(), 300);
+            setTimeout(() => {
+                this.remove();
+                persistGardenLayoutForContact(removedContactId);
+            }, 300);
         });
 
         state.roomEl.appendChild(item);
@@ -459,6 +831,7 @@
         const item = createRoomItem(type, placement);
         if (!item) return;
 
+        persistGardenLayoutForContact();
         showToast();
         vibrate(30);
     }
@@ -565,6 +938,7 @@
                 el.justDraggedTimer = setTimeout(() => {
                     delete el.dataset.justDragged;
                 }, 220);
+                persistGardenLayoutForContact();
             }
 
             if (el.dataset.isPet) {
@@ -601,6 +975,7 @@
         targetEl.style.background = background;
         targetEl.style.backgroundSize = bgSize;
         targetEl.style.backgroundColor = bgColor;
+        persistGardenLayoutForContact();
         vibrate(20);
     }
 
@@ -615,6 +990,8 @@
 
     function saveDesign() {
         if (state.currentView !== 'home' || !saveBtn || saveBtn.disabled) return;
+
+        persistGardenLayoutForContact();
 
         const originalHTML = saveBtn.dataset.originalHtml || saveBtn.innerHTML;
         saveBtn.dataset.originalHtml = originalHTML;
@@ -660,6 +1037,38 @@
         }
     }
 
+    function syncFloraFromEngine() {
+        const snapshot = window.FloraEngine && typeof window.FloraEngine.init === 'function'
+            ? window.FloraEngine.init()
+            : null;
+        const stateKey = snapshot && snapshot.state ? snapshot.state : state.floraState;
+        setFloraState(stateKey);
+    }
+
+    function handleFloraStateEvent(event) {
+        const detail = event && event.detail ? event.detail : null;
+        const stateKey = detail && detail.snapshot && detail.snapshot.state
+            ? detail.snapshot.state
+            : (detail && detail.state ? detail.state : null);
+        if (!stateKey) return;
+        setFloraState(stateKey);
+    }
+
+    function handleFloraContactEvent(event) {
+        const detail = event && event.detail ? event.detail : null;
+        const contactId = detail && detail.contactId ? String(detail.contactId) : resolveGardenContactId();
+        if (state.currentGardenContactId && state.currentGardenContactId !== contactId) {
+            persistGardenLayoutForContact(state.currentGardenContactId);
+        }
+        restoreGardenLayoutForContact(contactId);
+        const stateKey = detail && detail.snapshot && detail.snapshot.state ? detail.snapshot.state : null;
+        if (!stateKey) {
+            syncFloraFromEngine();
+            return;
+        }
+        setFloraState(stateKey);
+    }
+
     function renderFloraParticles(particles) {
         return particles.map((particle) => `
             <div class="garden-flora-particle" style="left: ${particle.left}; animation-delay: ${particle.delay};">${particle.label}</div>
@@ -679,32 +1088,20 @@
 
     function setFloraState(stateKey) {
         const nextStateKey = FLORA_STATES[stateKey] ? stateKey : 'healthy';
-        const nextState = FLORA_STATES[nextStateKey];
         state.floraState = nextStateKey;
 
         floraToggleBtns.forEach((btn) => {
             btn.classList.toggle('is-active', btn.dataset.floraState === nextStateKey);
+            btn.disabled = true;
+            btn.setAttribute('aria-disabled', 'true');
         });
-        if (floraArtEl) {
-            floraArtEl.className = `garden-flora-art-plant garden-flora-state-${nextStateKey}`;
-        }
-        if (floraAppEl) {
-            floraAppEl.className = `garden-flora-app garden-flora-bg-${nextStateKey}`;
-        }
-        if (floraParticlesEl) {
-            floraParticlesEl.innerHTML = renderFloraParticles(nextState.particles);
-            floraParticlesEl.style.opacity = nextState.particlesVisible ? '1' : '0';
-        }
-        if (floraLogContentEl) {
-            floraLogContentEl.innerHTML = nextState.logHtml;
-        }
         syncPortalPlantState(nextStateKey);
     }
 
     function openFloraScreen() {
         if (!floraScreenEl || state.currentView !== 'home') return;
         setDrawerOpen(false);
-        setFloraState(state.floraState);
+        syncFloraFromEngine();
         state.floraOpen = true;
         floraScreenEl.classList.add('is-open');
         floraScreenEl.setAttribute('aria-hidden', 'false');
@@ -721,16 +1118,18 @@
     function openApp() {
         init();
         if (!screenEl) return;
+        syncGardenTitle();
+        syncGardenLayoutFromActiveContact();
         switchView('home');
         setDrawerOpen(false);
-        ensureFixedFloraPlant();
         closeFloraScreen();
-        setFloraState(state.floraState);
+        syncFloraFromEngine();
         screenEl.classList.remove('hidden');
     }
 
     function closeApp() {
         if (!screenEl) return;
+        persistGardenLayoutForContact();
         setDrawerOpen(false);
         closeFloraScreen();
         screenEl.classList.add('hidden');
