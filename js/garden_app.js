@@ -1,41 +1,47 @@
-(function () {
+﻿(function () {
     'use strict';
 
     const GARDEN_TITLE_STORAGE_KEY = 'garden_app_custom_title_v1';
     const GARDEN_LAYOUT_STORAGE_KEY = 'garden_app_contact_layouts_v1';
+    const GARDEN_FIGURE_ASSET_DB_NAME = 'garden_app_figure_assets_v1';
+    const GARDEN_FIGURE_ASSET_STORE = 'resident_character_assets';
     const GARDEN_TITLE_DEFAULT = '\u840c\u5ba0\u76f8\u4f34\u7684\u5bb6';
     const GARDEN_TITLE_MAX_LENGTH = 20;
+    const CONTACT_FIGURE_MIN_LEFT = 15;
+    const CONTACT_FIGURE_MAX_LEFT = 85;
+    const CONTACT_FIGURE_MIN_TOP = 74;
+    const CONTACT_FIGURE_MAX_TOP = 90;
 
     const PANEL_TABS = [
         {
             key: 'pet',
-            label: '宠物',
+            label: '瀹犵墿',
             icon: 'fas fa-paw',
             items: [
-                { kind: 'spawn', itemType: 'pet_dog', placement: 'floor', icon: 'fas fa-dog', color: '#d97706', name: '活泼柴犬' },
+                { kind: 'spawn', itemType: 'pet_dog', placement: 'floor', icon: 'fas fa-dog', color: '#d97706', name: '娲绘臣鏌寸姮' },
                 { kind: 'spawn', itemType: 'pet_dog_samoyed', placement: 'floor', icon: 'fas fa-dog', color: '#cbd5e0', name: '萨摩耶' },
                 { kind: 'spawn', itemType: 'pet_dog_golden', placement: 'floor', icon: 'fas fa-dog', color: '#f59e0b', name: '大金毛' },
-                { kind: 'spawn', itemType: 'pet_cat', placement: 'floor', icon: 'fas fa-cat', color: '#f97316', name: '溜达橘猫' },
+                { kind: 'spawn', itemType: 'pet_cat', placement: 'floor', icon: 'fas fa-cat', color: '#f97316', name: '婧滆揪姗樼尗' },
                 { kind: 'spawn', itemType: 'pet_cat_silver', placement: 'floor', icon: 'fas fa-cat', color: '#d1d5db', name: '银渐层' },
                 { kind: 'spawn', itemType: 'pet_cat_calico', placement: 'floor', icon: 'fas fa-cat', color: '#374151', name: '三花猫' }
             ]
         },
         {
             key: 'furniture',
-            label: '家具',
+            label: '瀹跺叿',
             icon: 'fas fa-couch',
             items: [
                 { kind: 'spawn', itemType: 'bed', placement: 'floor', icon: 'fas fa-bed', color: 'var(--wood-dark)', name: '小熊床' },
-                { kind: 'spawn', itemType: 'sofa', placement: 'floor', icon: 'fas fa-couch', color: 'var(--primary)', name: '云朵沙发' },
-                { kind: 'spawn', itemType: 'tv', placement: 'floor', icon: 'fas fa-tv', color: '#9ca3af', name: '复古电视' },
+                { kind: 'spawn', itemType: 'sofa', placement: 'floor', icon: 'fas fa-couch', color: 'var(--primary)', name: '浜戞湹娌欏彂' },
+                { kind: 'spawn', itemType: 'tv', placement: 'floor', icon: 'fas fa-tv', color: '#9ca3af', name: '澶嶅彜鐢佃' },
                 { kind: 'spawn', itemType: 'bookshelf', placement: 'floor', icon: 'fas fa-book-open', color: '#8b5a2b', name: '大书架' },
                 { kind: 'spawn', itemType: 'table', placement: 'floor', icon: 'fas fa-table-cells-large', color: 'var(--wood)', name: '原木桌' },
                 { kind: 'spawn', itemType: 'desk', placement: 'floor', icon: 'fas fa-table', color: '#c08457', name: '小书桌' },
-                { kind: 'spawn', itemType: 'chair', placement: 'floor', icon: 'fas fa-chair', color: '#f3c17a', name: '木椅' },
+                { kind: 'spawn', itemType: 'chair', placement: 'floor', icon: 'fas fa-chair', color: '#f3c17a', name: '鏈ㄦ' },
                 { kind: 'spawn', itemType: 'dresser', placement: 'floor', icon: 'fas fa-box', color: '#f59e0b', name: '小斗柜' },
-                { kind: 'spawn', itemType: 'wardrobe', placement: 'floor', icon: 'fas fa-door-closed', color: '#f4d7a1', name: '奶油衣柜' },
-                { kind: 'spawn', itemType: 'pet_house', placement: 'floor', icon: 'fas fa-house', color: '#fb7185', name: '宠物小窝' },
-                { kind: 'spawn', itemType: 'plant', placement: 'floor', icon: 'fas fa-seedling', color: 'var(--primary)', name: '圆叶绿植' },
+                { kind: 'spawn', itemType: 'wardrobe', placement: 'floor', icon: 'fas fa-door-closed', color: '#f4d7a1', name: '濂舵补琛ｆ煖' },
+                { kind: 'spawn', itemType: 'pet_house', placement: 'floor', icon: 'fas fa-house', color: '#fb7185', name: '瀹犵墿灏忕獫' },
+                { kind: 'spawn', itemType: 'plant', placement: 'floor', icon: 'fas fa-seedling', color: 'var(--primary)', name: '鍦嗗彾缁挎' },
                 { kind: 'spawn', itemType: 'cactus', placement: 'floor', icon: 'fas fa-seedling', color: '#2a9d8f', name: '仙人掌' },
                 { kind: 'spawn', itemType: 'lamp', placement: 'floor', icon: 'fas fa-lightbulb', color: '#fef08a', name: '落地灯' },
                 { kind: 'spawn', itemType: 'pouf', placement: 'floor', icon: 'fas fa-circle', color: 'var(--secondary)', name: '软坐垫' },
@@ -45,40 +51,40 @@
         },
         {
             key: 'decor',
-            label: '墙饰',
+            label: '澧欓グ',
             icon: 'fas fa-image',
             items: [
                 { kind: 'spawn', itemType: 'window', placement: 'wall', icon: 'fas fa-window-maximize', color: '#bae6fd', name: '拱形窗' },
                 { kind: 'spawn', itemType: 'mirror', placement: 'wall', icon: 'fas fa-face-smile', color: '#fbcfe8', name: '梳妆镜' },
-                { kind: 'spawn', itemType: 'painting', placement: 'wall', icon: 'fas fa-image', color: 'var(--primary)', name: '抽象挂画' },
+                { kind: 'spawn', itemType: 'painting', placement: 'wall', icon: 'fas fa-image', color: 'var(--primary)', name: '鎶借薄鎸傜敾' },
                 { kind: 'spawn', itemType: 'board', placement: 'wall', icon: 'fas fa-thumbtack', color: '#d97706', name: '软木板' },
-                { kind: 'spawn', itemType: 'clock', placement: 'wall', icon: 'fas fa-clock', color: 'var(--secondary)', name: '挂钟' },
-                { kind: 'spawn', itemType: 'garland', placement: 'wall', icon: 'fas fa-flag', color: 'var(--wood-dark)', name: '派对彩旗' }
+                { kind: 'spawn', itemType: 'clock', placement: 'wall', icon: 'fas fa-clock', color: 'var(--secondary)', name: '鎸傞挓' },
+                { kind: 'spawn', itemType: 'garland', placement: 'wall', icon: 'fas fa-flag', color: 'var(--wood-dark)', name: '娲惧褰╂棗' }
             ]
         },
         {
             key: 'wallpaper',
-            label: '墙纸',
+            label: '澧欑焊',
             icon: 'fas fa-paint-roller',
             items: [
-                { kind: 'texture', target: 'wall', background: 'linear-gradient(to bottom, #fefce8, #fef9c3)', bgSize: 'auto', bgColor: 'transparent', swatchStyle: 'background: linear-gradient(to bottom, #fefce8, #fef9c3);', name: '奶油淡黄' },
-                { kind: 'texture', target: 'wall', background: 'linear-gradient(to bottom, #fcfefe, #f0f7f4)', bgSize: 'auto', bgColor: 'transparent', swatchStyle: 'background: linear-gradient(to bottom, #fcfefe, #f0f7f4);', name: '初雪清晨' },
-                { kind: 'texture', target: 'wall', background: 'repeating-linear-gradient(0deg, #fff2f2, #fff2f2 10px, #ffffff 10px, #ffffff 20px)', bgSize: 'auto', bgColor: 'transparent', swatchStyle: 'background: repeating-linear-gradient(0deg, #fff2f2, #fff2f2 10px, #ffffff 10px, #ffffff 20px);', name: '蜜桃条纹' },
-                { kind: 'texture', target: 'wall', background: 'radial-gradient(#88d4ab 2px, transparent 2px)', bgSize: '10px 10px', bgColor: '#f0f7f4', swatchStyle: 'background: radial-gradient(#88d4ab 2px, transparent 2px); background-size: 10px 10px; background-color: #f0f7f4;', name: '薄荷波点' },
-                { kind: 'texture', target: 'wall', background: 'linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px)', bgSize: '10px 10px', bgColor: '#ffffff', swatchStyle: 'background: linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px); background-size: 10px 10px; background-color: #fff;', name: '极简网格' },
+                { kind: 'texture', target: 'wall', background: 'linear-gradient(to bottom, #fefce8, #fef9c3)', bgSize: 'auto', bgColor: 'transparent', swatchStyle: 'background: linear-gradient(to bottom, #fefce8, #fef9c3);', name: '濂舵补娣￠粍' },
+                { kind: 'texture', target: 'wall', background: 'linear-gradient(to bottom, #fcfefe, #f0f7f4)', bgSize: 'auto', bgColor: 'transparent', swatchStyle: 'background: linear-gradient(to bottom, #fcfefe, #f0f7f4);', name: '鍒濋洩娓呮櫒' },
+                { kind: 'texture', target: 'wall', background: 'repeating-linear-gradient(0deg, #fff2f2, #fff2f2 10px, #ffffff 10px, #ffffff 20px)', bgSize: 'auto', bgColor: 'transparent', swatchStyle: 'background: repeating-linear-gradient(0deg, #fff2f2, #fff2f2 10px, #ffffff 10px, #ffffff 20px);', name: '铚滄鏉＄汗' },
+                { kind: 'texture', target: 'wall', background: 'radial-gradient(#88d4ab 2px, transparent 2px)', bgSize: '10px 10px', bgColor: '#f0f7f4', swatchStyle: 'background: radial-gradient(#88d4ab 2px, transparent 2px); background-size: 10px 10px; background-color: #f0f7f4;', name: '钖勮嵎娉㈢偣' },
+                { kind: 'texture', target: 'wall', background: 'linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px)', bgSize: '10px 10px', bgColor: '#ffffff', swatchStyle: 'background: linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px); background-size: 10px 10px; background-color: #fff;', name: '鏋佺畝缃戞牸' },
                 { kind: 'texture', target: 'wall', background: 'radial-gradient(#fef08a 2px, transparent 2px)', bgSize: '30px 30px', bgColor: '#e0f2fe', swatchStyle: 'background: radial-gradient(#fef08a 2px, transparent 2px); background-size: 15px 15px; background-color: #e0f2fe;', name: '星空蓝' }
             ]
         },
         {
             key: 'floor',
-            label: '地板',
+            label: '鍦版澘',
             icon: 'fas fa-border-all',
             items: [
-                { kind: 'texture', target: 'floor', background: 'repeating-linear-gradient(90deg, #fcd34d, #fcd34d 30px, #fbbf24 30px, #fbbf24 32px)', bgSize: 'auto', bgColor: 'transparent', swatchStyle: 'background: repeating-linear-gradient(90deg, #fcd34d, #fcd34d 10px, #fbbf24 10px, #fbbf24 12px);', name: '明亮木纹' },
+                { kind: 'texture', target: 'floor', background: 'repeating-linear-gradient(90deg, #fcd34d, #fcd34d 30px, #fbbf24 30px, #fbbf24 32px)', bgSize: 'auto', bgColor: 'transparent', swatchStyle: 'background: repeating-linear-gradient(90deg, #fcd34d, #fcd34d 10px, #fbbf24 10px, #fbbf24 12px);', name: '鏄庝寒鏈ㄧ汗' },
                 { kind: 'texture', target: 'floor', background: '#e8f4ec', bgSize: 'auto', bgColor: 'transparent', swatchStyle: 'background: #e8f4ec;', name: '浅草绿' },
-                { kind: 'texture', target: 'floor', background: 'repeating-linear-gradient(90deg, #e2e8f0, #e2e8f0 30px, #cbd5e0 30px, #cbd5e0 32px)', bgSize: 'auto', bgColor: 'transparent', swatchStyle: 'background: repeating-linear-gradient(90deg, #e2e8f0, #e2e8f0 10px, #cbd5e0 10px, #cbd5e0 12px);', name: '灰白木纹' },
-                { kind: 'texture', target: 'floor', background: 'repeating-linear-gradient(90deg, #8b5a2b, #8b5a2b 30px, #704721 30px, #704721 32px)', bgSize: 'auto', bgColor: 'transparent', swatchStyle: 'background: repeating-linear-gradient(90deg, #8b5a2b, #8b5a2b 10px, #704721 10px, #704721 12px);', name: '深色胡桃' },
-                { kind: 'texture', target: 'floor', background: 'conic-gradient(#88d4ab 90deg, #fff 90deg 180deg, #88d4ab 180deg 270deg, #fff 270deg)', bgSize: '40px 40px', bgColor: 'transparent', swatchStyle: 'background: conic-gradient(#88d4ab 90deg, #fff 90deg 180deg, #88d4ab 180deg 270deg, #fff 270deg); background-size: 20px 20px;', name: '复古棋盘' }
+                { kind: 'texture', target: 'floor', background: 'repeating-linear-gradient(90deg, #e2e8f0, #e2e8f0 30px, #cbd5e0 30px, #cbd5e0 32px)', bgSize: 'auto', bgColor: 'transparent', swatchStyle: 'background: repeating-linear-gradient(90deg, #e2e8f0, #e2e8f0 10px, #cbd5e0 10px, #cbd5e0 12px);', name: '鐏扮櫧鏈ㄧ汗' },
+                { kind: 'texture', target: 'floor', background: 'repeating-linear-gradient(90deg, #8b5a2b, #8b5a2b 30px, #704721 30px, #704721 32px)', bgSize: 'auto', bgColor: 'transparent', swatchStyle: 'background: repeating-linear-gradient(90deg, #8b5a2b, #8b5a2b 10px, #704721 10px, #704721 12px);', name: '娣辫壊鑳℃' },
+                { kind: 'texture', target: 'floor', background: 'conic-gradient(#88d4ab 90deg, #fff 90deg 180deg, #88d4ab 180deg 270deg, #fff 270deg)', bgSize: '40px 40px', bgColor: 'transparent', swatchStyle: 'background: conic-gradient(#88d4ab 90deg, #fff 90deg 180deg, #88d4ab 180deg 270deg, #fff 270deg); background-size: 20px 20px;', name: '澶嶅彜妫嬬洏' }
             ]
         }
     ];
@@ -191,6 +197,7 @@
         roomEl: null,
         wallEl: null,
         floorEl: null,
+        residentLayerEl: null,
         toastEl: null,
         drawerEl: null,
         tabsEl: null,
@@ -198,7 +205,21 @@
         floraState: 'healthy',
         floraOpen: false,
         currentGardenContactId: null,
-        gardenLayouts: null
+        gardenLayouts: null,
+        residentFigureEl: null,
+        residentFigureLoopTimer: null,
+        residentFigureMoveTimer: null,
+        residentFigurePreloadToken: 0,
+        residentFigureImageCache: new Map(),
+        residentFigureAssetDbPromise: null,
+        residentFigureAssetUrlCache: new Map(),
+        residentFigurePoseToken: 0,
+        contactFigureDraftFiles: {
+            idle: null,
+            runLeft: null,
+            runRight: null
+        },
+        contactFigureEditingId: null
     };
 
     let screenEl;
@@ -207,6 +228,7 @@
     let saveBtn;
     let viewEls;
     let navBtns;
+    let activitiesViewEl;
     let editorHost;
     let titleTextEl;
     let floraScreenEl;
@@ -216,6 +238,22 @@
     let floraParticlesEl;
     let floraLogContentEl;
     let floraToggleBtns = [];
+    let contactFigureModalEl;
+    let contactFigureModalTitleEl;
+    let contactFigureIdleInputEl;
+    let contactFigureRunLeftInputEl;
+    let contactFigureRunRightInputEl;
+    let contactFigureIdlePreviewEl;
+    let contactFigureRunLeftPreviewEl;
+    let contactFigureRunRightPreviewEl;
+
+    function createEmptyContactFigureDraftFiles() {
+        return {
+            idle: null,
+            runLeft: null,
+            runRight: null
+        };
+    }
 
     function init() {
         if (state.initialized) return;
@@ -228,6 +266,7 @@
         titleTextEl = document.querySelector('#garden-app .garden-app-title-text');
         viewEls = Array.from(document.querySelectorAll('#garden-app .garden-app-view'));
         navBtns = Array.from(document.querySelectorAll('#garden-app .garden-bottom-nav-btn'));
+        activitiesViewEl = document.querySelector('#garden-app [data-garden-view="activities"]');
         floraScreenEl = document.getElementById('garden-flora-screen');
         floraAppEl = document.getElementById('garden-flora-app');
         floraBackBtn = document.getElementById('garden-flora-back');
@@ -243,6 +282,9 @@
         closeBtn.addEventListener('click', closeApp);
         bindGardenTitleEditing();
         syncGardenTitle();
+        syncActivitiesNavButton();
+        bindActivitiesInteractions();
+        ensureContactFigureModal();
         togglePanelBtn.addEventListener('click', () => {
             if (state.currentView !== 'home') return;
             setDrawerOpen(!state.drawerOpen);
@@ -251,6 +293,7 @@
         navBtns.forEach((btn) => {
             btn.addEventListener('click', () => switchView(btn.dataset.gardenView));
         });
+        document.addEventListener('click', handleOutsideDrawerClick, true);
         if (floraBackBtn) {
             floraBackBtn.addEventListener('click', closeFloraScreen);
         }
@@ -379,6 +422,606 @@
         });
     }
 
+    function syncActivitiesNavButton() {
+        const button = document.querySelector('#garden-app .garden-bottom-nav-btn[data-garden-view="activities"]');
+        if (!button) return;
+
+        const icon = button.querySelector('i');
+        const label = button.querySelector('span');
+        if (icon) {
+            icon.className = 'fas fa-gamepad';
+        }
+        if (label) {
+            label.textContent = '\u6d3b\u52a8';
+        }
+    }
+
+    function triggerActivitiesPlayFeedback(playBtn) {
+        if (!playBtn) return;
+        const icon = playBtn.querySelector('i');
+        if (!icon) return;
+
+        icon.classList.remove('ph-play');
+        icon.classList.add('ph-spinner-gap', 'is-spinning');
+
+        window.clearTimeout(playBtn.spinTimer);
+        playBtn.spinTimer = window.setTimeout(() => {
+            icon.classList.remove('ph-spinner-gap', 'is-spinning');
+            icon.classList.add('ph-play');
+        }, 800);
+    }
+
+    function openActivitiesView() {
+        init();
+        if (!screenEl) return;
+        syncGardenTitle();
+        syncGardenLayoutFromActiveContact();
+        switchView('activities');
+        setDrawerOpen(false);
+        closeFloraScreen();
+        syncFloraFromEngine();
+        screenEl.classList.remove('hidden');
+    }
+
+    function openWhisperChallengeFromActivities() {
+        openActivitiesView();
+        if (window.WhisperChallenge && typeof window.WhisperChallenge.openApp === 'function') {
+            window.WhisperChallenge.openApp({ returnTarget: 'garden-activities' });
+        }
+    }
+
+    function bindActivitiesInteractions() {
+        if (!activitiesViewEl || activitiesViewEl.dataset.bound === 'true') return;
+
+        activitiesViewEl.dataset.bound = 'true';
+        activitiesViewEl.addEventListener('click', (event) => {
+            const actionButton = event.target.closest('[data-garden-action]');
+            if (actionButton) {
+                const action = actionButton.dataset.gardenAction;
+                vibrate(20);
+                if (action === 'back-home') {
+                    closeApp();
+                    return;
+                }
+                if (action === 'search-activities') {
+                    return;
+                }
+            }
+
+            const tabButton = event.target.closest('.garden-activities-tab');
+            if (tabButton) {
+                activitiesViewEl.querySelectorAll('.garden-activities-tab').forEach((button) => {
+                    button.classList.toggle('is-active', button === tabButton);
+                });
+                vibrate(15);
+                return;
+            }
+
+            const playButton = event.target.closest('.garden-activities-play-btn');
+            if (playButton) {
+                event.stopPropagation();
+                vibrate(20);
+                const playCard = playButton.closest('.garden-activities-card');
+                if (playCard && playCard.dataset.activitiesCard === 'whisper') {
+                    openWhisperChallengeFromActivities();
+                    return;
+                }
+                triggerActivitiesPlayFeedback(playButton);
+                return;
+            }
+
+            const card = event.target.closest('.garden-activities-card');
+            if (card) {
+                vibrate(20);
+                if (card.dataset.activitiesCard === 'whisper') {
+                    openWhisperChallengeFromActivities();
+                    return;
+                }
+                triggerActivitiesPlayFeedback(card.querySelector('.garden-activities-play-btn'));
+            }
+        });
+    }
+
+    function hasResidentCharacterAssetDbSupport() {
+        return typeof window !== 'undefined' && 'indexedDB' in window;
+    }
+
+    function openResidentCharacterAssetDb() {
+        if (!hasResidentCharacterAssetDbSupport()) {
+            return Promise.reject(new Error('indexeddb-not-supported'));
+        }
+        if (state.residentFigureAssetDbPromise) {
+            return state.residentFigureAssetDbPromise;
+        }
+
+        state.residentFigureAssetDbPromise = new Promise((resolve, reject) => {
+            const request = window.indexedDB.open(GARDEN_FIGURE_ASSET_DB_NAME, 1);
+
+            request.onupgradeneeded = () => {
+                const db = request.result;
+                if (!db.objectStoreNames.contains(GARDEN_FIGURE_ASSET_STORE)) {
+                    db.createObjectStore(GARDEN_FIGURE_ASSET_STORE, { keyPath: 'id' });
+                }
+            };
+
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error || new Error('indexeddb-open-failed'));
+        }).catch((error) => {
+            state.residentFigureAssetDbPromise = null;
+            throw error;
+        });
+
+        return state.residentFigureAssetDbPromise;
+    }
+
+    async function saveResidentCharacterAssetFile(file) {
+        const db = await openResidentCharacterAssetDb();
+        const assetId = `garden_figure_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        const record = {
+            id: assetId,
+            blob: file,
+            name: file && file.name ? file.name : 'figure',
+            type: file && file.type ? file.type : '',
+            updatedAt: Date.now()
+        };
+
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(GARDEN_FIGURE_ASSET_STORE, 'readwrite');
+            tx.objectStore(GARDEN_FIGURE_ASSET_STORE).put(record);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error || new Error('indexeddb-write-failed'));
+            tx.onabort = () => reject(tx.error || new Error('indexeddb-write-aborted'));
+        });
+
+        return record;
+    }
+
+    async function readResidentCharacterAssetRecord(assetId) {
+        if (!assetId) return null;
+        const db = await openResidentCharacterAssetDb();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(GARDEN_FIGURE_ASSET_STORE, 'readonly');
+            const request = tx.objectStore(GARDEN_FIGURE_ASSET_STORE).get(assetId);
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error || new Error('indexeddb-read-failed'));
+        });
+    }
+
+    async function getResidentCharacterAssetObjectUrl(assetId) {
+        if (!assetId) return '';
+
+        const cachedUrl = state.residentFigureAssetUrlCache.get(assetId);
+        if (cachedUrl) return cachedUrl;
+
+        const record = await readResidentCharacterAssetRecord(assetId);
+        if (!record || !record.blob) return '';
+
+        const objectUrl = URL.createObjectURL(record.blob);
+        state.residentFigureAssetUrlCache.set(assetId, objectUrl);
+        return objectUrl;
+    }
+
+    async function deleteResidentCharacterAsset(assetId) {
+        if (!assetId || !hasResidentCharacterAssetDbSupport()) return;
+
+        const cachedUrl = state.residentFigureAssetUrlCache.get(assetId);
+        if (cachedUrl) {
+            URL.revokeObjectURL(cachedUrl);
+            state.residentFigureAssetUrlCache.delete(assetId);
+        }
+
+        const db = await openResidentCharacterAssetDb();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(GARDEN_FIGURE_ASSET_STORE, 'readwrite');
+            tx.objectStore(GARDEN_FIGURE_ASSET_STORE).delete(assetId);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error || new Error('indexeddb-delete-failed'));
+            tx.onabort = () => reject(tx.error || new Error('indexeddb-delete-aborted'));
+        });
+    }
+
+    function getContactFigureDraftFile(fieldKey) {
+        return state.contactFigureDraftFiles && state.contactFigureDraftFiles[fieldKey]
+            ? state.contactFigureDraftFiles[fieldKey]
+            : null;
+    }
+
+    function clearContactFigureDraftFile(fieldKey) {
+        const draft = getContactFigureDraftFile(fieldKey);
+        if (draft && draft.previewUrl) {
+            URL.revokeObjectURL(draft.previewUrl);
+        }
+        if (!state.contactFigureDraftFiles) {
+            state.contactFigureDraftFiles = createEmptyContactFigureDraftFiles();
+        }
+        state.contactFigureDraftFiles[fieldKey] = null;
+    }
+
+    function resetContactFigureDraftFiles() {
+        ['idle', 'runLeft', 'runRight'].forEach(clearContactFigureDraftFile);
+        state.contactFigureDraftFiles = createEmptyContactFigureDraftFiles();
+    }
+
+    function setContactFigureDraftFile(fieldKey, file) {
+        clearContactFigureDraftFile(fieldKey);
+        if (!file) return;
+        if (!state.contactFigureDraftFiles) {
+            state.contactFigureDraftFiles = createEmptyContactFigureDraftFiles();
+        }
+        state.contactFigureDraftFiles[fieldKey] = {
+            file,
+            name: file.name || 'figure',
+            previewUrl: URL.createObjectURL(file)
+        };
+    }
+
+    function getContactFigureInputSource(inputEl, fieldKey = '') {
+        const manualUrl = inputEl && typeof inputEl.value === 'string' ? inputEl.value.trim() : '';
+        if (manualUrl) {
+            return { url: manualUrl, assetId: '', kind: 'url' };
+        }
+
+        const draft = fieldKey ? getContactFigureDraftFile(fieldKey) : null;
+        if (draft && draft.previewUrl) {
+            return { url: draft.previewUrl, assetId: '', kind: 'draft' };
+        }
+
+        const assetId = inputEl && inputEl.dataset ? String(inputEl.dataset.assetId || '').trim() : '';
+        if (assetId) {
+            return { url: '', assetId, kind: 'asset' };
+        }
+
+        return { url: '', assetId: '', kind: 'empty' };
+    }
+
+    function getContactFigureFieldConfigMeta(fieldKey) {
+        if (fieldKey === 'runLeft') {
+            return {
+                urlKey: 'runLeftUrl',
+                assetIdKey: 'runLeftAssetId',
+                inputEl: contactFigureRunLeftInputEl,
+                previewEl: contactFigureRunLeftPreviewEl,
+                emptyLabel: '暂无左跑图'
+            };
+        }
+        if (fieldKey === 'runRight') {
+            return {
+                urlKey: 'runRightUrl',
+                assetIdKey: 'runRightAssetId',
+                inputEl: contactFigureRunRightInputEl,
+                previewEl: contactFigureRunRightPreviewEl,
+                emptyLabel: '暂无右跑图'
+            };
+        }
+        return {
+            urlKey: 'idleUrl',
+            assetIdKey: 'idleAssetId',
+            inputEl: contactFigureIdleInputEl,
+            previewEl: contactFigureIdlePreviewEl,
+            emptyLabel: '暂无站立图'
+        };
+    }
+
+    function ensureContactFigurePreviewImage(previewEl) {
+        if (!previewEl) return null;
+
+        let imageEl = previewEl.querySelector('.garden-contact-figure-preview-img');
+        if (imageEl) return imageEl;
+
+        imageEl = document.createElement('img');
+        imageEl.className = 'garden-contact-figure-preview-img';
+        imageEl.alt = 'contact figure preview';
+        imageEl.draggable = false;
+        imageEl.loading = 'eager';
+        imageEl.style.width = '100%';
+        imageEl.style.height = '100%';
+        imageEl.style.display = 'block';
+        imageEl.style.objectFit = 'contain';
+        imageEl.style.objectPosition = 'center bottom';
+        imageEl.style.borderRadius = 'inherit';
+        imageEl.style.pointerEvents = 'none';
+        imageEl.style.opacity = '0';
+        imageEl.style.transition = 'opacity 0.18s ease';
+
+        previewEl.insertBefore(imageEl, previewEl.firstChild || null);
+        return imageEl;
+    }
+
+    function syncContactFigurePreview(previewEl, url, emptyLabel) {
+        if (!previewEl) return;
+        const nextUrl = sanitizeResidentCharacterUrl(url);
+        const labelEl = previewEl.querySelector('.garden-contact-figure-preview-label');
+        const imageEl = ensureContactFigurePreviewImage(previewEl);
+        previewEl.style.backgroundImage = 'none';
+        previewEl.classList.toggle('is-empty', !nextUrl);
+        if (imageEl) {
+            if (nextUrl) {
+                if (imageEl.getAttribute('src') !== nextUrl) {
+                    imageEl.setAttribute('src', nextUrl);
+                }
+                imageEl.style.opacity = '1';
+            } else {
+                imageEl.removeAttribute('src');
+                imageEl.style.opacity = '0';
+            }
+        }
+        if (labelEl) {
+            labelEl.textContent = nextUrl ? '' : emptyLabel;
+        }
+    }
+    function getContactFigureStoredValue(inputEl) {
+        if (!inputEl) return '';
+        const manualUrl = typeof inputEl.value === 'string' ? inputEl.value.trim() : '';
+        if (manualUrl) return manualUrl;
+        return inputEl.dataset && inputEl.dataset.uploadDataUrl
+            ? String(inputEl.dataset.uploadDataUrl || '').trim()
+            : '';
+    }
+
+    function isInlineImageDataUrl(value) {
+        return typeof value === 'string' && /^data:image\//i.test(value.trim());
+    }
+
+    function updateContactFigureUploadStatus(fieldKey, inputEl) {
+        if (!contactFigureModalEl || !inputEl) return;
+        const statusEl = contactFigureModalEl.querySelector(`[data-figure-upload-status="${fieldKey}"]`);
+        if (!statusEl) return;
+
+        const manualUrl = typeof inputEl.value === 'string' ? inputEl.value.trim() : '';
+        const uploadDataUrl = inputEl.dataset ? String(inputEl.dataset.uploadDataUrl || '').trim() : '';
+
+        if (manualUrl) {
+            statusEl.textContent = '当前使用：外部图片链接';
+            return;
+        }
+        if (uploadDataUrl) {
+            statusEl.textContent = '当前使用：浏览器内已上传动图';
+            return;
+        }
+        statusEl.textContent = '当前使用：未设置';
+    }
+
+    function readContactFigureFormConfig() {
+        return sanitizeResidentCharacter({
+            idleUrl: getContactFigureStoredValue(contactFigureIdleInputEl),
+            runLeftUrl: getContactFigureStoredValue(contactFigureRunLeftInputEl),
+            runRightUrl: getContactFigureStoredValue(contactFigureRunRightInputEl)
+        });
+    }
+
+    function updateContactFigureFormPreviews() {
+        syncContactFigurePreview(contactFigureIdlePreviewEl, getContactFigureStoredValue(contactFigureIdleInputEl), '暂无站立图');
+        syncContactFigurePreview(contactFigureRunLeftPreviewEl, getContactFigureStoredValue(contactFigureRunLeftInputEl), '暂无左跑图');
+        syncContactFigurePreview(contactFigureRunRightPreviewEl, getContactFigureStoredValue(contactFigureRunRightInputEl), '暂无右跑图');
+        updateContactFigureUploadStatus('idle', contactFigureIdleInputEl);
+        updateContactFigureUploadStatus('runLeft', contactFigureRunLeftInputEl);
+        updateContactFigureUploadStatus('runRight', contactFigureRunRightInputEl);
+    }
+
+    function fillContactFigureForm(contactId) {
+        const resolvedContactId = resolveGardenContactId(contactId);
+        const displayName = getGardenContactDisplayName(resolvedContactId);
+        const config = getContactFigureConfig(resolvedContactId);
+
+        state.contactFigureEditingId = resolvedContactId;
+        if (contactFigureModalTitleEl) {
+            contactFigureModalTitleEl.textContent = `${displayName}的形象设置`;
+        }
+        if (contactFigureIdleInputEl) {
+            contactFigureIdleInputEl.value = isInlineImageDataUrl(config.idleUrl) ? '' : config.idleUrl;
+            contactFigureIdleInputEl.dataset.uploadDataUrl = isInlineImageDataUrl(config.idleUrl) ? config.idleUrl : '';
+        }
+        if (contactFigureRunLeftInputEl) {
+            contactFigureRunLeftInputEl.value = isInlineImageDataUrl(config.runLeftUrl) ? '' : config.runLeftUrl;
+            contactFigureRunLeftInputEl.dataset.uploadDataUrl = isInlineImageDataUrl(config.runLeftUrl) ? config.runLeftUrl : '';
+        }
+        if (contactFigureRunRightInputEl) {
+            contactFigureRunRightInputEl.value = isInlineImageDataUrl(config.runRightUrl) ? '' : config.runRightUrl;
+            contactFigureRunRightInputEl.dataset.uploadDataUrl = isInlineImageDataUrl(config.runRightUrl) ? config.runRightUrl : '';
+        }
+        updateContactFigureFormPreviews();
+    }
+    function readImageFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+            reader.onerror = () => reject(reader.error || new Error('file-read-failed'));
+            reader.readAsDataURL(file);
+        });
+    }
+
+    async function applyContactFigureUpload(fieldKey, file) {
+        const meta = getContactFigureFieldConfigMeta(fieldKey);
+        if (!meta.inputEl || !file) return;
+
+        if (!(file.type || '').toLowerCase().startsWith('image/')) {
+            window.alert('请选择图片或动图文件。');
+            return;
+        }
+        if (file.size > 900 * 1024) {
+            window.alert('图片过大，当前浏览器直传建议控制在 900KB 以内，优先使用 WebP 动图。');
+            return;
+        }
+
+        try {
+            const dataUrl = await readImageFileAsDataUrl(file);
+            if (!dataUrl) {
+                window.alert('图片读取失败，请重试。');
+                return;
+            }
+            meta.inputEl.value = '';
+            meta.inputEl.dataset.uploadDataUrl = dataUrl;
+            updateContactFigureFormPreviews();
+        } catch (error) {
+            window.alert('图片读取失败，请重试。');
+        }
+    }
+
+    function closeContactFigureModal() {
+        if (!contactFigureModalEl) return;
+        contactFigureModalEl.classList.remove('is-open');
+        state.contactFigureEditingId = null;
+        window.setTimeout(() => {
+            if (contactFigureModalEl && !contactFigureModalEl.classList.contains('is-open')) {
+                contactFigureModalEl.hidden = true;
+            }
+        }, 180);
+    }
+
+    function openContactFigureSettings(contactId = null) {
+        init();
+        ensureContactFigureModal();
+        if (!contactFigureModalEl) return;
+
+        fillContactFigureForm(contactId);
+        contactFigureModalEl.hidden = false;
+        window.requestAnimationFrame(() => {
+            if (!contactFigureModalEl) return;
+            contactFigureModalEl.classList.add('is-open');
+        });
+    }
+
+    function ensureContactFigureModal() {
+        if (!screenEl || contactFigureModalEl) return;
+
+        const modal = document.createElement('div');
+        modal.className = 'garden-contact-figure-modal';
+        modal.hidden = true;
+        modal.innerHTML = `
+            <div class="garden-contact-figure-backdrop"></div>
+            <div class="garden-contact-figure-panel" role="dialog" aria-modal="true" aria-label="联系人形象设置">
+                <div class="garden-contact-figure-handle"></div>
+                <div class="garden-contact-figure-head">
+                    <div class="garden-contact-figure-title">联系人形象设置</div>
+                    <button class="garden-contact-figure-close" type="button" aria-label="关闭">×</button>
+                </div>
+                <div class="garden-contact-figure-form">
+                    <div class="garden-contact-figure-tip">可直接在网页里上传动图。注意：这种方式只会保存在当前用户自己的浏览器里，不会自动同步给所有用户。</div>
+                    <div class="garden-contact-figure-field">
+                        <div class="garden-contact-figure-field-top">
+                            <label class="garden-contact-figure-label" for="garden-contact-figure-idle">站立动图链接</label>
+                            <div class="garden-contact-figure-preview is-empty" id="garden-contact-figure-idle-preview"><span class="garden-contact-figure-preview-label">暂无站立图</span></div>
+                        </div>
+                        <input id="garden-contact-figure-idle" class="garden-contact-figure-input" type="text" placeholder="可粘贴外链，也可点下方上传" inputmode="url" spellcheck="false" />
+                        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                            <button type="button" class="garden-contact-figure-action is-muted" data-figure-upload="idle">上传站立图</button>
+                            <span data-figure-upload-status="idle" style="font-size:12px;color:#7c8aa5;">当前使用：未设置</span>
+                        </div>
+                        <input id="garden-contact-figure-idle-file" type="file" accept="image/*" hidden />
+                    </div>
+                    <div class="garden-contact-figure-field">
+                        <div class="garden-contact-figure-field-top">
+                            <label class="garden-contact-figure-label" for="garden-contact-figure-run-left">向左跑动图链接</label>
+                            <div class="garden-contact-figure-preview is-empty" id="garden-contact-figure-run-left-preview"><span class="garden-contact-figure-preview-label">暂无左跑图</span></div>
+                        </div>
+                        <input id="garden-contact-figure-run-left" class="garden-contact-figure-input" type="text" placeholder="可粘贴外链，也可点下方上传" inputmode="url" spellcheck="false" />
+                        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                            <button type="button" class="garden-contact-figure-action is-muted" data-figure-upload="runLeft">上传左跑图</button>
+                            <span data-figure-upload-status="runLeft" style="font-size:12px;color:#7c8aa5;">当前使用：未设置</span>
+                        </div>
+                        <input id="garden-contact-figure-run-left-file" type="file" accept="image/*" hidden />
+                    </div>
+                    <div class="garden-contact-figure-field">
+                        <div class="garden-contact-figure-field-top">
+                            <label class="garden-contact-figure-label" for="garden-contact-figure-run-right">向右跑动图链接</label>
+                            <div class="garden-contact-figure-preview is-empty" id="garden-contact-figure-run-right-preview"><span class="garden-contact-figure-preview-label">暂无右跑图</span></div>
+                        </div>
+                        <input id="garden-contact-figure-run-right" class="garden-contact-figure-input" type="text" placeholder="可粘贴外链，也可点下方上传" inputmode="url" spellcheck="false" />
+                        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                            <button type="button" class="garden-contact-figure-action is-muted" data-figure-upload="runRight">上传右跑图</button>
+                            <span data-figure-upload-status="runRight" style="font-size:12px;color:#7c8aa5;">当前使用：未设置</span>
+                        </div>
+                        <input id="garden-contact-figure-run-right-file" type="file" accept="image/*" hidden />
+                    </div>
+                </div>
+                <div class="garden-contact-figure-actions">
+                    <button class="garden-contact-figure-action is-muted" type="button" data-figure-action="cancel">取消</button>
+                    <button class="garden-contact-figure-action is-danger" type="button" data-figure-action="clear">清空</button>
+                    <button class="garden-contact-figure-action is-primary" type="button" data-figure-action="save">保存</button>
+                </div>
+            </div>
+        `;
+        screenEl.appendChild(modal);
+
+        contactFigureModalEl = modal;
+        contactFigureModalTitleEl = modal.querySelector('.garden-contact-figure-title');
+        contactFigureIdleInputEl = modal.querySelector('#garden-contact-figure-idle');
+        contactFigureRunLeftInputEl = modal.querySelector('#garden-contact-figure-run-left');
+        contactFigureRunRightInputEl = modal.querySelector('#garden-contact-figure-run-right');
+        contactFigureIdlePreviewEl = modal.querySelector('#garden-contact-figure-idle-preview');
+        contactFigureRunLeftPreviewEl = modal.querySelector('#garden-contact-figure-run-left-preview');
+        contactFigureRunRightPreviewEl = modal.querySelector('#garden-contact-figure-run-right-preview');
+
+        const closeButton = modal.querySelector('.garden-contact-figure-close');
+        const backdrop = modal.querySelector('.garden-contact-figure-backdrop');
+        const cancelButton = modal.querySelector('[data-figure-action="cancel"]');
+        const clearButton = modal.querySelector('[data-figure-action="clear"]');
+        const saveButton = modal.querySelector('[data-figure-action="save"]');
+        const idleFileInput = modal.querySelector('#garden-contact-figure-idle-file');
+        const runLeftFileInput = modal.querySelector('#garden-contact-figure-run-left-file');
+        const runRightFileInput = modal.querySelector('#garden-contact-figure-run-right-file');
+        const uploadButtons = Array.from(modal.querySelectorAll('[data-figure-upload]'));
+
+        [contactFigureIdleInputEl, contactFigureRunLeftInputEl, contactFigureRunRightInputEl].forEach((input) => {
+            if (!input) return;
+            input.addEventListener('input', updateContactFigureFormPreviews);
+        });
+
+        uploadButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const fieldKey = button.dataset.figureUpload;
+                if (fieldKey === 'idle' && idleFileInput) idleFileInput.click();
+                if (fieldKey === 'runLeft' && runLeftFileInput) runLeftFileInput.click();
+                if (fieldKey === 'runRight' && runRightFileInput) runRightFileInput.click();
+            });
+        });
+
+        if (idleFileInput) {
+            idleFileInput.addEventListener('change', async () => {
+                await applyContactFigureUpload('idle', idleFileInput.files && idleFileInput.files[0] ? idleFileInput.files[0] : null);
+                idleFileInput.value = '';
+            });
+        }
+        if (runLeftFileInput) {
+            runLeftFileInput.addEventListener('change', async () => {
+                await applyContactFigureUpload('runLeft', runLeftFileInput.files && runLeftFileInput.files[0] ? runLeftFileInput.files[0] : null);
+                runLeftFileInput.value = '';
+            });
+        }
+        if (runRightFileInput) {
+            runRightFileInput.addEventListener('change', async () => {
+                await applyContactFigureUpload('runRight', runRightFileInput.files && runRightFileInput.files[0] ? runRightFileInput.files[0] : null);
+                runRightFileInput.value = '';
+            });
+        }
+
+        if (closeButton) closeButton.addEventListener('click', closeContactFigureModal);
+        if (backdrop) backdrop.addEventListener('click', closeContactFigureModal);
+        if (cancelButton) cancelButton.addEventListener('click', closeContactFigureModal);
+        if (clearButton) {
+            clearButton.addEventListener('click', () => {
+                if (!state.contactFigureEditingId) {
+                    closeContactFigureModal();
+                    return;
+                }
+                setContactFigureConfig(state.contactFigureEditingId, createEmptyResidentCharacter());
+                closeContactFigureModal();
+                vibrate(15);
+            });
+        }
+        if (saveButton) {
+            saveButton.addEventListener('click', () => {
+                if (!state.contactFigureEditingId) {
+                    closeContactFigureModal();
+                    return;
+                }
+                setContactFigureConfig(state.contactFigureEditingId, readContactFigureFormConfig());
+                closeContactFigureModal();
+                vibrate(15);
+            });
+        }
+    }
+
     function createEmptyGardenLayoutStore() {
         return {
             contacts: {}
@@ -397,6 +1040,14 @@
                 backgroundSize: '',
                 backgroundColor: ''
             },
+            residentCharacter: {
+                idleUrl: '',
+                idleAssetId: '',
+                runLeftUrl: '',
+                runLeftAssetId: '',
+                runRightUrl: ''
+                ,runRightAssetId: ''
+            },
             items: []
         };
     }
@@ -407,6 +1058,33 @@
             background: typeof surface.background === 'string' ? surface.background : '',
             backgroundSize: typeof surface.backgroundSize === 'string' ? surface.backgroundSize : '',
             backgroundColor: typeof surface.backgroundColor === 'string' ? surface.backgroundColor : ''
+        };
+    }
+
+    function sanitizeResidentCharacterUrl(value) {
+        return typeof value === 'string' ? value.trim() : '';
+    }
+
+    function createEmptyResidentCharacter() {
+        return {
+            idleUrl: '',
+            idleAssetId: '',
+            runLeftUrl: '',
+            runLeftAssetId: '',
+            runRightUrl: ''
+            ,runRightAssetId: ''
+        };
+    }
+
+    function sanitizeResidentCharacter(rawCharacter) {
+        const source = rawCharacter && typeof rawCharacter === 'object' ? rawCharacter : {};
+        return {
+            idleUrl: sanitizeResidentCharacterUrl(source.idleUrl),
+            idleAssetId: sanitizeResidentCharacterUrl(source.idleAssetId),
+            runLeftUrl: sanitizeResidentCharacterUrl(source.runLeftUrl),
+            runLeftAssetId: sanitizeResidentCharacterUrl(source.runLeftAssetId),
+            runRightUrl: sanitizeResidentCharacterUrl(source.runRightUrl)
+            ,runRightAssetId: sanitizeResidentCharacterUrl(source.runRightAssetId)
         };
     }
 
@@ -435,6 +1113,7 @@
         return {
             wall: sanitizeGardenSurface(layout.wall),
             floor: sanitizeGardenSurface(layout.floor),
+            residentCharacter: sanitizeResidentCharacter(layout.residentCharacter),
             items: Array.isArray(layout.items)
                 ? layout.items.map(sanitizeGardenItem).filter(Boolean)
                 : []
@@ -497,6 +1176,41 @@
         return store.contacts[resolvedContactId] ? sanitizeGardenLayout(store.contacts[resolvedContactId]) : null;
     }
 
+    function findGardenContact(contactId) {
+        if (!window.iphoneSimState || !Array.isArray(window.iphoneSimState.contacts)) return null;
+        return window.iphoneSimState.contacts.find((contact) => String(contact.id) === String(contactId)) || null;
+    }
+
+    function getGardenContactDisplayName(contactId) {
+        const contact = findGardenContact(contactId);
+        if (!contact) return '\u8be5\u8054\u7cfb\u4eba';
+        return contact.remark || contact.nickname || contact.name || '\u8be5\u8054\u7cfb\u4eba';
+    }
+
+    function getContactFigureConfig(contactId = null) {
+        const layout = getStoredGardenLayout(contactId);
+        return layout ? sanitizeResidentCharacter(layout.residentCharacter) : createEmptyResidentCharacter();
+    }
+
+    function setContactFigureConfig(contactId = null, config = {}) {
+        const resolvedContactId = resolveGardenContactId(contactId);
+        const store = readGardenLayouts();
+        const existingLayout = store.contacts[resolvedContactId]
+            ? sanitizeGardenLayout(store.contacts[resolvedContactId])
+            : createDefaultGardenLayout();
+
+        existingLayout.residentCharacter = sanitizeResidentCharacter(config);
+        store.contacts[resolvedContactId] = existingLayout;
+        state.gardenLayouts = store;
+        writeGardenLayouts();
+
+        if (String(state.currentGardenContactId || '') === String(resolvedContactId)) {
+            refreshActiveContactFigure();
+        }
+
+        return sanitizeResidentCharacter(existingLayout.residentCharacter);
+    }
+
     function serializeSurface(targetEl) {
         if (!targetEl) {
             return sanitizeGardenSurface(null);
@@ -547,6 +1261,7 @@
 
         layout.wall = serializeSurface(state.wallEl);
         layout.floor = serializeSurface(state.floorEl);
+        layout.residentCharacter = getContactFigureConfig(resolveGardenContactId(state.currentGardenContactId));
         layout.items = Array.from(state.roomEl.querySelectorAll('.item-container'))
             .map(createItemSnapshot)
             .filter(Boolean);
@@ -583,6 +1298,7 @@
         if (!state.roomEl) return;
 
         const nextLayout = sanitizeGardenLayout(layout);
+        clearResidentCharacterFigure();
         clearRoomItems();
         applySurface(state.wallEl, nextLayout.wall);
         applySurface(state.floorEl, nextLayout.floor);
@@ -592,6 +1308,7 @@
         });
 
         ensureFixedFloraPlant();
+        refreshActiveContactFigure(nextLayout.residentCharacter);
         syncFloraFromEngine();
     }
 
@@ -645,7 +1362,8 @@
                 <main id="room">
                     <div class="room-wall" id="roomWall"></div>
                     <div class="room-floor" id="roomFloor"></div>
-                    <div class="toast" id="toast"><i class="fas fa-hand-pointer"></i> 丝滑拖拽，双击收回</div>
+                    <div class="resident-character-layer" id="residentCharacterLayer"></div>
+                    <div class="toast" id="toast"><i class="fas fa-hand-pointer"></i> 涓濇粦鎷栨嫿锛屽弻鍑绘敹鍥?/div>
                 </main>
 
                 <div class="decor-panel glass" id="decorPanel">
@@ -668,6 +1386,7 @@
         state.roomEl = state.shadowRoot.getElementById('room');
         state.wallEl = state.shadowRoot.getElementById('roomWall');
         state.floorEl = state.shadowRoot.getElementById('roomFloor');
+        state.residentLayerEl = state.shadowRoot.getElementById('residentCharacterLayer');
         state.toastEl = state.shadowRoot.getElementById('toast');
         state.drawerEl = state.shadowRoot.getElementById('decorPanel');
         state.tabsEl = state.shadowRoot.getElementById('gardenPanelTabs');
@@ -729,6 +1448,27 @@
         }
 
         changeTexture(action.target, action.background, action.bgSize, action.bgColor);
+    }
+
+    function isEventWithinElement(event, element) {
+        if (!event || !element) return false;
+
+        if (typeof event.composedPath === 'function') {
+            const path = event.composedPath();
+            if (Array.isArray(path) && path.includes(element)) {
+                return true;
+            }
+        }
+
+        const target = event.target;
+        return !!(target && typeof element.contains === 'function' && element.contains(target));
+    }
+
+    function handleOutsideDrawerClick(event) {
+        if (!state.drawerOpen || state.currentView !== 'home') return;
+        if (isEventWithinElement(event, state.drawerEl)) return;
+        if (isEventWithinElement(event, togglePanelBtn)) return;
+        setDrawerOpen(false);
     }
 
     function switchPanelTab(tabKey) {
@@ -968,6 +1708,265 @@
         }
     }
 
+    function randomInRange(min, max) {
+        return min + Math.random() * (max - min);
+    }
+
+    function clampResidentFigureValue(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    function clearResidentCharacterTimers() {
+        if (state.residentFigureLoopTimer) {
+            clearTimeout(state.residentFigureLoopTimer);
+            state.residentFigureLoopTimer = null;
+        }
+        if (state.residentFigureMoveTimer) {
+            clearTimeout(state.residentFigureMoveTimer);
+            state.residentFigureMoveTimer = null;
+        }
+    }
+
+    function clearResidentCharacterFigure() {
+        clearResidentCharacterTimers();
+        state.residentFigurePreloadToken += 1;
+        if (state.residentFigureEl) {
+            state.residentFigureEl.remove();
+            state.residentFigureEl = null;
+        }
+    }
+
+    function resolveResidentCharacterUrl(config, pose) {
+        const nextConfig = sanitizeResidentCharacter(config);
+        if (pose === 'run-left') {
+            return nextConfig.runLeftUrl || nextConfig.runRightUrl || nextConfig.idleUrl || '';
+        }
+        if (pose === 'run-right') {
+            return nextConfig.runRightUrl || nextConfig.runLeftUrl || nextConfig.idleUrl || '';
+        }
+        return nextConfig.idleUrl || nextConfig.runLeftUrl || nextConfig.runRightUrl || '';
+    }
+
+    function getResidentCharacterImageEl(figureEl) {
+        if (!figureEl) return null;
+        return figureEl.querySelector('.resident-character-sprite-img');
+    }
+
+    function waitForResidentCharacterImageEl(imageEl, timeout = 1200) {
+        if (!imageEl) return Promise.resolve('empty');
+        const currentUrl = imageEl.currentSrc || imageEl.getAttribute('src') || '';
+        if (!currentUrl) return Promise.resolve('empty');
+        if (imageEl.complete) {
+            return Promise.resolve(imageEl.naturalWidth > 0 ? 'loaded' : 'error');
+        }
+
+        return new Promise((resolve) => {
+            let timeoutId = null;
+            const finalize = (status) => {
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+                imageEl.removeEventListener('load', handleLoad);
+                imageEl.removeEventListener('error', handleError);
+                resolve(status);
+            };
+
+            const handleLoad = () => finalize('loaded');
+            const handleError = () => finalize('error');
+
+            imageEl.addEventListener('load', handleLoad, { once: true });
+            imageEl.addEventListener('error', handleError, { once: true });
+            timeoutId = window.setTimeout(() => finalize('timeout'), timeout);
+        });
+    }
+
+    function preloadResidentCharacterUrl(url) {
+        if (!url) return Promise.resolve('empty');
+
+        const existingEntry = state.residentFigureImageCache.get(url);
+        if (existingEntry) {
+            return existingEntry.promise;
+        }
+
+        const preloadImage = new Image();
+        const entry = {
+            status: 'loading',
+            promise: null
+        };
+
+        entry.promise = new Promise((resolve) => {
+            const finalize = (status) => {
+                preloadImage.onload = null;
+                preloadImage.onerror = null;
+                entry.status = status;
+                if (status === 'error') {
+                    state.residentFigureImageCache.delete(url);
+                }
+                resolve(status);
+            };
+
+            preloadImage.onload = () => finalize('loaded');
+            preloadImage.onerror = () => finalize('error');
+            preloadImage.src = url;
+        });
+
+        state.residentFigureImageCache.set(url, entry);
+        return entry.promise;
+    }
+
+    async function prepareResidentCharacterLoop(config, figureEl) {
+        const preloadToken = state.residentFigurePreloadToken;
+        scheduleResidentCharacterLoop(config);
+
+        const spriteImageEl = getResidentCharacterImageEl(figureEl);
+        await waitForResidentCharacterImageEl(spriteImageEl);
+
+        if (preloadToken !== state.residentFigurePreloadToken || state.residentFigureEl !== figureEl) {
+            return;
+        }
+
+        const preloadQueue = [
+            resolveResidentCharacterUrl(config, 'run-left'),
+            resolveResidentCharacterUrl(config, 'run-right')
+        ].filter((url, index, array) => Boolean(url) && array.indexOf(url) === index);
+
+        for (const url of preloadQueue) {
+            await preloadResidentCharacterUrl(url);
+            if (preloadToken !== state.residentFigurePreloadToken || state.residentFigureEl !== figureEl) {
+                return;
+            }
+        }
+    }
+
+    function updateResidentCharacterPose(config, pose) {
+        const figureEl = state.residentFigureEl;
+        if (!figureEl) return;
+
+        const spriteEl = figureEl.querySelector('.resident-character-sprite');
+        const imageEl = getResidentCharacterImageEl(figureEl);
+        const nextUrl = resolveResidentCharacterUrl(config, pose);
+
+        figureEl.dataset.pose = pose;
+        figureEl.classList.toggle('is-running', pose !== 'idle');
+        figureEl.classList.toggle('is-idle', pose === 'idle');
+        figureEl.classList.toggle('is-running-left', pose === 'run-left');
+        figureEl.classList.toggle('is-running-right', pose === 'run-right');
+
+        if (spriteEl) {
+            spriteEl.classList.toggle('is-empty', !nextUrl);
+        }
+
+        if (!imageEl) return;
+
+        if (nextUrl) {
+            if (imageEl.getAttribute('src') !== nextUrl) {
+                imageEl.setAttribute('src', nextUrl);
+            }
+            imageEl.dataset.pose = pose;
+        } else {
+            imageEl.removeAttribute('src');
+            imageEl.dataset.pose = '';
+        }
+
+        imageEl.classList.toggle('is-empty', !nextUrl);
+    }
+
+    function scheduleResidentCharacterLoop(config) {
+        const figureEl = state.residentFigureEl;
+        if (!figureEl) return;
+
+        updateResidentCharacterPose(config, 'idle');
+        figureEl.style.transition = 'left 240ms ease-out, top 240ms ease-out';
+
+        const idleDelay = randomInRange(600, 1200);
+        state.residentFigureLoopTimer = window.setTimeout(() => {
+            const currentLeft = parseFloat(figureEl.dataset.left || figureEl.style.left) || 50;
+            const currentTop = parseFloat(figureEl.dataset.top || figureEl.style.top) || 84;
+            let direction = Math.random() < 0.5 ? 'left' : 'right';
+            const deltaX = randomInRange(12, 28);
+
+            if (direction === 'left' && currentLeft <= CONTACT_FIGURE_MIN_LEFT + 6) {
+                direction = 'right';
+            } else if (direction === 'right' && currentLeft >= CONTACT_FIGURE_MAX_LEFT - 6) {
+                direction = 'left';
+            }
+
+            const nextLeft = clampResidentFigureValue(
+                currentLeft + (direction === 'left' ? -deltaX : deltaX),
+                CONTACT_FIGURE_MIN_LEFT,
+                CONTACT_FIGURE_MAX_LEFT
+            );
+            const nextTop = clampResidentFigureValue(
+                currentTop + randomInRange(-4, 4),
+                CONTACT_FIGURE_MIN_TOP,
+                CONTACT_FIGURE_MAX_TOP
+            );
+            const duration = Math.round(randomInRange(2000, 4000));
+
+            updateResidentCharacterPose(config, direction === 'left' ? 'run-left' : 'run-right');
+            figureEl.style.transition = `left ${duration}ms linear, top ${duration}ms linear`;
+            figureEl.style.left = `${nextLeft}%`;
+            figureEl.style.top = `${nextTop}%`;
+            figureEl.dataset.left = String(nextLeft);
+            figureEl.dataset.top = String(nextTop);
+            figureEl.style.zIndex = String(Math.floor(nextTop));
+
+            state.residentFigureMoveTimer = window.setTimeout(() => {
+                scheduleResidentCharacterLoop(config);
+            }, duration + 60);
+        }, idleDelay);
+    }
+
+    function ensureResidentCharacterLayer() {
+        if (!state.roomEl) return null;
+        if (!state.residentLayerEl || !state.residentLayerEl.isConnected) {
+            state.residentLayerEl = state.shadowRoot ? state.shadowRoot.getElementById('residentCharacterLayer') : null;
+        }
+        if (!state.residentLayerEl) {
+            const layer = document.createElement('div');
+            layer.id = 'residentCharacterLayer';
+            layer.className = 'resident-character-layer';
+            state.roomEl.appendChild(layer);
+            state.residentLayerEl = layer;
+        }
+        return state.residentLayerEl;
+    }
+
+    function refreshActiveContactFigure(config = null) {
+        const layerEl = ensureResidentCharacterLayer();
+        if (!layerEl) return;
+
+        clearResidentCharacterFigure();
+
+        const activeConfig = sanitizeResidentCharacter(config || getContactFigureConfig(state.currentGardenContactId));
+        const hasAnyFigure = Boolean(activeConfig.idleUrl || activeConfig.runLeftUrl || activeConfig.runRightUrl);
+        if (!hasAnyFigure || state.currentView !== 'home') {
+            return;
+        }
+
+        const figureEl = document.createElement('div');
+        const startLeft = randomInRange(28, 72);
+        const startTop = randomInRange(80, 88);
+        figureEl.className = 'resident-character is-idle';
+        figureEl.dataset.left = String(startLeft);
+        figureEl.dataset.top = String(startTop);
+        figureEl.style.left = `${startLeft}%`;
+        figureEl.style.top = `${startTop}%`;
+        figureEl.style.zIndex = String(Math.floor(startTop));
+        figureEl.innerHTML = `
+            <div class="resident-character-shadow"></div>
+            <div class="resident-character-sprite">
+                <img class="resident-character-sprite-img" alt="resident pose" draggable="false" loading="eager" />
+            </div>
+        `;
+
+        layerEl.appendChild(figureEl);
+        state.residentFigureEl = figureEl;
+        updateResidentCharacterPose(activeConfig, 'idle');
+        prepareResidentCharacterLoop(activeConfig, figureEl);
+    }
+
     function changeTexture(target, background, bgSize = 'auto', bgColor = 'transparent') {
         const targetEl = target === 'wall' ? state.wallEl : state.floorEl;
         if (!targetEl) return;
@@ -997,10 +1996,10 @@
         saveBtn.dataset.originalHtml = originalHTML;
         clearTimeout(state.saveResetTimer);
         clearTimeout(state.saveDoneTimer);
-        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>保存中</span>';
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>淇濆瓨涓?/span>';
 
         state.saveResetTimer = setTimeout(() => {
-            saveBtn.innerHTML = '<i class="fas fa-circle-check"></i><span>保存成功</span>';
+            saveBtn.innerHTML = '<i class="fas fa-circle-check"></i><span>淇濆瓨鎴愬姛</span>';
             saveBtn.classList.add('is-saved');
             state.saveDoneTimer = setTimeout(() => {
                 saveBtn.innerHTML = originalHTML;
@@ -1027,6 +2026,9 @@
         navBtns.forEach((btn) => {
             btn.classList.toggle('active', btn.dataset.gardenView === viewKey);
         });
+        if (screenEl) {
+            screenEl.classList.toggle('is-activities-view', viewKey === 'activities');
+        }
 
         const isHome = viewKey === 'home';
         if (togglePanelBtn) togglePanelBtn.disabled = !isHome;
@@ -1034,7 +2036,11 @@
         if (!isHome) {
             setDrawerOpen(false);
             closeFloraScreen();
+            clearResidentCharacterFigure();
+            return;
         }
+
+        refreshActiveContactFigure();
     }
 
     function syncFloraFromEngine() {
@@ -1132,6 +2138,8 @@
         persistGardenLayoutForContact();
         setDrawerOpen(false);
         closeFloraScreen();
+        closeContactFigureModal();
+        clearResidentCharacterFigure();
         screenEl.classList.add('hidden');
     }
 
@@ -1147,6 +2155,12 @@
 
     window.GardenApp = {
         openApp,
-        closeApp
+        closeApp,
+        openActivitiesView,
+        openWhisperChallengeFromActivities,
+        openContactFigureSettings,
+        getContactFigureConfig,
+        setContactFigureConfig,
+        refreshActiveContactFigure
     };
 })();

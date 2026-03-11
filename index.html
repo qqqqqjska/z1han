@@ -1568,6 +1568,79 @@
                         <div id="garden-editor-host" class="garden-editor-host"></div>
                     </section>
 
+                    <section class="garden-app-view garden-activities-view" data-garden-view="activities">
+                        <div class="garden-activities-screen">
+                            <div class="garden-activities-bg-blob garden-activities-blob-1"></div>
+                            <div class="garden-activities-bg-blob garden-activities-blob-2"></div>
+                            <header class="garden-activities-header garden-activities-glass">
+                                <div class="garden-activities-header-left">
+                                    <button class="garden-activities-back-btn" data-garden-action="back-home" type="button" aria-label="back home">
+                                        <i class="ph-bold ph-caret-left"></i>
+                                    </button>
+                                    <span>&#27963;&#21160;&#20013;&#24515;</span>
+                                </div>
+                                <button class="garden-activities-search-btn" data-garden-action="search-activities" type="button">
+                                    <i class="ph-bold ph-magnifying-glass"></i>
+                                    <span>&#25628;&#32034;</span>
+                                </button>
+                            </header>
+                            <div class="garden-activities-tabs-container">
+                                <div class="garden-activities-tabs" aria-label="activities categories">
+                                    <button class="garden-activities-tab is-active" type="button" data-activities-tab="all"><i class="ph-fill ph-star"></i><span>&#20840;&#37096;&#25512;&#33616;</span></button>
+                                    <button class="garden-activities-tab" type="button" data-activities-tab="casual"><i class="ph-fill ph-puzzle-piece"></i><span>&#20241;&#38386;&#30410;&#26234;</span></button>
+                                    <button class="garden-activities-tab" type="button" data-activities-tab="multiplayer"><i class="ph-fill ph-users-three"></i><span>&#22810;&#20154;&#20114;&#21160;</span></button>
+                                    <button class="garden-activities-tab" type="button" data-activities-tab="adventure"><i class="ph-fill ph-rocket"></i><span>&#21160;&#20316;&#20882;&#38505;</span></button>
+                                </div>
+                            </div>
+                            <div class="garden-activities-banner">
+                                <i class="ph-fill ph-sparkle garden-activities-banner-deco-1"></i>
+                                <i class="ph-fill ph-game-controller garden-activities-banner-deco-2"></i>
+                                <div class="garden-activities-banner-content">
+                                    <div class="garden-activities-banner-tag">&#21608;&#26411;&#38480;&#26102;</div>
+                                    <div class="garden-activities-banner-title">&#22799;&#26085;&#27700;&#20223;&#22823;&#20316;&#25112; &#128166;</div>
+                                </div>
+                            </div>
+                            <div class="garden-activities-game-list">
+                                <div class="garden-activities-card is-highlight" data-activities-card="draw">
+                                    <div class="garden-activities-icon is-draw"><i class="ph-fill ph-palette"></i></div>
+                                    <div class="garden-activities-info">
+                                        <div class="garden-activities-title">&#20320;&#30011;&#25105;&#29468;</div>
+                                        <div class="garden-activities-desc">&#21457;&#25381;&#24819;&#35937;&#21147;&#65292;&#30475;&#35841;&#25165;&#26159;&#28789;&#39746;&#30011;&#25163;&#65281;</div>
+                                        <div class="garden-activities-stats"><i class="ph-bold ph-fire"></i><span>1.2w &#33804;&#21451;&#22312;&#29609;</span></div>
+                                    </div>
+                                    <button class="garden-activities-play-btn" type="button" aria-label="play draw"><i class="ph-bold ph-play"></i></button>
+                                </div>
+                                <div class="garden-activities-card" data-activities-card="whisper">
+                                    <div class="garden-activities-icon is-whisper"><i class="ph-fill ph-chat-centered-text"></i></div>
+                                    <div class="garden-activities-info">
+                                        <div class="garden-activities-title">&#35825;&#23548;&#35745;&#21010;</div>
+                                        <div class="garden-activities-desc">&#25361;&#36873;&#30446;&#26631;&#32852;&#31995;&#20154;&#65292;&#22312;&#32842;&#22825;&#20013;&#24341;&#23548; TA &#20027;&#21160;&#35828;&#20986;&#25351;&#23450;&#30446;&#26631;&#35789;&#12290;</div>
+                                        <div class="garden-activities-stats"><i class="ph-bold ph-fire"></i><span>&#31192;&#23494;&#25361;&#25112; &#183; &#28857;&#20987;&#24320;&#22987;</span></div>
+                                    </div>
+                                    <button class="garden-activities-play-btn" type="button" aria-label="play whisper challenge"><i class="ph-bold ph-play"></i></button>
+                                </div>
+                                <div class="garden-activities-card" data-activities-card="space">
+                                    <div class="garden-activities-icon is-space"><i class="ph-fill ph-rocket-launch"></i></div>
+                                    <div class="garden-activities-info">
+                                        <div class="garden-activities-title">&#26143;&#38469;&#25506;&#38505;&#23478;</div>
+                                        <div class="garden-activities-desc">&#39550;&#39542;&#39134;&#33337;&#22312;&#23431;&#23449;&#20013;&#25910;&#38598;&#26143;&#26143;&#30862;&#29255;&#12290;</div>
+                                        <div class="garden-activities-stats"><i class="ph-bold ph-users"></i><span>5200 &#33804;&#21451;&#22312;&#29609;</span></div>
+                                    </div>
+                                    <button class="garden-activities-play-btn" type="button" aria-label="play space"><i class="ph-bold ph-play"></i></button>
+                                </div>
+                                <div class="garden-activities-card" data-activities-card="farm">
+                                    <div class="garden-activities-icon is-farm"><i class="ph-fill ph-plant"></i></div>
+                                    <div class="garden-activities-info">
+                                        <div class="garden-activities-title">&#24320;&#24515;&#23567;&#20892;&#22330;</div>
+                                        <div class="garden-activities-desc">&#31181;&#32993;&#33821;&#21340;&#12289;&#20859;&#23567;&#40481;&#65292;&#25171;&#36896;&#20320;&#30340;&#19987;&#23646;&#20892;&#22330;&#12290;</div>
+                                        <div class="garden-activities-stats"><i class="ph-bold ph-fire"></i><span>2.1w &#33804;&#21451;&#22312;&#29609;</span></div>
+                                    </div>
+                                    <button class="garden-activities-play-btn" type="button" aria-label="play farm"><i class="ph-bold ph-play"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
                     <section class="garden-app-view garden-app-placeholder-view" data-garden-view="inventory">
                         <div class="garden-placeholder-card">
                             <div class="garden-placeholder-icon"><i class="fas fa-box-open"></i></div>
@@ -1598,8 +1671,8 @@
                         <i class="fas fa-house"></i>
                         <span>家园</span>
                     </button>
-                    <button class="garden-bottom-nav-btn" data-garden-view="inventory" type="button">
-                        <i class="fas fa-box"></i>
+                    <button class="garden-bottom-nav-btn" data-garden-view="activities" type="button">
+                        <i class="fas fa-gamepad"></i>
                         <span>仓库</span>
                     </button>
                     <button class="garden-bottom-nav-btn" data-garden-view="gallery" type="button">

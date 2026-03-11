@@ -206,6 +206,12 @@
     overflow-y: auto;
 }
 
+#garden-app .garden-contact-sheet-row {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+}
+
 #garden-app .garden-contact-sheet-item {
     appearance: none;
     border: none;
@@ -219,6 +225,7 @@
     color: #4a5568;
     text-align: left;
     box-shadow: 0 10px 24px rgba(245, 158, 11, 0.08);
+    flex: 1;
 }
 
 #garden-app .garden-contact-sheet-item.is-active {
@@ -285,9 +292,207 @@
     opacity: 1;
 }
 
+#garden-app .garden-contact-sheet-settings-btn {
+    appearance: none;
+    border: none;
+    width: 48px;
+    min-width: 48px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.92);
+    color: #8b5a2b;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 10px 24px rgba(245, 158, 11, 0.08);
+    font-size: 16px;
+}
+
+#garden-app .garden-contact-sheet-settings-btn:active {
+    transform: scale(0.96);
+}
+
 #garden-app .garden-contact-sheet-empty {
     padding: 16px;
     text-align: center;
+}
+
+#garden-app .garden-contact-figure-modal {
+    position: absolute;
+    inset: 0;
+    z-index: 55;
+}
+
+#garden-app .garden-contact-figure-modal[hidden] {
+    display: none;
+}
+
+#garden-app .garden-contact-figure-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(17, 24, 39, 0.34);
+    opacity: 0;
+    transition: opacity 0.18s ease;
+}
+
+#garden-app .garden-contact-figure-panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 10px 16px calc(24px + env(safe-area-inset-bottom));
+    border-radius: 24px 24px 0 0;
+    background: rgba(255, 252, 245, 0.98);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow: 0 -16px 40px rgba(104, 78, 33, 0.18);
+    transform: translateY(100%);
+    transition: transform 0.18s ease;
+}
+
+#garden-app .garden-contact-figure-modal.is-open .garden-contact-figure-backdrop {
+    opacity: 1;
+}
+
+#garden-app .garden-contact-figure-modal.is-open .garden-contact-figure-panel {
+    transform: translateY(0);
+}
+
+#garden-app .garden-contact-figure-handle {
+    width: 42px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.45);
+    margin: 0 auto 12px;
+}
+
+#garden-app .garden-contact-figure-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+#garden-app .garden-contact-figure-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #6b4f1d;
+}
+
+#garden-app .garden-contact-figure-close {
+    appearance: none;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+    color: #8b5a2b;
+    font-size: 22px;
+    line-height: 1;
+}
+
+#garden-app .garden-contact-figure-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+#garden-app .garden-contact-figure-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#garden-app .garden-contact-figure-field-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+#garden-app .garden-contact-figure-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #6b4f1d;
+}
+
+#garden-app .garden-contact-figure-input {
+    appearance: none;
+    border: 1px solid rgba(251, 191, 36, 0.22);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.92);
+    color: #4a5568;
+    padding: 11px 12px;
+    font-size: 13px;
+}
+
+#garden-app .garden-contact-figure-input:focus {
+    outline: none;
+    border-color: rgba(245, 158, 11, 0.45);
+    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.12);
+}
+
+#garden-app .garden-contact-figure-preview {
+    width: 72px;
+    height: 72px;
+    border-radius: 16px;
+    overflow: hidden;
+    background-color: rgba(255, 255, 255, 0.92);
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    background-size: contain;
+    border: 1px solid rgba(251, 191, 36, 0.18);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+#garden-app .garden-contact-figure-preview.is-empty {
+    background-image: none !important;
+    background: linear-gradient(135deg, #fff8e7, #fffdf5);
+}
+
+#garden-app .garden-contact-figure-preview-label {
+    font-size: 11px;
+    line-height: 1.35;
+    color: #a0aec0;
+    text-align: center;
+    padding: 8px;
+}
+
+#garden-app .garden-contact-figure-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+#garden-app .garden-contact-figure-action {
+    appearance: none;
+    border: none;
+    border-radius: 999px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 8px 18px rgba(251, 191, 36, 0.14);
+}
+
+#garden-app .garden-contact-figure-action.is-muted {
+    background: rgba(255, 255, 255, 0.9);
+    color: #8b5a2b;
+}
+
+#garden-app .garden-contact-figure-action.is-danger {
+    background: #fff1f2;
+    color: #e11d48;
+}
+
+#garden-app .garden-contact-figure-action.is-primary {
+    background: #fbbf24;
+    color: #fff;
 }
 
 #garden-app .garden-app-header-btn.is-active,
@@ -310,6 +515,14 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+}
+
+#garden-app.is-activities-view .garden-app-header {
+    display: none;
+}
+
+#garden-app.is-activities-view .garden-app-body-shell {
+    top: 0;
 }
 
 #garden-app .garden-app-view-stack {
@@ -375,6 +588,386 @@
     font-size: 32px;
     background: linear-gradient(135deg, rgba(251, 191, 36, 0.24), rgba(255, 187, 166, 0.32));
     box-shadow: 0 18px 34px rgba(251, 191, 36, 0.16);
+}
+
+#garden-app .garden-activities-view {
+    display: none;
+    overflow: hidden;
+    background: #fefce8;
+}
+
+#garden-app .garden-activities-view.active {
+    display: block;
+}
+
+#garden-app .garden-activities-screen {
+    position: relative;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 22px 0 calc(24px + env(safe-area-inset-bottom, 0px));
+    color: #4a5568;
+    background-color: #fefce8;
+}
+
+#garden-app .garden-activities-screen::-webkit-scrollbar {
+    display: none;
+}
+
+#garden-app .garden-activities-bg-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+    z-index: 0;
+    animation: gardenActivitiesFloat 10s ease-in-out infinite;
+    pointer-events: none;
+}
+
+#garden-app .garden-activities-blob-1 {
+    width: 350px;
+    height: 350px;
+    background: rgba(255, 187, 166, 0.4);
+    top: -50px;
+    left: -50px;
+}
+
+#garden-app .garden-activities-blob-2 {
+    width: 300px;
+    height: 300px;
+    background: rgba(251, 191, 36, 0.3);
+    bottom: 80px;
+    right: -50px;
+    animation-delay: -5s;
+}
+
+@keyframes gardenActivitiesFloat {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(20px, 20px); }
+}
+
+#garden-app .garden-activities-glass {
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    border-radius: 24px;
+    box-shadow: 0 8px 32px 0 rgba(251, 191, 36, 0.15);
+}
+
+#garden-app .garden-activities-header {
+    position: sticky;
+    top: 8px;
+    z-index: 2;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    margin: 0 20px 16px;
+    border-radius: 100px;
+}
+
+#garden-app .garden-activities-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 700;
+    font-size: 18px;
+    color: #4a5568;
+}
+
+#garden-app .garden-activities-back-btn,
+#garden-app .garden-activities-search-btn {
+    appearance: none;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+#garden-app .garden-activities-back-btn {
+    width: 40px;
+    height: 40px;
+    background: #fbbf24;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 20px;
+    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.4);
+}
+
+#garden-app .garden-activities-search-btn {
+    background: #fbbf24;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 100px;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.4);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+}
+
+#garden-app .garden-activities-back-btn:active,
+#garden-app .garden-activities-search-btn:active,
+#garden-app .garden-activities-play-btn:active,
+#garden-app .garden-activities-card:active {
+    transform: scale(0.96);
+}
+
+#garden-app .garden-activities-tabs-container {
+    position: relative;
+    z-index: 1;
+    margin: 5px 20px 15px;
+}
+
+#garden-app .garden-activities-tabs {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+}
+
+#garden-app .garden-activities-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+#garden-app .garden-activities-tab {
+    appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.5);
+    padding: 10px 20px;
+    border-radius: 100px;
+    font-weight: 700;
+    font-size: 15px;
+    color: #a0aec0;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+#garden-app .garden-activities-tab.is-active {
+    background: white;
+    color: #fbbf24;
+    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.2);
+    border-color: transparent;
+}
+
+#garden-app .garden-activities-banner {
+    position: relative;
+    z-index: 1;
+    margin: 0 20px 20px;
+    height: 150px;
+    border-radius: 24px;
+    background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+    display: flex;
+    align-items: flex-end;
+    padding: 20px;
+    overflow: hidden;
+    box-shadow: 0 10px 25px rgba(254, 214, 227, 0.4);
+    border: 2px solid white;
+}
+
+#garden-app .garden-activities-banner-deco-1 {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    font-size: 80px;
+    opacity: 0.2;
+    transform: rotate(15deg);
+}
+
+#garden-app .garden-activities-banner-deco-2 {
+    position: absolute;
+    bottom: 20px;
+    right: 40px;
+    font-size: 50px;
+    color: white;
+    opacity: 0.8;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+    animation: gardenActivitiesBounce 2s infinite ease-in-out;
+}
+
+@keyframes gardenActivitiesBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+#garden-app .garden-activities-banner-content {
+    position: relative;
+    z-index: 1;
+    color: #4a5568;
+}
+
+#garden-app .garden-activities-banner-tag {
+    display: inline-block;
+    background: #88d4ab;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    box-shadow: 0 4px 10px rgba(136, 212, 171, 0.4);
+}
+
+#garden-app .garden-activities-banner-title {
+    font-size: 20px;
+    font-weight: 800;
+    text-shadow: 0 2px 4px rgba(255, 255, 255, 0.8);
+}
+
+#garden-app .garden-activities-game-list {
+    position: relative;
+    z-index: 1;
+    padding: 0 20px 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+#garden-app .garden-activities-card {
+    background: white;
+    border-radius: 20px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.03);
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+#garden-app .garden-activities-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.05);
+}
+
+#garden-app .garden-activities-card.is-highlight {
+    background: linear-gradient(to right, #ffffff, #fffbeb);
+    border-color: #fcd34d;
+}
+
+#garden-app .garden-activities-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    color: white;
+    flex-shrink: 0;
+    box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.1);
+}
+
+#garden-app .garden-activities-icon.is-draw {
+    background: #ffbba6;
+}
+
+#garden-app .garden-activities-icon.is-chess {
+    background: #bae6fd;
+    color: #0284c7;
+}
+
+#garden-app .garden-activities-icon.is-space {
+    background: #c4b5fd;
+}
+
+#garden-app .garden-activities-icon.is-farm {
+    background: #88d4ab;
+}
+
+#garden-app .garden-activities-icon.is-whisper {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+#garden-app .garden-activities-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+#garden-app .garden-activities-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #4a5568;
+}
+
+#garden-app .garden-activities-desc {
+    font-size: 13px;
+    color: #a0aec0;
+    font-weight: 600;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+#garden-app .garden-activities-stats {
+    font-size: 12px;
+    color: #fbbf24;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+#garden-app .garden-activities-play-btn {
+    appearance: none;
+    border: none;
+    background-color: #fbbf24;
+    color: white;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.4);
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+#garden-app .garden-activities-play-btn i.is-spinning {
+    animation: gardenActivitiesSpin 1s linear infinite;
+}
+
+@keyframes gardenActivitiesSpin {
+    100% { transform: rotate(360deg); }
+}
+
+@media (max-width: 420px) {
+    #garden-app .garden-activities-header {
+        margin-left: 16px;
+        margin-right: 16px;
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    #garden-app .garden-activities-search-btn span {
+        display: none;
+    }
+
+    #garden-app .garden-activities-tabs-container,
+    #garden-app .garden-activities-banner,
+    #garden-app .garden-activities-game-list {
+        margin-left: 16px;
+        margin-right: 16px;
+        padding-left: 0;
+        padding-right: 0;
+    }
 }
 
 #garden-app .garden-bottom-nav {

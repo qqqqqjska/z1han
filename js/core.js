@@ -826,8 +826,15 @@ function handleAppClick(appId, appName) {
     console.log('Config migration completed.');
 
     if (appId === 'whisper-challenge-app') {
-        if (window.WhisperChallenge && typeof window.WhisperChallenge.openApp === 'function') {
-            window.WhisperChallenge.openApp();
+        if (window.GardenApp && typeof window.GardenApp.openWhisperChallengeFromActivities === 'function') {
+            window.GardenApp.openWhisperChallengeFromActivities();
+            return;
+        }
+        if (window.GardenApp && typeof window.GardenApp.openActivitiesView === 'function') {
+            window.GardenApp.openActivitiesView();
+            if (window.WhisperChallenge && typeof window.WhisperChallenge.openApp === 'function') {
+                window.WhisperChallenge.openApp({ returnTarget: 'garden-activities' });
+            }
             return;
         }
     }

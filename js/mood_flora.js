@@ -527,6 +527,30 @@
         }
     }
 
+    function buildContactPickerItem(contact, activeContactId) {
+        const displayName = contact.remark || contact.name || '未命名联系人';
+        const subLabel = contact.name && contact.remark && contact.remark !== contact.name ? contact.name : '当前聊天角色';
+        const avatarHtml = contact.avatar
+            ? `<img src="${escapeHtml(contact.avatar)}" alt="${escapeHtml(displayName)}">`
+            : `<span class="garden-contact-sheet-avatar-fallback">${escapeHtml((displayName || 'TA').slice(0, 1).toUpperCase())}</span>`;
+
+        return `
+            <div class="garden-contact-sheet-row">
+                <button class="garden-contact-sheet-item${String(contact.id) === String(activeContactId) ? ' is-active' : ''}" type="button" data-contact-id="${escapeHtml(contact.id)}">
+                    <span class="garden-contact-sheet-avatar">${avatarHtml}</span>
+                    <span class="garden-contact-sheet-meta">
+                        <span class="garden-contact-sheet-name">${escapeHtml(displayName)}</span>
+                        <span class="garden-contact-sheet-sub">${escapeHtml(subLabel)}</span>
+                    </span>
+                    <span class="garden-contact-sheet-check">✓</span>
+                </button>
+                <button class="garden-contact-sheet-settings-btn" type="button" data-contact-settings-id="${escapeHtml(contact.id)}" aria-label="设置${escapeHtml(displayName)}的形象" onclick="event.stopPropagation(); if(window.GardenApp && window.GardenApp.openContactFigureSettings){ window.GardenApp.openContactFigureSettings(this.dataset.contactSettingsId); }">
+                    <i class="fas fa-gear"></i>
+                </button>
+            </div>
+        `;
+    }
+
     function renderCurrentSnapshot() {
         const snapshot = getSnapshot(getActiveContactId());
         renderStaticView(snapshot);

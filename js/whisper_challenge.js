@@ -37,6 +37,7 @@
         history: [],
         progress: { unlockedLevelCount: 1 },
         preference: { selectedContactId: null },
+        returnTarget: 'home',
         timerId: null,
         dom: {}
     };
@@ -217,8 +218,38 @@
         state.dom.historyEmpty = document.getElementById('whisper-challenge-history-empty');
     }
 
+    function normalizeReturnTarget(target) {
+        if (target === 'garden-activities' || target === 'garden-home') {
+            return target;
+        }
+        return 'home';
+    }
+
+    function syncBackButtonContext() {
+        if (!state.dom.backBtn) return;
+        const label = state.returnTarget === 'garden-activities'
+            ? '返回活动列表'
+            : (state.returnTarget === 'garden-home' ? '返回家园' : '返回主屏幕');
+        state.dom.backBtn.setAttribute('aria-label', label);
+        state.dom.backBtn.setAttribute('title', label);
+    }
+
+    function handleBackNavigation() {
+        const returnTarget = normalizeReturnTarget(state.returnTarget);
+        closeApp();
+
+        if (returnTarget === 'garden-activities' && window.GardenApp && typeof window.GardenApp.openActivitiesView === 'function') {
+            window.GardenApp.openActivitiesView();
+            return;
+        }
+
+        if (returnTarget === 'garden-home' && window.GardenApp && typeof window.GardenApp.openApp === 'function') {
+            window.GardenApp.openApp();
+        }
+    }
+
     function bindEvents() {
-        if (state.dom.backBtn) state.dom.backBtn.addEventListener('click', closeApp);
+        if (state.dom.backBtn) state.dom.backBtn.addEventListener('click', handleBackNavigation);
 
         if (state.dom.restartBtn) {
             state.dom.restartBtn.addEventListener('click', function () {
@@ -432,6 +463,8 @@
         const presentation = getStatusPresentation();
         const hasContacts = getContacts().length > 0;
 
+        syncBackButtonContext();
+
         if (state.dom.missionCode) state.dom.missionCode.textContent = `MISSION ${String(level.id).padStart(3, '0')}`;
         if (state.dom.statusPill) {
             state.dom.statusPill.className = `whisper-ui-status-pill ${presentation.pillClass}`;
@@ -595,14 +628,18 @@
         return getState();
     }
 
-    function openApp() {
+    function openApp(options = {}) {
         init();
+        state.returnTarget = normalizeReturnTarget(options && options.returnTarget);
+        syncBackButtonContext();
         if (state.dom.root) state.dom.root.classList.remove('hidden');
         render();
     }
 
     function closeApp() {
         if (state.dom.root) state.dom.root.classList.add('hidden');
+        state.returnTarget = 'home';
+        syncBackButtonContext();
     }
 
     function goToWechat() {
