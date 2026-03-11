@@ -1,13 +1,56 @@
 ﻿// Screen Share Simulation Logic
 
 window.isScreenSharing = false;
+window.isFloatingChatGenerating = false;
+
+function getFloatingChatContactId() {
+    return window.screenShareContactId || (window.iphoneSimState && window.iphoneSimState.currentChatContactId) || null;
+}
+
+function getFloatingChatDisplayName(contactId = getFloatingChatContactId()) {
+    if (!(window.iphoneSimState && contactId)) return '聊天';
+    const contact = (window.iphoneSimState.contacts || []).find(item => String(item.id) === String(contactId));
+    if (!contact) return '聊天';
+    return contact.remark || contact.nickname || contact.name || '聊天';
+}
+
+function setFloatingChatTitle(text) {
+    const titleEl = document.getElementById('fc-title-text');
+    if (titleEl) {
+        titleEl.textContent = text || '聊天';
+    }
+}
+
+function refreshFloatingChatTitle(contactId = getFloatingChatContactId()) {
+    if (window.isFloatingChatGenerating) {
+        setFloatingChatTitle('正在输入中...');
+        return;
+    }
+    setFloatingChatTitle(getFloatingChatDisplayName(contactId));
+}
+
+function setFloatingChatGeneratingState(isGenerating, contactId = getFloatingChatContactId()) {
+    window.isFloatingChatGenerating = !!isGenerating;
+    const sendBtn = document.getElementById('fc-send-btn');
+    if (sendBtn) {
+        sendBtn.disabled = !!isGenerating;
+        sendBtn.title = isGenerating ? '正在生成回复' : '生成回复';
+    }
+    if (isGenerating) {
+        setFloatingChatTitle('正在输入中...');
+        return;
+    }
+    setFloatingChatTitle(getFloatingChatDisplayName(contactId));
+}
+
+window.refreshFloatingChatTitle = refreshFloatingChatTitle;
+window.setFloatingChatGeneratingState = setFloatingChatGeneratingState;
 
 function initScreenShare() {
     console.log('initScreenShare running');
     const exitBtn = document.getElementById('exit-screen-share-btn');
     const minBtn = document.getElementById('fc-minimize-btn');
     const sendBtn = document.getElementById('fc-send-btn');
-    const replyBtn = document.getElementById('fc-reply-btn');
     const input = document.getElementById('fc-input');
     const chatWindow = document.getElementById('floating-chat-window');
 
@@ -16,13 +59,32 @@ function initScreenShare() {
     }
 
     if (minBtn && chatWindow) {
-        minBtn.onclick = () => {
+        minBtn.onclick = (e) => {
+            const suppressUntil = Number(chatWindow.dataset.dragSuppressClickUntil || 0);
+            if (suppressUntil && Date.now() < suppressUntil) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            const currentTop = chatWindow.offsetTop;
+            const currentRight = chatWindow.offsetLeft + chatWindow.offsetWidth;
             chatWindow.classList.toggle('minimized');
             minBtn.innerHTML = chatWindow.classList.contains('minimized') ? '<i class="fas fa-window-maximize"></i>' : '<i class="fas fa-window-minimize"></i>';
+            requestAnimationFrame(() => {
+                const padding = 20;
+                const overlay = document.getElementById('screen-share-overlay');
+                const overlayWidth = overlay ? overlay.clientWidth : window.innerWidth;
+                const overlayHeight = overlay ? overlay.clientHeight : window.innerHeight;
+                const maxTop = Math.max(padding, overlayHeight - chatWindow.offsetHeight - padding);
+                const nextTop = Math.min(Math.max(currentTop, padding), maxTop);
+                const maxLeft = Math.max(padding, overlayWidth - chatWindow.offsetWidth - padding);
+                const nextLeft = Math.min(Math.max(currentRight - chatWindow.offsetWidth, padding), maxLeft);
+                chatWindow.style.top = `${nextTop}px`;
+                chatWindow.style.left = `${nextLeft}px`;
+                chatWindow.style.bottom = 'auto';
+            });
         };
     }
-
-    const getFloatingChatContactId = () => window.screenShareContactId || (window.iphoneSimState && window.iphoneSimState.currentChatContactId);
 
     const sendMessage = () => {
         if (!input) return;
@@ -38,9 +100,19 @@ function initScreenShare() {
         }
     };
 
-    const requestAiReply = () => {
+    const requestAiReply = async () => {
         if (!window.generateAiReply) return;
         const contactId = getFloatingChatContactId();
+        if (!contactId || window.isFloatingChatGenerating) return;
+
+        if (input && input.value.trim()) {
+            input.focus();
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('先按回车发送，再点蓝色按钮生成回复', 2200);
+            }
+            return;
+        }
+
         console.log('[ScreenShare Debug] floating reply requested', {
             contactId,
             isScreenSharing: !!window.isScreenSharing,
@@ -48,13 +120,16 @@ function initScreenShare() {
                 ? getScreenNavigationContext()
                 : null
         });
-        if (contactId) {
-            window.generateAiReply(null, contactId);
+
+        try {
+            setFloatingChatGeneratingState(true, contactId);
+            await window.generateAiReply(null, contactId);
+        } finally {
+            setFloatingChatGeneratingState(false, contactId);
         }
     };
 
-    if (sendBtn) sendBtn.onclick = sendMessage;
-    if (replyBtn) replyBtn.onclick = requestAiReply;
+    if (sendBtn) sendBtn.onclick = requestAiReply;
     if (input) {
         input.onkeydown = (e) => {
             if (e.key === 'Enter') {
@@ -97,6 +172,7 @@ window.startScreenShare = function() {
 
     overlay.classList.remove('hidden');
     window.isScreenSharing = true;
+    window.isFloatingChatGenerating = false;
 
     if (window.iphoneSimState && window.iphoneSimState.currentChatContactId) {
         window.screenShareContactId = window.iphoneSimState.currentChatContactId;
@@ -108,6 +184,7 @@ window.startScreenShare = function() {
         cursor.style.left = '50%';
     }
 
+    refreshFloatingChatTitle();
     loadFloatingChatHistory();
 
     const contactId = window.screenShareContactId;
@@ -117,11 +194,11 @@ window.startScreenShare = function() {
             id: Date.now() + Math.random().toString(36).substr(2, 9),
             time: Date.now(),
             role: 'system',
-            content: '[系统]: 屏幕共享已开启。如需操作屏幕，请在回复里输出 ACTION: SCREEN_TAP: 目标名称。你也可以输出高层导航目标，例如“相册”“方亦楷的朋友圈”“测试的聊天”，系统会自动拆成连续点击。不要假设自己已经点击成功，只有输出 ACTION 后系统才会执行。',
-            type: 'text'
+            content: '[System]: Screen share started. The shared screen is the user\'s phone, and you are the one actively inspecting or checking it, like a romantic partner checking the user\'s phone. This is not the user checking your phone. You may proactively inspect the user\'s chat records, albums, moments, profile, and other already-implemented on-screen areas whenever that fits the conversation or your emotional motive. If you need to operate the screen, output ACTION: SCREEN_TAP: target or ACTION: SCREEN_TYPE: text in your reply. You may chain multiple SCREEN_TAP / SCREEN_TYPE actions in one reply and they will execute strictly in order. You may also output high-level destinations such as album, moments, profile, or a chat, and the system can decompose them into consecutive taps. Treat visible screen content as evidence you are personally seeing while checking the user\'s phone. Do not assume any tap has already succeeded before you emit ACTION lines.',
+            type: 'screen_share_hidden'
         });
         if (window.saveConfig) window.saveConfig();
-        appendFloatingChatMessage('[系统]: 屏幕共享已开启', false, true);
+        appendFloatingChatMessage('[System]: Screen share started.', false, true);
     }
 };
 
@@ -148,6 +225,8 @@ window.stopScreenShare = function() {
     }
 
     window.screenShareContactId = null;
+    setFloatingChatGeneratingState(false, null);
+    setFloatingChatTitle('聊天');
 };
 
 function appendFloatingChatMessage(text, isUser, isSystem = false, type = 'text') {
@@ -183,6 +262,7 @@ function loadFloatingChatHistory() {
     body.innerHTML = '';
 
     const contactId = window.screenShareContactId || (window.iphoneSimState && window.iphoneSimState.currentChatContactId);
+    refreshFloatingChatTitle(contactId);
     if (!(window.iphoneSimState && contactId)) return;
 
     const history = window.iphoneSimState.chatHistory[contactId] || [];
@@ -201,7 +281,7 @@ function loadFloatingChatHistory() {
 window.loadFloatingChatHistory = loadFloatingChatHistory;
 
 function getActiveScreenShareContactId() {
-    return window.screenShareContactId || (window.iphoneSimState && window.iphoneSimState.currentChatContactId) || null;
+    return getFloatingChatContactId();
 }
 
 window.syncToFloatingChat = function(msg, sourceContactId = null) {
@@ -259,6 +339,9 @@ const screenTargets = {
     '退出手机': '#close-phone-app',
     '退出照片': '#album-photo-close-btn',
     '收藏照片': '#album-photo-favorite-btn',
+    'Albums': '#album-tab-albums',
+    '密码输入框': '#album-privacy-password-input',
+    '确定': '#album-privacy-password-confirm',
     '主屏幕': '.home-indicator',
     '桌面': '.home-indicator'
 };
@@ -299,8 +382,13 @@ const CANONICAL_SCREEN_TARGET_ALIASES = {
     '通讯录': ['通讯录', '联系人列表', 'contacts'],
     '聊天列表': ['聊天列表', '消息列表', '列表'],
     '朋友圈': ['朋友圈'],
+    '聊天头像': ['聊天头像', '头像', 'avatar', 'profile', 'profilepicture', 'profilepic', 'pfp', 'contactavatar'],
+    'Albums': ['albums', 'albumstab', '相簿', '相簿页', '相簿列表', '相册列表', 'albums页', 'albumlist'],
     '退出照片': ['退出照片', '关闭照片', '关闭图片', '退出图片', '关闭当前照片', 'closephoto', 'closephotodetail'],
     '收藏照片': ['收藏照片', '收藏这张照片', '点爱心', '点击爱心', '爱心', '喜欢这张照片', 'favoritephoto', 'favorite', 'likephoto'],
+    '下一张照片': ['下一张照片', '另一张照片', '下一张', '另一张', 'nextphoto', 'nextimage'],
+    '密码输入框': ['密码输入框', '密码框', '输入密码', 'passwordinput', 'passwordfield'],
+    '确定': ['确定', '打开', '确认', '提交', '解锁', 'open'],
     '主屏幕': ['主屏幕', '桌面', 'home']
 };
 
@@ -572,6 +660,14 @@ function resolveScreenNavigationIntent(targetDesc, context) {
         return { type: 'open_app', appId: 'album-app', appLabel: '相册' };
     }
 
+    const isAlbumAlbumsIntent = normalizedText === 'albums'
+        || normalizedText === '相簿'
+        || textHasAnyKeyword(normalizedText, ['去albums', '打开albums', '去相簿', '去相簿页', '打开相簿页', '相册列表', '相簿列表']);
+    if (isAlbumAlbumsIntent) {
+        return { type: 'album_albums_tab' };
+    }
+
+
     if (textHasAnyKeyword(normalizedText, ['去论坛', '打开论坛', '论坛app']) || normalizedText === '论坛') {
         return { type: 'open_app', appId: 'forum-app', appLabel: '论坛' };
     }
@@ -589,8 +685,10 @@ function resolveScreenNavigationIntent(targetDesc, context) {
     }
 
     const contactRef = resolveContactReferenceFromText(targetDesc, context);
-    const isChatIntent = textHasAnyKeyword(normalizedText, ['聊天', '对话', '消息', '私聊', '聊天页'])
-        || (!!contactRef.contact && getContactNameVariants(contactRef.contact).some(variant => variant.normalized === normalizedText));
+    const hasExplicitChatKeyword = textHasAnyKeyword(normalizedText, ['聊天', '对话', '消息', '私聊', '聊天页']);
+    const isExactContactNameIntent = !!contactRef.contact
+        && getContactNameVariants(contactRef.contact).some(variant => variant.normalized === normalizedText);
+    const isChatIntent = hasExplicitChatKeyword;
     const isProfileIntent = textHasAnyKeyword(normalizedText, ['资料', '主页', '个人页', '名片', '资料卡', '信息页']);
     const isMomentsIntent = normalizedText.includes('朋友圈') || normalizedText.includes('个人动态');
 
@@ -604,6 +702,28 @@ function resolveScreenNavigationIntent(targetDesc, context) {
 
     if (contactRef.contact && isProfileIntent) {
         return { type: 'contact_profile', contact: contactRef.contact };
+    }
+
+    if (contactRef.contact && isExactContactNameIntent) {
+        if (context.page === SCREEN_PAGE.CHAT_LIST) {
+            return { type: 'contact_chat', contact: contactRef.contact };
+        }
+
+        if (context.page === SCREEN_PAGE.CONTACT_CHAT) {
+            const currentContact = getCurrentContextContact(context);
+            if (isSameContact(currentContact, contactRef.contact)) {
+                return { type: 'contact_profile', contact: contactRef.contact };
+            }
+            return { type: 'contact_chat', contact: contactRef.contact };
+        }
+
+        if (
+            context.page === SCREEN_PAGE.MOMENTS_FEED
+            || context.page === SCREEN_PAGE.PERSONAL_MOMENTS
+            || context.page === SCREEN_PAGE.PROFILE
+        ) {
+            return { type: 'contact_profile', contact: contactRef.contact };
+        }
     }
 
     if (contactRef.contact && isChatIntent) {
@@ -886,6 +1006,35 @@ function buildPlanToApp(appId, context) {
     ];
 }
 
+function buildPlanToAlbumAlbumsTab(context) {
+    if (context.page === SCREEN_PAGE.ALBUM_APP) {
+        const albumsTab = document.getElementById('album-tab-albums');
+        const photoView = document.getElementById('album-photo-detail-view');
+        const detailOverlay = document.getElementById('album-detail-overlay');
+        const isPhotoDetailOpen = !!(photoView && photoView.classList.contains('open'));
+        const isAlbumDetailOpen = !!(detailOverlay && detailOverlay.classList.contains('open'));
+        const isAlbumsActive = !!(albumsTab && albumsTab.classList.contains('active'));
+        const plan = [];
+
+        if (isPhotoDetailOpen) {
+            plan.push(createTapStep('退出照片', { failureText: '未能退出照片详情' }));
+        }
+        if (isAlbumDetailOpen) {
+            plan.push(createTapStep('返回', { failureText: '未能返回相簿列表' }));
+        }
+        if (!isAlbumsActive || isPhotoDetailOpen || isAlbumDetailOpen) {
+            plan.push(createTapStep('Albums', { failureText: '未能切换到相簿页' }));
+        }
+        return plan;
+    }
+
+    return [
+        ...buildPlanToApp('album-app', context),
+        createTapStep('Albums', { failureText: '未能切换到相簿页' })
+    ];
+}
+
+
 function buildScreenNavigationPlan(intent, context) {
     if (!intent) return null;
     switch (intent.type) {
@@ -901,6 +1050,8 @@ function buildScreenNavigationPlan(intent, context) {
             return buildPlanToMyMoments(context);
         case 'open_app':
             return buildPlanToApp(intent.appId, context);
+        case 'album_albums_tab':
+            return buildPlanToAlbumAlbumsTab(context);
         default:
             return null;
     }
@@ -920,6 +1071,8 @@ function getNavigationSuccessMessage(intent) {
             return '[系统]: 已打开动态页';
         case 'open_app':
             return `[系统]: 已打开 ${intent.appLabel || HIGH_LEVEL_APP_TARGETS[intent.appId] || intent.appId}`;
+        case 'album_albums_tab':
+            return '[系统]: 已切换到相簿页';
         default:
             return '[系统]: 已完成导航';
     }
@@ -927,7 +1080,7 @@ function getNavigationSuccessMessage(intent) {
 
 function emitScreenShareSystemMessage(text) {
     appendFloatingChatMessage(text, false, true);
-    injectSystemContext(text);
+    injectSystemContext(text, 'screen_share_hidden');
 }
 
 function getAlbumBackTarget() {
@@ -987,26 +1140,42 @@ function parseAlbumIndexedTarget(targetDesc) {
     const rawText = String(targetDesc || '').trim();
     if (!rawText) return null;
 
-    const patterns = [
-        { kind: 'photo', regex: /^图片\s*(\d+)$/i },
-        { kind: 'photo', regex: /^照片\s*(\d+)$/i },
-        { kind: 'photo', regex: /^第\s*(\d+)\s*(?:张(?:图片|照片|图)?|个图片|个照片)?$/i },
-        { kind: 'photo', regex: /^第\s*([一二三四五六七八九十两〇零]+)\s*(?:张(?:图片|照片|图)?|个图片|个照片)?$/ },
-        { kind: 'photo', regex: /^([一二三四五六七八九十两〇零]+)\s*(?:张(?:图片|照片|图)?|个图片|个照片)?$/ },
-        { kind: 'album', regex: /^相册\s*(\d+)$/i },
-        { kind: 'album', regex: /^第\s*(\d+)\s*个相册$/i },
-        { kind: 'album', regex: /^第\s*([一二三四五六七八九十两〇零]+)\s*个相册$/ }
+    const normalizedText = normalizeScreenActionText(rawText);
+    const asciiPatterns = [
+        { kind: 'photo', regex: /^photo(\d+)$/i },
+        { kind: 'photo', regex: /^photoslot(\d+)$/i },
+        { kind: 'photo', regex: /^image(\d+)$/i },
+        { kind: 'album', regex: /^album(\d+)$/i },
+        { kind: 'album', regex: /^albumslot(\d+)$/i }
     ];
 
-    for (const pattern of patterns) {
+    for (const pattern of asciiPatterns) {
+        const match = normalizedText.match(pattern.regex);
+        if (!match) continue;
+        const index = Number.parseInt(match[1], 10);
+        if (Number.isFinite(index) && index >= 1) {
+            return { kind: pattern.kind, index };
+        }
+    }
+
+    const hanNumberClass = '[\u4E00\u4E8C\u4E09\u56DB\u4E94\u516D\u4E03\u516B\u4E5D\u5341\u4E24\u3007\u96F6]+';
+    const localizedPatterns = [
+        { kind: 'photo', regex: /^图片\s*(\d+)$/i },
+        { kind: 'photo', regex: /^照片\s*(\d+)$/i },
+        { kind: 'photo', regex: new RegExp('^\\u7B2C\\s*(\\d+)\\s*(?:\\u5F20)?(?:\\u56FE\\u7247|\\u7167\\u7247|\\u56FE|\\u4E2A\\u56FE\\u7247|\\u4E2A\\u7167\\u7247)?$', 'i') },
+        { kind: 'photo', regex: new RegExp('^\\u7B2C\\s*(' + hanNumberClass + ')\\s*(?:\\u5F20)?(?:\\u56FE\\u7247|\\u7167\\u7247|\\u56FE|\\u4E2A\\u56FE\\u7247|\\u4E2A\\u7167\\u7247)?$') },
+        { kind: 'photo', regex: new RegExp('^(' + hanNumberClass + ')\\s*(?:\\u5F20)?(?:\\u56FE\\u7247|\\u7167\\u7247|\\u56FE|\\u4E2A\\u56FE\\u7247|\\u4E2A\\u7167\\u7247)?$') },
+        { kind: 'album', regex: /^相册\s*(\d+)$/i },
+        { kind: 'album', regex: new RegExp('^\\u7B2C\\s*(\\d+)\\s*\\u4E2A\\u76F8\\u518C$', 'i') },
+        { kind: 'album', regex: new RegExp('^\\u7B2C\\s*(' + hanNumberClass + ')\\s*\\u4E2A\\u76F8\\u518C$') }
+    ];
+
+    for (const pattern of localizedPatterns) {
         const match = rawText.match(pattern.regex);
         if (!match) continue;
         const index = parseChineseScreenActionNumber(match[1]);
         if (Number.isFinite(index) && index >= 1) {
-            return {
-                kind: pattern.kind,
-                index
-            };
+            return { kind: pattern.kind, index };
         }
     }
 
@@ -1087,28 +1256,10 @@ function extractScreenShareActionTargetsFromUserText(text, context = getScreenNa
 }
 
 window.executeScreenShareUserTextActions = async function(text) {
-    if (!window.isScreenSharing) {
-        return { executed: false, targets: [] };
-    }
-
-    const initialContext = getScreenNavigationContext();
-    const targets = extractScreenShareActionTargetsFromUserText(text, initialContext);
-    if (!targets.length) {
-        return { executed: false, targets: [] };
-    }
-
-    console.log('[ScreenShare Debug] inferred user screen actions', {
-        text,
-        targets,
-        initialContext
+    console.log('[ScreenShare Debug] skipped user-text screen action inference (plan B only)', {
+        text
     });
-
-    for (const target of targets) {
-        await executeSingleScreenAction('SCREEN_TAP', target);
-        await sleep(260);
-    }
-
-    return { executed: true, targets };
+    return { executed: false, targets: [] };
 };
 
 function getSpecialScreenActionTarget(targetDesc, context = getScreenNavigationContext()) {
@@ -1161,6 +1312,14 @@ function getSpecialScreenActionTarget(targetDesc, context = getScreenNavigationC
             return findFirstVisibleElement('#wechat-app .wechat-tab-item[data-tab="addressbook"]');
         case '收藏照片':
             return findFirstVisibleElement('#album-photo-favorite-btn');
+        case '下一张照片':
+            return getAlbumNextPhotoTarget();
+        case 'Albums':
+            return findFirstVisibleElement('#album-tab-albums');
+        case '密码输入框':
+            return findFirstVisibleElement('#album-privacy-password-input');
+        case '确定':
+            return findFirstVisibleElement('#album-privacy-password-confirm');
         case '退出照片':
             return findFirstVisibleElement('#album-photo-close-btn');
         case '退出相册':
@@ -1255,8 +1414,425 @@ function simulateScreenTap(cursor, targetEl) {
     });
 }
 
+function getAlbumNextPhotoTarget() {
+    const thumbnails = Array.from(document.querySelectorAll('#album-photo-thumbnails .album-photo-thumb[data-photo-id]'));
+    return thumbnails.find(button => !button.classList.contains('is-active') && isVisibleScreenActionEl(button)) || null;
+}
+
+function isFloatingChatInputElement(targetEl) {
+    return !!(targetEl && typeof targetEl.closest === 'function' && targetEl.closest('#floating-chat-window'));
+}
+
+function getPreferredScreenTypeTarget() {
+    const privacyInput = document.getElementById('album-privacy-password-input');
+    if (privacyInput && isVisibleScreenActionEl(privacyInput)) {
+        return privacyInput;
+    }
+
+    const activeEl = document.activeElement;
+    const canUseActiveEl = !!(
+        activeEl
+        && !isFloatingChatInputElement(activeEl)
+        && ((typeof activeEl.matches === 'function' && activeEl.matches('input, textarea')) || activeEl.isContentEditable)
+        && isVisibleScreenActionEl(activeEl)
+    );
+    return canUseActiveEl ? activeEl : null;
+}
+
+function isAlbumPrivacyPasswordInput(targetEl) {
+    return !!(targetEl && targetEl.id === 'album-privacy-password-input');
+}
+
+
+function dispatchScreenTypeInputEvents(targetEl) {
+    ['input', 'change'].forEach(eventName => {
+        targetEl.dispatchEvent(new Event(eventName, {
+            bubbles: true,
+            cancelable: true
+        }));
+    });
+}
+
+function getScreenTypeElementValue(targetEl) {
+    if (!targetEl) return '';
+    if (targetEl.isContentEditable) return String(targetEl.textContent || '');
+    if ('value' in targetEl) return String(targetEl.value || '');
+    return '';
+}
+
+function setScreenTypeElementValue(targetEl, value) {
+    if (!targetEl) return '';
+
+    const nextValue = String(value || '');
+    if (typeof targetEl.focus === 'function') {
+        targetEl.focus();
+    }
+
+    if (targetEl.isContentEditable) {
+        targetEl.textContent = nextValue;
+    } else if ('value' in targetEl) {
+        const proto = targetEl.tagName === 'TEXTAREA'
+            ? (window.HTMLTextAreaElement && window.HTMLTextAreaElement.prototype)
+            : (window.HTMLInputElement && window.HTMLInputElement.prototype);
+        const descriptor = proto ? Object.getOwnPropertyDescriptor(proto, 'value') : null;
+        if (descriptor && typeof descriptor.set === 'function') {
+            descriptor.set.call(targetEl, nextValue);
+        } else {
+            targetEl.value = nextValue;
+        }
+        if (typeof targetEl.setSelectionRange === 'function') {
+            try {
+                targetEl.setSelectionRange(nextValue.length, nextValue.length);
+            } catch (error) {
+                console.log('[ScreenShare Debug] setSelectionRange skipped', {
+                    targetId: targetEl.id || null,
+                    error: error && error.message ? error.message : String(error)
+                });
+            }
+        }
+        try {
+            targetEl.setAttribute('value', nextValue);
+        } catch (error) {}
+    }
+
+    dispatchScreenTypeInputEvents(targetEl);
+    return getScreenTypeElementValue(targetEl);
+}
+
+function getScreenShareChatHistoryForActiveContact() {
+    const contactId = getActiveScreenShareContactId();
+    if (!(window.iphoneSimState && contactId && window.iphoneSimState.chatHistory)) {
+        return [];
+    }
+
+    const history = window.iphoneSimState.chatHistory[contactId];
+    return Array.isArray(history) ? history : [];
+}
+
+function escapeScreenActionRegex(value) {
+    return String(value || '').replace(/[.*+?^{}$()|[\]\\]/g, '\\$&');
+}
+
+function normalizeScreenTypeSecret(value) {
+    const normalized = String(value || '')
+        .normalize('NFKC')
+        .trim()
+        .replace(/^[\s"'`\u201c\u201d\u2018\u2019\uFF02\uFF07\u300c\u300d\u300e\u300f\u300a\u300b\u3008\u3009\u3010\u3011()\[\]{}<>\uFF0C\u3002,.\uFF01\uFF1F!?\uFF1B;\uFF1A:]+/, '')
+        .replace(/[\s"'`\u201c\u201d\u2018\u2019\uFF02\uFF07\u300c\u300d\u300e\u300f\u300a\u300b\u3008\u3009\u3010\u3011()\[\]{}<>\uFF0C\u3002,.\uFF01\uFF1F!?\uFF1B;\uFF1A:]+$/, '');
+    return normalized;
+}
+
+function canonicalizeScreenTypeSecret(value) {
+    return normalizeScreenTypeSecret(value).replace(/\s+/g, '');
+}
+
+function buildScreenTypeMmddSecret(monthValue, dayValue) {
+    const month = Number.parseInt(monthValue, 10);
+    const day = Number.parseInt(dayValue, 10);
+    if (!Number.isFinite(month) || !Number.isFinite(day)) return '';
+    if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+    return String(month).padStart(2, '0') + String(day).padStart(2, '0');
+}
+
+function buildScreenTypeCompactDateSecret(rawValue) {
+    const digits = String(rawValue || '').replace(/\D+/g, '');
+    if (!digits) return '';
+    if (digits.length === 3) {
+        return buildScreenTypeMmddSecret(digits.slice(0, 1), digits.slice(1));
+    }
+    if (digits.length === 4) {
+        return buildScreenTypeMmddSecret(digits.slice(0, 2), digits.slice(2));
+    }
+    return '';
+}
+
+function extractBirthdayDateSecretsFromText(text) {
+    const sourceText = String(text || '');
+    if (!sourceText.trim()) return [];
+
+    const patterns = [
+        new RegExp('(?:\u6211(?:\u7684)?\u751F\u65E5|\u751F\u65E5)[^\n\r]{0,20}?(\\d{1,2})\\s*\\u6708\\s*(\\d{1,2})\\s*(?:\\u65E5|\\u53F7)?', 'gi'),
+        new RegExp('(?:\u6211(?:\u7684)?\u751F\u65E5|\u751F\u65E5)[^\n\r]{0,20}?(\\d{1,2})\\s*[\\/\\-.]\\s*(\\d{1,2})(?!\\d)', 'gi')
+    ];
+
+    const secrets = [];
+    patterns.forEach(pattern => {
+        let match;
+        while ((match = pattern.exec(sourceText)) !== null) {
+            const mmdd = buildScreenTypeMmddSecret(match[1], match[2]);
+            if (mmdd) secrets.push(mmdd);
+        }
+    });
+
+    const compactPattern = new RegExp('(?:\\u6211(?:\\u7684)?\\u751F\\u65E5|\\u751F\\u65E5)[^\\n\\r]{0,20}?(\\d{3,4})(?!\\d)', 'gi');
+    let compactMatch;
+    while ((compactMatch = compactPattern.exec(sourceText)) !== null) {
+        const mmdd = buildScreenTypeCompactDateSecret(compactMatch[1]);
+        if (mmdd) secrets.push(mmdd);
+    }
+
+    return Array.from(new Set(secrets.map(canonicalizeScreenTypeSecret).filter(Boolean)));
+}
+
+function extractLooseDateSecretsFromText(text) {
+    const sourceText = String(text || '');
+    if (!sourceText.trim()) return [];
+
+    const patterns = [
+        new RegExp('(?:^|[^\\d])(?:(\\d{1,2})\\s*\\u6708\\s*(\\d{1,2})\\s*(?:\\u65E5|\\u53F7)?)(?!\\d)', 'gi'),
+        new RegExp('(?:^|[^\\d])(?:(\\d{1,2})\\s*[\\/\\-.]\\s*(\\d{1,2}))(?!\\d)', 'gi'),
+        new RegExp('(?:^|[^\\d])(?:\\d{2,4}\\s*(?:\\u5E74|[\\/\\-.])\\s*(\\d{1,2})\\s*(?:\\u6708|[\\/\\-.])\\s*(\\d{1,2})\\s*(?:\\u65E5|\\u53F7)?)(?!\\d)', 'gi')
+    ];
+
+    const secrets = [];
+    patterns.forEach(pattern => {
+        let match;
+        while ((match = pattern.exec(sourceText)) !== null) {
+            const mmdd = buildScreenTypeMmddSecret(match[1], match[2]);
+            if (mmdd) secrets.push(mmdd);
+        }
+    });
+
+    const compactCuePattern = new RegExp('(?:\\u751F\\u65E5|\\u7EAA\\u5FF5\\u65E5|anniversary|special\\s*date|date)[^\\n\\r]{0,20}?(\\d{3,4})(?!\\d)', 'gi');
+    let compactMatch;
+    while ((compactMatch = compactCuePattern.exec(sourceText)) !== null) {
+        const mmdd = buildScreenTypeCompactDateSecret(compactMatch[1]);
+        if (mmdd) secrets.push(mmdd);
+    }
+
+    return Array.from(new Set(secrets.map(canonicalizeScreenTypeSecret).filter(Boolean)));
+}
+
+function extractPasswordDateSecretsFromText(text) {
+    const sourceText = String(text || '');
+    if (!sourceText.trim()) return [];
+
+    const patterns = [
+        new RegExp('(?:\u5BC6\u7801|password)[^\n\r]{0,24}?(\\d{1,2})\\s*\\u6708\\s*(\\d{1,2})\\s*(?:\\u65E5|\\u53F7)?', 'gi'),
+        new RegExp('(?:\u5BC6\u7801|password)[^\n\r]{0,24}?(\\d{1,2})\\s*[\\/\\-.]\\s*(\\d{1,2})(?!\\d)', 'gi')
+    ];
+
+    const secrets = [];
+    patterns.forEach(pattern => {
+        let match;
+        while ((match = pattern.exec(sourceText)) !== null) {
+            const mmdd = buildScreenTypeMmddSecret(match[1], match[2]);
+            if (mmdd) secrets.push(mmdd);
+        }
+    });
+
+    return Array.from(new Set(secrets.map(canonicalizeScreenTypeSecret).filter(Boolean)));
+}
+
+function isWrappedStandaloneSecretText(text) {
+    const trimmed = String(text || '').trim();
+    if (!trimmed || trimmed.length < 2) return false;
+
+    const wrappers = [
+        ['"', '"'],
+        ["'", "'"],
+        ['`', '`'],
+        ['“', '”'],
+        ['‘', '’'],
+        ['「', '」'],
+        ['『', '』'],
+        ['《', '》'],
+        ['〈', '〉'],
+        ['【', '】'],
+        ['(', ')'],
+        ['（', '）'],
+        ['[', ']'],
+        ['{', '}']
+    ];
+
+    return wrappers.some(([left, right]) => (
+        trimmed.startsWith(left)
+        && trimmed.endsWith(right)
+        && trimmed.length > left.length + right.length
+    ));
+}
+
+function extractStandaloneScreenTypeSecretsFromText(text) {
+    const sourceText = String(text || '');
+    if (!sourceText.trim()) return [];
+
+    const normalizedText = normalizeScreenTypeSecret(sourceText);
+    if (!normalizedText) return [];
+
+    const secrets = [];
+    const normalizedCompact = normalizedText.replace(/\s+/g, '');
+    const isWrapped = isWrappedStandaloneSecretText(sourceText);
+    const standaloneDateMatch = normalizedText.match(/^(\d{1,2})\s*(?:月|[\/\-.])\s*(\d{1,2})(?:日|号)?$/i);
+
+    if (standaloneDateMatch) {
+        const mmdd = buildScreenTypeMmddSecret(standaloneDateMatch[1], standaloneDateMatch[2]);
+        if (mmdd) secrets.push(mmdd);
+    }
+
+    if (/^[A-Za-z0-9_!@#$%^&*\-.]{2,64}$/.test(normalizedCompact)) {
+        const hasDigitOrSymbol = /[0-9_!@#$%^&*\-.]/.test(normalizedCompact);
+        if (hasDigitOrSymbol || isWrapped) {
+            secrets.push(normalizedCompact);
+        }
+    }
+
+    return Array.from(new Set(secrets.map(canonicalizeScreenTypeSecret).filter(Boolean)));
+}
+
+function extractExplicitScreenTypeSecretsFromText(text, albumName = '', referenceSecrets = []) {
+    const sourceText = String(text || '');
+    if (!sourceText.trim()) return [];
+
+    const normalizedAlbumName = String(albumName || '').trim();
+    const patterns = [];
+    const secretTail = '([^\\s\\uFF0C\\u3002,.\\uFF01\\uFF1F!?\\uFF1B;]+)';
+    const asciiSecretTail = '([A-Za-z0-9_!@#$%^&*\\-.]{2,64})';
+    const birthdayReferenceRegex = /^(?:\u6211(?:\u7684)?\u751F\u65E5|\u751F\u65E5)$/;
+    const containsPasswordKeyword = /\u5BC6\u7801|password/i.test(sourceText);
+    const containsBirthdayReference = /\u6211(?:\u7684)?\u751F\u65E5|\u751F\u65E5/.test(sourceText);
+    const derivedReferenceSecrets = Array.isArray(referenceSecrets)
+        ? referenceSecrets.map(canonicalizeScreenTypeSecret).filter(Boolean)
+        : [];
+    const secrets = [];
+
+    secrets.push(...extractPasswordDateSecretsFromText(sourceText));
+    secrets.push(...extractBirthdayDateSecretsFromText(sourceText));
+
+    if (normalizedAlbumName) {
+        patterns.push(new RegExp(`${escapeScreenActionRegex(normalizedAlbumName)}\\s*(?:\\u76F8\\u518C|\\u76F8\\u7C3F)?\\s*(?:\\u7684)?\\s*\\u5BC6\\u7801\\s*(?:\\u662F|\\u4E3A|[:\\uFF1A])\\s*${secretTail}`, 'gi'));
+        patterns.push(new RegExp(`${escapeScreenActionRegex(normalizedAlbumName)}\\s*(?:\\u76F8\\u518C|\\u76F8\\u7C3F)?\\s*(?:\\u7684)?\\s*\\u5BC6\\u7801\\s*${asciiSecretTail}`, 'gi'));
+        patterns.push(new RegExp(`${escapeScreenActionRegex(normalizedAlbumName)}\\s*(?:\\u76F8\\u518C|\\u76F8\\u7C3F)?\\s*password\\s*(?:is|=|:)?\\s*${asciiSecretTail}`, 'gi'));
+    }
+
+    patterns.push(new RegExp(`(?:\\u76F8\\u518C|\\u76F8\\u7C3F)?\\u5BC6\\u7801\\s*(?:\\u662F|\\u4E3A|[:\\uFF1A])\\s*${secretTail}`, 'gi'));
+    patterns.push(new RegExp(`(?:\\u76F8\\u518C|\\u76F8\\u7C3F)?\\u5BC6\\u7801\\s*${asciiSecretTail}`, 'gi'));
+    patterns.push(new RegExp(`password\\s*(?:is|=|:)?\\s*${asciiSecretTail}`, 'gi'));
+
+    patterns.forEach(pattern => {
+        let match;
+        while ((match = pattern.exec(sourceText)) !== null) {
+            const candidate = normalizeScreenTypeSecret(match[1] || '');
+            if (!candidate) continue;
+            if (birthdayReferenceRegex.test(candidate)) continue;
+            secrets.push(candidate);
+        }
+    });
+
+    if (containsPasswordKeyword && containsBirthdayReference && derivedReferenceSecrets.length) {
+        secrets.push(...derivedReferenceSecrets);
+    }
+
+    return Array.from(new Set(secrets.map(canonicalizeScreenTypeSecret).filter(Boolean)));
+}
+
+function getScreenShareContactMemoriesForActiveContact() {
+    const contactId = getActiveScreenShareContactId();
+    if (!(window.iphoneSimState && contactId && Array.isArray(window.iphoneSimState.memories))) {
+        return [];
+    }
+
+    return window.iphoneSimState.memories.filter(memory => {
+        if (!memory || typeof memory.content !== 'string') return false;
+        return String(memory.contactId || '') === String(contactId);
+    });
+}
+
+function getScreenShareSettingPasswordSourcesForActiveContact() {
+    const contactId = getActiveScreenShareContactId();
+    const contact = getContactById(contactId);
+    if (!contact || !window.iphoneSimState) return [];
+
+    const entries = [];
+    const seen = new Set();
+    const pushEntry = (source, content) => {
+        const normalizedContent = typeof content === 'string' ? content.trim() : '';
+        if (!normalizedContent) return;
+        const key = source + '::' + normalizedContent;
+        if (seen.has(key)) return;
+        seen.add(key);
+        entries.push({ source, content: normalizedContent });
+    };
+
+    pushEntry('contact_persona', contact.persona);
+    pushEntry('user_persona_override', contact.userPersonaPromptOverride);
+
+    const userPersonas = Array.isArray(window.iphoneSimState.userPersonas)
+        ? window.iphoneSimState.userPersonas
+        : [];
+    const resolvedUserPersonaId = contact.userPersonaId || window.iphoneSimState.currentUserPersonaId;
+    if (resolvedUserPersonaId) {
+        const matchedPersona = userPersonas.find(item => String(item && item.id) === String(resolvedUserPersonaId));
+        if (matchedPersona) {
+            pushEntry(contact.userPersonaId ? 'user_persona' : 'current_user_persona', matchedPersona.aiPrompt || '');
+            pushEntry(contact.userPersonaId ? 'user_persona_desc' : 'current_user_persona_desc', matchedPersona.desc || '');
+        }
+    }
+
+    return entries;
+}
+
+function getAllowedAlbumPrivacyPasswords(albumName = '') {
+    const history = getScreenShareChatHistoryForActiveContact();
+    const contactMemories = getScreenShareContactMemoriesForActiveContact();
+    const settingEntries = getScreenShareSettingPasswordSourcesForActiveContact();
+    const historyEntries = [];
+    const memoryEntries = [];
+    const recentHistoryEntries = [];
+
+    history.forEach(msg => {
+        if (!msg || msg.role !== 'user' || typeof msg.content !== 'string') return;
+        const entry = { source: 'history', content: msg.content };
+        historyEntries.push(entry);
+        recentHistoryEntries.push(entry);
+        if (recentHistoryEntries.length > 6) {
+            recentHistoryEntries.shift();
+        }
+    });
+
+    contactMemories.forEach(memory => {
+        memoryEntries.push({ source: 'memory', content: String(memory.content || '') });
+    });
+
+    const sourceEntries = [...historyEntries, ...memoryEntries, ...settingEntries];
+
+    const birthdayReferenceSecrets = [];
+    sourceEntries.forEach(entry => {
+        birthdayReferenceSecrets.push(...extractBirthdayDateSecretsFromText(entry.content));
+    });
+
+    const uniqueBirthdayReferenceSecrets = Array.from(new Set(birthdayReferenceSecrets.map(canonicalizeScreenTypeSecret).filter(Boolean)));
+    const secrets = [];
+    sourceEntries.forEach(entry => {
+        secrets.push(...extractExplicitScreenTypeSecretsFromText(entry.content, albumName, uniqueBirthdayReferenceSecrets));
+    });
+    settingEntries.forEach(entry => {
+        secrets.push(...extractLooseDateSecretsFromText(entry.content));
+    });
+    recentHistoryEntries.forEach(entry => {
+        secrets.push(...extractStandaloneScreenTypeSecretsFromText(entry.content));
+    });
+    contactMemories.forEach(memory => {
+        secrets.push(...extractStandaloneScreenTypeSecretsFromText(String(memory.content || '')));
+    });
+
+    const uniqueSecrets = Array.from(new Set(secrets.map(canonicalizeScreenTypeSecret).filter(Boolean)));
+    console.log('[ScreenShare Debug] password source scan', {
+        contactId: getActiveScreenShareContactId(),
+        historyUserCount: historyEntries.length,
+        memoryCount: memoryEntries.length,
+        settingsCount: settingEntries.length,
+        settingSources: settingEntries.map(entry => entry.source),
+        uniqueBirthdayReferenceSecrets,
+        uniqueSecrets
+    });
+    return uniqueSecrets;
+}
+
+
+
 window.screenActionQueue = [];
 window.isExecutingScreenAction = false;
+window.lastScreenTypeAction = null;
 
 window.executeAIScreenAction = function(action, payload) {
     if (!window.isScreenSharing) return;
@@ -1320,8 +1896,69 @@ async function executeNavigationPlan(cursor, plan) {
 
 function executeSingleScreenAction(action, payload) {
     return (async () => {
+        const normalizedAction = String(action || '').trim().toUpperCase();
         const cursor = document.getElementById('ai-cursor');
-        if (!cursor || action !== 'SCREEN_TAP') return;
+
+        if (normalizedAction === 'SCREEN_TYPE') {
+            const textToType = normalizeScreenTypeSecret(payload);
+            if (!textToType) {
+                emitScreenShareSystemMessage('[System]: No text to type');
+                return;
+            }
+
+            const targetEl = getPreferredScreenTypeTarget();
+            if (!targetEl) {
+                emitScreenShareSystemMessage('[System]: No input is available right now');
+                return;
+            }
+
+            let albumName = '';
+            if (isAlbumPrivacyPasswordInput(targetEl)) {
+                const snapshot = typeof window.getAlbumScreenShareSnapshot === 'function'
+                    ? window.getAlbumScreenShareSnapshot()
+                    : null;
+                albumName = snapshot && (snapshot.passwordAlbumName || snapshot.activeAlbumName)
+                    ? (snapshot.passwordAlbumName || snapshot.activeAlbumName)
+                    : '';
+                const allowedPasswords = getAllowedAlbumPrivacyPasswords(albumName);
+                const canonicalTextToType = canonicalizeScreenTypeSecret(textToType);
+                console.log('[ScreenShare Debug] SCREEN_TYPE password check', {
+                    albumName,
+                    textToType,
+                    canonicalTextToType,
+                    allowedPasswordsJson: JSON.stringify(allowedPasswords)
+                });
+                if (!allowedPasswords.includes(canonicalTextToType)) {
+                    emitScreenShareSystemMessage(
+                        '[System]: The password for ' + (albumName || 'this album') + ' is not grounded in the current chat history or the established chat-settings persona/date facts, so I cannot type it yet'
+                    );
+                    return;
+                }
+            }
+
+            const actualTypedValue = canonicalizeScreenTypeSecret(setScreenTypeElementValue(targetEl, textToType));
+            const canonicalTypedText = canonicalizeScreenTypeSecret(textToType);
+            window.lastScreenTypeAction = {
+                value: canonicalTypedText,
+                targetId: targetEl.id || null,
+                albumName,
+                at: Date.now()
+            };
+            console.log('[ScreenShare Debug] SCREEN_TYPE applied', {
+                targetId: targetEl.id || null,
+                expectedValue: canonicalTypedText,
+                actualTypedValue
+            });
+            if (actualTypedValue !== canonicalTypedText) {
+                emitScreenShareSystemMessage(`[System]: Tried to type ${textToType}, but the input is still empty`);
+                return;
+            }
+
+            emitScreenShareSystemMessage(`[System]: Typed ${textToType}`);
+            return;
+        }
+
+        if (!cursor || normalizedAction !== 'SCREEN_TAP') return;
 
         const targetDesc = String(payload || '').trim();
         if (!targetDesc) return;
@@ -1348,9 +1985,25 @@ function executeSingleScreenAction(action, payload) {
             }
             return;
         }
-
         const targetEl = findScreenActionTargetElement(targetDesc);
         if (targetEl) {
+            if (targetEl.id === 'album-privacy-password-confirm') {
+                const passwordInput = document.getElementById('album-privacy-password-input');
+                let passwordValue = canonicalizeScreenTypeSecret(getScreenTypeElementValue(passwordInput));
+                if (!passwordValue && passwordInput && window.lastScreenTypeAction && window.lastScreenTypeAction.targetId === 'album-privacy-password-input') {
+                    const restoredValue = canonicalizeScreenTypeSecret(setScreenTypeElementValue(passwordInput, window.lastScreenTypeAction.value || ''));
+                    console.log('[ScreenShare Debug] restored password before confirm', {
+                        restoredValue,
+                        lastScreenTypeAction: window.lastScreenTypeAction
+                    });
+                    passwordValue = restoredValue;
+                }
+                if (!passwordValue) {
+                    emitScreenShareSystemMessage('[System]: Password is still empty, cannot tap Open yet');
+                    return;
+                }
+            }
+
             await simulateScreenTap(cursor, targetEl);
             emitScreenShareSystemMessage(`[系统]: 已点击 ${targetDesc}`);
             return;
@@ -1367,7 +2020,7 @@ function executeSingleScreenAction(action, payload) {
     })();
 }
 
-function injectSystemContext(text) {
+function injectSystemContext(text, type = 'text') {
     const contactId = window.screenShareContactId || (window.iphoneSimState && window.iphoneSimState.currentChatContactId);
     if (window.iphoneSimState && contactId) {
         const history = window.iphoneSimState.chatHistory[contactId] || [];
@@ -1376,9 +2029,22 @@ function injectSystemContext(text) {
             time: Date.now(),
             role: 'system',
             content: text,
-            type: 'text'
+            type
         });
         if (window.saveConfig) window.saveConfig();
+    }
+}
+
+function normalizeScreenShareImageUrl(value) {
+    const rawValue = String(value || '').trim();
+    if (!rawValue) return '';
+    if (/^data:/i.test(rawValue) || /^https?:\/\//i.test(rawValue)) return rawValue;
+    if (/^\/\//.test(rawValue)) return 'https:' + rawValue;
+
+    try {
+        return new URL(rawValue, window.location.href).href;
+    } catch (error) {
+        return rawValue;
     }
 }
 
@@ -1387,15 +2053,39 @@ function getAlbumScreenShareSummaryText(snapshot) {
 
     const visibleCount = Array.isArray(snapshot.items) ? snapshot.items.length : 0;
     switch (snapshot.view) {
-        case 'photo_detail':
-            return `相册当前在图片详情页，可见图片 ${snapshot.currentPhoto ? 1 : 0} 张${snapshot.detailSourceText ? `，左上角来源文本=${snapshot.detailSourceText}` : ''}，可执行的按钮包括：退出照片、收藏照片`;
+        case 'privacy_password_modal': {
+            const parts = ['Album is on privacy_password_modal'];
+            parts.push('album=' + (snapshot.passwordAlbumName || snapshot.activeAlbumName || 'unknown'));
+            if (snapshot.passwordTitle) parts.push('title=' + snapshot.passwordTitle);
+            if (snapshot.passwordDescription) parts.push('description=' + snapshot.passwordDescription);
+            parts.push('passwordInput=' + (snapshot.passwordInputVisible ? 'visible' : 'hidden'));
+            if (snapshot.passwordConfirmText) parts.push('confirmButton=' + snapshot.passwordConfirmText);
+            if (snapshot.passwordError) parts.push('error=' + snapshot.passwordError);
+            parts.push('availableActions=passwordfield,SCREEN_TYPE,open');
+            return parts.join(' | ');
+        }
+        case 'photo_detail': {
+            const parts = ['Album is on photo_detail'];
+            if (snapshot.activeAlbumName) parts.push('album=' + snapshot.activeAlbumName);
+            if (snapshot.detailSourceText) parts.push('sourceText=' + snapshot.detailSourceText);
+            parts.push('thumbnailCandidates=' + visibleCount);
+            parts.push('availableActions=closephoto,favorite,nextphoto');
+            return parts.join(' | ');
+        }
         case 'album_detail':
-            return `相册当前在相册详情页，当前相册=${snapshot.activeAlbumName || snapshot.title || '未命名相册'}，可见图片 ${visibleCount} 张`;
-        case 'albums_grid':
-            return `相册当前在相册列表页，标题=${snapshot.title || 'Albums'}，可见相册 ${visibleCount} 个`;
+            return 'Album is on album_detail | album=' + (snapshot.activeAlbumName || snapshot.title || 'untitled') + ' | visiblePhotos=' + visibleCount;
+        case 'albums_grid': {
+            const albumLabels = Array.isArray(snapshot.items)
+                ? snapshot.items
+                    .map(item => item ? ((item.albumName || ('slot-' + item.position)) + (item.isPrivate ? '(private)' : '')) : '')
+                    .filter(Boolean)
+                    .join(', ')
+                : '';
+            return 'Album is on albums_grid | title=' + (snapshot.title || 'Albums') + ' | visibleAlbums=' + visibleCount + (albumLabels ? ' | albums=' + albumLabels : '');
+        }
         case 'recent_grid':
         default:
-            return `相册当前在最近项目页，标题=${snapshot.title || 'Recent'}，可见图片 ${visibleCount} 张`;
+            return 'Album is on recent_grid | title=' + (snapshot.title || 'Recent') + ' | visiblePhotos=' + visibleCount;
     }
 }
 
@@ -1403,20 +2093,23 @@ function buildAlbumScreenShareItemText(item) {
     if (!item) return '';
 
     if (item.kind === 'album_cover') {
-        const parts = [`相册${item.position}`];
-        parts.push(`album=${item.albumName || '未命名相册'}`);
+        const parts = ['albumSlot=' + item.position];
+        parts.push('tapTarget=album' + item.position);
+        parts.push('album=' + (item.albumName || 'untitled'));
         if (Number.isFinite(Number(item.count))) {
-            parts.push(`count=${Number(item.count)}`);
+            parts.push('count=' + Number(item.count));
         }
+        parts.push('private=' + (item.isPrivate === true ? 'true' : 'false'));
         parts.push('type=album_cover');
         return parts.join(' | ');
     }
 
-    const parts = [`图片${item.position}`];
-    if (item.sourceText) parts.push(`sourceText=${item.sourceText}`);
-    if (item.location) parts.push(`location=${item.location}`);
-    if (item.datetime) parts.push(`datetime=${item.datetime}`);
-    if (item.albumName) parts.push(`album=${item.albumName}`);
+    const parts = ['photoSlot=' + item.position];
+    parts.push('tapTarget=photo' + item.position);
+    if (item.sourceText) parts.push('sourceText=' + item.sourceText);
+    if (item.location) parts.push('location=' + item.location);
+    if (item.datetime) parts.push('datetime=' + item.datetime);
+    if (item.albumName) parts.push('album=' + item.albumName);
     return parts.join(' | ');
 }
 
@@ -1426,7 +2119,7 @@ function buildAlbumScreenShareMultimodalContent(snapshot) {
 
     const content = [{
         type: 'text',
-        text: '下面是当前相册界面的可见图片/相册内容。若你需要继续操作，请先基于这些可见对象判断，再输出类似 ACTION: SCREEN_TAP: 图片1、ACTION: SCREEN_TAP: 相册1、ACTION: SCREEN_TAP: 退出照片、ACTION: SCREEN_TAP: 收藏照片 的动作。'
+        text: 'You are currently checking the user\'s phone, not letting the user check yours. Visible album content is listed below as evidence from the user\'s phone. You may proactively continue inspecting relevant albums, photos, or other areas. If you need to keep operating, you can chain multiple actions in one reply. Example: ACTION: SCREEN_TAP: Albums, ACTION: SCREEN_TAP: passwordfield, ACTION: SCREEN_TYPE: 1234, ACTION: SCREEN_TAP: open, ACTION: SCREEN_TAP: favorite, ACTION: SCREEN_TAP: nextphoto.'
     }];
 
     const seenKeys = new Set();
@@ -1436,9 +2129,9 @@ function buildAlbumScreenShareMultimodalContent(snapshot) {
         if (seenKeys.has(dedupeKey)) return;
         seenKeys.add(dedupeKey);
 
-        const preferredImageUrl = snapshot && snapshot.view === 'photo_detail'
+        const preferredImageUrl = normalizeScreenShareImageUrl(snapshot && snapshot.view === 'photo_detail'
             ? (item.src || item.thumb)
-            : (item.thumb || item.src);
+            : (item.thumb || item.src));
         if (!preferredImageUrl) return;
 
         content.push({
@@ -1454,6 +2147,56 @@ function buildAlbumScreenShareMultimodalContent(snapshot) {
     return content.length > 1 ? content : null;
 }
 
+function sanitizeScreenShareSummaryValue(value, maxLength = 120) {
+    const normalized = String(value || '')
+        .replace(/\s+/g, ' ')
+        .replace(/[|]+/g, '/')
+        .trim();
+    if (!normalized) return '';
+    if (normalized.length <= maxLength) return normalized;
+    if (maxLength <= 1) return '…';
+    return `${normalized.slice(0, maxLength - 1)}…`;
+}
+
+function getWechatListScreenShareSummaryText(snapshot) {
+    if (!snapshot) return '';
+    const items = Array.isArray(snapshot.items) ? snapshot.items.slice(0, 8) : [];
+    if (!items.length) {
+        return 'WeChat is on chat_list | visibleChats=0';
+    }
+
+    const itemText = items.map((item, index) => {
+        const parts = [`${index + 1}. ${sanitizeScreenShareSummaryValue(item.name || '联系人', 40)}`];
+        if (item.pinned) parts.push('(pinned)');
+        if (item.preview) parts.push(`preview=${sanitizeScreenShareSummaryValue(item.preview, 80)}`);
+        if (item.time) parts.push(`time=${sanitizeScreenShareSummaryValue(item.time, 16)}`);
+        return parts.join(' ');
+    }).join(' ; ');
+
+    return `WeChat is on chat_list | visibleChats=${items.length} | items=${itemText}`;
+}
+
+function getWechatChatScreenShareSummaryText(snapshot) {
+    if (!snapshot) return '';
+    const items = Array.isArray(snapshot.items) ? snapshot.items.slice(0, 8) : [];
+    const contactName = sanitizeScreenShareSummaryValue(snapshot.contactName || '联系人', 40) || '联系人';
+    if (!items.length) {
+        return `WeChat is on contact_chat | contact=${contactName} | visibleMessages=0`;
+    }
+
+    const itemText = items.map((item, index) => {
+        const parts = [
+            `${index + 1}. ${sanitizeScreenShareSummaryValue(item.side || 'other', 12)}`,
+            `type=${sanitizeScreenShareSummaryValue(item.type || 'text', 18)}`
+        ];
+        if (item.text) parts.push(`text=${sanitizeScreenShareSummaryValue(item.text, 120)}`);
+        if (item.replyPreview) parts.push(`reply=${sanitizeScreenShareSummaryValue(item.replyPreview, 80)}`);
+        return parts.join(' | ');
+    }).join(' ; ');
+
+    return `WeChat is on contact_chat | contact=${contactName} | visibleMessages=${items.length} | messages=${itemText}`;
+}
+
 window.getScreenShareAiContextMessages = function() {
     if (!window.isScreenSharing) {
         console.log('[ScreenShare Debug] skipped context build: screen share inactive');
@@ -1461,63 +2204,138 @@ window.getScreenShareAiContextMessages = function() {
     }
 
     const context = getScreenNavigationContext();
-    if (!context || context.page !== SCREEN_PAGE.ALBUM_APP) {
-        console.log('[ScreenShare Debug] skipped context build: album app not active', {
-            context
+    if (!context) {
+        console.log('[ScreenShare Debug] skipped context build: navigation context missing');
+        return null;
+    }
+
+    if (context.page === SCREEN_PAGE.ALBUM_APP) {
+        if (typeof window.getAlbumScreenShareSnapshot !== 'function') {
+            console.log('[ScreenShare Debug] skipped context build: snapshot provider missing');
+            return null;
+        }
+
+        const snapshot = window.getAlbumScreenShareSnapshot();
+        if (!snapshot) {
+            console.log('[ScreenShare Debug] skipped context build: snapshot empty');
+            return null;
+        }
+
+        const summaryText = getAlbumScreenShareSummaryText(snapshot);
+        const multimodalContent = buildAlbumScreenShareMultimodalContent(snapshot);
+        const imageUrlParts = Array.isArray(multimodalContent)
+            ? multimodalContent.filter(part => part && part.type === 'image_url')
+            : [];
+
+        console.log('[ScreenShare Debug] built album context', {
+            page: context.page,
+            view: snapshot.view || null,
+            title: snapshot.title || null,
+            activeAlbumName: snapshot.activeAlbumName || null,
+            itemCount: Array.isArray(snapshot.items) ? snapshot.items.length : 0,
+            imageUrlCount: imageUrlParts.length,
+            summaryText: summaryText || null,
+            items: Array.isArray(snapshot.items)
+                ? snapshot.items.map(item => ({
+                    position: item.position || null,
+                    kind: item.kind || null,
+                    src: normalizeScreenShareImageUrl(item.src || item.thumb || null) || null,
+                    location: item.location || null,
+                    datetime: item.datetime || null,
+                    albumName: item.albumName || null,
+                    isPrivate: item.isPrivate === true,
+                    count: typeof item.count === 'number' ? item.count : null
+                }))
+                : []
         });
-        return null;
-    }
-    if (typeof window.getAlbumScreenShareSnapshot !== 'function') {
-        console.log('[ScreenShare Debug] skipped context build: snapshot provider missing');
-        return null;
+
+        if (!summaryText && !multimodalContent) {
+            console.log('[ScreenShare Debug] skipped context build: no usable summary or multimodal content');
+            return null;
+        }
+
+        return {
+            summaryText,
+            multimodalContent
+        };
     }
 
-    const snapshot = window.getAlbumScreenShareSnapshot();
-    if (!snapshot) {
-        console.log('[ScreenShare Debug] skipped context build: snapshot empty');
-        return null;
+    if (context.page === SCREEN_PAGE.CHAT_LIST) {
+        if (typeof window.getWechatListScreenShareSnapshot !== 'function') {
+            console.log('[ScreenShare Debug] skipped context build: wechat list snapshot provider missing');
+            return null;
+        }
+
+        const snapshot = window.getWechatListScreenShareSnapshot();
+        if (!snapshot) {
+            console.log('[ScreenShare Debug] skipped context build: wechat list snapshot empty');
+            return null;
+        }
+
+        const summaryText = getWechatListScreenShareSummaryText(snapshot);
+        console.log('[ScreenShare Debug] built wechat list context', {
+            page: context.page,
+            activeTab: snapshot.activeTab || null,
+            itemCount: Array.isArray(snapshot.items) ? snapshot.items.length : 0,
+            summaryText: summaryText || null,
+            items: Array.isArray(snapshot.items) ? snapshot.items : []
+        });
+
+        if (!summaryText) {
+            console.log('[ScreenShare Debug] skipped context build: wechat list summary empty');
+            return null;
+        }
+
+        return {
+            summaryText,
+            multimodalContent: null
+        };
     }
 
-    const summaryText = getAlbumScreenShareSummaryText(snapshot);
-    const multimodalContent = buildAlbumScreenShareMultimodalContent(snapshot);
-    const imageUrlParts = Array.isArray(multimodalContent)
-        ? multimodalContent.filter(part => part && part.type === 'image_url')
-        : [];
+    if (context.page === SCREEN_PAGE.CONTACT_CHAT) {
+        if (typeof window.getWechatChatScreenShareSnapshot !== 'function') {
+            console.log('[ScreenShare Debug] skipped context build: wechat chat snapshot provider missing');
+            return null;
+        }
 
-    console.log('[ScreenShare Debug] built album context', {
-        page: context.page,
-        view: snapshot.view || null,
-        title: snapshot.title || null,
-        activeAlbumName: snapshot.activeAlbumName || null,
-        itemCount: Array.isArray(snapshot.items) ? snapshot.items.length : 0,
-        imageUrlCount: imageUrlParts.length,
-        summaryText: summaryText || null,
-        items: Array.isArray(snapshot.items)
-            ? snapshot.items.map(item => ({
-                position: item.position || null,
-                kind: item.kind || null,
-                src: item.src || item.thumb || null,
-                location: item.location || null,
-                datetime: item.datetime || null,
-                albumName: item.albumName || null,
-                count: typeof item.count === 'number' ? item.count : null
-            }))
-            : []
+        const snapshot = window.getWechatChatScreenShareSnapshot();
+        if (!snapshot) {
+            console.log('[ScreenShare Debug] skipped context build: wechat chat snapshot empty');
+            return null;
+        }
+
+        const summaryText = getWechatChatScreenShareSummaryText(snapshot);
+        console.log('[ScreenShare Debug] built wechat chat context', {
+            page: context.page,
+            contactId: snapshot.contactId || null,
+            contactName: snapshot.contactName || null,
+            itemCount: Array.isArray(snapshot.items) ? snapshot.items.length : 0,
+            summaryText: summaryText || null,
+            items: Array.isArray(snapshot.items) ? snapshot.items : []
+        });
+
+        if (!summaryText) {
+            console.log('[ScreenShare Debug] skipped context build: wechat chat summary empty');
+            return null;
+        }
+
+        return {
+            summaryText,
+            multimodalContent: null
+        };
+    }
+
+    console.log('[ScreenShare Debug] skipped context build: unsupported page', {
+        context
     });
-
-    if (!summaryText && !multimodalContent) {
-        console.log('[ScreenShare Debug] skipped context build: no usable summary or multimodal content');
-        return null;
-    }
-
-    return {
-        summaryText,
-        multimodalContent
-    };
+    return null;
 }
 
 function makeDraggable(element, handle) {
     let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    let dragStartX = 0, dragStartY = 0;
+    let hasDragged = false;
+    const dragThreshold = 6;
 
     handle.onmousedown = dragMouseDown;
     handle.ontouchstart = dragTouchStart;
@@ -1527,6 +2345,9 @@ function makeDraggable(element, handle) {
         e.preventDefault();
         pos3 = e.clientX;
         pos4 = e.clientY;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        hasDragged = false;
         document.onmouseup = closeDragElement;
         document.onmousemove = elementDrag;
     }
@@ -1535,6 +2356,9 @@ function makeDraggable(element, handle) {
         const touch = e.touches[0];
         pos3 = touch.clientX;
         pos4 = touch.clientY;
+        dragStartX = touch.clientX;
+        dragStartY = touch.clientY;
+        hasDragged = false;
         document.ontouchend = closeDragElement;
         document.ontouchmove = elementDragTouch;
     }
@@ -1546,6 +2370,10 @@ function makeDraggable(element, handle) {
         pos2 = pos4 - e.clientY;
         pos3 = e.clientX;
         pos4 = e.clientY;
+
+        if (!hasDragged && (Math.abs(e.clientX - dragStartX) > dragThreshold || Math.abs(e.clientY - dragStartY) > dragThreshold)) {
+            hasDragged = true;
+        }
 
         let newTop = element.offsetTop - pos2;
         let newLeft = element.offsetLeft - pos1;
@@ -1567,6 +2395,10 @@ function makeDraggable(element, handle) {
         pos3 = touch.clientX;
         pos4 = touch.clientY;
 
+        if (!hasDragged && (Math.abs(touch.clientX - dragStartX) > dragThreshold || Math.abs(touch.clientY - dragStartY) > dragThreshold)) {
+            hasDragged = true;
+        }
+
         let newTop = element.offsetTop - pos2;
         let newLeft = element.offsetLeft - pos1;
 
@@ -1581,6 +2413,9 @@ function makeDraggable(element, handle) {
     }
 
     function closeDragElement() {
+        if (hasDragged) {
+            element.dataset.dragSuppressClickUntil = String(Date.now() + 350);
+        }
         document.onmouseup = null;
         document.onmousemove = null;
         document.ontouchend = null;
@@ -1591,6 +2426,3 @@ function makeDraggable(element, handle) {
 if (window.appInitFunctions) {
     window.appInitFunctions.push(initScreenShare);
 }
-
-
-

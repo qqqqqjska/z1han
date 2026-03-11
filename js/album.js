@@ -518,6 +518,7 @@
             albumName: typeof album.name === 'string' ? album.name : '',
             src,
             count: Number.isFinite(Number(album.count)) ? Number(album.count) : 0,
+            isPrivate: album.isPrivate === true,
             position
         };
     }
@@ -543,8 +544,16 @@
         const pageTitle = document.getElementById('album-page-title');
         const detailOverlay = document.getElementById('album-detail-overlay');
         const photoView = document.getElementById('album-photo-detail-view');
+        const privacyPasswordModal = document.getElementById('album-privacy-password-modal');
+        const privacyPasswordTitle = document.getElementById('album-privacy-password-title');
+        const privacyPasswordDescription = document.getElementById('album-privacy-password-description');
+        const privacyPasswordInput = document.getElementById('album-privacy-password-input');
+        const privacyPasswordError = document.getElementById('album-privacy-password-error');
+        const privacyPasswordConfirm = document.getElementById('album-privacy-password-confirm');
         const isPhotoDetailOpen = !!(photoView && photoView.classList.contains('open'));
         const isAlbumDetailOpen = !!(detailOverlay && detailOverlay.classList.contains('open'));
+        const isPrivacyPasswordOpen = !!(privacyPasswordModal && privacyPasswordModal.classList.contains('open'));
+        const privacyAlbum = albumState.privacyPasswordAlbumId ? getAlbumById(albumState.privacyPasswordAlbumId) : null;
 
         const snapshot = {
             app: 'album',
@@ -552,9 +561,29 @@
             title: pageTitle ? pageTitle.textContent.trim() : 'Album',
             activeAlbumName: null,
             currentPhoto: null,
+            photoOriginView: null,
             detailSourceText: '',
+            passwordAlbumName: privacyAlbum && privacyAlbum.name ? privacyAlbum.name : null,
+            passwordMode: albumState.privacyPasswordMode || null,
+            passwordTitle: privacyPasswordTitle ? String(privacyPasswordTitle.textContent || '').trim() : '',
+            passwordDescription: privacyPasswordDescription ? String(privacyPasswordDescription.textContent || '').trim() : '',
+            passwordError: privacyPasswordError && !privacyPasswordError.classList.contains('hidden')
+                ? String(privacyPasswordError.textContent || '').trim()
+                : '',
+            passwordInputVisible: !!privacyPasswordInput,
+            passwordConfirmText: privacyPasswordConfirm ? String(privacyPasswordConfirm.textContent || '').trim() : '',
             items: []
         };
+
+        if (isPrivacyPasswordOpen) {
+            snapshot.view = 'privacy_password_modal';
+            snapshot.title = snapshot.passwordTitle || '输入相册密码';
+            snapshot.activeAlbumName = snapshot.passwordAlbumName;
+            snapshot.items = getVisibleAlbumElements('#album-albums-grid .album-card[data-album-id]')
+                .map((button, index) => buildScreenShareAlbumItem(getAlbumById(button.dataset.albumId), index + 1, getAlbumElementImageSrc(button)))
+                .filter(Boolean);
+            return snapshot;
+        }
 
         if (isPhotoDetailOpen) {
             const detailSourceText = getAlbumPhotoDetailSourceText();
@@ -570,15 +599,15 @@
             snapshot.activeAlbumName = getCurrentPhotoAlbumName();
             snapshot.detailSourceText = detailSourceText;
             snapshot.currentPhoto = currentPhoto;
-            if (currentPhoto) {
-                const currentPhotoItem = buildScreenSharePhotoItem(
-                    currentPhoto,
-                    1,
-                    currentPhoto.src,
-                    detailSourceText
-                );
-                snapshot.items = currentPhotoItem ? [currentPhotoItem] : [];
-            }
+            snapshot.photoOriginView = isAlbumDetailOpen ? 'album_detail' : 'recent_grid';
+            snapshot.items = getVisibleAlbumElements('#album-photo-thumbnails .album-photo-thumb[data-photo-id]', ALBUM_SCREEN_SHARE_MAX_ITEMS + 1)
+                .filter(button => !button.classList.contains('is-active'))
+                .map((button, index) => buildScreenSharePhotoItem(
+                    findPhotoById(button.dataset.collectionKey || albumState.currentPhotoCollectionKey, button.dataset.photoId),
+                    index + 1,
+                    getAlbumElementImageSrc(button)
+                ))
+                .filter(Boolean);
             return snapshot;
         }
 

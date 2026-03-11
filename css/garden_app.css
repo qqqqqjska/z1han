@@ -1,0 +1,630 @@
+#garden-app {
+    color: #4a5568;
+    background: linear-gradient(180deg, #fffbea 0%, #fef7ec 100%);
+}
+
+#garden-app .garden-app-header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding-left: 16px;
+    padding-right: 16px;
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.72);
+}
+
+#garden-app .garden-app-title-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+#garden-app .garden-app-title-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #fff;
+    font-size: 17px;
+    box-shadow: 0 8px 18px rgba(245, 158, 11, 0.25);
+    flex-shrink: 0;
+}
+
+#garden-app .garden-app-title-text {
+    font-size: 16px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #6b4f1d;
+}
+
+#garden-app .garden-app-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+#garden-app .garden-app-header-btn {
+    appearance: none;
+    border: none;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.86);
+    color: #8b5a2b;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 8px 20px rgba(251, 191, 36, 0.15);
+    transition: transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease;
+}
+
+#garden-app .garden-app-header-btn:active {
+    transform: scale(0.96);
+}
+
+#garden-app .garden-app-header-btn:disabled {
+    opacity: 0.4;
+    box-shadow: none;
+}
+
+#garden-app .garden-app-header-btn.is-active,
+#garden-app .garden-app-save-btn {
+    background: #fbbf24;
+    color: #fff;
+}
+
+#garden-app .garden-app-save-btn.is-saved {
+    background: #88d4ab;
+    color: #fff;
+}
+
+#garden-app .garden-app-body-shell {
+    position: absolute;
+    top: calc(44px + max(47px, env(safe-area-inset-top, 0px)));
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#garden-app .garden-app-view-stack {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#garden-app .garden-app-view {
+    position: absolute;
+    inset: 0;
+    display: none;
+}
+
+#garden-app .garden-app-view.active {
+    display: block;
+}
+
+#garden-app .garden-editor-host {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+#garden-app .garden-app-placeholder-view {
+    padding: 24px 20px 16px;
+}
+
+#garden-app .garden-placeholder-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    text-align: center;
+    padding: 28px;
+    color: #8b6b39;
+}
+
+#garden-app .garden-placeholder-card h3 {
+    margin: 0;
+    font-size: 24px;
+    color: #6b4f1d;
+}
+
+#garden-app .garden-placeholder-card p {
+    margin: 0;
+    max-width: 280px;
+    line-height: 1.6;
+    font-size: 14px;
+    color: #8f7a54;
+}
+
+#garden-app .garden-placeholder-icon {
+    width: 84px;
+    height: 84px;
+    border-radius: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.24), rgba(255, 187, 166, 0.32));
+    box-shadow: 0 18px 34px rgba(251, 191, 36, 0.16);
+}
+
+#garden-app .garden-bottom-nav {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    align-items: stretch;
+    padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: rgba(255, 255, 255, 0.84);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-top: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+#garden-app .garden-bottom-nav-btn {
+    appearance: none;
+    border: none;
+    background: transparent;
+    border-radius: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 58px;
+    color: #a07a38;
+    font-size: 11px;
+    font-weight: 700;
+    transition: color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+}
+
+#garden-app .garden-bottom-nav-btn i {
+    font-size: 18px;
+}
+
+#garden-app .garden-bottom-nav-btn.active {
+    color: #fff;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    box-shadow: 0 12px 26px rgba(251, 191, 36, 0.22);
+}
+
+#garden-app .garden-bottom-nav-btn:active {
+    transform: scale(0.97);
+}
+
+@media (max-width: 420px) {
+    #garden-app .garden-app-title-text {
+        font-size: 15px;
+    }
+
+    #garden-app .garden-app-header-btn {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    #garden-app .garden-app-header-btn span {
+        display: none;
+    }
+}
+
+#garden-app .garden-flora-screen {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(18px) scale(0.985);
+    transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
+#garden-app .garden-flora-screen.is-open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+}
+
+#garden-app .garden-flora-app {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #f0f8f6;
+    background-image:
+        radial-gradient(circle at 50% 0%, rgba(52, 199, 89, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 100% 100%, rgba(0, 150, 136, 0.08) 0%, transparent 40%);
+    transition: background 0.8s ease;
+}
+
+#garden-app .garden-flora-app.garden-flora-bg-withering {
+    background: #fdfaf2;
+}
+
+#garden-app .garden-flora-app.garden-flora-bg-withered {
+    background: #f4f1ee;
+}
+
+#garden-app .garden-flora-app.garden-flora-bg-blooming {
+    background: #fff5f8;
+}
+
+#garden-app .garden-flora-header-nav {
+    padding: calc(10px + max(44px, env(safe-area-inset-top, 0px))) 24px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+#garden-app .garden-flora-icon-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #1d1d1f;
+    font-size: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    flex-shrink: 0;
+}
+
+#garden-app button.garden-flora-icon-btn {
+    appearance: none;
+    cursor: pointer;
+}
+
+#garden-app button.garden-flora-icon-btn:active {
+    transform: scale(0.96);
+    opacity: 0.85;
+}
+
+#garden-app .garden-flora-brand {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.8px;
+    color: #00695c;
+}
+
+#garden-app .garden-flora-stage {
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 10px;
+    animation: gardenFloraFadeIn 1s ease forwards;
+}
+
+#garden-app .garden-flora-state-toggle {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 4px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    z-index: 10;
+}
+
+#garden-app .garden-flora-toggle-btn {
+    appearance: none;
+    border: none;
+    background: transparent;
+    padding: 8px 14px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #8e8e93;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#garden-app .garden-flora-toggle-btn.is-active {
+    background: #fff;
+    color: #111;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+#garden-app .garden-flora-art-plant {
+    position: relative;
+    width: 200px;
+    height: 250px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    margin-bottom: 20px;
+}
+
+#garden-app .garden-flora-art-pot {
+    width: 120px;
+    height: 90px;
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 12px 12px 40px 40px;
+    position: relative;
+    z-index: 5;
+    box-shadow: 0 20px 40px rgba(0, 100, 50, 0.05), inset 0 0 20px rgba(255, 255, 255, 0.5);
+    display: flex;
+    justify-content: center;
+    transition: all 0.8s ease;
+}
+
+#garden-app .garden-flora-art-pot::after {
+    content: '';
+    position: absolute;
+    top: 10px;
+    width: 90%;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 2px;
+}
+
+#garden-app .garden-flora-art-stem,
+#garden-app .garden-flora-art-leaf,
+#garden-app .garden-flora-art-flower {
+    transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+#garden-app .garden-flora-art-stem {
+    position: absolute;
+    bottom: 70px;
+    left: 50%;
+    margin-left: -3px;
+    width: 6px;
+    height: 140px;
+    background: linear-gradient(to top, #81c784, #aed581);
+    border-radius: 4px;
+    z-index: 1;
+    transform-origin: bottom center;
+}
+
+#garden-app .garden-flora-art-leaf {
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, rgba(168, 224, 99, 0.9), rgba(76, 175, 80, 0.8));
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    z-index: 2;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+    transform: rotate(var(--rot));
+}
+
+#garden-app .garden-flora-l1,
+#garden-app .garden-flora-l3 {
+    left: 50%;
+    transform-origin: bottom right;
+    border-radius: 0 40px 0 40px;
+}
+
+#garden-app .garden-flora-l2,
+#garden-app .garden-flora-l4 {
+    left: 50%;
+    transform-origin: bottom left;
+    border-radius: 40px 0 40px 0;
+}
+
+#garden-app .garden-flora-l1 { bottom: 110px; margin-left: -60px; --rot: -20deg; }
+#garden-app .garden-flora-l2 { bottom: 130px; margin-left: 0; --rot: 20deg; }
+#garden-app .garden-flora-l3 { bottom: 160px; margin-left: -45px; width: 45px; height: 45px; --rot: -10deg; }
+#garden-app .garden-flora-l4 { bottom: 180px; margin-left: 0; width: 35px; height: 35px; --rot: 10deg; }
+
+#garden-app .garden-flora-art-flower {
+    position: absolute;
+    bottom: 205px;
+    left: 50%;
+    margin-left: -15px;
+    width: 30px;
+    height: 30px;
+    background: #ff4081;
+    border-radius: 50%;
+    z-index: 4;
+    transform: scale(0);
+    opacity: 0;
+    box-shadow:
+        15px 0 0 -2px #ff4081,
+        -15px 0 0 -2px #ff4081,
+        0 15px 0 -2px #ff4081,
+        0 -15px 0 -2px #ff4081,
+        inset 0 0 10px #c2185b;
+}
+
+#garden-app .garden-flora-art-flower::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    background: #ffeb3b;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: inset 0 0 5px #fbc02d;
+}
+
+#garden-app .garden-flora-art-plant.garden-flora-state-blooming .garden-flora-art-leaf {
+    background: linear-gradient(135deg, rgba(168, 224, 99, 1), rgba(67, 160, 71, 0.9));
+}
+
+#garden-app .garden-flora-art-plant.garden-flora-state-blooming .garden-flora-art-flower {
+    transform: scale(1);
+    opacity: 1;
+}
+
+#garden-app .garden-flora-art-plant.garden-flora-state-blooming .garden-flora-l1 { --rot: -10deg; }
+#garden-app .garden-flora-art-plant.garden-flora-state-blooming .garden-flora-l2 { --rot: 10deg; }
+#garden-app .garden-flora-art-plant.garden-flora-state-blooming .garden-flora-l3 { --rot: -5deg; }
+#garden-app .garden-flora-art-plant.garden-flora-state-blooming .garden-flora-l4 { --rot: 5deg; }
+
+#garden-app .garden-flora-art-plant.garden-flora-state-withering .garden-flora-art-stem {
+    background: linear-gradient(to top, #bcaaa4, #dce775);
+}
+
+#garden-app .garden-flora-art-plant.garden-flora-state-withering .garden-flora-art-leaf {
+    background: linear-gradient(135deg, rgba(220, 231, 117, 0.9), rgba(192, 202, 51, 0.8));
+}
+
+#garden-app .garden-flora-art-plant.garden-flora-state-withering .garden-flora-l1 { --rot: -50deg; }
+#garden-app .garden-flora-art-plant.garden-flora-state-withering .garden-flora-l2 { --rot: 50deg; }
+#garden-app .garden-flora-art-plant.garden-flora-state-withering .garden-flora-l3 { --rot: -45deg; }
+#garden-app .garden-flora-art-plant.garden-flora-state-withering .garden-flora-l4 { --rot: 45deg; }
+
+#garden-app .garden-flora-art-plant.garden-flora-state-withered .garden-flora-art-stem {
+    background: linear-gradient(to top, #8d6e63, #a1887f);
+}
+
+#garden-app .garden-flora-art-plant.garden-flora-state-withered .garden-flora-art-leaf {
+    background: linear-gradient(135deg, rgba(161, 136, 127, 0.9), rgba(141, 110, 99, 0.8));
+}
+
+#garden-app .garden-flora-art-plant.garden-flora-state-withered .garden-flora-l1 { --rot: -80deg; }
+#garden-app .garden-flora-art-plant.garden-flora-state-withered .garden-flora-l2 { --rot: 80deg; }
+#garden-app .garden-flora-art-plant.garden-flora-state-withered .garden-flora-l3 { --rot: -75deg; }
+#garden-app .garden-flora-art-plant.garden-flora-state-withered .garden-flora-l4 { --rot: 75deg; }
+
+#garden-app .garden-flora-particle-system {
+    position: absolute;
+    top: -40px;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    transition: opacity 0.5s ease;
+}
+
+#garden-app .garden-flora-particle {
+    position: absolute;
+    font-size: 20px;
+    opacity: 0;
+    animation: gardenFloraRise 4s ease-in-out infinite;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+}
+
+#garden-app .garden-flora-log-container {
+    background: #fff;
+    border-radius: 32px 32px 0 0;
+    padding: 30px 24px calc(30px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.03);
+    flex-shrink: 0;
+    animation: gardenFloraSlideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+    opacity: 0;
+    transform: translateY(40px);
+}
+
+#garden-app .garden-flora-log-indicator {
+    width: 40px;
+    height: 4px;
+    background: #e5e5ea;
+    border-radius: 2px;
+    margin: 0 auto 24px;
+}
+
+#garden-app .garden-flora-typographic-header {
+    margin-bottom: 20px;
+}
+
+#garden-app .garden-flora-typo-eng {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: #86868b;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+#garden-app .garden-flora-typo-zh {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 800;
+    color: #1d1d1f;
+    letter-spacing: -0.5px;
+}
+
+#garden-app .garden-flora-msg {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+#garden-app .garden-flora-msg-time {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    color: #86868b;
+    padding-top: 4px;
+    width: 48px;
+    flex-shrink: 0;
+}
+
+#garden-app .garden-flora-msg-bubble {
+    background: #f5f5f7;
+    padding: 14px 16px;
+    border-radius: 0 16px 16px 16px;
+    font-size: 14px;
+    color: #333;
+    line-height: 1.55;
+    position: relative;
+    flex: 1;
+}
+
+#garden-app .garden-flora-msg-bubble i {
+    margin-right: 8px;
+}
+
+#garden-app .garden-flora-msg-bubble.is-positive {
+    background: rgba(52, 199, 89, 0.1);
+    color: #1b5e20;
+}
+
+#garden-app .garden-flora-msg-bubble.is-negative {
+    background: rgba(255, 59, 48, 0.08);
+    color: #c62828;
+}
+
+@keyframes gardenFloraSlideUpFade {
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes gardenFloraFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes gardenFloraRise {
+    0% { transform: translateY(30px) scale(0.8); opacity: 0; }
+    20% { opacity: 1; }
+    70% { opacity: 1; transform: translateY(-60px) scale(1.2); }
+    100% { transform: translateY(-80px) scale(1); opacity: 0; }
+}

@@ -46,6 +46,14 @@ function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type 
 
         saveConfig();
 
+        if (type === 'text' && window.WhisperChallenge && typeof window.WhisperChallenge.checkAiMessage === 'function') {
+            window.WhisperChallenge.checkAiMessage(text, {
+                contactId,
+                contactName: contact ? (contact.remark || contact.name || '') : '',
+                type
+            });
+        }
+
         if (window.syncToFloatingChat && window.isScreenSharing) {
             console.log('[ScreenShare Debug] sync assistant reply to floating', {
                 contactId,
@@ -98,7 +106,7 @@ function handleRegenerateReply() {
         renderChatHistory(window.iphoneSimState.currentChatContactId);
     }
     
-    generateAiReply('请严格遵守JSON格式输出。如果开启了心声(thought)，必须先输出心声（角色的心理活动）。请务必将长回复拆分为多条短消息。');
+    generateAiReply('请基于当前协议重新生成上一轮回复：保持人设、自然聊天感和正确 JSON 格式；如果已开启显示心声，仍需先输出 thought_state；避免重复上一版的不自然表达。');
 }
 
 function handleTransfer() {
@@ -1535,6 +1543,86 @@ async function summarizeVoiceCall(contactId, startIndex) {
 
     showNotification('正在总结通话...');
 
+    let summary = '';
+    let structuredPayload = null;
+    try {
+        if (typeof window.generateChannelNaturalSummary !== 'function') {
+            throw new Error('summary helper unavailable');
+        }
+        const generated = await window.generateChannelNaturalSummary(contact, callTextMessages, {
+            channel: 'call',
+            source: 'call_summary',
+            rangeLabel: '语音通话',
+            detailModeHint: '当前是通话总结，重点写通话中的确认点、未决点与下一次确认时点。',
+            summaryPromptMode: 'manual',
+            rangeLabel: '语音通话',
+            detailModeHint: '',
+            totalMessageCount,
+            sourceMessageCount: totalMessageCount,
+            rangeOverride: Object.assign({}, lengthRange, { maxTokens: 900 }),
+            settings
+        });
+        summary = String(generated && generated.summary || '').trim();
+        if (!summary) throw new Error('empty summary');
+    } catch (error) {
+        console.error('通话总结失败:', error);
+        const rawRecord = callTextMessages
+            .slice(0, 14)
+            .map(msg => `${msg.role === 'user' ? userName : contactLabel}: ${msg.content}`)
+            .join('；');
+        summary = rawRecord ? `【通话原始记录】${rawRecord}` : '';
+        if (!summary) {
+            showNotification('总结出错', 2000, 'error');
+            return;
+        }
+        showNotification('AI总结失败，已使用原始记录兜底', 2000, 'warning');
+    }
+
+    if (summary && summary !== '无' && summary !== '无。') {
+        const summaryTitle = typeof buildMemoryDisplayTitle === 'function'
+            ? buildMemoryDisplayTitle({
+                title: '',
+                content: summary,
+                structuredSummary: structuredPayload,
+                memoryTags: ['short_term']
+            })
+            : '';
+        const memoryContent = `【通话回忆】${summary}`;
+        if (typeof window.createMemoryCandidate === 'function') {
+            const created = window.createMemoryCandidate(contact.id, {
+                title: summaryTitle,
+                content: memoryContent,
+                suggestedTags: ['short_term'],
+                source: 'call_summary',
+                confidence: 0.8,
+                range: '语音通话',
+                reason: '语音通话总结'
+            });
+            saveConfig();
+            if (created && created.status === 'pending') {
+                showNotification('通话总结已加入待确认', 2000, 'success');
+            } else if (created) {
+                showNotification('通话总结完成', 2000, 'success');
+            } else {
+                showNotification('手动模式：未自动写入记忆', 2200);
+            }
+        } else {
+            window.iphoneSimState.memories.push({
+                id: Date.now(),
+                contactId: contact.id,
+                content: memoryContent,
+                time: Date.now(),
+                range: '语音通话'
+            });
+            saveConfig();
+            showNotification('通话总结完成', 2000, 'success');
+        }
+        console.log('通话总结完成:', summary);
+    }
+
+    return;
+
+    if (false) {
     const now = new Date();
     const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
@@ -1668,6 +1756,7 @@ async function summarizeVoiceCall(contactId, startIndex) {
     } catch (error) {
         console.error('通话总结失败:', error);
         showNotification('总结出错', 2000, 'error');
+    }
     }
 }
 
@@ -4898,10 +4987,10 @@ function checkActiveReplies() {
             
             if (lastMsg.role === 'user') {
                 // User sent last message, AI is replying late
-                activeInstruction = `（系统提示：主动发消息模式触发。距离用户上一条消息已过去 ${minutesPassed} 分钟。请回复用户的消息。你可以顺便解释一下为什么回复晚了，或者直接自然地继续话题。）`;
+                activeInstruction = `（系统提示：主动发消息模式触发。距离用户上一条消息已过去 ${minutesPassed} 分钟。请在不打断人设的前提下自然接住对方刚才的话；可以轻描淡写解释回复稍晚，也可以直接顺着话题继续。）`;
             } else {
                 // AI sent last message, User didn't reply
-                activeInstruction = `（系统提示：主动发消息模式触发。距离你上一条消息已过去 ${minutesPassed} 分钟，用户一直没有回复。请主动发起一条新消息，可以是对上一条的补充，或者是开启新话题，或者是分享当下的心情/状态。请保持自然，不要暴露你是AI。）`;
+                activeInstruction = `（系统提示：主动发消息模式触发。距离你上一条消息已过去 ${minutesPassed} 分钟，用户一直没有回复。请像真人间隔一阵后自然续聊：可以补一句、换个轻话题，或分享当下状态/见闻；不要写成系统通知或任务播报。）`;
             }
 
             generateAiReply(activeInstruction, contact.id);

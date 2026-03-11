@@ -27,7 +27,9 @@
     <link rel="manifest" href="manifest.json">
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&display=swap">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/whisper_challenge_palette.css">
     <link rel="stylesheet" href="css/chat_tail_style.css">
     <link rel="stylesheet" href="css/image_refresh.css">
     <link rel="stylesheet" href="css/forum_style.css">
@@ -45,6 +47,8 @@
     <link rel="stylesheet" href="css/album.css">
     <link rel="stylesheet" href="css/chat_ui_v1_overrides.css">
     <link rel="stylesheet" href="css/screen_share.css">
+    <link rel="stylesheet" href="css/calendar_app.css">
+    <link rel="stylesheet" href="css/garden_app.css?v=4">
 </head>
 <body>
     <div class="screen-container" id="screen-container">
@@ -58,16 +62,15 @@
             
             <div id="floating-chat-window">
                 <div class="fc-header">
-                    <div class="fc-title"><i class="fas fa-comment-dots"></i> 聊天</div>
+                    <div class="fc-title"><i class="fas fa-comment-dots"></i> <span id="fc-title-text">聊天</span></div>
                     <div class="fc-controls">
                         <button id="fc-minimize-btn" class="fc-btn"><i class="fas fa-window-minimize"></i></button>
                     </div>
                 </div>
                 <div id="fc-body" class="fc-body"></div>
                 <div class="fc-input-area">
-                    <input type="text" id="fc-input" class="fc-input" placeholder="输入消息...">
-                    <button id="fc-reply-btn" class="fc-reply-btn" title="生成回复"><i class="fas fa-robot"></i></button>
-                    <button id="fc-send-btn" class="fc-send-btn" title="发送消息"><i class="fas fa-arrow-up"></i></button>
+                    <input type="text" id="fc-input" class="fc-input" placeholder="按回车发送消息...">
+                    <button id="fc-send-btn" class="fc-send-btn" title="生成回复"><i class="fas fa-arrow-up"></i></button>
                 </div>
             </div>
         </div>
@@ -884,6 +887,15 @@
                                     </label>
                                 </div>
                             </div>
+                            <div class="list-item">
+                                <div class="list-content">
+                                    <label>知晓节假日与日程</label>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="chat-setting-calendar-aware">
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="section-title">语音合成 (TTS)</div>
@@ -1528,9 +1540,140 @@
                     </div>
                 </div>
             </div>
+
         </div>
 
-        <!-- AI 资料卡全屏页 -->
+        <div id="garden-app" class="app-screen hidden" style="z-index: 185; background-color: #fefce8;">
+            <div class="app-header garden-app-header">
+                <button id="close-garden-app" class="back-btn"><i class="fas fa-chevron-left"></i> 返回</button>
+                <div class="garden-app-title-wrap">
+                    <div class="garden-app-title-avatar">🐾</div>
+                    <div class="garden-app-title-text">萌宠相伴的家</div>
+                </div>
+                <div class="garden-app-header-actions">
+                    <button id="garden-toggle-panel-btn" class="garden-app-header-btn" type="button">
+                        <i class="fas fa-couch"></i>
+                        <span>家具</span>
+                    </button>
+                    <button id="garden-save-btn" class="garden-app-header-btn garden-app-save-btn" type="button">
+                        <i class="fas fa-check"></i>
+                        <span>保存</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="garden-app-body-shell">
+                <div class="garden-app-view-stack">
+                    <section class="garden-app-view active" data-garden-view="home">
+                        <div id="garden-editor-host" class="garden-editor-host"></div>
+                    </section>
+
+                    <section class="garden-app-view garden-app-placeholder-view" data-garden-view="inventory">
+                        <div class="garden-placeholder-card">
+                            <div class="garden-placeholder-icon"><i class="fas fa-box-open"></i></div>
+                            <h3>仓库</h3>
+                            <p>家园仓库正在整理中，后续会把已拥有的家具和主题都放到这里。</p>
+                        </div>
+                    </section>
+
+                    <section class="garden-app-view garden-app-placeholder-view" data-garden-view="gallery">
+                        <div class="garden-placeholder-card">
+                            <div class="garden-placeholder-icon"><i class="fas fa-images"></i></div>
+                            <h3>图鉴</h3>
+                            <p>图鉴页先保留占位，后续可以扩展为家具图鉴、宠物图鉴或布置灵感页。</p>
+                        </div>
+                    </section>
+
+                    <section class="garden-app-view garden-app-placeholder-view" data-garden-view="profile">
+                        <div class="garden-placeholder-card">
+                            <div class="garden-placeholder-icon"><i class="fas fa-user"></i></div>
+                            <h3>我的</h3>
+                            <p>个人页稍后补充，这里会预留给家园资料、成就和偏好设置。</p>
+                        </div>
+                    </section>
+                </div>
+
+                <nav class="garden-bottom-nav" aria-label="家园底部导航">
+                    <button class="garden-bottom-nav-btn active" data-garden-view="home" type="button">
+                        <i class="fas fa-house"></i>
+                        <span>家园</span>
+                    </button>
+                    <button class="garden-bottom-nav-btn" data-garden-view="inventory" type="button">
+                        <i class="fas fa-box"></i>
+                        <span>仓库</span>
+                    </button>
+                    <button class="garden-bottom-nav-btn" data-garden-view="gallery" type="button">
+                        <i class="fas fa-book-open"></i>
+                        <span>图鉴</span>
+                    </button>
+                    <button class="garden-bottom-nav-btn" data-garden-view="profile" type="button">
+                        <i class="fas fa-user"></i>
+                        <span>我的</span>
+                    </button>
+                </nav>
+            </div>
+            <div id="garden-flora-screen" class="garden-flora-screen" aria-hidden="true">
+                <div id="garden-flora-app" class="garden-flora-app garden-flora-bg-healthy">
+                    <div class="garden-flora-header-nav">
+                        <button id="garden-flora-back" class="garden-flora-icon-btn" type="button" aria-label="&#36820;&#22238;&#23478;&#22253;">
+                            <i class="ph ph-caret-left"></i>
+                        </button>
+                        <div class="garden-flora-brand">BOTANICAL</div>
+                        <div class="garden-flora-icon-btn" aria-hidden="true">
+                            <i class="ph ph-plant"></i>
+                        </div>
+                    </div>
+
+                    <div class="garden-flora-stage">
+                        <div class="garden-flora-state-toggle" aria-label="&#32511;&#26893;&#29366;&#24577;&#20999;&#25442;">
+                            <button class="garden-flora-toggle-btn" data-flora-state="blooming" type="button">&#30427;&#24320;</button>
+                            <button class="garden-flora-toggle-btn is-active" data-flora-state="healthy" type="button">&#20581;&#24247;</button>
+                            <button class="garden-flora-toggle-btn" data-flora-state="withering" type="button">&#32570;&#27700;</button>
+                            <button class="garden-flora-toggle-btn" data-flora-state="withered" type="button">&#26543;&#33806;</button>
+                        </div>
+
+                        <div id="garden-flora-art-plant" class="garden-flora-art-plant garden-flora-state-healthy">
+                            <div id="garden-flora-particles" class="garden-flora-particle-system">
+                                <div class="garden-flora-particle" style="left: 20%; animation-delay: 0s;">&#10024;</div>
+                                <div class="garden-flora-particle" style="left: 70%; animation-delay: 1.5s;">&#127807;</div>
+                                <div class="garden-flora-particle" style="left: 45%; animation-delay: 0.8s;">&#127793;</div>
+                            </div>
+                            <div class="garden-flora-art-flower"></div>
+                            <div class="garden-flora-art-leaf garden-flora-l1"></div>
+                            <div class="garden-flora-art-leaf garden-flora-l2"></div>
+                            <div class="garden-flora-art-leaf garden-flora-l3"></div>
+                            <div class="garden-flora-art-leaf garden-flora-l4"></div>
+                            <div class="garden-flora-art-stem"></div>
+                            <div class="garden-flora-art-pot"></div>
+                        </div>
+                    </div>
+
+                    <div class="garden-flora-log-container">
+                        <div class="garden-flora-log-indicator"></div>
+
+                        <div class="garden-flora-typographic-header">
+                            <div class="garden-flora-typo-eng">Care Journal</div>
+                            <h2 class="garden-flora-typo-zh">&#20859;&#25252;&#26085;&#35760;</h2>
+                        </div>
+
+                        <div id="garden-flora-log-content">
+                            <div class="garden-flora-msg">
+                                <div class="garden-flora-msg-time">10:42</div>
+                                <div class="garden-flora-msg-bubble is-positive">
+                                    <i class="ph-fill ph-smiley"></i>TA &#21018;&#21018;&#22238;&#20102;&#20320;&#19968;&#21477;&#8220;&#21704;&#21704;&#21704;&#21704;&#8221;&#65292;&#32511;&#26893;&#21560;&#25910;&#21040;&#20102;&#24555;&#20048;&#20859;&#20998;&#12290;
+                                </div>
+                            </div>
+                            <div class="garden-flora-msg">
+                                <div class="garden-flora-msg-time">09:15</div>
+                                <div class="garden-flora-msg-bubble">
+                                    <i class="ph-fill ph-cloud-rain" style="color: #5ac8fa;"></i>&#20170;&#22825;&#35760;&#24471;&#20063;&#26469;&#27975;&#27975;&#27700;&#65292;&#38506;&#23427;&#35828;&#35828;&#35805;&#12290;
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         <div id="ai-profile-screen" class="sub-screen hidden" style="z-index: 170; background-color: #fff;">
             <div class="app-header transparent-header" id="ai-profile-header">
                 <button id="close-ai-profile" class="back-btn" style="color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.5);"><i class="fas fa-chevron-left"></i></button>
@@ -4227,6 +4370,184 @@
         </div>
     </div>
 
+    <!-- Calendar App -->
+    <div id="calendar-app" class="app-screen hidden" style="z-index: 250;">
+        <div class="calendar-v1-shell">
+            <div class="calendar-v1-top-bar">
+                <div class="calendar-v1-leading">
+                    <button id="calendar-v1-back-btn" class="calendar-v1-back-btn" type="button" aria-label="Back">
+                        <i class="ri-arrow-left-s-line"></i>
+                    </button>
+                    <button id="calendar-v1-date-trigger" class="calendar-v1-date-trigger" type="button">
+                        <div class="calendar-v1-date-info">
+                            <h1 id="calendar-v1-page-title">Today</h1>
+                            <p id="calendar-v1-page-subtitle">October 24, 2026</p>
+                        </div>
+                    </button>
+                </div>
+                <button id="calendar-v1-header-action-btn" class="calendar-v1-user-avatar" type="button" aria-label="课表功能">
+                    <i id="calendar-v1-header-action-icon" class="ri-user-smile-line"></i>
+                </button>
+            </div>
+
+            <div class="calendar-v1-views-wrapper">
+                <div class="calendar-v1-view active" id="calendar-v1-view-calendar">
+                    <div id="calendar-v1-month-card" class="calendar-v1-glass-card calendar-v1-month-card">
+                        <div class="calendar-v1-weekdays">
+                            <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+                        </div>
+                        <div id="calendar-v1-days" class="calendar-v1-days"></div>
+                    </div>
+
+                    <div class="calendar-v1-section-title">
+                        <span>Upcoming</span>
+                        <button id="calendar-v1-event-add-btn" class="calendar-v1-section-action" type="button" aria-label="Add event">
+                            <i class="ri-more-fill"></i>
+                        </button>
+                    </div>
+                    <div id="calendar-v1-upcoming-list" class="calendar-v1-upcoming-list"></div>
+
+                    <div style="height: 100px;"></div>
+                </div>
+
+                <div class="calendar-v1-view" id="calendar-v1-view-schedule">
+                    <div class="calendar-v1-schedule-container">
+                        <div class="calendar-v1-glass-card" style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <span id="calendar-v1-schedule-week-label" style="font-weight: 600; font-size: 14px;">第 1 周</span>
+                            <div style="display: flex; gap: 10px;">
+                                <button id="calendar-v1-schedule-prev-week" class="calendar-v1-month-sheet-nav" type="button" aria-label="上一周">
+                                    <i class="ri-arrow-left-s-line"></i>
+                                </button>
+                                <button id="calendar-v1-schedule-next-week" class="calendar-v1-month-sheet-nav" type="button" aria-label="下一周">
+                                    <i class="ri-arrow-right-s-line"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="calendar-v1-glass-card" style="padding: 15px 10px;">
+                            <div id="calendar-v1-schedule-meta" class="calendar-v1-empty-state" style="margin-bottom: 14px; text-align: left;">
+                                还没导入课表哦，点右上角按钮把 JSON 课表塞进来吧～
+                            </div>
+                            <div class="calendar-v1-tt-wrapper">
+                                <div class="calendar-v1-timetable">
+                                    <div class="calendar-v1-tt-header">
+                                        <div class="calendar-v1-tt-corner"></div>
+                                        <div id="calendar-v1-tt-days" class="calendar-v1-tt-days"></div>
+                                    </div>
+
+                                    <div class="calendar-v1-tt-body">
+                                        <div id="calendar-v1-tt-times" class="calendar-v1-tt-times"></div>
+                                        <div id="calendar-v1-tt-grid" class="calendar-v1-tt-grid"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <input type="file" id="calendar-v1-schedule-import-input" accept=".json,application/json" class="file-input-hidden">
+
+            <div class="calendar-v1-bottom-nav-container">
+                <div class="calendar-v1-bottom-nav">
+                    <button class="calendar-v1-nav-item active" type="button" data-target="calendar-v1-view-calendar" aria-label="Calendar">
+                        <i class="ri-calendar-line"></i>
+                    </button>
+                    <button class="calendar-v1-nav-item" type="button" data-target="calendar-v1-view-schedule" aria-label="Schedule">
+                        <i class="ri-book-open-line"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div id="calendar-v1-month-sheet" class="calendar-v1-month-sheet" aria-hidden="true">
+                <button id="calendar-v1-month-sheet-backdrop" class="calendar-v1-month-sheet-backdrop" type="button" aria-label="Close month picker"></button>
+                <div class="calendar-v1-month-sheet-panel">
+                    <div class="calendar-v1-month-sheet-handle"></div>
+                    <div class="calendar-v1-month-sheet-header">
+                        <button id="calendar-v1-month-prev-year" class="calendar-v1-month-sheet-nav" type="button" aria-label="Previous year">
+                            <i class="ri-arrow-left-s-line"></i>
+                        </button>
+                        <div id="calendar-v1-month-sheet-year" class="calendar-v1-month-sheet-year">2026</div>
+                        <button id="calendar-v1-month-next-year" class="calendar-v1-month-sheet-nav" type="button" aria-label="Next year">
+                            <i class="ri-arrow-right-s-line"></i>
+                        </button>
+                    </div>
+                    <div id="calendar-v1-month-sheet-grid" class="calendar-v1-month-sheet-grid"></div>
+                    <div class="calendar-v1-month-sheet-actions">
+                        <button id="calendar-v1-month-back-today" class="calendar-v1-month-sheet-action primary" type="button">Back to Today</button>
+                        <button id="calendar-v1-month-sheet-cancel" class="calendar-v1-month-sheet-action" type="button">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="calendar-v1-event-sheet" class="calendar-v1-event-sheet" aria-hidden="true">
+                <button id="calendar-v1-event-sheet-backdrop" class="calendar-v1-event-sheet-backdrop" type="button" aria-label="关闭弹窗"></button>
+                <div class="calendar-v1-event-sheet-panel">
+                    <div class="calendar-v1-event-sheet-handle"></div>
+                    <div class="calendar-v1-event-sheet-header">
+                        <div>
+                            <div id="calendar-v1-event-sheet-title" class="calendar-v1-event-sheet-title">新建安排</div>
+                            <div id="calendar-v1-event-sheet-subtitle" class="calendar-v1-event-sheet-subtitle">March 5, 2026</div>
+                        </div>
+                        <button id="calendar-v1-event-sheet-close" class="calendar-v1-event-sheet-close" type="button" aria-label="关闭弹窗">
+                            <i class="ri-close-line"></i>
+                        </button>
+                    </div>
+
+                    <form id="calendar-v1-event-form" class="calendar-v1-event-form">
+                        <div class="calendar-v1-event-field">
+                            <label class="calendar-v1-event-label" for="calendar-v1-event-title-input">要做啥</label>
+                            <input id="calendar-v1-event-title-input" class="calendar-v1-event-input" type="text" maxlength="80" placeholder="写点安排吧～">
+                        </div>
+
+                        <div class="calendar-v1-event-field">
+                            <label class="calendar-v1-event-label" for="calendar-v1-event-location-input">地点 / 备注</label>
+                            <input id="calendar-v1-event-location-input" class="calendar-v1-event-input" type="text" maxlength="120" placeholder="比如会议室、咖啡店，或者随手记一句">
+                        </div>
+
+                        <div class="calendar-v1-event-switch-row">
+                            <div>
+                                <div class="calendar-v1-event-label" style="margin-bottom: 2px;">全天</div>
+                                <div class="calendar-v1-event-sheet-subtitle">这是全天的事，不用填时间啦～</div>
+                            </div>
+                            <input id="calendar-v1-event-all-day-input" class="calendar-v1-event-switch" type="checkbox">
+                        </div>
+
+                        <div id="calendar-v1-event-time-field" class="calendar-v1-event-field">
+                            <label class="calendar-v1-event-label" for="calendar-v1-event-time-input">几点</label>
+                            <input id="calendar-v1-event-time-input" class="calendar-v1-event-input" type="time">
+                        </div>
+
+                        <div id="calendar-v1-event-form-error" class="calendar-v1-event-form-error"></div>
+
+                        <div class="calendar-v1-event-sheet-actions">
+                            <button id="calendar-v1-event-delete-btn" class="calendar-v1-event-sheet-action danger" type="button">删掉</button>
+                            <button id="calendar-v1-event-cancel-btn" class="calendar-v1-event-sheet-action" type="button">先不填</button>
+                            <button id="calendar-v1-event-save-btn" class="calendar-v1-event-sheet-action primary" type="submit">保存一下</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div id="calendar-v1-course-sheet" class="calendar-v1-course-sheet" aria-hidden="true">
+                <button id="calendar-v1-course-sheet-backdrop" class="calendar-v1-course-sheet-backdrop" type="button" aria-label="关闭课程详情"></button>
+                <div class="calendar-v1-course-sheet-panel">
+                    <div class="calendar-v1-course-sheet-handle"></div>
+                    <div class="calendar-v1-course-sheet-header">
+                        <div>
+                            <div id="calendar-v1-course-sheet-title" class="calendar-v1-course-sheet-title">课程详情</div>
+                            <div id="calendar-v1-course-sheet-subtitle" class="calendar-v1-course-sheet-subtitle">点开看看今天上啥课</div>
+                        </div>
+                        <button id="calendar-v1-course-sheet-close" class="calendar-v1-course-sheet-close" type="button" aria-label="关闭课程详情">
+                            <i class="ri-close-line"></i>
+                        </button>
+                    </div>
+                    <div id="calendar-v1-course-sheet-body" class="calendar-v1-course-sheet-body"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- iCity Stranger Profile Screen -->
     <div id="icity-stranger-profile-screen" class="app-screen hidden" style="background-color: #fff; z-index: 250;">
         <div class="app-header" style="position: absolute; top: 0; left: 0; width: 100%; z-index: 10; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; border: none; justify-content: space-between; padding-left: 10px; padding-right: 10px; padding-top: max(10px, env(safe-area-inset-top)); pointer-events: none;">
@@ -6394,6 +6715,111 @@
         </div>
     </div>
 
+    <div id="whisper-challenge-app" class="app-screen hidden whisper-ui-app-shell">
+        <div class="whisper-ui-app">
+            <div class="whisper-ui-header-nav">
+                <button id="whisper-challenge-back" class="whisper-ui-icon-btn" aria-label="返回主屏幕">
+                    <i class="ph ph-caret-left"></i>
+                </button>
+                <button id="whisper-challenge-restart" class="whisper-ui-icon-btn" aria-label="重开当前挑战">
+                    <i class="ph ph-arrow-clockwise"></i>
+                </button>
+            </div>
+
+            <div class="whisper-ui-body">
+                <div class="whisper-ui-typographic-header">
+                    <div class="whisper-ui-typo-eng">Whisper Game</div>
+                    <h1 class="whisper-ui-typo-zh">✧ 秘密小测试 ✧</h1>
+                </div>
+
+                <div class="whisper-ui-glass-card whisper-ui-mission-card">
+                    <div class="whisper-ui-card-top">
+                        <div id="whisper-challenge-mission-code" class="whisper-ui-tag-pill">MISSION 001</div>
+                        <div id="whisper-challenge-status-pill" class="whisper-ui-status-pill is-idle">未开始</div>
+                    </div>
+
+                    <div id="whisper-challenge-mission-title" class="whisper-ui-mission-title">试探边界</div>
+                    <div id="whisper-challenge-mission-text" class="whisper-ui-mission-text">
+                        在接下来的聊天里，悄悄引导 TA 说出「笨蛋」。
+                    </div>
+
+                    <div class="whisper-ui-meta-grid">
+                        <div class="whisper-ui-meta-block">
+                            <span>目标词</span>
+                            <strong id="whisper-challenge-target-word">笨蛋</strong>
+                        </div>
+                        <div class="whisper-ui-meta-block">
+                            <span>难度</span>
+                            <strong id="whisper-challenge-difficulty">新手</strong>
+                        </div>
+                        <div class="whisper-ui-meta-block">
+                            <span>关卡</span>
+                            <strong id="whisper-challenge-level">第 1 关</strong>
+                        </div>
+                    </div>
+
+                    <div class="whisper-ui-contact-box">
+                        <div class="whisper-ui-contact-head">
+                            <span>执行对象</span>
+                            <strong id="whisper-challenge-contact-name">未指定</strong>
+                        </div>
+                        <div class="whisper-ui-contact-select-wrap">
+                            <i class="ph-fill ph-user-circle whisper-ui-contact-select-icon"></i>
+                            <select id="whisper-challenge-contact-select" class="whisper-ui-contact-select" aria-label="选择挑战联系人">
+                                <option value="">暂无联系人</option>
+                            </select>
+                        </div>
+                        <div id="whisper-challenge-contact-help" class="whisper-ui-contact-help">
+                            请选择你要去诱导的联系人。
+                        </div>
+                    </div>
+
+                    <div class="whisper-ui-rule-box">
+                        <i class="ph-fill ph-info whisper-ui-rule-icon"></i>
+                        <div class="whisper-ui-rule-content">
+                            <strong>✦ 嘘...不能说的词 ✦</strong>
+                            <div id="whisper-challenge-forbidden-list" class="whisper-ui-chip-list">
+                                <span class="whisper-ui-chip">傻</span>
+                                <span class="whisper-ui-chip">蠢</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="whisper-ui-progress-wrap">
+                        <div class="whisper-ui-progress-head">
+                            <span id="whisper-challenge-status-text">开始挑战后开始倒计时</span>
+                            <span id="whisper-challenge-countdown-text">10:00</span>
+                        </div>
+                        <div class="whisper-ui-progress-track">
+                            <div id="whisper-challenge-progress-bar" class="whisper-ui-progress-bar"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="whisper-ui-actions">
+                    <button id="whisper-challenge-start-btn" class="whisper-ui-action-button whisper-ui-action-primary">
+                        <i class="ph-fill ph-target"></i>
+                        <span>开始挑战</span>
+                    </button>
+                    <button id="whisper-challenge-go-btn" class="whisper-ui-action-button whisper-ui-action-secondary">
+                        <i class="ph-fill ph-paper-plane-tilt"></i>
+                        <span>出发去聊天 ♡</span>
+                    </button>
+                </div>
+
+                <div class="whisper-ui-section-title">
+                    <span>✦ 往期回忆 ✦</span>
+                    <i class="ph ph-faders"></i>
+                </div>
+
+                <div id="whisper-challenge-history-empty" class="whisper-ui-empty-state">
+                    暂无挑战记录，完成一次任务后会显示在这里。
+                </div>
+                <div id="whisper-challenge-history-list"></div>
+            </div>
+        </div>
+    </div>
+
     <div id="family-card-detail-modal" class="modal hidden" style="z-index: 320; align-items: center;">
         <div class="modal-content">
             <div class="modal-header">
@@ -6473,7 +6899,9 @@
     <script src="js/meeting.js"></script>
     <script src="js/apps.js"></script>
     <script src="js/icity.js"></script>
+    <script src="js/garden_app.js?v=4"></script>
     <script src="js/home.js"></script>
+    <script src="js/calendar_app.js"></script>
     <script src="js/music_app_screen.js"></script>
     <script src="js/check_phone.js"></script>
     <script src="js/chat/01-contact-settings.js"></script>
@@ -6490,6 +6918,8 @@
     <script src="js/settings_v3.js"></script>
     <script src="js/album.js"></script>
     <script src="js/screen_share.js"></script>
+    <script src="js/changelog.js"></script>
+    <script src="js/whisper_challenge.js"></script>
 <!-- 在 index.html 中找到 <!-- 编辑记忆弹窗 --> 附近，添加以下代码 -->
 
             <!-- 编辑消息弹窗 -->

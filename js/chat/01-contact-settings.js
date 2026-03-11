@@ -508,6 +508,7 @@ function handleSaveContact() {
         avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + name,
         activeReplyEnabled: false,
         activeReplyInterval: 60,
+        calendarAwareEnabled: true,
         autoItineraryEnabled: false,
         autoItineraryInterval: 10,
         messagesSinceLastItinerary: 0,
@@ -605,7 +606,20 @@ function isHiddenForumWechatSyncText(text) {
 
 function shouldHideChatSyncMsg(msg) {
     if (!msg) return false;
-    if (msg.type === 'system_event' || msg.type === 'live_sync_hidden' || msg.type === 'family_card_spend_notice_hidden') return true;
+    if (msg.type === 'system_event' || msg.type === 'live_sync_hidden' || msg.type === 'family_card_spend_notice_hidden' || msg.type === 'screen_share_hidden') return true;
+    if (
+        msg.role === 'system'
+        && typeof msg.content === 'string'
+        && (
+            msg.content.startsWith('[System]: Screen share started')
+            || msg.content.startsWith('[System]: Typed ')
+            || msg.content.startsWith('[System]: Tried to type ')
+            || msg.content.startsWith('[System]: No text to type')
+            || msg.content.startsWith('[System]: No input is available right now')
+            || msg.content.startsWith('[System]: The password for ')
+            || msg.content.startsWith('[System]: Password is still empty, cannot tap Open yet')
+        )
+    ) return true;
     if (msg.type === 'text' && typeof msg.content === 'string' && isHiddenForumWechatSyncText(msg.content)) return true;
     return false;
 }
@@ -748,6 +762,92 @@ function formatLastMsgPreview(lastMsg) {
     const fallback = stripHtmlToText(typeof lastMsg.content === 'string' ? lastMsg.content : '');
     return truncatePreview(fallback || '[消息]');
 }
+
+function formatContactListTimeLabel(timestamp) {
+    const time = Number(timestamp);
+    if (!Number.isFinite(time) || time <= 0) return '';
+    const date = new Date(time);
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+}
+
+function getLastRenderableChatMessage(contactId) {
+    const history = window.iphoneSimState && window.iphoneSimState.chatHistory
+        ? window.iphoneSimState.chatHistory[contactId]
+        : null;
+    if (!Array.isArray(history) || history.length === 0) return null;
+
+    for (let index = history.length - 1; index >= 0; index--) {
+        const msg = history[index];
+        if (shouldHideChatSyncMsg(msg)) continue;
+        return msg;
+    }
+
+    return null;
+}
+
+function getSortedContactsForCurrentGroup(filterGroup = (window.iphoneSimState && window.iphoneSimState.currentContactGroup) || 'all') {
+    const contacts = window.iphoneSimState && Array.isArray(window.iphoneSimState.contacts)
+        ? [...window.iphoneSimState.contacts]
+        : [];
+
+    const filteredContacts = filterGroup === 'all'
+        ? contacts
+        : contacts.filter(contact => contact.group === filterGroup);
+
+    filteredContacts.sort((contactA, contactB) => {
+        if (contactA.isPinned && !contactB.isPinned) return -1;
+        if (!contactA.isPinned && contactB.isPinned) return 1;
+
+        const lastTimeA = getLastRenderableChatMessage(contactA.id);
+        const lastTimeB = getLastRenderableChatMessage(contactB.id);
+        return Number(lastTimeB && lastTimeB.time) - Number(lastTimeA && lastTimeA.time);
+    });
+
+    return filteredContacts;
+}
+
+function isElementVisibleInScrollViewport(element, container) {
+    if (!element || !container) return false;
+    const elementRect = element.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    return elementRect.bottom > containerRect.top && elementRect.top < containerRect.bottom;
+}
+
+window.getWechatListScreenShareSnapshot = function() {
+    const activeTab = document.querySelector('#wechat-app .wechat-tab-item.active')?.dataset?.tab || 'contacts';
+    const list = document.getElementById('contact-list');
+    let items = [];
+
+    if (list) {
+        const renderedItems = Array.from(list.querySelectorAll('.contact-item'));
+        const visibleItems = renderedItems.filter(item => isElementVisibleInScrollViewport(item, list));
+        const sourceItems = (visibleItems.length > 0 ? visibleItems : renderedItems).slice(0, 8);
+
+        items = sourceItems.map(item => ({
+            name: (item.querySelector('.contact-name')?.textContent || '').trim(),
+            preview: (item.querySelector('.contact-msg-preview')?.textContent || '[消息]').trim() || '[消息]',
+            time: (item.querySelector('.contact-time')?.textContent || '').trim(),
+            pinned: item.classList.contains('pinned')
+        })).filter(item => item.name);
+    }
+
+    if (items.length === 0) {
+        items = getSortedContactsForCurrentGroup().slice(0, 8).map(contact => {
+            const lastMsg = getLastRenderableChatMessage(contact.id);
+            return {
+                name: contact.remark || contact.nickname || contact.name || '联系人',
+                preview: formatLastMsgPreview(lastMsg) || '[消息]',
+                time: formatContactListTimeLabel(lastMsg && lastMsg.time),
+                pinned: !!contact.isPinned
+            };
+        });
+    }
+
+    return {
+        activeTab,
+        items
+    };
+};
 
 function renderContactList(filterGroup = 'all') {
     const isSwitchingGroup = window.iphoneSimState.currentContactGroup !== filterGroup;
@@ -1450,6 +1550,7 @@ function openChatSettings() {
     document.getElementById('chat-setting-show-thought').checked = contact.showThought || false;
     document.getElementById('chat-setting-thought-visible').checked = contact.thoughtVisible || false;
     document.getElementById('chat-setting-real-time-visible').checked = contact.realTimeVisible || false;
+    document.getElementById('chat-setting-calendar-aware').checked = contact.calendarAwareEnabled !== false;
 
     const thoughtStyleSelect = document.getElementById('chat-setting-thought-style');
     const thoughtPetPanel = document.getElementById('chat-setting-thought-pet-panel');
@@ -2021,6 +2122,7 @@ function handleSaveChatSettings() {
     const showThought = document.getElementById('chat-setting-show-thought').checked;
     const thoughtVisible = document.getElementById('chat-setting-thought-visible').checked;
     const realTimeVisible = document.getElementById('chat-setting-real-time-visible').checked;
+    const calendarAwareEnabled = document.getElementById('chat-setting-calendar-aware').checked;
     const thoughtDisplayModeRaw = document.getElementById('chat-setting-thought-style')
         ? document.getElementById('chat-setting-thought-style').value
         : 'title';
@@ -2077,6 +2179,7 @@ function handleSaveChatSettings() {
     contact.showThought = showThought;
     contact.thoughtVisible = thoughtVisible;
     contact.realTimeVisible = realTimeVisible;
+    contact.calendarAwareEnabled = calendarAwareEnabled;
     contact.thoughtDisplayMode = thoughtDisplayMode;
     contact.thoughtPetSize = thoughtPetSize;
     contact.thoughtPetPosition = normalizeThoughtPetPositionSetting(contact.thoughtPetPosition);
@@ -2218,3 +2321,4 @@ function handleSaveChatSettings() {
 }
 
 // --- 聊天界面功能 ---
+
