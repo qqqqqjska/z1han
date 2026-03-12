@@ -1555,7 +1555,7 @@
 
 #garden-app .garden-kitchen-top-bar {
     position: absolute;
-    top: 18px;
+    top: calc(max(47px, env(safe-area-inset-top, 0px)) + 8px);
     left: 20px;
     right: 20px;
     z-index: 3;
@@ -1592,7 +1592,7 @@
 
 #garden-app .garden-kitchen-area {
     position: absolute;
-    top: 82px;
+    top: calc(max(47px, env(safe-area-inset-top, 0px)) + 62px);
     left: 0;
     right: 0;
     bottom: 0;
@@ -1843,13 +1843,11 @@
     }
 
     #garden-app .garden-kitchen-top-bar {
-        top: 14px;
         left: 14px;
         right: 14px;
     }
 
     #garden-app .garden-kitchen-area {
-        top: 72px;
         padding-left: 14px;
         padding-right: 14px;
     }
