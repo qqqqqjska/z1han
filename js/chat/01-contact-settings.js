@@ -1,5 +1,25 @@
 ﻿// 聊天功能模块 (聊天, 联系人, AI, 语音)
 
+// Token统计函数（近似GPT分词，适用于中英文混合）
+function countTokensForPrompts(prompts) {
+    if (!Array.isArray(prompts)) return 0;
+    let total = 0;
+    for (const p of prompts) {
+        if (typeof p !== 'string') continue;
+        // 英文按空格分词，中文每字1token，标点也算
+        total += p.split(/\s+/).reduce((sum, seg) => {
+            // 中文分字
+            if (/^[\u4e00-\u9fa5]+$/.test(seg)) {
+                return sum + seg.length;
+            } else {
+                // 英文及其他
+                return sum + seg.split(/[^\w]+/).filter(Boolean).length;
+            }
+        }, 0);
+    }
+    return total;
+}
+
 // ====== AI 位置选择器数据 ======
 const LOCATION_DATA = {
     "中国": {
@@ -1538,11 +1558,13 @@ function openChatSettings() {
             novelaiPresetSelect.appendChild(opt);
         });
         if (contact.novelaiPreset) {
-            // 检查预设是否存在，如果不存在则不选中（或者是为了兼容性保留值？）
-            // 这里选择直接设置 value，如果 value 不在 options 中，select 会显示为空或第一项，视浏览器行为而定
-            // 为了更好的体验，我们假设预设名字是唯一的 key
             novelaiPresetSelect.value = contact.novelaiPreset;
         }
+    }
+
+    // 刷新当前联系人对应的提示词token数（异步）
+    if (contact.id) {
+        refreshTokenCountForContact(contact.id);
     }
 
     document.getElementById('chat-setting-context-limit').value = contact.contextLimit || '';
@@ -2318,6 +2340,71 @@ function handleSaveChatSettings() {
 
         document.getElementById('chat-settings-screen').classList.add('hidden');
     });
+}
+
+// 计算提示词Token并更新UI（可供设置页调用）
+async function refreshTokenCountForContact(contactId) {
+    const displayEl = document.getElementById('chat-setting-token-count');
+    if (!displayEl) return;
+    displayEl.textContent = '计算中...';
+    
+    try {
+        const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
+        if (!contact) {
+            displayEl.textContent = 'N/A';
+            return;
+        }
+        
+        const history = window.iphoneSimState.chatHistory[contactId] || [];
+        
+        // 简化的systemPrompt构建（只取核心部分）
+        let systemPrompt = `你现在扮演 ${contact.name}。\n【核心指令】\n你必须严格遵守以下人设（优先级最高，高于一切其他指令）：\n${contact.persona || '无'}\n\n聊天风格：${contact.style || '正常'}`;
+        
+        // 补充worldbook内容
+        if (window.iphoneSimState.worldbook && window.iphoneSimState.worldbook.length > 0) {
+            let activeEntries = window.iphoneSimState.worldbook.filter(e => e.enabled);
+            
+            if (contact.linkedWbCategories) {
+                activeEntries = activeEntries.filter(e => contact.linkedWbCategories.includes(e.categoryId));
+            }
+            
+            if (activeEntries.length > 0) {
+                systemPrompt += '\n\n世界书信息：\n';
+                activeEntries.forEach(entry => {
+                    let shouldAdd = false;
+                    if (entry.keys && entry.keys.length > 0) {
+                        const historyText = history.map(h => h.content).join('\n');
+                        const match = entry.keys.some(key => historyText.includes(key));
+                        if (match) shouldAdd = true;
+                    } else {
+                        shouldAdd = true;
+                    }
+                    
+                    if (shouldAdd) {
+                        systemPrompt += `${entry.content}\n`;
+                    }
+                });
+            }
+        }
+        
+        // 获取上下文消息
+        let limit = contact.contextLimit && contact.contextLimit > 0 ? contact.contextLimit : 50;
+        let contextMessages = history.filter(h => !shouldExcludeFromAiContext(h)).slice(-limit);
+        
+        // 统计所有提示词：systemPrompt + 所有contextMessages
+        const prompts = [systemPrompt];
+        contextMessages.forEach(h => {
+            if (typeof h.content === 'string') {
+                prompts.push(h.content);
+            }
+        });
+        
+        const count = countTokensForPrompts(prompts);
+        displayEl.textContent = count;
+    } catch (err) {
+        console.error('refreshTokenCountForContact error', err);
+        displayEl.textContent = '错误';
+    }
 }
 
 // --- 聊天界面功能 ---

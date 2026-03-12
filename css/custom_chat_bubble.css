@@ -31,7 +31,7 @@
     color: #1a1a1a !important;
     position: relative !important;
     display: inline-block !important;
-    max-width: 72% !important;
+    max-width: 100% !important;
     padding: 8px 10px 8px 10px !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
     word-break: break-word !important;
@@ -48,11 +48,11 @@
     position: relative !important;
     display: inline-block !important;
     max-width: 72% !important;
-    padding: 8px 10px 22px 10px !important; /* 底部留出对钩图标空间 */
+    padding: 8px 10px 24px 10px !important; /* 底部留出时间戳 + 对钩图标空间 */
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
     word-break: break-word !important;
 
-    /* 默认四角全部大圆角（单独一条时的样子） */
+    /* 默��四角全部大圆角（单独一条时的样子） */
     border-radius: 18px 18px 18px 18px !important;
 }
 
@@ -69,7 +69,7 @@
    ├─────────────────────────────────────────────────────┤
    │ 「中间条」（上下都有同方向消息）：                     │
    │   左上角 → 4px                                      │
-   │   左下角 → 4px                                      │
+   │   左下角 → 4px           d                       │
    │   右上/右下 → 18px                                  │
    ├─────────────────────────────────────────────────────┤
    │ 「最后一条」（上面有同方向消息，下面没有）：            │
@@ -87,7 +87,7 @@
    → 左上角变小
 */
 .chat-message.other:has(+ .chat-message.other) .message-content {
-    border-radius: 4px 18px 18px 18px !important;
+    border-radius: 18px 18px 18px 4px !important;
     /*            TL   TR   BR   BL  */
 }
 
@@ -142,7 +142,7 @@
 
 /* 「第一条」发送方消息 */
 .chat-message.user:has(+ .chat-message.user) .message-content {
-    border-radius: 18px 4px 18px 18px !important;
+    border-radius: 18px 18px 4px 18px !important;
     /*            TL   TR   BR   BL  */
 }
 
@@ -168,26 +168,34 @@
 
 /* ============================================================
    四、时间戳样式
+   
+   时间戳格式说明（由 JS 控制，CSS 只负责显示样式）：
+   请确保你的 JS 渲染时间时使用 12 小时制格式，例如：
+     new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+   这样会输出 "3:24 PM" / "9:05 AM" 形式
    ============================================================ */
 
-/* 接收方时间戳 */
+/* ── 接收方时间戳：跟在消息文字右侧，气泡内部 ── */
 .chat-message.other .message-time {
     font-size: 11px !important;
-    color: #999999 !important;
-    margin-left: 4px !important;
+    color: #a0a0a0 !important;          /* 浅灰色，气泡内低调显示 */
+    margin-left: 6px !important;
     white-space: nowrap !important;
-    display: inline-block !important;
-    vertical-align: bottom !important;
+    display: inline !important;
+    vertical-align: baseline !important;
+    letter-spacing: 0.2px !important;
 }
 
-/* 发送方时间戳（悬浮在气泡右下角，对钩左侧） */
+/* ── 发送方时间戳：绝对定位在气泡内右下角，紧靠对钩左侧 ── */
 .chat-message.user .message-time {
     font-size: 11px !important;
-    color: #7a7a7a !important;
+    color: #8a7d55 !important;          /* 暖棕/金色调，配合淡黄气泡背景 */
     position: absolute !important;
-    bottom: 5px !important;
-    right: 30px !important; /* 给对钩图标留出空间，对钩宽度约18px + 5px间距 */
+    bottom: 6px !important;             /* 距气泡底部 6px */
+    right: 30px !important;             /* 距右侧 30px：为对钩图标（18px）留出间距 */
     white-space: nowrap !important;
+    letter-spacing: 0.2px !important;
+    line-height: 1 !important;
 }
 
 
@@ -293,24 +301,3 @@
     background-color: #f9e8eb;
 } */
 
-/* ============================================================
-   文件说明
-   ============================================================
-   
-   HTML 结构假设（请根据你的实际 HTML 调整选择器）：
-   
-   <div class="chat-message other [is-first|is-middle|is-last|is-solo]">
-     <div class="message-content">
-       消息内容
-       <span class="message-time">3:24 PM</span>
-     </div>
-   </div>
-   
-   <div class="chat-message user [is-first|is-middle|is-last|is-solo]">
-     <div class="message-content">
-       消息内容
-       <!-- 时间 & ���钩通过 CSS 定位，不需要单独放在这里 -->
-     </div>
-   </div>
-   
-   ============================================================ */

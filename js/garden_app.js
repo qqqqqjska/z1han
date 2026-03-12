@@ -4,6 +4,8 @@
     const GARDEN_TITLE_STORAGE_KEY = 'garden_app_custom_title_v1';
     const GARDEN_LAYOUT_STORAGE_KEY = 'garden_app_contact_layouts_v1';
     const GARDEN_GAME_STATE_STORAGE_KEY = 'garden_game_state_v1';
+    const GARDEN_ROGUE_ACTIVITY_STATE_STORAGE_KEY = 'garden_rogue_activity_state_v1';
+    const GARDEN_HOME_TUTORIAL_DISMISSED_KEY = 'garden_home_tutorial_dismissed_v1';
     const GARDEN_FIGURE_ASSET_DB_NAME = 'garden_app_figure_assets_v1';
     const GARDEN_FIGURE_ASSET_STORE = 'resident_character_assets';
     const GARDEN_TITLE_DEFAULT = '\u840c\u5ba0\u76f8\u4f34\u7684\u5bb6';
@@ -60,13 +62,67 @@
     };
 
     const KITCHEN_RECIPES = {
-        bread: { id: 'bread', name: '香喷喷面包', emoji: '🍞', ingredients: { wheat: 2, egg: 1 } },
-        cake: { id: 'cake', name: '美味蛋糕', emoji: '🍰', ingredients: { wheat: 3, milk: 1 } },
-        salad: { id: 'salad', name: '田园沙拉', emoji: '🥗', ingredients: { tomato: 2, carrot: 1 } },
-        pizza: { id: 'pizza', name: '农家披萨', emoji: '🍕', ingredients: { wheat: 3, tomato: 2, pork: 1 } },
-        taco: { id: 'taco', name: '烤肉卷饼', emoji: '🌮', ingredients: { wheat: 2, pork: 2 } },
-        icecream: { id: 'icecream', name: '奶香冰淇淋', emoji: '🍨', ingredients: { milk: 2, egg: 1 } },
-        stirfry: { id: 'stirfry', name: '营养炖菜', emoji: '🥘', ingredients: { carrot: 2, pork: 1 } }
+        bread: { id: 'bread', name: '香喷喷面包', emoji: '🍞', primaryIngredient: 'wheat', ingredients: { wheat: 2, egg: 1 } },
+        cake: { id: 'cake', name: '美味蛋糕', emoji: '🍰', primaryIngredient: 'wheat', ingredients: { wheat: 3, milk: 1 } },
+        salad: { id: 'salad', name: '田园沙拉', emoji: '🥗', primaryIngredient: 'tomato', ingredients: { tomato: 2, carrot: 1 } },
+        pizza: { id: 'pizza', name: '农家披萨', emoji: '🍕', primaryIngredient: 'wheat', ingredients: { wheat: 3, tomato: 2, pork: 1 } },
+        taco: { id: 'taco', name: '烤肉卷饼', emoji: '🌮', primaryIngredient: 'wheat', ingredients: { wheat: 2, pork: 2 } },
+        icecream: { id: 'icecream', name: '奶香冰淇淋', emoji: '🍨', primaryIngredient: 'milk', ingredients: { milk: 2, egg: 1 } },
+        stirfry: { id: 'stirfry', name: '营养炖菜', emoji: '🥘', primaryIngredient: 'carrot', ingredients: { carrot: 2, pork: 1 } }
+    };
+
+    const ROGUE_STAGE_LABELS = {
+        farm: '农场阶段',
+        pasture: '牧场阶段',
+        kitchen: '厨房阶段',
+        sell_setup: '出售准备',
+        sell_orders: '出售阶段'
+    };
+
+    const ROGUE_CONTEXT_LABELS = {
+        farm: '农场',
+        pasture: '牧场',
+        kitchen: '厨房',
+        sell: '出售'
+    };
+
+    const ROGUE_STAGE_SEQUENCE = ['farm', 'pasture', 'kitchen', 'sell_setup', 'sell_orders'];
+
+    const ROGUE_CARD_POOL = {
+        farm_fast_water: { id: 'farm_fast_water', context: 'farm', title: '快浇快熟', desc: '接下来 3 次浇水后的作物，成熟时间 x0.75', effectType: 'farm_fast_water', values: { remaining: 3, value: 0.75 } },
+        farm_double_crop: { id: 'farm_double_crop', context: 'farm', title: '双倍丰收', desc: '接下来 5 次作物收获，各有 35% 概率额外 +1', effectType: 'farm_double_crop', values: { remaining: 5, value: 0.35 } },
+        farm_seed_rebate: { id: 'farm_seed_rebate', context: 'farm', title: '种子返利', desc: '本轮所有播种返还 30% 金币，向上取整', effectType: 'farm_seed_rebate', values: { value: 0.3 } },
+        farm_big_crop: { id: 'farm_big_crop', context: 'farm', title: '大果加成', desc: '本轮价格 >= 25 的作物收获固定额外 +1', effectType: 'farm_big_crop', values: { value: 1 } },
+        pasture_fast_feed: { id: 'pasture_fast_feed', context: 'pasture', title: '速喂速成', desc: '接下来 4 次喂食后，对应成长/生产时间 x0.7', effectType: 'pasture_fast_feed', values: { remaining: 4, value: 0.7 } },
+        pasture_twin_yield: { id: 'pasture_twin_yield', context: 'pasture', title: '双产祝福', desc: '接下来 5 次畜产收获，各有 35% 概率额外 +1', effectType: 'pasture_twin_yield', values: { remaining: 5, value: 0.35 } },
+        pasture_type_bonus: { id: 'pasture_type_bonus', context: 'pasture', title: '首收奖励', desc: '本轮每种动物类型的第一次收获固定额外 +1', effectType: 'pasture_type_bonus', values: { flags: [] } },
+        pasture_baby_boost: { id: 'pasture_baby_boost', context: 'pasture', title: '幼崽冲刺', desc: '本轮所有幼崽成长时间 x0.6', effectType: 'pasture_baby_boost', values: { value: 0.6 } },
+        kitchen_bonus_output: { id: 'kitchen_bonus_output', context: 'kitchen', title: '加量出锅', desc: '接下来 2 次成功烹饪，成品固定额外 +1', effectType: 'kitchen_bonus_output', values: { remaining: 2, value: 1 } },
+        kitchen_easy_qte: { id: 'kitchen_easy_qte', context: 'kitchen', title: '稳手厨师', desc: '接下来 5 次烹饪 QTE，白区和黄区宽度 x1.35', effectType: 'kitchen_easy_qte', values: { remaining: 5, value: 1.35 } },
+        kitchen_cooked_markup: { id: 'kitchen_cooked_markup', context: 'kitchen', title: '熟食溢价', desc: '本轮所有熟食出售价格 +20%', effectType: 'kitchen_cooked_markup', values: { value: 0.2 } },
+        kitchen_primary_save: { id: 'kitchen_primary_save', context: 'kitchen', title: '返料巧手', desc: '接下来 2 次成功烹饪，返还 1 份主材料', effectType: 'kitchen_primary_save', values: { remaining: 2, value: 1 } },
+        sell_bulk_bonus: { id: 'sell_bulk_bonus', context: 'sell', title: '整批出货', desc: '单次出售同一物品数量 >= 3 时，该物品金币 +15%', effectType: 'sell_bulk_bonus', values: { value: 0.15 } },
+        sell_cooked_order: { id: 'sell_cooked_order', context: 'sell', title: '熟食订单', desc: '熟食进入订单权重 x2，且熟食订单奖励 x1.3', effectType: 'sell_cooked_order', values: { value: 1.3 } },
+        sell_order_tip: { id: 'sell_order_tip', context: 'sell', title: '订单小费', desc: '每完成一张订单，额外获得 +60 金币', effectType: 'sell_order_tip', values: { value: 60 } },
+        sell_chain_bonus: { id: 'sell_chain_bonus', context: 'sell', title: '连单奖励', desc: '完成一张订单后，下一张订单奖励 x1.2', effectType: 'sell_chain_bonus', values: { flags: [] } }
+    };
+
+    const STAGE_SUPPLY_POOL = {
+        farm: [
+            { id: 'farm_supply_gold', stage: 'farm', title: '金币补给', desc: '立即获得 100 金币', rewardType: 'coins', amount: 100 },
+            { id: 'farm_supply_chicken', stage: 'farm', title: '小鸡支援', desc: '免费获得 1 只小鸡幼崽', rewardType: 'animal', animalType: 'chicken', amount: 1 },
+            { id: 'farm_supply_pig', stage: 'farm', title: '小猪支援', desc: '免费获得 1 只小猪幼崽', rewardType: 'animal', animalType: 'pig', amount: 1 }
+        ],
+        pasture: [
+            { id: 'pasture_supply_basic', stage: 'pasture', title: '基础食材箱', desc: '获得 小麦 x2 + 鸡蛋 x2', rewardType: 'items', items: { wheat: 2, egg: 2 } },
+            { id: 'pasture_supply_milk', stage: 'pasture', title: '鲜奶拼箱', desc: '获得 牛奶 x1 + 鸡蛋 x1 + 番茄 x2', rewardType: 'items', items: { milk: 1, egg: 1, tomato: 2 } },
+            { id: 'pasture_supply_meat', stage: 'pasture', title: '炖锅食材箱', desc: '获得 猪肉 x1 + 小麦 x2 + 胡萝卜 x2', rewardType: 'items', items: { pork: 1, wheat: 2, carrot: 2 } }
+        ],
+        kitchen: [
+            { id: 'kitchen_supply_bread', stage: 'kitchen', title: '面包补给', desc: '获得 面包 x2', rewardType: 'items', items: { bread: 2 } },
+            { id: 'kitchen_supply_combo', stage: 'kitchen', title: '熟食双拼', desc: '获得 沙拉 x1 + 卷饼 x1', rewardType: 'items', items: { salad: 1, taco: 1 } },
+            { id: 'kitchen_supply_gold', stage: 'kitchen', title: '金币打赏', desc: '立即获得 120 金币', rewardType: 'coins', amount: 120 }
+        ]
     };
 
     const PASTURE_ANIMAL_DATA = {
@@ -251,7 +307,10 @@
 
     const state = {
         initialized: false,
+        gardenMode: 'casual',
         gardenGame: null,
+        casualGardenGame: null,
+        rogueActivityGame: null,
         activeTab: 'pet',
         currentView: 'home',
         drawerOpen: false,
@@ -263,6 +322,8 @@
         farmToastTimeout: null,
         pastureToastTimeout: null,
         kitchenToastTimeout: null,
+        roguePanelOpen: false,
+        homeTutorialDismissed: false,
         farmGame: {
             initialized: false,
             progressTimer: null,
@@ -372,6 +433,24 @@
     let kitchenQteHintEl;
     let kitchenToastEl;
     let kitchenCookBtns = [];
+    let rogueProgressStripEl;
+    let rogueProgressStageEl;
+    let rogueProgressCardsEl;
+    let rogueProgressGoalEl;
+    let rogueProgressOrderEl;
+    let rogueProgressPanelEl;
+    let rogueProgressPanelStageEl;
+    let rogueProgressPanelCardsEl;
+    let rogueProgressPanelGoalEl;
+    let rogueProgressPanelOrderEl;
+    let rogueOfferModalEl;
+    let rogueOfferTitleEl;
+    let rogueOfferDescEl;
+    let rogueOfferChoicesEl;
+    let storageOrderCardEl;
+    let kitchenSkipBtnEl;
+    let homeTutorialCardEl;
+    let homeTutorialReopenBtnEl;
     let editorHost;
     let titleTextEl;
     let floraScreenEl;
@@ -401,7 +480,8 @@
         return {
             state: 'empty',
             seedId: '',
-            readyAt: null
+            readyAt: null,
+            growDuration: null
         };
     }
 
@@ -412,8 +492,116 @@
         ];
     }
 
-    function createDefaultGardenGameState() {
+    function createDefaultRogueRun(completedRuns = 0) {
         return {
+            runId: `rogue_run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            stage: 'farm',
+            progress: {
+                farmHarvests: 0,
+                pastureHarvests: 0,
+                kitchenSuccesses: 0,
+                ordersCompleted: 0
+            },
+            selectedCards: [],
+            activeModifiers: {},
+            currentOffer: null,
+            currentSupplyOffer: null,
+            currentOrder: null,
+            completedRuns: Math.max(0, Math.floor(Number(completedRuns) || 0))
+        };
+    }
+
+    function normalizeRogueModifierState(rawModifier) {
+        if (!rawModifier || typeof rawModifier !== 'object') return null;
+        const remaining = isFiniteNumber(Number(rawModifier.remaining)) ? Math.max(0, Math.floor(Number(rawModifier.remaining))) : null;
+        const value = isFiniteNumber(Number(rawModifier.value)) ? Number(rawModifier.value) : null;
+        const flags = Array.isArray(rawModifier.flags)
+            ? rawModifier.flags.map((flag) => String(flag)).filter(Boolean)
+            : [];
+        return { remaining, value, flags };
+    }
+
+    function normalizeRogueOffer(rawOffer) {
+        if (!rawOffer || typeof rawOffer !== 'object') return null;
+        const context = ['farm', 'pasture', 'kitchen', 'sell'].includes(rawOffer.context) ? rawOffer.context : null;
+        if (!context) return null;
+        const cardIds = Array.isArray(rawOffer.cardIds)
+            ? Array.from(new Set(rawOffer.cardIds.filter((cardId) => ROGUE_CARD_POOL[cardId] && ROGUE_CARD_POOL[cardId].context == context))).slice(0, 3)
+            : [];
+        if (!cardIds.length) return null;
+        return { context, cardIds };
+    }
+
+    function normalizeRogueSupplyOffer(rawOffer) {
+        if (!rawOffer || typeof rawOffer !== 'object') return null;
+        const stage = ['farm', 'pasture', 'kitchen'].includes(rawOffer.stage) ? rawOffer.stage : null;
+        if (!stage) return null;
+        const optionIds = Array.isArray(rawOffer.optionIds)
+            ? Array.from(new Set(rawOffer.optionIds.filter((optionId) => {
+                return (STAGE_SUPPLY_POOL[stage] || []).some((entry) => entry.id === optionId);
+            }))).slice(0, 3)
+            : [];
+        if (!optionIds.length) return null;
+        return { stage, optionIds };
+    }
+
+    function normalizeRogueOrder(rawOrder) {
+        if (!rawOrder || typeof rawOrder !== 'object') return null;
+        const lines = Array.isArray(rawOrder.lines)
+            ? rawOrder.lines.map((line) => {
+                if (!line || typeof line !== 'object' || !ITEM_META[line.itemId]) return null;
+                const requiredQty = isFiniteNumber(Number(line.requiredQty)) ? Math.max(1, Math.floor(Number(line.requiredQty))) : 1;
+                const fulfilledQty = isFiniteNumber(Number(line.fulfilledQty))
+                    ? Math.max(0, Math.min(requiredQty, Math.floor(Number(line.fulfilledQty))))
+                    : 0;
+                return { itemId: line.itemId, requiredQty, fulfilledQty };
+            }).filter(Boolean).slice(0, 2)
+            : [];
+        if (!lines.length) return null;
+        return {
+            orderId: rawOrder.orderId ? String(rawOrder.orderId) : `rogue_order_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            title: rawOrder.title ? String(rawOrder.title) : '特殊订单',
+            lines,
+            baseValue: isFiniteNumber(Number(rawOrder.baseValue)) ? Math.max(0, Math.floor(Number(rawOrder.baseValue))) : 0,
+            bonusGold: isFiniteNumber(Number(rawOrder.bonusGold)) ? Math.max(0, Math.floor(Number(rawOrder.bonusGold))) : 0
+        };
+    }
+
+    function normalizeRogueRun(rawRun) {
+        const defaults = createDefaultRogueRun(rawRun && rawRun.completedRuns);
+        if (!rawRun || typeof rawRun !== 'object') return defaults;
+        const progressSource = rawRun.progress && typeof rawRun.progress === 'object' ? rawRun.progress : {};
+        const activeModifiers = {};
+        Object.keys(ROGUE_CARD_POOL).forEach((cardId) => {
+            const normalizedModifier = normalizeRogueModifierState(rawRun.activeModifiers && rawRun.activeModifiers[cardId]);
+            if (!normalizedModifier) return;
+            if (normalizedModifier.remaining === 0 && normalizedModifier.value === null && !normalizedModifier.flags.length) return;
+            activeModifiers[cardId] = normalizedModifier;
+        });
+        return {
+            ...defaults,
+            runId: rawRun.runId ? String(rawRun.runId) : defaults.runId,
+            stage: ROGUE_STAGE_LABELS[rawRun.stage] ? rawRun.stage : defaults.stage,
+            progress: {
+                farmHarvests: isFiniteNumber(Number(progressSource.farmHarvests)) ? Math.max(0, Math.floor(Number(progressSource.farmHarvests))) : 0,
+                pastureHarvests: isFiniteNumber(Number(progressSource.pastureHarvests)) ? Math.max(0, Math.floor(Number(progressSource.pastureHarvests))) : 0,
+                kitchenSuccesses: isFiniteNumber(Number(progressSource.kitchenSuccesses)) ? Math.max(0, Math.floor(Number(progressSource.kitchenSuccesses))) : 0,
+                ordersCompleted: isFiniteNumber(Number(progressSource.ordersCompleted)) ? Math.max(0, Math.floor(Number(progressSource.ordersCompleted))) : 0
+            },
+            selectedCards: Array.isArray(rawRun.selectedCards)
+                ? Array.from(new Set(rawRun.selectedCards.filter((cardId) => ROGUE_CARD_POOL[cardId]))).slice(0, 4)
+                : [],
+            activeModifiers,
+            currentOffer: normalizeRogueOffer(rawRun.currentOffer),
+            currentSupplyOffer: normalizeRogueSupplyOffer(rawRun.currentSupplyOffer),
+            currentOrder: normalizeRogueOrder(rawRun.currentOrder),
+            completedRuns: isFiniteNumber(Number(rawRun.completedRuns)) ? Math.max(0, Math.floor(Number(rawRun.completedRuns))) : defaults.completedRuns
+        };
+    }
+
+    function createDefaultGardenGameState(options) {
+        const includeRogue = !!(options && options.includeRogue);
+        const baseState = {
             coins: 250,
             inventory: createEmptyInventory(),
             farm: {
@@ -429,6 +617,14 @@
                 tab: 'crops'
             }
         };
+        if (includeRogue) {
+            baseState.rogueRun = createDefaultRogueRun(0);
+        }
+        return baseState;
+    }
+
+    function createDefaultRogueActivityGameState() {
+        return createDefaultGardenGameState({ includeRogue: true });
     }
 
     function isFiniteNumber(value) {
@@ -461,6 +657,7 @@
         if (plot.readyAt > now) return false;
         plot.state = 'ready';
         plot.readyAt = null;
+        plot.growDuration = null;
         return true;
     }
 
@@ -472,6 +669,7 @@
         plot.state = nextState === 'planted' || nextState === 'growing' || nextState === 'ready' ? nextState : 'empty';
         plot.seedId = FARM_SEEDS[rawPlot.seedId] ? rawPlot.seedId : '';
         plot.readyAt = isFiniteNumber(rawPlot.readyAt) ? rawPlot.readyAt : null;
+        plot.growDuration = isFiniteNumber(rawPlot.growDuration) ? Math.max(1000, Math.floor(rawPlot.growDuration)) : null;
 
         if (!plot.seedId) {
             return createEmptyFarmPlotState();
@@ -481,16 +679,23 @@
         }
         if (plot.state === 'ready') {
             plot.readyAt = null;
+            plot.growDuration = null;
             return plot;
         }
         if (plot.state === 'planted') {
             plot.readyAt = null;
+            plot.growDuration = null;
             return plot;
         }
         if (!isFiniteNumber(plot.readyAt)) {
             plot.state = 'planted';
             plot.readyAt = null;
+            plot.growDuration = null;
             return plot;
+        }
+        if (!isFiniteNumber(plot.growDuration)) {
+            const seed = FARM_SEEDS[plot.seedId];
+            plot.growDuration = seed ? seed.time : null;
         }
         advanceFarmPlotByClock(plot, now);
         return plot;
@@ -541,8 +746,9 @@
         return animal;
     }
 
-    function normalizeGardenGameState(rawState) {
-        const defaults = createDefaultGardenGameState();
+    function normalizeGardenGameState(rawState, options) {
+        const includeRogue = !!(options && options.includeRogue);
+        const defaults = includeRogue ? createDefaultRogueActivityGameState() : createDefaultGardenGameState();
         const now = Date.now();
         if (!rawState || typeof rawState !== 'object') return defaults;
 
@@ -553,7 +759,7 @@
             .map((animal) => normalizePastureAnimal(animal, now))
             .filter(Boolean);
 
-        return {
+        const normalizedState = {
             coins: isFiniteNumber(Number(rawState.coins)) ? Math.max(0, Math.floor(Number(rawState.coins))) : defaults.coins,
             inventory: normalizeInventory(rawState.inventory),
             farm: {
@@ -569,24 +775,66 @@
                 tab: sanitizeStorageTab(rawState.storage && rawState.storage.tab)
             }
         };
+        if (includeRogue) {
+            normalizedState.rogueRun = normalizeRogueRun(rawState.rogueRun);
+        }
+        return normalizedState;
     }
 
-    function loadGardenGameState() {
+    function getGardenGameStorageKey(mode) {
+        return mode === 'rogue_activity' ? GARDEN_ROGUE_ACTIVITY_STATE_STORAGE_KEY : GARDEN_GAME_STATE_STORAGE_KEY;
+    }
+
+    function loadGardenGameState(mode = 'casual') {
+        const isRogueActivity = mode === 'rogue_activity';
+        const defaultState = isRogueActivity ? createDefaultRogueActivityGameState() : createDefaultGardenGameState();
         try {
-            const raw = window.localStorage.getItem(GARDEN_GAME_STATE_STORAGE_KEY);
-            if (!raw) return createDefaultGardenGameState();
-            return normalizeGardenGameState(JSON.parse(raw));
+            const raw = window.localStorage.getItem(getGardenGameStorageKey(mode));
+            if (!raw) return defaultState;
+            return normalizeGardenGameState(JSON.parse(raw), { includeRogue: isRogueActivity });
         } catch (error) {
-            return createDefaultGardenGameState();
+            return defaultState;
         }
     }
 
-    function saveGardenGameState() {
-        if (!state.gardenGame) return;
+    function hasPersistedRogueActivitySave() {
         try {
-            window.localStorage.setItem(GARDEN_GAME_STATE_STORAGE_KEY, JSON.stringify(state.gardenGame));
+            return !!window.localStorage.getItem(GARDEN_ROGUE_ACTIVITY_STATE_STORAGE_KEY);
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function syncGardenGameReference() {
+        state.gardenGame = state.gardenMode === 'rogue_activity'
+            ? state.rogueActivityGame
+            : state.casualGardenGame;
+    }
+
+    function saveGardenGameState() {
+        const mode = state.gardenMode === 'rogue_activity' ? 'rogue_activity' : 'casual';
+        const gameState = mode === 'rogue_activity' ? state.rogueActivityGame : state.casualGardenGame;
+        if (!gameState) return;
+        try {
+            window.localStorage.setItem(getGardenGameStorageKey(mode), JSON.stringify(gameState));
         } catch (error) {
             return;
+        }
+    }
+
+    function setGardenMode(mode) {
+        const nextMode = mode === 'rogue_activity' ? 'rogue_activity' : 'casual';
+        if (nextMode === 'rogue_activity' && !state.rogueActivityGame) {
+            state.rogueActivityGame = loadGardenGameState('rogue_activity');
+        }
+        if (nextMode === 'casual' && !state.casualGardenGame) {
+            state.casualGardenGame = loadGardenGameState('casual');
+        }
+        state.gardenMode = nextMode;
+        syncGardenGameReference();
+        if (screenEl) {
+            screenEl.classList.toggle('is-rogue-activity-mode', state.gardenMode === 'rogue_activity');
+            screenEl.classList.toggle('is-casual-garden-mode', state.gardenMode !== 'rogue_activity');
         }
     }
 
@@ -629,12 +877,788 @@
         syncPastureStats();
     }
 
+    function syncActivitiesFarmCardUi() {
+        const farmCard = activitiesViewEl
+            ? activitiesViewEl.querySelector('[data-activities-card="farm"]')
+            : document.querySelector('#garden-app [data-activities-card="farm"]');
+        if (!farmCard) return;
+        const descEl = farmCard.querySelector('.garden-activities-desc');
+        const statsTextEl = farmCard.querySelector('.garden-activities-stats span');
+        const playBtn = farmCard.querySelector('.garden-activities-play-btn');
+        const hasProgress = hasPendingRogueActivityProgress();
+        if (descEl) {
+            descEl.textContent = '四阶段轻肉鸽周目：农场 → 牧场 → 厨房 → 出售。';
+        }
+        if (statsTextEl) {
+            statsTextEl.textContent = hasProgress ? '周目进行中 · 点击继续挑战' : '轻肉鸽挑战 · 点击进入挑战';
+        }
+        if (playBtn) {
+            playBtn.setAttribute('aria-label', hasProgress ? 'continue farm rogue challenge' : 'start farm rogue challenge');
+            playBtn.title = hasProgress ? '继续挑战' : '进入挑战';
+        }
+        farmCard.classList.toggle('is-highlight', true);
+    }
+
     function refreshGardenEconomyUi() {
         syncFarmStats();
         syncPastureStats();
         syncKitchenCookButtons();
         renderStorageItems(state.gardenGame && state.gardenGame.storage ? state.gardenGame.storage.tab : 'crops');
         syncStorageSellSheetUi();
+        syncGardenRogueUi();
+        syncActivitiesFarmCardUi();
+    }
+
+    function refreshGardenModeViews() {
+        refreshGardenEconomyUi();
+        renderFarmPlots();
+        renderPastureAnimals();
+    }
+
+    function showRogueToast(message) {
+        if (!message) return;
+        if (typeof window.showChatToast === 'function') {
+            window.showChatToast(message, 2200);
+            return;
+        }
+        if (typeof window.showNotification === 'function') {
+            window.showNotification(message, 1800, 'info');
+        }
+    }
+
+    function isRogueActivityMode() {
+        return state.gardenMode === 'rogue_activity';
+    }
+
+    function getRogueRun() {
+        return isRogueActivityMode() && state.gardenGame ? state.gardenGame.rogueRun : null;
+    }
+
+    function ensureRogueRun() {
+        if (!isRogueActivityMode() || !state.gardenGame) return null;
+        if (!state.gardenGame.rogueRun) {
+            state.gardenGame.rogueRun = createDefaultRogueRun(0);
+        }
+        return state.gardenGame.rogueRun;
+    }
+
+    function getRogueCardContextForStage(stage) {
+        if (stage === 'farm') return 'farm';
+        if (stage === 'pasture') return 'pasture';
+        if (stage === 'kitchen') return 'kitchen';
+        if (stage === 'sell_setup') return 'sell';
+        return null;
+    }
+
+    function getNextRogueStageAfterSupply(stage) {
+        if (stage === 'farm') return 'pasture';
+        if (stage === 'pasture') return 'kitchen';
+        if (stage === 'kitchen') return 'sell_setup';
+        return null;
+    }
+
+    function getSupplyOptionDef(stage, optionId) {
+        return (STAGE_SUPPLY_POOL[stage] || []).find((entry) => entry.id === optionId) || null;
+    }
+
+    function createRogueSupplyOffer(stage) {
+        const run = ensureRogueRun();
+        const options = STAGE_SUPPLY_POOL[stage] || [];
+        if (!run || !options.length) return null;
+        run.currentSupplyOffer = {
+            stage,
+            optionIds: options.map((entry) => entry.id).slice(0, 3)
+        };
+        return run.currentSupplyOffer;
+    }
+
+    function createPastureAnimalRewardState(type) {
+        const x = 18 + (Math.random() * 64);
+        const y = 24 + (Math.random() * 52);
+        return createPastureAnimalState(type, x, y, false);
+    }
+
+    function applyRogueSupplyReward(optionId) {
+        const run = ensureRogueRun();
+        const offer = run ? run.currentSupplyOffer : null;
+        const option = offer ? getSupplyOptionDef(offer.stage, optionId) : null;
+        if (!run || !offer || !option) return false;
+        if (option.rewardType === 'coins') {
+            updateGardenCoins(option.amount || 0);
+        } else if (option.rewardType === 'animal' && option.animalType) {
+            getPastureAnimals().push(createPastureAnimalRewardState(option.animalType));
+        } else if (option.rewardType === 'items' && option.items) {
+            Object.entries(option.items).forEach(([itemId, amount]) => {
+                addInventoryItem(itemId, Math.max(0, Math.floor(Number(amount) || 0)));
+            });
+        }
+        return true;
+    }
+
+    function hasPendingRogueActivityProgress() {
+        if (!hasPersistedRogueActivitySave()) return false;
+        const game = state.rogueActivityGame || loadGardenGameState('rogue_activity');
+        const run = game && game.rogueRun ? game.rogueRun : null;
+        if (!run) return false;
+        return true;
+    }
+
+    function getSelectedRogueCardDefs() {
+        const run = getRogueRun();
+        if (!run || !Array.isArray(run.selectedCards)) return [];
+        return run.selectedCards.map((cardId) => ROGUE_CARD_POOL[cardId]).filter(Boolean);
+    }
+
+    function hasSelectedRogueCardForContext(context) {
+        return getSelectedRogueCardDefs().some((card) => card.context === context);
+    }
+
+    function getRogueModifier(cardId) {
+        const run = getRogueRun();
+        if (!run || !run.activeModifiers) return null;
+        return run.activeModifiers[cardId] || null;
+    }
+
+    function isRogueModifierActive(cardId) {
+        const modifier = getRogueModifier(cardId);
+        if (!modifier) return false;
+        return modifier.remaining == null || modifier.remaining > 0;
+    }
+
+    function getRogueModifierValue(cardId, fallbackValue) {
+        const modifier = getRogueModifier(cardId);
+        if (modifier && isFiniteNumber(Number(modifier.value))) return Number(modifier.value);
+        const card = ROGUE_CARD_POOL[cardId];
+        if (card && card.values && isFiniteNumber(Number(card.values.value))) return Number(card.values.value);
+        return fallbackValue;
+    }
+
+    function createRogueModifierState(cardId) {
+        const card = ROGUE_CARD_POOL[cardId];
+        if (!card) return null;
+        const values = card.values || {};
+        return {
+            remaining: isFiniteNumber(Number(values.remaining)) ? Math.max(1, Math.floor(Number(values.remaining))) : null,
+            value: isFiniteNumber(Number(values.value)) ? Number(values.value) : null,
+            flags: Array.isArray(values.flags) ? values.flags.map((flag) => String(flag)).filter(Boolean) : []
+        };
+    }
+
+    function applyRogueCardModifier(cardId) {
+        const run = ensureRogueRun();
+        if (!run) return;
+        const modifier = createRogueModifierState(cardId);
+        if (!modifier) return;
+        run.activeModifiers[cardId] = modifier;
+    }
+
+    function consumeRogueModifier(cardId, amount = 1) {
+        const run = ensureRogueRun();
+        if (!run || !run.activeModifiers || !run.activeModifiers[cardId]) return false;
+        const modifier = run.activeModifiers[cardId];
+        if (modifier.remaining == null) return true;
+        modifier.remaining = Math.max(0, Math.floor(Number(modifier.remaining) || 0) - Math.max(1, Math.floor(amount || 1)));
+        if (modifier.remaining <= 0) {
+            delete run.activeModifiers[cardId];
+        }
+        return true;
+    }
+
+    function rogueModifierHasFlag(cardId, flag) {
+        const modifier = getRogueModifier(cardId);
+        return !!(modifier && Array.isArray(modifier.flags) && modifier.flags.includes(flag));
+    }
+
+    function rogueModifierAddFlag(cardId, flag) {
+        const modifier = getRogueModifier(cardId);
+        if (!modifier || !flag) return;
+        if (!Array.isArray(modifier.flags)) modifier.flags = [];
+        if (!modifier.flags.includes(flag)) modifier.flags.push(flag);
+    }
+
+    function rogueModifierRemoveFlag(cardId, flag) {
+        const modifier = getRogueModifier(cardId);
+        if (!modifier || !Array.isArray(modifier.flags)) return;
+        modifier.flags = modifier.flags.filter((entry) => entry !== flag);
+    }
+
+    function shuffleGardenArray(list) {
+        const cloned = Array.isArray(list) ? list.slice() : [];
+        for (let index = cloned.length - 1; index > 0; index -= 1) {
+            const swapIndex = Math.floor(Math.random() * (index + 1));
+            const temp = cloned[index];
+            cloned[index] = cloned[swapIndex];
+            cloned[swapIndex] = temp;
+        }
+        return cloned;
+    }
+
+    function createRogueCardOffer(context) {
+        const run = ensureRogueRun();
+        if (!run) return null;
+        const availableCards = shuffleGardenArray(
+            Object.values(ROGUE_CARD_POOL).filter((card) => card.context === context && !run.selectedCards.includes(card.id))
+        ).slice(0, 3);
+        if (!availableCards.length) return null;
+        run.currentOffer = {
+            context,
+            cardIds: availableCards.map((card) => card.id)
+        };
+        return run.currentOffer;
+    }
+
+    function canCookAnyKitchenRecipe() {
+        return Object.values(KITCHEN_RECIPES).some((recipe) => hasInventoryItems(recipe.ingredients));
+    }
+
+    function getSellUnitPrice(itemId) {
+        const meta = ITEM_META[itemId];
+        if (!meta) return 0;
+        let price = meta.sellPrice;
+        if (meta.category === 'cooked' && isRogueModifierActive('kitchen_cooked_markup')) {
+            price *= 1 + getRogueModifierValue('kitchen_cooked_markup', 0.2);
+        }
+        return Math.max(1, Math.round(price));
+    }
+
+    function calculateStorageSellGold(itemId, qty) {
+        const sellQty = Math.max(0, Math.floor(qty || 0));
+        if (sellQty < 1) return 0;
+        let totalGold = getSellUnitPrice(itemId) * sellQty;
+        if (sellQty >= 3 && isRogueModifierActive('sell_bulk_bonus')) {
+            totalGold = Math.round(totalGold * (1 + getRogueModifierValue('sell_bulk_bonus', 0.15)));
+        }
+        return Math.max(0, Math.round(totalGold));
+    }
+
+    function markSellChainPending() {
+        if (!isRogueModifierActive('sell_chain_bonus')) return;
+        rogueModifierAddFlag('sell_chain_bonus', 'pending_next');
+    }
+
+    function takeSellChainPending() {
+        if (!rogueModifierHasFlag('sell_chain_bonus', 'pending_next')) return false;
+        rogueModifierRemoveFlag('sell_chain_bonus', 'pending_next');
+        return true;
+    }
+
+    function calculateOrderReward(lines, options) {
+        const normalizedLines = Array.isArray(lines) ? lines : [];
+        const baseValue = normalizedLines.reduce((sum, line) => sum + (getSellUnitPrice(line.itemId) * line.requiredQty), 0);
+        let bonusGold = Math.round(baseValue * 0.5);
+        const hasCookedLine = normalizedLines.some((line) => ITEM_META[line.itemId] && ITEM_META[line.itemId].category === 'cooked');
+        if (hasCookedLine && isRogueModifierActive('sell_cooked_order')) {
+            bonusGold = Math.round(bonusGold * getRogueModifierValue('sell_cooked_order', 1.3));
+        }
+        if (options && options.chainApplied) {
+            bonusGold = Math.round(bonusGold * 1.2);
+        }
+        if (isRogueModifierActive('sell_order_tip')) {
+            bonusGold += Math.round(getRogueModifierValue('sell_order_tip', 60));
+        }
+        return { baseValue, bonusGold };
+    }
+
+    function getSpecialOrderCandidates() {
+        return Object.keys(ITEM_META)
+            .map((itemId) => ({
+                itemId,
+                stock: getInventoryCount(itemId),
+                meta: ITEM_META[itemId],
+                weight: ITEM_META[itemId].category === 'cooked' && isRogueModifierActive('sell_cooked_order') ? 2 : 1
+            }))
+            .filter((entry) => entry.stock > 0);
+    }
+
+    function pickWeightedSpecialOrderCandidate(candidates, excludedIds) {
+        const excludedSet = excludedIds instanceof Set ? excludedIds : new Set(excludedIds || []);
+        const weightedPool = [];
+        (candidates || []).forEach((entry) => {
+            if (!entry || excludedSet.has(entry.itemId)) return;
+            for (let index = 0; index < Math.max(1, entry.weight || 1); index += 1) {
+                weightedPool.push(entry);
+            }
+        });
+        if (!weightedPool.length) return null;
+        return weightedPool[Math.floor(Math.random() * weightedPool.length)];
+    }
+
+    function createSpecialOrderLine(itemId) {
+        const meta = ITEM_META[itemId];
+        const stock = getInventoryCount(itemId);
+        if (!meta || stock < 1) return null;
+        const maxQty = meta.category === 'cooked' ? 2 : 3;
+        const requiredQty = Math.max(1, Math.min(stock, 1 + Math.floor(Math.random() * Math.min(maxQty, stock))));
+        return { itemId, requiredQty, fulfilledQty: 0 };
+    }
+
+    function createSpecialSellOrder() {
+        const run = ensureRogueRun();
+        const candidates = getSpecialOrderCandidates();
+        if (!run || !candidates.length) return null;
+        const desiredLineCount = candidates.length >= 2 && Math.random() >= 0.75 ? 2 : 1;
+        const chosenIds = [];
+        const usedIds = new Set();
+        while (chosenIds.length < desiredLineCount) {
+            const picked = pickWeightedSpecialOrderCandidate(candidates, usedIds);
+            if (!picked) break;
+            chosenIds.push(picked.itemId);
+            usedIds.add(picked.itemId);
+        }
+        if (!chosenIds.length) return null;
+        const lines = chosenIds.map((itemId) => createSpecialOrderLine(itemId)).filter(Boolean);
+        if (!lines.length) return null;
+        const chainApplied = takeSellChainPending();
+        const reward = calculateOrderReward(lines, { chainApplied });
+        return {
+            orderId: `rogue_order_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            title: `特殊订单 ${Math.min(2, run.progress.ordersCompleted + 1)}/2`,
+            lines,
+            baseValue: reward.baseValue,
+            bonusGold: reward.bonusGold
+        };
+    }
+
+    function ensureSellStageOrder() {
+        const run = ensureRogueRun();
+        if (!run || run.stage !== 'sell_orders' || run.currentOrder || run.currentOffer || run.currentSupplyOffer) return false;
+        const nextOrder = createSpecialSellOrder();
+        if (!nextOrder) return false;
+        run.currentOrder = nextOrder;
+        return true;
+    }
+
+    function syncRogueStateConsistency() {
+        const run = ensureRogueRun();
+        if (!run) return false;
+        let changed = false;
+        if (!run.currentSupplyOffer && !run.currentOffer) {
+            const currentContext = getRogueCardContextForStage(run.stage);
+            if (currentContext && !hasSelectedRogueCardForContext(currentContext)) {
+                changed = !!createRogueCardOffer(currentContext) || changed;
+            }
+        }
+        changed = ensureSellStageOrder() || changed;
+        return changed;
+    }
+
+    function getRogueStageGoalText() {
+        const run = getRogueRun();
+        if (!run) return '等待新周目开始';
+        if (run.currentSupplyOffer) {
+            const nextStage = getNextRogueStageAfterSupply(run.currentSupplyOffer.stage);
+            return `阶段完成，领取补给后进入${ROGUE_STAGE_LABELS[nextStage] || '下一阶段'}`;
+        }
+        if (run.stage === 'farm') {
+            if (run.currentOffer) return '先选择 1 张农场卡牌';
+            return `收获作物 2 次（${Math.min(2, run.progress.farmHarvests)}/2）`;
+        }
+        if (run.stage === 'pasture') {
+            if (run.currentOffer) return '先选择 1 张牧场卡牌';
+            return `收获畜产 2 次（${Math.min(2, run.progress.pastureHarvests)}/2）`;
+        }
+        if (run.stage === 'kitchen') {
+            if (run.currentOffer) return '先选择 1 张厨房卡牌';
+            if (!canCookAnyKitchenRecipe()) return '暂无可做料理，可无惩罚跳过厨房';
+            return `成功烹饪 1 次（${Math.min(1, run.progress.kitchenSuccesses)}/1）`;
+        }
+        if (run.stage === 'sell_setup') return run.currentOffer ? '先选择 1 张出售卡牌' : '出售卡牌已生效，准备生成特殊订单';
+        if (run.stage === 'sell_orders') return run.currentOrder ? `完成特殊订单 2 张（${Math.min(2, run.progress.ordersCompleted)}/2）` : '等待可交付库存';
+        return '继续推进本轮周目';
+    }
+
+    function getRogueOrderSummaryText() {
+        const run = getRogueRun();
+        if (!run) return '未开始';
+        if (run.currentSupplyOffer) return '本阶段已完成，先领取补给';
+        if (run.stage === 'sell_setup') return '选完出售卡后生成第一张订单';
+        if (run.stage !== 'sell_orders') return '尚未进入出售阶段';
+        if (!run.currentOrder) return '等待可交付库存';
+        const completedLines = run.currentOrder.lines.map((line) => {
+            const meta = ITEM_META[line.itemId];
+            return `${meta ? meta.emoji : '📦'} ${meta ? meta.name : line.itemId} ${line.fulfilledQty}/${line.requiredQty}`;
+        });
+        return `${run.currentOrder.title} · ${completedLines.join(' / ')} · 奖励 ${run.currentOrder.bonusGold}`;
+    }
+
+    function renderStorageSpecialOrderCard() {
+        if (!storageOrderCardEl) return;
+        if (!isRogueActivityMode()) {
+            storageOrderCardEl.hidden = true;
+            storageOrderCardEl.innerHTML = '';
+            return;
+        }
+        storageOrderCardEl.hidden = false;
+        const run = ensureRogueRun();
+        if (!run) {
+            storageOrderCardEl.innerHTML = '';
+            return;
+        }
+        const isSellStage = run.stage === 'sell_setup' || run.stage === 'sell_orders';
+        storageOrderCardEl.classList.toggle('is-active', isSellStage);
+        storageOrderCardEl.classList.toggle('is-idle', !isSellStage);
+        if (run.stage === 'sell_setup') {
+            storageOrderCardEl.innerHTML = `
+                <div class="garden-storage-order-head">
+                    <div>
+                        <div class="garden-storage-order-title">特殊订单</div>
+                        <div class="garden-storage-order-subtitle">选完出售卡后自动生成第一张订单</div>
+                    </div>
+                    <div class="garden-storage-order-reward">待生成</div>
+                </div>
+            `;
+            return;
+        }
+        if (run.stage !== 'sell_orders') {
+            storageOrderCardEl.innerHTML = `
+                <div class="garden-storage-order-head">
+                    <div>
+                        <div class="garden-storage-order-title">特殊订单</div>
+                        <div class="garden-storage-order-subtitle">出售阶段开始后会在这里显示订单</div>
+                    </div>
+                    <div class="garden-storage-order-reward">未开启</div>
+                </div>
+            `;
+            return;
+        }
+        if (!run.currentOrder) {
+            storageOrderCardEl.innerHTML = `
+                <div class="garden-storage-order-head">
+                    <div>
+                        <div class="garden-storage-order-title">特殊订单</div>
+                        <div class="garden-storage-order-subtitle">等待可交付库存，仓库有货后会自动补单</div>
+                    </div>
+                    <div class="garden-storage-order-reward">补货中</div>
+                </div>
+            `;
+            return;
+        }
+        const lineHtml = run.currentOrder.lines.map((line) => {
+            const meta = ITEM_META[line.itemId];
+            return `
+                <div class="garden-storage-order-line">
+                    <span>${meta ? meta.emoji : '📦'} ${meta ? meta.name : line.itemId}</span>
+                    <strong>${line.fulfilledQty}/${line.requiredQty}</strong>
+                </div>
+            `;
+        }).join('');
+        storageOrderCardEl.innerHTML = `
+            <div class="garden-storage-order-head">
+                <div>
+                    <div class="garden-storage-order-title">${run.currentOrder.title}</div>
+                    <div class="garden-storage-order-subtitle">完成后额外获得 ${run.currentOrder.bonusGold} 金币</div>
+                </div>
+                <div class="garden-storage-order-reward">${run.progress.ordersCompleted}/2</div>
+            </div>
+            <div class="garden-storage-order-lines">${lineHtml}</div>
+        `;
+    }
+
+    function syncKitchenSkipButton() {
+        if (!kitchenSkipBtnEl) return;
+        const run = getRogueRun();
+        const shouldShow = !!run && run.stage === 'kitchen' && !run.currentOffer && !run.currentSupplyOffer && !canCookAnyKitchenRecipe();
+        kitchenSkipBtnEl.hidden = !shouldShow;
+        kitchenSkipBtnEl.disabled = !shouldShow;
+    }
+
+    function renderRogueProgressStrip() {
+        const run = getRogueRun();
+        if (!run) return;
+        if (rogueProgressStageEl) rogueProgressStageEl.textContent = ROGUE_STAGE_LABELS[run.stage] || '农场阶段';
+        if (rogueProgressCardsEl) {
+            const cardTitles = getSelectedRogueCardDefs().map((card) => card.title);
+            rogueProgressCardsEl.textContent = cardTitles.length ? `卡牌：${cardTitles.join(' · ')}` : '已选卡牌 0/4';
+        }
+        if (rogueProgressGoalEl) rogueProgressGoalEl.textContent = `目标：${getRogueStageGoalText()}`;
+        if (rogueProgressOrderEl) {
+            rogueProgressOrderEl.textContent = run.currentOrder
+                ? `${run.currentOrder.title} · 奖励 ${run.currentOrder.bonusGold}`
+                : (run.stage === 'sell_orders' ? '订单：等待可交付库存' : '订单：未开始');
+        }
+    }
+
+    function renderRogueProgressPanel() {
+        const run = getRogueRun();
+        if (!run) return;
+        if (rogueProgressPanelStageEl) rogueProgressPanelStageEl.textContent = ROGUE_STAGE_LABELS[run.stage] || '农场阶段';
+        if (rogueProgressPanelGoalEl) rogueProgressPanelGoalEl.textContent = getRogueStageGoalText();
+        if (rogueProgressPanelCardsEl) {
+            const cards = getSelectedRogueCardDefs();
+            rogueProgressPanelCardsEl.innerHTML = cards.length
+                ? cards.map((card) => `<span class="garden-rogue-chip">${card.title}</span>`).join('')
+                : '<span class="garden-rogue-empty-text">本轮还没有选卡</span>';
+        }
+        if (rogueProgressPanelOrderEl) {
+            if (!run.currentOrder) {
+                rogueProgressPanelOrderEl.innerHTML = `<div class="garden-rogue-empty-text">${getRogueOrderSummaryText()}</div>`;
+            } else {
+                rogueProgressPanelOrderEl.innerHTML = `
+                    <div class="garden-rogue-order-title">${run.currentOrder.title}</div>
+                    <div class="garden-rogue-order-lines">${run.currentOrder.lines.map((line) => {
+                        const meta = ITEM_META[line.itemId];
+                        return `<div class="garden-rogue-order-line"><span>${meta ? meta.emoji : '📦'} ${meta ? meta.name : line.itemId}</span><strong>${line.fulfilledQty}/${line.requiredQty}</strong></div>`;
+                    }).join('')}</div>
+                    <div class="garden-rogue-order-reward">完成奖励：${run.currentOrder.bonusGold} 金币</div>
+                `;
+            }
+        }
+    }
+
+    function renderRogueOfferModal() {
+        if (!rogueOfferModalEl) return;
+        const run = getRogueRun();
+        const cardOffer = run ? run.currentOffer : null;
+        const supplyOffer = run ? run.currentSupplyOffer : null;
+        const isOpen = !!(cardOffer || supplyOffer);
+        rogueOfferModalEl.classList.toggle('is-open', isOpen);
+        rogueOfferModalEl.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+        if (!isOpen) return;
+        if (supplyOffer) {
+            if (rogueOfferTitleEl) rogueOfferTitleEl.textContent = `${ROGUE_CONTEXT_LABELS[supplyOffer.stage] || '阶段'}完成补给`;
+            if (rogueOfferDescEl) rogueOfferDescEl.textContent = '选择 1 份补给后，会自动进入下一阶段。';
+            if (rogueOfferChoicesEl) {
+                rogueOfferChoicesEl.innerHTML = supplyOffer.optionIds.map((optionId) => {
+                    const option = getSupplyOptionDef(supplyOffer.stage, optionId);
+                    if (!option) return '';
+                    return `
+                        <button class="garden-rogue-card-choice" data-rogue-supply-id="${option.id}" type="button">
+                            <div class="garden-rogue-card-choice-title">${option.title}</div>
+                            <div class="garden-rogue-card-choice-desc">${option.desc}</div>
+                        </button>
+                    `;
+                }).join('');
+            }
+            return;
+        }
+        if (!cardOffer) return;
+        if (rogueOfferTitleEl) rogueOfferTitleEl.textContent = `${ROGUE_CONTEXT_LABELS[cardOffer.context] || '阶段'}三选一卡`;
+        if (rogueOfferDescEl) rogueOfferDescEl.textContent = `本轮已选 ${run.selectedCards.length} 张卡牌，选择后立即生效。`;
+        if (rogueOfferChoicesEl) {
+            rogueOfferChoicesEl.innerHTML = cardOffer.cardIds.map((cardId) => {
+                const card = ROGUE_CARD_POOL[cardId];
+                return `
+                    <button class="garden-rogue-card-choice" data-rogue-card-id="${card.id}" type="button">
+                        <div class="garden-rogue-card-choice-title">${card.title}</div>
+                        <div class="garden-rogue-card-choice-desc">${card.desc}</div>
+                    </button>
+                `;
+            }).join('');
+        }
+    }
+
+    function syncGardenRogueUi() {
+        if (!state.gardenGame) return;
+        if (!isRogueActivityMode()) {
+            setRogueProgressPanelOpen(false);
+            if (rogueProgressStripEl) rogueProgressStripEl.hidden = true;
+            if (rogueOfferModalEl) {
+                rogueOfferModalEl.classList.remove('is-open');
+                rogueOfferModalEl.setAttribute('aria-hidden', 'true');
+            }
+            renderStorageSpecialOrderCard();
+            syncKitchenSkipButton();
+            return;
+        }
+        if (rogueProgressStripEl) rogueProgressStripEl.hidden = false;
+        const changed = syncRogueStateConsistency();
+        if (changed) saveGardenGameState();
+        renderRogueProgressStrip();
+        renderRogueProgressPanel();
+        renderRogueOfferModal();
+        renderStorageSpecialOrderCard();
+        syncKitchenSkipButton();
+    }
+
+    function setRogueProgressPanelOpen(open) {
+        state.roguePanelOpen = !!open;
+        if (!rogueProgressPanelEl) return;
+        rogueProgressPanelEl.classList.toggle('is-open', state.roguePanelOpen);
+        rogueProgressPanelEl.setAttribute('aria-hidden', state.roguePanelOpen ? 'false' : 'true');
+    }
+
+    function handleRogueUiClick(event) {
+        if (!isRogueActivityMode()) return;
+        const openButton = event.target.closest('[data-rogue-open-panel]');
+        if (openButton) {
+            setRogueProgressPanelOpen(true);
+            vibrate(12);
+            return;
+        }
+        const closeButton = event.target.closest('[data-rogue-close-panel]');
+        if (closeButton) {
+            setRogueProgressPanelOpen(false);
+            vibrate(12);
+            return;
+        }
+        const cardButton = event.target.closest('[data-rogue-card-id]');
+        if (cardButton) {
+            selectRogueCard(cardButton.dataset.rogueCardId);
+            vibrate(15);
+            return;
+        }
+        const supplyButton = event.target.closest('[data-rogue-supply-id]');
+        if (supplyButton) {
+            selectRogueSupply(supplyButton.dataset.rogueSupplyId);
+            vibrate(15);
+            return;
+        }
+        const skipButton = event.target.closest('[data-kitchen-skip-rogue]');
+        if (skipButton) {
+            skipRogueKitchenStage();
+            vibrate(15);
+            return;
+        }
+    }
+
+    function openCurrentRogueStageScreen(options) {
+        const run = getRogueRun();
+        const preferActivitiesBase = !options || options.preferActivitiesBase !== false;
+        if (!run) return;
+        if (run.stage === 'farm') {
+            if (preferActivitiesBase && state.currentView === 'gallery') {
+                switchView('activities');
+            }
+            openFarmScreen();
+            return;
+        }
+        if (run.stage === 'pasture') {
+            if (preferActivitiesBase && state.currentView === 'gallery') {
+                switchView('activities');
+            }
+            openPastureScreen();
+            return;
+        }
+        if (run.stage === 'kitchen') {
+            if (preferActivitiesBase && state.currentView === 'gallery') {
+                switchView('activities');
+            }
+            openKitchenScreen();
+            return;
+        }
+        switchView('gallery');
+    }
+
+    function progressRogueFarmHarvest() {
+        const run = ensureRogueRun();
+        if (!run || run.stage !== 'farm' || run.currentOffer || run.currentSupplyOffer) return;
+        run.progress.farmHarvests += 1;
+        if (run.progress.farmHarvests >= 2 && !run.currentSupplyOffer) {
+            createRogueSupplyOffer('farm');
+            showRogueToast('农场目标完成，来领 1 份阶段补给');
+        }
+    }
+
+    function progressRoguePastureHarvest() {
+        const run = ensureRogueRun();
+        if (!run || run.stage !== 'pasture' || run.currentOffer || run.currentSupplyOffer) return;
+        run.progress.pastureHarvests += 1;
+        if (run.progress.pastureHarvests >= 2 && !run.currentSupplyOffer) {
+            createRogueSupplyOffer('pasture');
+            showRogueToast('牧场目标完成，来领 1 份阶段补给');
+        }
+    }
+
+    function progressRogueKitchenSuccess() {
+        const run = ensureRogueRun();
+        if (!run || run.stage !== 'kitchen' || run.currentOffer || run.currentSupplyOffer) return;
+        run.progress.kitchenSuccesses += 1;
+        if (run.progress.kitchenSuccesses >= 1 && !run.currentSupplyOffer) {
+            createRogueSupplyOffer('kitchen');
+            showRogueToast('厨房目标完成，来领 1 份阶段补给');
+        }
+    }
+
+    function skipRogueKitchenStage() {
+        const run = ensureRogueRun();
+        if (!run || run.stage !== 'kitchen' || run.currentOffer || run.currentSupplyOffer || canCookAnyKitchenRecipe()) return;
+        run.stage = 'sell_setup';
+        run.currentOrder = null;
+        showRogueToast('已无惩罚跳过厨房，进入出售准备');
+        syncRogueStateConsistency();
+        saveGardenGameState();
+        refreshGardenEconomyUi();
+        openCurrentRogueStageScreen({ preferActivitiesBase: false });
+    }
+
+    function selectRogueCard(cardId) {
+        const run = ensureRogueRun();
+        const card = ROGUE_CARD_POOL[cardId];
+        if (!run || !card || !run.currentOffer || !run.currentOffer.cardIds.includes(cardId)) return;
+        if (!run.selectedCards.includes(cardId)) run.selectedCards.push(cardId);
+        applyRogueCardModifier(cardId);
+        run.currentOffer = null;
+        if (card.context === 'farm') {
+            showRogueToast('农场卡已生效，去收获 2 次作物吧');
+        } else if (card.context === 'pasture') {
+            showRogueToast('牧场卡已生效，去收获 2 次畜产吧');
+        } else if (card.context === 'kitchen') {
+            showRogueToast(canCookAnyKitchenRecipe() ? '厨房卡已生效，成功做出 1 道菜即可进入出售' : '当前没有可做料理，可以直接跳过厨房');
+        } else if (card.context === 'sell') {
+            run.stage = 'sell_orders';
+            run.currentOrder = null;
+            showRogueToast('出售卡已生效，去仓库完成 2 张特殊订单吧');
+        }
+        syncRogueStateConsistency();
+        saveGardenGameState();
+        refreshGardenEconomyUi();
+        if (card.context === 'sell') {
+            openCurrentRogueStageScreen({ preferActivitiesBase: false });
+        }
+    }
+
+    function selectRogueSupply(optionId) {
+        const run = ensureRogueRun();
+        const offer = run ? run.currentSupplyOffer : null;
+        if (!run || !offer || !offer.optionIds.includes(optionId)) return;
+        if (!applyRogueSupplyReward(optionId)) return;
+        const nextStage = getNextRogueStageAfterSupply(offer.stage);
+        run.currentSupplyOffer = null;
+        if (nextStage) {
+            run.stage = nextStage;
+            if (nextStage === 'sell_setup') {
+                run.currentOrder = null;
+            }
+        }
+        syncRogueStateConsistency();
+        saveGardenGameState();
+        refreshGardenEconomyUi();
+        if (nextStage) {
+            showRogueToast(`补给已领取，进入${ROGUE_STAGE_LABELS[nextStage] || '下一阶段'}`);
+            openCurrentRogueStageScreen();
+        }
+    }
+
+    function applySellToCurrentOrder(itemId, sellQty) {
+        const run = ensureRogueRun();
+        if (!run || run.stage !== 'sell_orders' || !run.currentOrder || sellQty < 1) return null;
+        let remainingQty = sellQty;
+        run.currentOrder.lines.forEach((line) => {
+            if (line.itemId !== itemId || remainingQty < 1) return;
+            const missingQty = Math.max(0, line.requiredQty - line.fulfilledQty);
+            if (missingQty < 1) return;
+            const fulfilledNow = Math.min(missingQty, remainingQty);
+            line.fulfilledQty += fulfilledNow;
+            remainingQty -= fulfilledNow;
+        });
+        const isCompleted = run.currentOrder.lines.every((line) => line.fulfilledQty >= line.requiredQty);
+        if (!isCompleted) return null;
+        const completedOrder = run.currentOrder;
+        run.progress.ordersCompleted += 1;
+        updateGardenCoins(completedOrder.bonusGold);
+        markSellChainPending();
+        run.currentOrder = null;
+        if (run.progress.ordersCompleted >= 2) {
+            const completedRuns = Math.max(0, Math.floor(Number(run.completedRuns) || 0)) + 1;
+            updateGardenCoins(120);
+            state.gardenGame.rogueRun = createDefaultRogueRun(completedRuns);
+            syncRogueStateConsistency();
+            showRogueToast(`本轮完成，额外获得 ${completedOrder.bonusGold + 120} 金币，已开启下一轮农场阶段`);
+            return { finishedRun: true, reward: completedOrder.bonusGold, settlementGold: 120 };
+        }
+        ensureSellStageOrder();
+        showRogueToast(`订单完成，额外获得 ${completedOrder.bonusGold} 金币`);
+        return { finishedRun: false, reward: completedOrder.bonusGold };
     }
 
     function createEmptyContactFigureDraftFiles() {
@@ -643,6 +1667,39 @@
             runLeft: null,
             runRight: null
         };
+    }
+
+    function readHomeTutorialDismissed() {
+        try {
+            const value = window.localStorage.getItem(GARDEN_HOME_TUTORIAL_DISMISSED_KEY);
+            if (value == null) return true;
+            return value === '1';
+        } catch (error) {
+            return true;
+        }
+    }
+
+    function writeHomeTutorialDismissed(dismissed) {
+        try {
+            window.localStorage.setItem(GARDEN_HOME_TUTORIAL_DISMISSED_KEY, dismissed ? '1' : '0');
+        } catch (error) {
+            return;
+        }
+    }
+
+    function syncHomeTutorialVisibility() {
+        if (homeTutorialCardEl) {
+            homeTutorialCardEl.hidden = true;
+        }
+        if (homeTutorialReopenBtnEl) {
+            homeTutorialReopenBtnEl.hidden = true;
+        }
+    }
+
+    function setHomeTutorialDismissed(dismissed) {
+        state.homeTutorialDismissed = !!dismissed;
+        writeHomeTutorialDismissed(state.homeTutorialDismissed);
+        syncHomeTutorialVisibility();
     }
 
     function init() {
@@ -697,6 +1754,24 @@
         kitchenQteHintEl = document.getElementById('garden-kitchen-qte-hint');
         kitchenToastEl = document.getElementById('garden-kitchen-toast');
         kitchenCookBtns = Array.from(document.querySelectorAll('#garden-app [data-kitchen-cook]'));
+        rogueProgressStripEl = document.getElementById('garden-rogue-strip');
+        rogueProgressStageEl = document.getElementById('garden-rogue-stage');
+        rogueProgressCardsEl = document.getElementById('garden-rogue-cards');
+        rogueProgressGoalEl = document.getElementById('garden-rogue-goal');
+        rogueProgressOrderEl = document.getElementById('garden-rogue-order');
+        rogueProgressPanelEl = document.getElementById('garden-rogue-panel');
+        rogueProgressPanelStageEl = document.getElementById('garden-rogue-panel-stage');
+        rogueProgressPanelCardsEl = document.getElementById('garden-rogue-panel-cards');
+        rogueProgressPanelGoalEl = document.getElementById('garden-rogue-panel-goal');
+        rogueProgressPanelOrderEl = document.getElementById('garden-rogue-panel-order');
+        rogueOfferModalEl = document.getElementById('garden-rogue-offer');
+        rogueOfferTitleEl = document.getElementById('garden-rogue-offer-title');
+        rogueOfferDescEl = document.getElementById('garden-rogue-offer-desc');
+        rogueOfferChoicesEl = document.getElementById('garden-rogue-offer-choices');
+        storageOrderCardEl = document.getElementById('garden-storage-order-card');
+        kitchenSkipBtnEl = document.getElementById('garden-kitchen-skip-btn');
+        homeTutorialCardEl = document.getElementById('garden-home-tutorial-card');
+        homeTutorialReopenBtnEl = document.getElementById('garden-home-tutorial-reopen');
         floraScreenEl = document.getElementById('garden-flora-screen');
         floraAppEl = document.getElementById('garden-flora-app');
         floraBackBtn = document.getElementById('garden-flora-back');
@@ -710,7 +1785,9 @@
         }
 
         state.gardenGame = loadGardenGameState();
+        state.homeTutorialDismissed = readHomeTutorialDismissed();
         saveGardenGameState();
+        syncHomeTutorialVisibility();
 
         closeBtn.addEventListener('click', closeApp);
         bindGardenTitleEditing();
@@ -719,6 +1796,7 @@
         bindActivitiesInteractions();
         initStorageView();
         ensureContactFigureModal();
+        screenEl.addEventListener('click', handleRogueUiClick);
         togglePanelBtn.addEventListener('click', () => {
             if (state.currentView !== 'home') return;
             setDrawerOpen(!state.drawerOpen);
@@ -1030,8 +2108,9 @@
         if (!plot || plot.state !== 'growing' || !plot.seedId || !isFiniteNumber(plot.readyAt)) return 0;
         const seed = FARM_SEEDS[plot.seedId];
         if (!seed) return 0;
+        const totalDuration = isFiniteNumber(plot.growDuration) ? plot.growDuration : seed.time;
         const remaining = Math.max(0, plot.readyAt - Date.now());
-        return Math.max(0, Math.min(100, ((seed.time - remaining) / seed.time) * 100));
+        return Math.max(0, Math.min(100, ((totalDuration - remaining) / totalDuration) * 100));
     }
 
     function renderFarmPlots() {
@@ -1157,7 +2236,14 @@
                 return;
             }
             updateGardenCoins(-seed.cost);
-            plantFarmSeed(plotEl, seed);
+            let rebateGold = 0;
+            if (isRogueModifierActive('farm_seed_rebate')) {
+                rebateGold = Math.ceil(seed.cost * getRogueModifierValue('farm_seed_rebate', 0.3));
+                if (rebateGold > 0) {
+                    updateGardenCoins(rebateGold);
+                }
+            }
+            plantFarmSeed(plotEl, seed, rebateGold);
             return;
         }
 
@@ -1217,15 +2303,18 @@
         showFarmToast('切换工具后就能开始种地啦');
     }
 
-    function plantFarmSeed(plotEl, seed) {
+    function plantFarmSeed(plotEl, seed, rebateGold = 0) {
         const plot = getFarmPlotStateByElement(plotEl);
         if (!plot) return;
         plot.state = 'planted';
         plot.seedId = seed.id;
         plot.readyAt = null;
+        plot.growDuration = null;
         renderFarmPlots();
         saveGardenGameState();
-        showFarmToast(`已种下${seed.name}，记得浇水`);
+        showFarmToast(rebateGold > 0
+            ? `已种下${seed.name}，返还 ${rebateGold} 金币，记得浇水`
+            : `已种下${seed.name}，记得浇水`);
     }
 
     function waterFarmPlot(plotEl) {
@@ -1237,21 +2326,34 @@
         window.setTimeout(() => {
             plotEl.style.backgroundColor = '';
         }, 500);
+        const fastWaterApplied = consumeRogueModifier('farm_fast_water');
+        const growDuration = Math.max(60 * 1000, Math.round(seed.time * (fastWaterApplied ? getRogueModifierValue('farm_fast_water', 0.75) : 1)));
         plot.state = 'growing';
-        plot.readyAt = Date.now() + seed.time;
+        plot.growDuration = growDuration;
+        plot.readyAt = Date.now() + growDuration;
         renderFarmPlots();
         saveGardenGameState();
-        showFarmToast('已浇水，开始按现实时间生长');
+        showFarmToast(fastWaterApplied ? '已浇水，速熟效果已生效' : '已浇水，开始按现实时间生长');
     }
 
     function harvestFarmCrop(plotEl, seed) {
         const plot = getFarmPlotStateByElement(plotEl);
         if (!plot) return;
-        addInventoryItem(seed.inventoryId, 1);
+        let rewardQty = 1;
+        if (consumeRogueModifier('farm_double_crop') && Math.random() < getRogueModifierValue('farm_double_crop', 0.35)) {
+            rewardQty += 1;
+        }
+        const cropMeta = ITEM_META[seed.inventoryId];
+        if (cropMeta && cropMeta.sellPrice >= 25 && isRogueModifierActive('farm_big_crop')) {
+            rewardQty += 1;
+        }
+        addInventoryItem(seed.inventoryId, rewardQty);
         plot.state = 'empty';
         plot.seedId = '';
         plot.readyAt = null;
+        plot.growDuration = null;
         state.gardenGame.farm.exp += 10;
+        progressRogueFarmHarvest();
 
         let leveledUp = false;
         while (state.gardenGame.farm.exp >= 100) {
@@ -1264,8 +2366,8 @@
         saveGardenGameState();
         refreshGardenEconomyUi();
         showFarmToast(leveledUp
-            ? `收获 ${seed.name}，已存入仓库 · 升到 ${state.gardenGame.farm.level} 级`
-            : `收获 ${seed.name}，已存入仓库`);
+            ? `收获 ${seed.name} x${rewardQty}，已存入仓库 · 升到 ${state.gardenGame.farm.level} 级`
+            : `收获 ${seed.name} x${rewardQty}，已存入仓库`);
     }
 
     function clearFarmPlot(plotEl) {
@@ -1274,6 +2376,7 @@
         plot.state = 'empty';
         plot.seedId = '';
         plot.readyAt = null;
+        plot.growDuration = null;
         renderFarmPlots();
         saveGardenGameState();
     }
@@ -1532,7 +2635,15 @@
 
         if (state.pastureGame.currentTool === 'feed' && animalState === 'hungry') {
             animal.state = animalAge === 'baby' ? 'growing' : 'producing';
-            animal.stateEndsAt = Date.now() + (animalAge === 'baby' ? data.growTime : data.produceTime);
+            let durationMultiplier = 1;
+            if (consumeRogueModifier('pasture_fast_feed')) {
+                durationMultiplier *= getRogueModifierValue('pasture_fast_feed', 0.7);
+            }
+            if (animalAge === 'baby' && isRogueModifierActive('pasture_baby_boost')) {
+                durationMultiplier *= getRogueModifierValue('pasture_baby_boost', 0.6);
+            }
+            const baseDuration = animalAge === 'baby' ? data.growTime : data.produceTime;
+            animal.stateEndsAt = Date.now() + Math.max(1000, Math.round(baseDuration * durationMultiplier));
             state.pastureGame.visualEatingUntil[animal.id] = Date.now() + 1500;
             saveGardenGameState();
             renderPastureAnimals();
@@ -1556,11 +2667,20 @@
 
             animal.state = 'hungry';
             animal.stateEndsAt = null;
-            addInventoryItem(data.inventoryId, 1);
+            let rewardQty = 1;
+            if (consumeRogueModifier('pasture_twin_yield') && Math.random() < getRogueModifierValue('pasture_twin_yield', 0.35)) {
+                rewardQty += 1;
+            }
+            if (isRogueModifierActive('pasture_type_bonus') && !rogueModifierHasFlag('pasture_type_bonus', animal.type)) {
+                rewardQty += 1;
+                rogueModifierAddFlag('pasture_type_bonus', animal.type);
+            }
+            addInventoryItem(data.inventoryId, rewardQty);
+            progressRoguePastureHarvest();
             renderPastureAnimals();
             saveGardenGameState();
             refreshGardenEconomyUi();
-            showPastureToast(`获得 ${data.produceName} ${data.produceEmoji}，已存入仓库`);
+            showPastureToast(`获得 ${data.produceName} ${data.produceEmoji} x${rewardQty}，已存入仓库`);
         }
     }
 
@@ -1681,6 +2801,7 @@
         }
 
         syncKitchenCookButtons();
+        syncGardenRogueUi();
     }
 
     function syncKitchenCookButtons() {
@@ -1695,6 +2816,7 @@
                 card.classList.toggle('is-disabled', !canCook);
             }
         });
+        syncKitchenSkipButton();
     }
 
     function openKitchenScreen() {
@@ -1710,6 +2832,7 @@
         kitchenScreenEl.classList.add('is-open');
         kitchenScreenEl.setAttribute('aria-hidden', 'false');
         syncKitchenCookButtons();
+        syncGardenRogueUi();
         vibrate(20);
     }
 
@@ -1739,11 +2862,14 @@
     function startKitchenQte() {
         if (!kitchenOverlayEl || !kitchenQteContainerEl || !kitchenQteDialEl || !kitchenQtePointerEl || !kitchenQteHintEl) return;
 
-        const randomStart = Math.floor(Math.random() * 230) + 20;
+        const qteMultiplier = consumeRogueModifier('kitchen_easy_qte') ? getRogueModifierValue('kitchen_easy_qte', 1.35) : 1;
+        const whiteWidth = Math.min(180, 90 * qteMultiplier);
+        const yellowWidth = Math.min(whiteWidth - 10, 15 * qteMultiplier);
+        const randomStart = Math.floor(Math.random() * Math.max(1, (320 - whiteWidth))) + 20;
         state.kitchenGame.whiteStart = randomStart;
-        state.kitchenGame.whiteEnd = randomStart + 90;
-        state.kitchenGame.yellowStart = randomStart + 37.5;
-        state.kitchenGame.yellowEnd = state.kitchenGame.yellowStart + 15;
+        state.kitchenGame.whiteEnd = randomStart + whiteWidth;
+        state.kitchenGame.yellowStart = randomStart + ((whiteWidth - yellowWidth) / 2);
+        state.kitchenGame.yellowEnd = state.kitchenGame.yellowStart + yellowWidth;
         state.kitchenGame.currentAngle = 0;
         state.kitchenGame.qteActive = true;
         state.kitchenGame.spinDuration = 1.5 + Math.random() * 1.0;
@@ -1770,6 +2896,7 @@
         void kitchenQtePointerEl.offsetWidth;
         kitchenQtePointerEl.style.animation = `gardenKitchenSpinPointer ${state.kitchenGame.spinDuration}s linear infinite`;
         state.kitchenGame.startTime = performance.now();
+        saveGardenGameState();
     }
 
     function handleKitchenQteHit() {
@@ -1802,19 +2929,29 @@
                 return;
             }
 
-            const recipe = KITCHEN_RECIPES[state.kitchenGame.currentRecipeId] || { id: null, name: '料理', emoji: '🍳', ingredients: {} };
+            const recipe = KITCHEN_RECIPES[state.kitchenGame.currentRecipeId] || { id: null, name: '料理', emoji: '🍳', primaryIngredient: null, ingredients: {} };
             if (!spendInventoryItems(recipe.ingredients)) {
                 syncKitchenCookButtons();
                 showKitchenToast('材料不足，未能完成烹饪');
                 return;
             }
-            if (recipe.id) {
-                addInventoryItem(recipe.id, 1);
+            let outputQty = 1;
+            if (consumeRogueModifier('kitchen_bonus_output')) {
+                outputQty += 1;
             }
+            if (recipe.id) {
+                addInventoryItem(recipe.id, outputQty);
+            }
+            let returnedPrimary = false;
+            if (recipe.primaryIngredient && consumeRogueModifier('kitchen_primary_save')) {
+                addInventoryItem(recipe.primaryIngredient, 1);
+                returnedPrimary = true;
+            }
+            progressRogueKitchenSuccess();
             saveGardenGameState();
             refreshGardenEconomyUi();
             const prefix = quality === 'perfect' ? '✨[完美品质]✨' : '✅';
-            showKitchenToast(`${prefix} ${recipe.name} ${recipe.emoji} 已存入仓库`);
+            showKitchenToast(`${prefix} ${recipe.name} ${recipe.emoji} x${outputQty} 已存入仓库${returnedPrimary ? ' · 已返还 1 份主材料' : ''}`);
         }, 500);
     }
 
@@ -1993,6 +3130,7 @@
         const items = STORAGE_TABS[nextType].itemIds
             .map((itemId) => ({ ...ITEM_META[itemId], count: getInventoryCount(itemId) }))
             .filter((item) => item.count > 0);
+        renderStorageSpecialOrderCard();
 
         if (state.gardenGame && state.gardenGame.storage) {
             state.gardenGame.storage.tab = nextType;
@@ -2004,6 +3142,7 @@
 
         if (!items.length) {
             storageGridEl.innerHTML = '<div class="garden-storage-empty">当前分类暂无库存</div>';
+            syncStorageSellSheetUi();
             return;
         }
 
@@ -2012,7 +3151,7 @@
                 <div class="garden-storage-item-count">${item.count}</div>
                 <div class="garden-storage-item-icon">${item.emoji}</div>
                 <div class="garden-storage-item-name">${item.name}</div>
-                <div class="garden-storage-item-price">${item.sellPrice} 金币/个</div>
+                <div class="garden-storage-item-price">${getSellUnitPrice(item.id)} 金币/个</div>
             </button>`
         )).join('');
 
@@ -2054,9 +3193,9 @@
         if (storageSellIconEl) storageSellIconEl.textContent = meta.emoji;
         if (storageSellNameEl) storageSellNameEl.textContent = meta.name;
         if (storageSellStockEl) storageSellStockEl.textContent = `当前持有 ${stockCount}`;
-        if (storageSellPriceEl) storageSellPriceEl.textContent = `单价 ${meta.sellPrice} 金币`;
+        if (storageSellPriceEl) storageSellPriceEl.textContent = `单价 ${getSellUnitPrice(itemId)} 金币`;
         if (storageSellQtyEl) storageSellQtyEl.textContent = String(state.storageSell.qty);
-        if (storageSellTotalEl) storageSellTotalEl.textContent = `${state.storageSell.qty * meta.sellPrice} 金币`;
+        if (storageSellTotalEl) storageSellTotalEl.textContent = `${calculateStorageSellGold(itemId, state.storageSell.qty)} 金币`;
         if (storageSellConfirmBtn) {
             const disabled = state.storageSell.qty < 1 || state.storageSell.qty > stockCount;
             storageSellConfirmBtn.disabled = disabled;
@@ -2070,10 +3209,18 @@
         const sellQty = Math.max(0, Math.min(stockCount, Math.floor(qty || 0)));
         if (sellQty < 1 || sellQty > stockCount) return;
 
+        const totalGold = calculateStorageSellGold(itemId, sellQty);
         addInventoryItem(itemId, -sellQty);
-        updateGardenCoins(meta.sellPrice * sellQty);
+        updateGardenCoins(totalGold);
+        const orderResult = applySellToCurrentOrder(itemId, sellQty);
         saveGardenGameState();
         refreshGardenEconomyUi();
+
+        if (orderResult && orderResult.finishedRun) {
+            closeStorageSellSheet();
+            openCurrentRogueStageScreen();
+            return;
+        }
 
         if (getInventoryCount(itemId) > 0) {
             state.storageSell.qty = Math.min(state.storageSell.qty, getInventoryCount(itemId));
@@ -3583,6 +4730,8 @@
     function switchView(viewKey) {
         state.currentView = viewKey;
         setHomeEntryMenuOpen(false);
+        setRogueProgressPanelOpen(false);
+        syncHomeTutorialVisibility();
         if (viewKey !== 'gallery') {
             closeStorageSellSheet();
         }
@@ -3698,8 +4847,10 @@
         init();
         if (!screenEl) return;
         state.gardenGame = loadGardenGameState();
+        syncRogueStateConsistency();
         saveGardenGameState();
         refreshGardenEconomyUi();
+        syncHomeTutorialVisibility();
         renderFarmPlots();
         renderPastureAnimals();
         syncGardenTitle();
@@ -3722,6 +4873,7 @@
         closePastureScreen({ silent: true });
         closeKitchenScreen({ silent: true });
         closeStorageSellSheet();
+        setRogueProgressPanelOpen(false);
         setHomeEntryMenuOpen(false);
         setDrawerOpen(false);
         closeFloraScreen();

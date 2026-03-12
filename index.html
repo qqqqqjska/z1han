@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <title>iPhone Simulator</title>
@@ -816,6 +816,12 @@
                             </div>
                             <div class="list-item">
                                 <div class="list-content column">
+                                    <label>提示词Token数</label>
+                                    <span id="chat-setting-token-count" style="color:#888;">计算中...</span>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-content column">
                                     <label>自动总结触发条数 (0为关闭)</label>
                                     <input type="number" id="chat-setting-summary-limit" placeholder="默认关闭" min="0">
                                 </div>
@@ -1562,6 +1568,31 @@
                 </div>
             </div>
 
+            <div id="garden-rogue-strip" class="garden-rogue-strip">
+                <button class="garden-rogue-strip-main" data-rogue-open-panel type="button">
+                    <div class="garden-rogue-strip-head">
+                        <span class="garden-rogue-strip-title">本轮进度</span>
+                        <span id="garden-rogue-stage" class="garden-rogue-strip-pill">农场阶段</span>
+                        <span id="garden-rogue-cards" class="garden-rogue-strip-pill">已选卡牌 0/4</span>
+                    </div>
+                    <div id="garden-rogue-goal" class="garden-rogue-strip-goal">目标：收获作物 2 次（0/2）</div>
+                    <div id="garden-rogue-order" class="garden-rogue-strip-order">订单：未开始</div>
+                </button>
+                <button id="garden-home-tutorial-reopen" class="garden-home-tutorial-reopen" data-home-tutorial-open type="button">教程</button>
+                <div id="garden-home-tutorial-card" class="garden-home-tutorial-card" aria-label="家园新手教程" hidden>
+                    <button class="garden-home-tutorial-close" data-home-tutorial-close type="button" aria-label="关闭教程">
+                        <i class="ri-close-line"></i>
+                    </button>
+                    <div class="garden-home-tutorial-title">新手教程</div>
+                    <div class="garden-home-tutorial-item">1. 一轮顺序：农场 → 牧场 → 厨房 → 出售。</div>
+                    <div class="garden-home-tutorial-item">2. 每阶段完成目标后，可三选一拿本轮卡牌。</div>
+                    <div class="garden-home-tutorial-item">3. 出售阶段完成 2 张特殊订单，就能结算并开启下一轮。</div>
+                    <div class="garden-home-tutorial-item">4. 农场目标就是收获作物；牧场目标就是收获畜产；厨房目标是成功做出 1 道菜。</div>
+                    <div class="garden-home-tutorial-item">5. 厨房没材料时可直接跳过，不会失败。</div>
+                    <div class="garden-home-tutorial-tip">提示：进度条第二行显示的就是你当前阶段目标。</div>
+                </div>
+            </div>
+
             <div class="garden-app-body-shell">
                 <div class="garden-app-view-stack">
                     <section class="garden-app-view active" data-garden-view="home">
@@ -1659,6 +1690,7 @@
                             </div>
 
                             <div class="garden-storage-area">
+                                <div id="garden-storage-order-card" class="garden-storage-order-card"></div>
                                 <div class="garden-storage-tabs" role="tablist" aria-label="仓库分类">
                                     <button class="garden-storage-tab active" data-storage-tab="crops" type="button">作物</button>
                                     <button class="garden-storage-tab" data-storage-tab="products" type="button">畜产</button>
@@ -1904,6 +1936,8 @@
                         </button>
                     </div>
 
+                    <button id="garden-kitchen-skip-btn" class="garden-kitchen-skip-btn" data-kitchen-skip-rogue type="button" hidden>当前没有可做料理，跳过厨房</button>
+
                     <div class="garden-kitchen-area" id="garden-kitchen-area">
                         <div class="garden-kitchen-recipe-card" data-kitchen-recipe="bread">
                             <div class="garden-kitchen-recipe-icon">🍞</div>
@@ -1979,6 +2013,57 @@
                     </div>
 
                     <div id="garden-kitchen-toast" class="garden-kitchen-toast"></div>
+                </div>
+            </div>
+
+            <div id="garden-rogue-panel" class="garden-rogue-panel" aria-hidden="true">
+                <button class="garden-rogue-panel-backdrop" data-rogue-close-panel="true" type="button" aria-label="关闭本轮进度"></button>
+                <div class="garden-rogue-panel-sheet" role="dialog" aria-label="本轮进度">
+                    <div class="garden-rogue-panel-handle"></div>
+                    <div class="garden-rogue-panel-head">
+                        <div>
+                            <div class="garden-rogue-panel-title">本轮进度</div>
+                            <div class="garden-rogue-panel-subtitle">轻肉鸽周目会在这里展示阶段、卡牌与订单</div>
+                        </div>
+                        <button class="garden-rogue-panel-close" data-rogue-close-panel="true" type="button" aria-label="关闭本轮进度">
+                            <i class="ri-close-line"></i>
+                        </button>
+                    </div>
+                    <div class="garden-rogue-panel-section">
+                        <div class="garden-rogue-panel-label">当前阶段</div>
+                        <div id="garden-rogue-panel-stage" class="garden-rogue-panel-value">农场阶段</div>
+                    </div>
+                    <div class="garden-rogue-panel-section">
+                        <div class="garden-rogue-panel-label">本阶段目标</div>
+                        <div id="garden-rogue-panel-goal" class="garden-rogue-panel-value">收获作物 2 次（0/2）</div>
+                    </div>
+                    <div class="garden-rogue-panel-section">
+                        <div class="garden-rogue-panel-label">已选卡牌</div>
+                        <div id="garden-rogue-panel-cards" class="garden-rogue-panel-cards"></div>
+                    </div>
+                    <div class="garden-rogue-panel-section">
+                        <div class="garden-rogue-panel-label">当前订单</div>
+                        <div id="garden-rogue-panel-order" class="garden-rogue-panel-order"></div>
+                    </div>
+                    <div class="garden-rogue-panel-section">
+                        <div class="garden-rogue-panel-label">简单教程</div>
+                        <div class="garden-rogue-tutorial">
+                            <div class="garden-rogue-tutorial-item">1. 一轮顺序固定为：农场 → 牧场 → 厨房 → 出售。</div>
+                            <div class="garden-rogue-tutorial-item">2. 每个阶段完成目标后，都能三选一拿到本轮卡牌加成。</div>
+                            <div class="garden-rogue-tutorial-item">3. 出售阶段完成 2 张特殊订单，就会自动结算并开启下一轮。</div>
+                            <div class="garden-rogue-tutorial-item">4. 厨房没有足够材料时，可以直接跳过，不会失败也不会受罚。</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="garden-rogue-offer" class="garden-rogue-offer" aria-hidden="true">
+                <div class="garden-rogue-offer-mask"></div>
+                <div class="garden-rogue-offer-card" role="dialog" aria-label="三选一卡牌">
+                    <div class="garden-rogue-offer-badge">三选一</div>
+                    <div id="garden-rogue-offer-title" class="garden-rogue-offer-title">农场三选一卡</div>
+                    <div id="garden-rogue-offer-desc" class="garden-rogue-offer-desc">选择后立即生效</div>
+                    <div id="garden-rogue-offer-choices" class="garden-rogue-offer-choices"></div>
                 </div>
             </div>
 
