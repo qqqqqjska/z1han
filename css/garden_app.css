@@ -1,4 +1,4 @@
-#garden-app {
+﻿#garden-app {
     color: #4a5568;
     background: linear-gradient(180deg, #fffbea 0%, #fef7ec 100%);
 }
@@ -605,7 +605,7 @@
     height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 22px 0 calc(24px + env(safe-area-inset-bottom, 0px));
+    padding: 34px 0 calc(24px + env(safe-area-inset-bottom, 0px));
     color: #4a5568;
     background-color: #fefce8;
 }
@@ -656,7 +656,7 @@
 
 #garden-app .garden-activities-header {
     position: sticky;
-    top: 8px;
+    top: 16px;
     z-index: 2;
     display: flex;
     justify-content: space-between;
@@ -720,6 +720,7 @@
     position: relative;
     z-index: 1;
     margin: 5px 20px 15px;
+    padding-top: 10px;
 }
 
 #garden-app .garden-activities-tabs {
@@ -1013,6 +1014,766 @@
     transform: scale(0.97);
 }
 
+#garden-app .garden-home-entry-menu {
+    position: absolute;
+    inset: 0;
+    z-index: 24;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+#garden-app .garden-home-entry-menu.is-open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#garden-app .garden-home-entry-menu-backdrop {
+    appearance: none;
+    position: absolute;
+    inset: 0;
+    border: none;
+    background: rgba(39, 32, 20, 0.16);
+    padding: 0;
+    cursor: default;
+}
+
+#garden-app .garden-home-entry-menu-panel {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    padding: 12px;
+    border-radius: 24px;
+    background: rgba(255, 252, 245, 0.98);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow: 0 20px 40px rgba(104, 78, 33, 0.16);
+    transform: translateY(18px) scale(0.98);
+    transition: transform 0.22s ease;
+}
+
+#garden-app .garden-home-entry-menu.is-open .garden-home-entry-menu-panel {
+    transform: translateY(0) scale(1);
+}
+
+#garden-app .garden-home-entry-menu-handle {
+    width: 42px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.45);
+    margin: 0 auto 12px;
+}
+
+#garden-app .garden-home-entry-menu-head {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 14px;
+    padding: 0 4px;
+}
+
+#garden-app .garden-home-entry-menu-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #6b4f1d;
+}
+
+#garden-app .garden-home-entry-menu-subtitle {
+    font-size: 12px;
+    line-height: 1.4;
+    color: #9a7b4f;
+}
+
+#garden-app .garden-home-entry-menu-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+#garden-app .garden-home-entry-menu-item {
+    appearance: none;
+    border: none;
+    width: 100%;
+    min-height: 100px;
+    padding: 14px;
+    border-radius: 20px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 248, 235, 0.96));
+    color: #6b4f1d;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    text-align: left;
+    box-shadow: 0 10px 22px rgba(245, 158, 11, 0.08);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+#garden-app .garden-home-entry-menu-item:active {
+    transform: scale(0.97);
+}
+
+#garden-app .garden-home-entry-menu-item.is-current {
+    background: linear-gradient(135deg, #fff5cf, #ffe9ab);
+    box-shadow: 0 12px 28px rgba(245, 158, 11, 0.18);
+}
+
+#garden-app .garden-home-entry-menu-item-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 18px;
+    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.08);
+}
+
+#garden-app .garden-home-entry-menu-item-icon.is-home {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+}
+
+#garden-app .garden-home-entry-menu-item-icon.is-farm {
+    background: linear-gradient(135deg, #86efac, #22c55e);
+}
+
+#garden-app .garden-home-entry-menu-item-icon.is-pasture {
+    background: linear-gradient(135deg, #93c5fd, #3b82f6);
+}
+
+#garden-app .garden-home-entry-menu-item-icon.is-kitchen {
+    background: linear-gradient(135deg, #fda4af, #f97316);
+}
+
+#garden-app .garden-home-entry-menu-item-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+#garden-app .garden-home-entry-menu-item-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: #5b3d12;
+}
+
+#garden-app .garden-home-entry-menu-item-desc {
+    font-size: 12px;
+    line-height: 1.4;
+    color: #9a7b4f;
+}
+
+#garden-app .garden-home-entry-menu-item-badge {
+    margin-top: auto;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.7);
+    color: #b7791f;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+#garden-app .garden-farm-screen {
+    position: absolute;
+    inset: 0;
+    z-index: 26;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(20px) scale(0.985);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+#garden-app .garden-farm-screen.is-open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+}
+
+#garden-app .garden-farm-world {
+    --farm-dirt-color: #8d6e63;
+    --farm-dirt-wet: #5d4037;
+    --farm-grass-color: #a5d6a7;
+    --farm-sky-top: #64b5f6;
+    --farm-sky-bottom: #e3f2fd;
+    --farm-panel-bg: rgba(255, 255, 255, 0.9);
+    --farm-primary-color: #4caf50;
+    --farm-text-color: #333;
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background: linear-gradient(to bottom, var(--farm-sky-top) 0%, var(--farm-sky-bottom) 40%, var(--farm-grass-color) 40%, #81c784 100%);
+    color: var(--farm-text-color);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+#garden-app .garden-farm-top-bar {
+    position: absolute;
+    top: max(52px, calc(env(safe-area-inset-top, 0px) + 40px));
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 3;
+}
+
+#garden-app .garden-farm-user-stats {
+    background: var(--farm-panel-bg);
+    padding: 10px 20px;
+    border-radius: 30px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}
+
+#garden-app .garden-farm-stat-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+}
+
+#garden-app .garden-farm-stat-item i {
+    font-size: 20px;
+}
+
+#garden-app .garden-farm-coin-icon {
+    color: #ffd700;
+}
+
+#garden-app .garden-farm-level-icon {
+    color: #ffa000;
+}
+
+#garden-app .garden-farm-close-btn {
+    appearance: none;
+    border: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: #666;
+    background: var(--farm-panel-bg);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}
+
+#garden-app .garden-farm-close-btn:active {
+    transform: scale(0.96);
+}
+
+#garden-app .garden-farm-area {
+    position: absolute;
+    top: 47%;
+    left: 50%;
+    width: 90%;
+    max-width: 600px;
+    transform: translate(-50%, -50%);
+}
+
+#garden-app .garden-farm-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 20px;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+
+#garden-app .garden-farm-plot {
+    position: relative;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--farm-dirt-color);
+    border: 4px solid #6d4c41;
+    border-radius: 12px;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3), 0 4px 0 #5d4037;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    font-size: clamp(30px, 10vw, 60px);
+}
+
+#garden-app .garden-farm-plot:active {
+    transform: translateY(4px);
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3), 0 0 0 #5d4037;
+}
+
+#garden-app .garden-farm-plot.ready {
+    animation: gardenFarmBounce 2s infinite;
+    filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.8));
+}
+
+@keyframes gardenFarmBounce {
+    0%,
+    100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+#garden-app .garden-farm-progress-container {
+    position: absolute;
+    left: 10%;
+    bottom: -15px;
+    width: 80%;
+    height: 8px;
+    display: none;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+}
+
+#garden-app .garden-farm-progress-fill {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #4caf50, #8bc34a);
+    transition: width 0.1s linear;
+}
+
+#garden-app .garden-farm-plot.growing .garden-farm-progress-container {
+    display: block;
+}
+
+#garden-app .garden-farm-bottom-panel {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    padding: 20px 20px calc(30px + env(safe-area-inset-bottom, 0px));
+    background: var(--farm-panel-bg);
+    border-top-left-radius: 24px;
+    border-top-right-radius: 24px;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 3;
+}
+
+#garden-app .garden-farm-inventory-panel {
+    display: none;
+    margin-bottom: 20px;
+    animation: gardenFarmSlideUp 0.3s ease;
+}
+
+@keyframes gardenFarmSlideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+#garden-app .garden-farm-inventory-panel.is-open {
+    display: block;
+}
+
+#garden-app .garden-farm-inventory-title {
+    margin: 0 0 10px 5px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #666;
+}
+
+#garden-app .garden-farm-seed-list {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+#garden-app .garden-farm-seed-list::-webkit-scrollbar {
+    display: none;
+}
+
+#garden-app .garden-farm-seed-item {
+    flex: 0 0 auto;
+    min-width: 80px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #f5f5f5;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+#garden-app .garden-farm-seed-item.active {
+    border-color: var(--farm-primary-color);
+    background: #e8f5e9;
+    transform: scale(1.05);
+}
+
+#garden-app .garden-farm-seed-emoji {
+    margin-bottom: 4px;
+    font-size: 28px;
+}
+
+#garden-app .garden-farm-seed-info {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 12px;
+    color: #555;
+}
+
+#garden-app .garden-farm-toolbar {
+    display: flex;
+    justify-content: space-around;
+    gap: 10px;
+}
+
+#garden-app .garden-farm-tool-btn {
+    flex: 1;
+    appearance: none;
+    border: none;
+    border-radius: 16px;
+    padding: 12px 5px;
+    background: transparent;
+    color: #666;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+#garden-app .garden-farm-tool-btn:active {
+    transform: scale(0.95);
+}
+
+#garden-app .garden-farm-tool-btn.active {
+    color: var(--farm-primary-color);
+    background: #e8f5e9;
+}
+
+#garden-app .garden-farm-tool-icon {
+    margin-bottom: 5px;
+    font-size: 28px;
+}
+
+#garden-app .garden-farm-tool-icon-shovel {
+    transform: rotate(45deg);
+}
+
+#garden-app .garden-farm-tool-name {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+#garden-app .garden-farm-toast {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 5;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    transition: opacity 0.3s;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 16px;
+}
+
+#garden-app .garden-farm-toast.is-visible {
+    opacity: 1;
+}
+
+#garden-app .garden-farm-cloud {
+    position: absolute;
+    background: #fff;
+    border-radius: 50px;
+    opacity: 0.8;
+    filter: blur(2px);
+}
+
+#garden-app .garden-farm-cloud-1 {
+    width: 100px;
+    height: 30px;
+    top: 10%;
+    left: -100px;
+    animation: gardenFarmFloatCloud 20s linear infinite;
+}
+
+#garden-app .garden-farm-cloud-2 {
+    width: 150px;
+    height: 40px;
+    top: 20%;
+    right: -150px;
+    animation: gardenFarmFloatCloud 30s linear infinite reverse;
+}
+
+@keyframes gardenFarmFloatCloud {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(100vw); }
+}
+
+#garden-app .garden-kitchen-screen {
+    position: absolute;
+    inset: 0;
+    z-index: 27;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(20px) scale(0.985);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+#garden-app .garden-kitchen-screen.is-open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+}
+
+#garden-app .garden-kitchen-world {
+    --kitchen-bg-color: #ffcc80;
+    --kitchen-panel-bg: rgba(255, 255, 255, 0.95);
+    --kitchen-primary-color: #ef6c00;
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background: var(--kitchen-bg-color);
+    color: #333;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+#garden-app .garden-kitchen-top-bar {
+    position: absolute;
+    top: max(52px, calc(env(safe-area-inset-top, 0px) + 40px));
+    left: 20px;
+    right: 20px;
+    z-index: 3;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#garden-app .garden-kitchen-title {
+    padding: 10px 20px;
+    border-radius: 30px;
+    background: var(--kitchen-panel-bg);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+#garden-app .garden-kitchen-close-btn {
+    appearance: none;
+    border: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--kitchen-panel-bg);
+    font-size: 24px;
+    color: #444;
+}
+
+#garden-app .garden-kitchen-close-btn:active {
+    transform: scale(0.96);
+}
+
+#garden-app .garden-kitchen-area {
+    position: absolute;
+    top: 112px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+    background: var(--kitchen-panel-bg);
+    border-radius: 24px 24px 0 0;
+}
+
+#garden-app .garden-kitchen-recipe-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    border-radius: 16px;
+    background: #fff3e0;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+#garden-app .garden-kitchen-recipe-card.is-disabled {
+    opacity: 0.72;
+}
+
+#garden-app .garden-kitchen-recipe-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    font-size: 50px;
+    flex-shrink: 0;
+}
+
+#garden-app .garden-kitchen-recipe-info {
+    flex: 1;
+    min-width: 0;
+}
+
+#garden-app .garden-kitchen-recipe-name {
+    margin-bottom: 5px;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+#garden-app .garden-kitchen-recipe-reqs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 13px;
+    color: #666;
+}
+
+#garden-app .garden-kitchen-cook-btn {
+    appearance: none;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    background: var(--kitchen-primary-color);
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+#garden-app .garden-kitchen-cook-btn:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+#garden-app .garden-kitchen-cook-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+#garden-app .garden-kitchen-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+#garden-app .garden-kitchen-overlay.is-active {
+    display: flex;
+}
+
+#garden-app .garden-kitchen-qte-container {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    display: none;
+    overflow: hidden;
+    border-radius: 50%;
+    background: #333;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+#garden-app .garden-kitchen-qte-container.is-active {
+    display: block;
+}
+
+#garden-app .garden-kitchen-qte-dial {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(#333 0deg, #333 270deg, white 270deg, white 315deg, #ffc107 315deg, #ffc107 330deg, white 330deg, white 360deg);
+}
+
+#garden-app .garden-kitchen-qte-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 40px;
+    height: 40px;
+    z-index: 2;
+    border-radius: 50%;
+    background: #fff;
+    transform: translate(-50%, -50%);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+#garden-app .garden-kitchen-qte-pointer {
+    position: absolute;
+    top: 10%;
+    left: 50%;
+    z-index: 3;
+    width: 4px;
+    height: 40%;
+    margin-left: -2px;
+    border-radius: 2px;
+    background: #f44336;
+    transform-origin: center bottom;
+    box-shadow: 0 0 5px rgba(244, 67, 54, 0.5);
+    will-change: transform;
+}
+
+@keyframes gardenKitchenSpinPointer {
+    from { transform: rotate(0deg) translateZ(0); }
+    to { transform: rotate(360deg) translateZ(0); }
+}
+
+#garden-app .garden-kitchen-qte-hint {
+    display: none;
+    margin-bottom: 30px;
+    color: #fff;
+    font-size: 18px;
+    font-weight: 700;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+}
+
+#garden-app .garden-kitchen-qte-hint.is-active {
+    display: block;
+}
+
+#garden-app .garden-kitchen-toast {
+    position: absolute;
+    top: 20%;
+    left: 50%;
+    z-index: 5;
+    opacity: 0;
+    color: #fff;
+    padding: 12px 20px;
+    font-size: 16px;
+    border-radius: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    transform: translate(-50%, -50%);
+    transition: opacity 0.3s;
+}
+
+#garden-app .garden-kitchen-toast.is-visible {
+    opacity: 1;
+}
+
 @media (max-width: 420px) {
     #garden-app .garden-app-title-text {
         font-size: 15px;
@@ -1025,6 +1786,98 @@
 
     #garden-app .garden-app-header-btn span {
         display: none;
+    }
+
+    #garden-app .garden-home-entry-menu-panel {
+        left: 10px;
+        right: 10px;
+        bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+        padding: 10px;
+        border-radius: 22px;
+    }
+
+    #garden-app .garden-home-entry-menu-grid {
+        gap: 8px;
+    }
+
+    #garden-app .garden-home-entry-menu-item {
+        min-height: 92px;
+        padding: 12px;
+    }
+
+    #garden-app .garden-farm-top-bar {
+        left: 14px;
+        right: 14px;
+    }
+
+    #garden-app .garden-farm-user-stats {
+        gap: 14px;
+        padding: 10px 14px;
+    }
+
+    #garden-app .garden-farm-stat-item {
+        font-size: 14px;
+    }
+
+    #garden-app .garden-farm-area {
+        width: calc(100% - 24px);
+        top: 44%;
+    }
+
+    #garden-app .garden-farm-grid {
+        gap: 12px;
+        padding: 14px;
+    }
+
+    #garden-app .garden-farm-bottom-panel {
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    #garden-app .garden-farm-tool-icon {
+        font-size: 24px;
+    }
+
+    #garden-app .garden-farm-tool-name {
+        font-size: 12px;
+    }
+
+    #garden-app .garden-kitchen-top-bar {
+        left: 14px;
+        right: 14px;
+    }
+
+    #garden-app .garden-kitchen-area {
+        top: 112px;
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    #garden-app .garden-kitchen-recipe-card {
+        gap: 12px;
+        padding: 14px;
+    }
+
+    #garden-app .garden-kitchen-recipe-icon {
+        width: 70px;
+        height: 70px;
+        font-size: 42px;
+    }
+
+    #garden-app .garden-kitchen-cook-btn {
+        padding: 9px 16px;
+    }
+}
+
+@media (min-width: 768px) {
+    #garden-app .garden-farm-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    #garden-app .garden-farm-seed-item {
+        flex-direction: row;
+        gap: 10px;
+        padding: 10px 20px;
     }
 }
 
@@ -1436,3 +2289,10 @@
     70% { opacity: 1; transform: translateY(-60px) scale(1.2); }
     100% { transform: translateY(-80px) scale(1); opacity: 0; }
 }
+
+
+
+
+
+
+

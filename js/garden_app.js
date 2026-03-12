@@ -12,6 +12,30 @@
     const CONTACT_FIGURE_MIN_TOP = 74;
     const CONTACT_FIGURE_MAX_TOP = 90;
 
+    const HOME_ENTRY_META = {
+        home: { label: '小家' },
+        farm: { label: '农场' },
+        pasture: { label: '牧场' },
+        kitchen: { label: '厨房' }
+    };
+
+    const FARM_SEEDS = {
+        wheat: { id: 'wheat', name: '小麦', emoji: '🌾', cost: 10, reward: 20, time: 4000 },
+        carrot: { id: 'carrot', name: '胡萝卜', emoji: '🥕', cost: 15, reward: 35, time: 6000 },
+        tomato: { id: 'tomato', name: '番茄', emoji: '🍅', cost: 20, reward: 50, time: 8000 },
+        corn: { id: 'corn', name: '玉米', emoji: '🌽', cost: 25, reward: 65, time: 10000 },
+        pumpkin: { id: 'pumpkin', name: '南瓜', emoji: '🎃', cost: 35, reward: 90, time: 15000 }
+    };
+
+    const KITCHEN_RECIPES = {
+        bread: { name: '香喷喷面包', emoji: '🍞' },
+        cake: { name: '美味蛋糕', emoji: '🍰' },
+        salad: { name: '田园沙拉', emoji: '🥗' },
+        pizza: { name: '农家披萨', emoji: '🍕' },
+        taco: { name: '烤肉卷饼', emoji: '🌮' },
+        icecream: { name: '奶香冰淇淋', emoji: '🍨' }
+    };
+
     const PANEL_TABS = [
         {
             key: 'pet',
@@ -190,6 +214,32 @@
         activeTab: 'pet',
         currentView: 'home',
         drawerOpen: false,
+        currentHomeSection: 'home',
+        homeEntryMenuOpen: false,
+        farmScreenOpen: false,
+        kitchenScreenOpen: false,
+        farmToastTimeout: null,
+        kitchenToastTimeout: null,
+        farmGame: {
+            initialized: false,
+            coins: 100,
+            level: 1,
+            exp: 0,
+            currentTool: 'pointer',
+            currentSeed: 'wheat'
+        },
+        kitchenGame: {
+            initialized: false,
+            qteActive: false,
+            currentRecipeId: null,
+            currentAngle: 0,
+            spinDuration: 0,
+            startTime: 0,
+            whiteStart: 0,
+            whiteEnd: 0,
+            yellowStart: 0,
+            yellowEnd: 0
+        },
         toastTimeout: null,
         saveResetTimer: null,
         saveDoneTimer: null,
@@ -229,6 +279,25 @@
     let viewEls;
     let navBtns;
     let activitiesViewEl;
+    let homeEntryMenuEl;
+    let farmScreenEl;
+    let farmCloseBtn;
+    let farmGridEl;
+    let farmSeedPanelEl;
+    let farmSeedListEl;
+    let farmCoinsEl;
+    let farmLevelEl;
+    let farmToolBtns = [];
+    let farmToastEl;
+    let kitchenScreenEl;
+    let kitchenCloseBtn;
+    let kitchenOverlayEl;
+    let kitchenQteContainerEl;
+    let kitchenQteDialEl;
+    let kitchenQtePointerEl;
+    let kitchenQteHintEl;
+    let kitchenToastEl;
+    let kitchenCookBtns = [];
     let editorHost;
     let titleTextEl;
     let floraScreenEl;
@@ -267,6 +336,25 @@
         viewEls = Array.from(document.querySelectorAll('#garden-app .garden-app-view'));
         navBtns = Array.from(document.querySelectorAll('#garden-app .garden-bottom-nav-btn'));
         activitiesViewEl = document.querySelector('#garden-app [data-garden-view="activities"]');
+        homeEntryMenuEl = document.getElementById('garden-home-entry-menu');
+        farmScreenEl = document.getElementById('garden-farm-screen');
+        farmCloseBtn = document.getElementById('garden-farm-close-btn');
+        farmGridEl = document.getElementById('garden-farm-grid');
+        farmSeedPanelEl = document.getElementById('garden-farm-seed-panel');
+        farmSeedListEl = document.getElementById('garden-farm-seed-list');
+        farmCoinsEl = document.getElementById('garden-farm-coins');
+        farmLevelEl = document.getElementById('garden-farm-level');
+        farmToolBtns = Array.from(document.querySelectorAll('#garden-app [data-farm-tool]'));
+        farmToastEl = document.getElementById('garden-farm-toast');
+        kitchenScreenEl = document.getElementById('garden-kitchen-screen');
+        kitchenCloseBtn = document.getElementById('garden-kitchen-close-btn');
+        kitchenOverlayEl = document.getElementById('garden-kitchen-overlay');
+        kitchenQteContainerEl = document.getElementById('garden-kitchen-qte-container');
+        kitchenQteDialEl = document.getElementById('garden-kitchen-qte-dial');
+        kitchenQtePointerEl = document.getElementById('garden-kitchen-qte-pointer');
+        kitchenQteHintEl = document.getElementById('garden-kitchen-qte-hint');
+        kitchenToastEl = document.getElementById('garden-kitchen-toast');
+        kitchenCookBtns = Array.from(document.querySelectorAll('#garden-app [data-kitchen-cook]'));
         floraScreenEl = document.getElementById('garden-flora-screen');
         floraAppEl = document.getElementById('garden-flora-app');
         floraBackBtn = document.getElementById('garden-flora-back');
@@ -291,8 +379,30 @@
         });
         saveBtn.addEventListener('click', saveDesign);
         navBtns.forEach((btn) => {
-            btn.addEventListener('click', () => switchView(btn.dataset.gardenView));
+            btn.addEventListener('click', () => {
+                const viewKey = btn.dataset.gardenView;
+                if (viewKey === 'home' && state.currentView === 'home') {
+                    setDrawerOpen(false);
+                    syncHomeEntryMenuSelection();
+                    setHomeEntryMenuOpen(!state.homeEntryMenuOpen);
+                    vibrate(20);
+                    return;
+                }
+
+                setHomeEntryMenuOpen(false);
+                switchView(viewKey);
+                vibrate(20);
+            });
         });
+        if (homeEntryMenuEl) {
+            homeEntryMenuEl.addEventListener('click', handleHomeEntryMenuClick);
+        }
+        if (farmCloseBtn) {
+            farmCloseBtn.addEventListener('click', closeFarmScreen);
+        }
+        if (kitchenCloseBtn) {
+            kitchenCloseBtn.addEventListener('click', closeKitchenScreen);
+        }
         document.addEventListener('click', handleOutsideDrawerClick, true);
         if (floraBackBtn) {
             floraBackBtn.addEventListener('click', closeFloraScreen);
@@ -301,6 +411,8 @@
         window.addEventListener('moodflora:contactchange', handleFloraContactEvent);
 
         initEditor();
+        initFarmScreen();
+        initKitchenScreen();
         syncGardenLayoutFromActiveContact();
         syncFloraFromEngine();
         switchView('home');
@@ -434,6 +546,457 @@
         if (label) {
             label.textContent = '\u6d3b\u52a8';
         }
+    }
+
+    function setHomeEntryMenuOpen(open) {
+        state.homeEntryMenuOpen = Boolean(open) && state.currentView === 'home';
+        if (!homeEntryMenuEl) return;
+        homeEntryMenuEl.classList.toggle('is-open', state.homeEntryMenuOpen);
+        homeEntryMenuEl.setAttribute('aria-hidden', state.homeEntryMenuOpen ? 'false' : 'true');
+    }
+
+    function syncHomeEntryMenuSelection() {
+        if (!homeEntryMenuEl) return;
+        homeEntryMenuEl.querySelectorAll('[data-garden-home-entry]').forEach((button) => {
+            button.classList.toggle('is-current', button.dataset.gardenHomeEntry === state.currentHomeSection);
+        });
+    }
+
+    function handleHomeEntrySelection(entryKey) {
+        const targetKey = HOME_ENTRY_META[entryKey] ? entryKey : 'home';
+        setHomeEntryMenuOpen(false);
+        vibrate(20);
+
+        if (targetKey === 'home') {
+            state.currentHomeSection = 'home';
+            syncHomeEntryMenuSelection();
+            switchView('home');
+            return;
+        }
+
+        if (targetKey === 'farm') {
+            openFarmScreen();
+            return;
+        }
+
+        if (targetKey === 'kitchen') {
+            openKitchenScreen();
+            return;
+        }
+
+        const label = HOME_ENTRY_META[targetKey] ? HOME_ENTRY_META[targetKey].label : '\u8be5\u533a\u57df';
+        if (typeof window.showChatToast === 'function') {
+            window.showChatToast(`${label}\u5165\u53e3\u83dc\u5355\u5df2\u7ecf\u505a\u597d\uff0c\u4e0b\u4e00\u6b65\u6211\u53ef\u4ee5\u7ee7\u7eed\u5e2e\u4f60\u628a\u9875\u9762\u63a5\u8fdb\u53bb`, 2200);
+            return;
+        }
+        if (typeof window.showNotification === 'function') {
+            window.showNotification(`${label}\u5165\u53e3\u83dc\u5355\u5df2\u7ecf\u505a\u597d`, 1800, 'info');
+        }
+    }
+
+    function handleHomeEntryMenuClick(event) {
+        const closeTarget = event.target.closest('[data-garden-home-entry-close]');
+        if (closeTarget) {
+            setHomeEntryMenuOpen(false);
+            return;
+        }
+
+        const entryButton = event.target.closest('[data-garden-home-entry]');
+        if (!entryButton) return;
+        handleHomeEntrySelection(entryButton.dataset.gardenHomeEntry);
+    }
+
+    function initFarmScreen() {
+        if (!farmGridEl || !farmSeedListEl) return;
+        if (state.farmGame.initialized) {
+            syncFarmStats();
+            syncFarmToolUi();
+            return;
+        }
+
+        farmGridEl.innerHTML = '';
+        for (let index = 0; index < 9; index += 1) {
+            const plot = document.createElement('div');
+            plot.className = 'garden-farm-plot';
+            plot.dataset.state = 'empty';
+            plot.dataset.seedId = '';
+            plot.dataset.progress = '0';
+            plot.innerHTML = '<span class="garden-farm-crop"></span><div class="garden-farm-progress-container"><div class="garden-farm-progress-fill"></div></div>';
+            plot.addEventListener('click', () => handleFarmPlotClick(plot));
+            farmGridEl.appendChild(plot);
+        }
+
+        farmSeedListEl.innerHTML = '';
+        Object.values(FARM_SEEDS).forEach((seed, index) => {
+            const item = document.createElement('div');
+            item.className = `garden-farm-seed-item${index === 0 ? ' active' : ''}`;
+            item.dataset.farmSeed = seed.id;
+            item.innerHTML = `<div class="garden-farm-seed-emoji">${seed.emoji}</div><div class="garden-farm-seed-info"><i class="ri-copper-coin-fill" style="color:#FFD700;"></i>${seed.cost}</div>`;
+            item.addEventListener('click', () => setFarmSeed(seed.id));
+            farmSeedListEl.appendChild(item);
+        });
+
+        farmToolBtns.forEach((button) => {
+            button.addEventListener('click', () => setFarmTool(button.dataset.farmTool));
+        });
+
+        syncFarmStats();
+        syncFarmToolUi();
+        state.farmGame.initialized = true;
+    }
+
+    function syncFarmStats() {
+        if (farmCoinsEl) farmCoinsEl.textContent = String(state.farmGame.coins);
+        if (farmLevelEl) farmLevelEl.textContent = String(state.farmGame.level);
+    }
+
+    function syncFarmToolUi() {
+        farmToolBtns.forEach((button) => {
+            button.classList.toggle('active', button.dataset.farmTool === state.farmGame.currentTool);
+        });
+        if (farmSeedPanelEl) {
+            farmSeedPanelEl.classList.toggle('is-open', state.farmGame.currentTool === 'plant');
+        }
+        if (!farmSeedListEl) return;
+        farmSeedListEl.querySelectorAll('[data-farm-seed]').forEach((item) => {
+            item.classList.toggle('active', item.dataset.farmSeed === state.farmGame.currentSeed);
+        });
+    }
+
+    function setFarmTool(toolKey) {
+        state.farmGame.currentTool = toolKey || 'pointer';
+        syncFarmToolUi();
+        vibrate(15);
+    }
+
+    function setFarmSeed(seedId) {
+        if (!FARM_SEEDS[seedId]) return;
+        state.farmGame.currentSeed = seedId;
+        syncFarmToolUi();
+        vibrate(15);
+    }
+
+    function openFarmScreen() {
+        initFarmScreen();
+        if (!farmScreenEl) return;
+        closeKitchenScreen({ silent: true });
+        setHomeEntryMenuOpen(false);
+        setDrawerOpen(false);
+        closeFloraScreen();
+        state.farmScreenOpen = true;
+        state.currentHomeSection = 'farm';
+        farmScreenEl.classList.add('is-open');
+        farmScreenEl.setAttribute('aria-hidden', 'false');
+        vibrate(20);
+    }
+
+    function closeFarmScreen(options) {
+        if (!farmScreenEl) return;
+        const silent = !!(options && options.silent);
+        state.farmScreenOpen = false;
+        state.currentHomeSection = 'home';
+        farmScreenEl.classList.remove('is-open');
+        farmScreenEl.setAttribute('aria-hidden', 'true');
+        if (!silent) vibrate(20);
+    }
+
+    function handleFarmPlotClick(plotEl) {
+        if (!plotEl) return;
+        const plotState = plotEl.dataset.state || 'empty';
+        const currentTool = state.farmGame.currentTool;
+
+        if (currentTool === 'plant') {
+            if (plotState !== 'empty') {
+                showFarmToast('这块地已经种上啦');
+                return;
+            }
+            const seed = FARM_SEEDS[state.farmGame.currentSeed];
+            if (!seed) return;
+            if (state.farmGame.coins < seed.cost) {
+                showFarmToast('金币不足啦');
+                return;
+            }
+            updateFarmCoins(-seed.cost);
+            plantFarmSeed(plotEl, seed);
+            return;
+        }
+
+        if (currentTool === 'water') {
+            if (plotState !== 'growing') {
+                showFarmToast('只有生长中的作物才能浇水');
+                return;
+            }
+            waterFarmPlot(plotEl);
+            return;
+        }
+
+        if (currentTool === 'harvest') {
+            if (plotState !== 'ready') {
+                showFarmToast('还没成熟，先等等');
+                return;
+            }
+            const seed = FARM_SEEDS[plotEl.dataset.seedId];
+            if (!seed) return;
+            harvestFarmCrop(plotEl, seed);
+            return;
+        }
+
+        if (currentTool === 'shovel') {
+            if (plotState === 'empty') {
+                showFarmToast('这块地现在是空的');
+                return;
+            }
+            clearFarmPlot(plotEl);
+            showFarmToast('已铲除当前作物');
+            return;
+        }
+
+        if (plotState === 'ready') {
+            const seed = FARM_SEEDS[plotEl.dataset.seedId];
+            showFarmToast(seed ? `${seed.name} 已成熟，快去收获` : '作物已成熟');
+            return;
+        }
+        if (plotState === 'growing') {
+            showFarmToast('作物正在努力生长中');
+            return;
+        }
+        showFarmToast('切换工具后就能开始种地啦');
+    }
+
+    function plantFarmSeed(plotEl, seed) {
+        clearFarmPlot(plotEl, { keepToast: true });
+        plotEl.dataset.state = 'growing';
+        plotEl.dataset.seedId = seed.id;
+        plotEl.dataset.progress = '0';
+        plotEl.classList.add('growing');
+        const cropEl = plotEl.querySelector('.garden-farm-crop');
+        const progressFillEl = plotEl.querySelector('.garden-farm-progress-fill');
+        if (cropEl) cropEl.textContent = '🌱';
+        if (progressFillEl) progressFillEl.style.width = '0%';
+
+        const updateInterval = 100;
+        const step = (updateInterval / seed.time) * 100;
+        plotEl.growInterval = window.setInterval(() => {
+            advanceFarmPlotGrowth(plotEl, step);
+        }, updateInterval);
+        showFarmToast(`已种下${seed.name}`);
+    }
+
+    function advanceFarmPlotGrowth(plotEl, amount) {
+        if (!plotEl || plotEl.dataset.state !== 'growing') return;
+        const progressFillEl = plotEl.querySelector('.garden-farm-progress-fill');
+        let progress = Number(plotEl.dataset.progress || '0');
+        progress = Math.min(100, progress + amount);
+        plotEl.dataset.progress = String(progress);
+        if (progressFillEl) progressFillEl.style.width = `${progress}%`;
+        if (progress < 100) return;
+
+        window.clearInterval(plotEl.growInterval);
+        plotEl.growInterval = null;
+        plotEl.dataset.state = 'ready';
+        plotEl.classList.remove('growing');
+        plotEl.classList.add('ready');
+        const seed = FARM_SEEDS[plotEl.dataset.seedId];
+        const cropEl = plotEl.querySelector('.garden-farm-crop');
+        if (cropEl) cropEl.textContent = seed ? seed.emoji : '🌾';
+    }
+
+    function waterFarmPlot(plotEl) {
+        if (!plotEl) return;
+        plotEl.style.backgroundColor = 'var(--farm-dirt-wet)';
+        window.setTimeout(() => {
+            plotEl.style.backgroundColor = '';
+        }, 500);
+        advanceFarmPlotGrowth(plotEl, 18);
+        showFarmToast('已浇水，生长加速');
+    }
+
+    function harvestFarmCrop(plotEl, seed) {
+        clearFarmPlot(plotEl, { keepToast: true });
+        updateFarmCoins(seed.reward);
+        state.farmGame.exp += 10;
+        showFarmToast(`收获 ${seed.name}，获得 ${seed.reward} 金币`);
+        if (state.farmGame.exp < 100) return;
+
+        state.farmGame.level += 1;
+        state.farmGame.exp = 0;
+        syncFarmStats();
+        showFarmToast(`升级啦！当前等级 ${state.farmGame.level}`);
+    }
+
+    function clearFarmPlot(plotEl) {
+        if (!plotEl) return;
+        if (plotEl.growInterval) {
+            window.clearInterval(plotEl.growInterval);
+            plotEl.growInterval = null;
+        }
+        plotEl.dataset.state = 'empty';
+        plotEl.dataset.seedId = '';
+        plotEl.dataset.progress = '0';
+        plotEl.classList.remove('growing', 'ready');
+        const cropEl = plotEl.querySelector('.garden-farm-crop');
+        const progressFillEl = plotEl.querySelector('.garden-farm-progress-fill');
+        if (cropEl) cropEl.textContent = '';
+        if (progressFillEl) progressFillEl.style.width = '0%';
+    }
+
+    function updateFarmCoins(amount) {
+        state.farmGame.coins += amount;
+        syncFarmStats();
+    }
+
+    function showFarmToast(message) {
+        if (!farmToastEl || !message) return;
+        farmToastEl.textContent = message;
+        farmToastEl.classList.add('is-visible');
+        window.clearTimeout(state.farmToastTimeout);
+        state.farmToastTimeout = window.setTimeout(() => {
+            if (farmToastEl) farmToastEl.classList.remove('is-visible');
+        }, 2000);
+    }
+
+    function initKitchenScreen() {
+        if (!kitchenOverlayEl) return;
+        if (state.kitchenGame.initialized) return;
+
+        kitchenCookBtns.forEach((button) => {
+            button.addEventListener('click', () => {
+                const recipeId = button.dataset.kitchenCook;
+                if (recipeId) cookKitchenRecipe(recipeId);
+            });
+        });
+
+        kitchenOverlayEl.addEventListener('click', (event) => {
+            if (!state.kitchenGame.qteActive) return;
+            event.stopPropagation();
+            handleKitchenQteHit();
+        });
+
+        state.kitchenGame.initialized = true;
+    }
+
+    function openKitchenScreen() {
+        initKitchenScreen();
+        if (!kitchenScreenEl) return;
+        closeFarmScreen({ silent: true });
+        setHomeEntryMenuOpen(false);
+        setDrawerOpen(false);
+        closeFloraScreen();
+        state.kitchenScreenOpen = true;
+        state.currentHomeSection = 'kitchen';
+        kitchenScreenEl.classList.add('is-open');
+        kitchenScreenEl.setAttribute('aria-hidden', 'false');
+        vibrate(20);
+    }
+
+    function closeKitchenScreen(options) {
+        if (!kitchenScreenEl) return;
+        const silent = !!(options && options.silent);
+        stopKitchenQte(true);
+        state.kitchenScreenOpen = false;
+        state.currentHomeSection = 'home';
+        kitchenScreenEl.classList.remove('is-open');
+        kitchenScreenEl.setAttribute('aria-hidden', 'true');
+        if (!silent) vibrate(20);
+    }
+
+    function cookKitchenRecipe(recipeId) {
+        if (!KITCHEN_RECIPES[recipeId]) return;
+        state.kitchenGame.currentRecipeId = recipeId;
+        startKitchenQte();
+    }
+
+    function startKitchenQte() {
+        if (!kitchenOverlayEl || !kitchenQteContainerEl || !kitchenQteDialEl || !kitchenQtePointerEl || !kitchenQteHintEl) return;
+
+        const randomStart = Math.floor(Math.random() * 230) + 20;
+        state.kitchenGame.whiteStart = randomStart;
+        state.kitchenGame.whiteEnd = randomStart + 90;
+        state.kitchenGame.yellowStart = randomStart + 37.5;
+        state.kitchenGame.yellowEnd = state.kitchenGame.yellowStart + 15;
+        state.kitchenGame.currentAngle = 0;
+        state.kitchenGame.qteActive = true;
+        state.kitchenGame.spinDuration = 1.5 + Math.random() * 1.0;
+
+        kitchenQteDialEl.style.background = `conic-gradient(
+            #444 0deg,
+            #444 ${state.kitchenGame.whiteStart - 0.5}deg,
+            white ${state.kitchenGame.whiteStart}deg,
+            white ${state.kitchenGame.yellowStart - 0.5}deg,
+            #FF9800 ${state.kitchenGame.yellowStart}deg,
+            #FF9800 ${state.kitchenGame.yellowEnd}deg,
+            white ${state.kitchenGame.yellowEnd + 0.5}deg,
+            white ${state.kitchenGame.whiteEnd}deg,
+            #444 ${state.kitchenGame.whiteEnd + 0.5}deg,
+            #444 360deg
+        )`;
+
+        kitchenOverlayEl.classList.add('is-active');
+        kitchenQteContainerEl.classList.add('is-active');
+        kitchenQteHintEl.classList.add('is-active');
+
+        kitchenQtePointerEl.style.animation = 'none';
+        kitchenQtePointerEl.style.transform = 'rotate(0deg) translateZ(0)';
+        void kitchenQtePointerEl.offsetWidth;
+        kitchenQtePointerEl.style.animation = `gardenKitchenSpinPointer ${state.kitchenGame.spinDuration}s linear infinite`;
+        state.kitchenGame.startTime = performance.now();
+    }
+
+    function handleKitchenQteHit() {
+        if (!state.kitchenGame.qteActive || !kitchenQtePointerEl) return;
+        const elapsedSeconds = (performance.now() - state.kitchenGame.startTime) / 1000;
+        const progress = (elapsedSeconds / state.kitchenGame.spinDuration) % 1;
+        const angle = progress * 360;
+        state.kitchenGame.currentAngle = angle;
+
+        kitchenQtePointerEl.style.animation = 'none';
+        kitchenQtePointerEl.style.transform = `rotate(${angle}deg) translateZ(0)`;
+
+        if (angle >= state.kitchenGame.yellowStart && angle <= state.kitchenGame.yellowEnd) {
+            endKitchenQte(true, '完美成功！', 'perfect');
+            return;
+        }
+        if (angle >= state.kitchenGame.whiteStart && angle <= state.kitchenGame.whiteEnd) {
+            endKitchenQte(true, '普通成功！', 'normal');
+            return;
+        }
+        endKitchenQte(false, '点错时机啦！烹饪失败...');
+    }
+
+    function endKitchenQte(isSuccess, message, quality) {
+        state.kitchenGame.qteActive = false;
+        window.setTimeout(() => {
+            stopKitchenQte(true);
+            if (!isSuccess) {
+                showKitchenToast(`❌ ${message}`);
+                return;
+            }
+
+            const recipe = KITCHEN_RECIPES[state.kitchenGame.currentRecipeId] || { name: '料理', emoji: '🍳' };
+            const prefix = quality === 'perfect' ? '✨[完美品质]✨' : '✅';
+            showKitchenToast(`${prefix} 获得 ${recipe.name} ${recipe.emoji}`);
+        }, 500);
+    }
+
+    function stopKitchenQte(resetPointer) {
+        state.kitchenGame.qteActive = false;
+        if (kitchenOverlayEl) kitchenOverlayEl.classList.remove('is-active');
+        if (kitchenQteContainerEl) kitchenQteContainerEl.classList.remove('is-active');
+        if (kitchenQteHintEl) kitchenQteHintEl.classList.remove('is-active');
+        if (resetPointer && kitchenQtePointerEl) {
+            kitchenQtePointerEl.style.animation = 'none';
+            kitchenQtePointerEl.style.transform = 'rotate(0deg) translateZ(0)';
+        }
+    }
+
+    function showKitchenToast(message) {
+        if (!kitchenToastEl || !message) return;
+        kitchenToastEl.textContent = message;
+        kitchenToastEl.classList.add('is-visible');
+        window.clearTimeout(state.kitchenToastTimeout);
+        state.kitchenToastTimeout = window.setTimeout(() => {
+            if (kitchenToastEl) kitchenToastEl.classList.remove('is-visible');
+        }, 2500);
     }
 
     function triggerActivitiesPlayFeedback(playBtn) {
@@ -1363,7 +1926,7 @@
                     <div class="room-wall" id="roomWall"></div>
                     <div class="room-floor" id="roomFloor"></div>
                     <div class="resident-character-layer" id="residentCharacterLayer"></div>
-                    <div class="toast" id="toast"><i class="fas fa-hand-pointer"></i> 涓濇粦鎷栨嫿锛屽弻鍑绘敹鍥?/div>
+                    <div class="toast" id="toast"><i class="fas fa-hand-pointer"></i> 丝滑拖拽，双击收回</div>
                 </main>
 
                 <div class="decor-panel glass" id="decorPanel">
@@ -1505,7 +2068,7 @@
             item.dataset.portal = options.portal;
             item.setAttribute('role', 'button');
             item.setAttribute('tabindex', '0');
-            item.setAttribute('aria-label', options.ariaLabel || '????');
+            item.setAttribute('aria-label', options.ariaLabel || '可交互物件');
         }
 
         if (!options.noDrag) {
@@ -1996,10 +2559,10 @@
         saveBtn.dataset.originalHtml = originalHTML;
         clearTimeout(state.saveResetTimer);
         clearTimeout(state.saveDoneTimer);
-        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>淇濆瓨涓?/span>';
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>保存中...</span>';
 
         state.saveResetTimer = setTimeout(() => {
-            saveBtn.innerHTML = '<i class="fas fa-circle-check"></i><span>淇濆瓨鎴愬姛</span>';
+            saveBtn.innerHTML = '<i class="fas fa-circle-check"></i><span>保存成功</span>';
             saveBtn.classList.add('is-saved');
             state.saveDoneTimer = setTimeout(() => {
                 saveBtn.innerHTML = originalHTML;
@@ -2020,6 +2583,11 @@
 
     function switchView(viewKey) {
         state.currentView = viewKey;
+        setHomeEntryMenuOpen(false);
+        if (viewKey !== 'home') {
+            closeFarmScreen({ silent: true });
+            closeKitchenScreen({ silent: true });
+        }
         viewEls.forEach((viewEl) => {
             viewEl.classList.toggle('active', viewEl.dataset.gardenView === viewKey);
         });
@@ -2040,6 +2608,7 @@
             return;
         }
 
+        syncHomeEntryMenuSelection();
         refreshActiveContactFigure();
     }
 
@@ -2126,7 +2695,10 @@
         if (!screenEl) return;
         syncGardenTitle();
         syncGardenLayoutFromActiveContact();
+        closeFarmScreen({ silent: true });
+        closeKitchenScreen({ silent: true });
         switchView('home');
+        setHomeEntryMenuOpen(false);
         setDrawerOpen(false);
         closeFloraScreen();
         syncFloraFromEngine();
@@ -2136,6 +2708,9 @@
     function closeApp() {
         if (!screenEl) return;
         persistGardenLayoutForContact();
+        closeFarmScreen({ silent: true });
+        closeKitchenScreen({ silent: true });
+        setHomeEntryMenuOpen(false);
         setDrawerOpen(false);
         closeFloraScreen();
         closeContactFigureModal();
@@ -2156,6 +2731,10 @@
     window.GardenApp = {
         openApp,
         closeApp,
+        openFarmScreen,
+        closeFarmScreen,
+        openKitchenScreen,
+        closeKitchenScreen,
         openActivitiesView,
         openWhisperChallengeFromActivities,
         openContactFigureSettings,

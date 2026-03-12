@@ -48,7 +48,7 @@
     <link rel="stylesheet" href="css/chat_ui_v1_overrides.css">
     <link rel="stylesheet" href="css/screen_share.css">
     <link rel="stylesheet" href="css/calendar_app.css">
-    <link rel="stylesheet" href="css/garden_app.css?v=4">
+    <link rel="stylesheet" href="css/garden_app.css?v=12">
 </head>
 <body>
     <div class="screen-container" id="screen-container">
@@ -1684,7 +1684,193 @@
                         <span>我的</span>
                     </button>
                 </nav>
+
+                <div id="garden-home-entry-menu" class="garden-home-entry-menu" aria-hidden="true">
+                    <button class="garden-home-entry-menu-backdrop" data-garden-home-entry-close="true" type="button" aria-label="关闭家园区域菜单"></button>
+                    <div class="garden-home-entry-menu-panel" role="dialog" aria-label="选择进入家园区域">
+                        <div class="garden-home-entry-menu-handle"></div>
+                        <div class="garden-home-entry-menu-head">
+                            <div class="garden-home-entry-menu-title">选择家园区域</div>
+                            <div class="garden-home-entry-menu-subtitle">在小家页再次点击底栏“家园”即可快速切换</div>
+                        </div>
+                        <div class="garden-home-entry-menu-grid">
+                            <button class="garden-home-entry-menu-item is-current" data-garden-home-entry="home" type="button">
+                                <span class="garden-home-entry-menu-item-icon is-home"><i class="fas fa-house"></i></span>
+                                <span class="garden-home-entry-menu-item-copy">
+                                    <span class="garden-home-entry-menu-item-title">小家</span>
+                                    <span class="garden-home-entry-menu-item-desc">回到温馨小窝</span>
+                                </span>
+                                <span class="garden-home-entry-menu-item-badge">当前</span>
+                            </button>
+                            <button class="garden-home-entry-menu-item" data-garden-home-entry="farm" type="button">
+                                <span class="garden-home-entry-menu-item-icon is-farm"><i class="fas fa-seedling"></i></span>
+                                <span class="garden-home-entry-menu-item-copy">
+                                    <span class="garden-home-entry-menu-item-title">农场</span>
+                                    <span class="garden-home-entry-menu-item-desc">种植作物与收获</span>
+                                </span>
+                                <span class="garden-home-entry-menu-item-badge">前往</span>
+                            </button>
+                            <button class="garden-home-entry-menu-item" data-garden-home-entry="pasture" type="button">
+                                <span class="garden-home-entry-menu-item-icon is-pasture"><i class="fas fa-cow"></i></span>
+                                <span class="garden-home-entry-menu-item-copy">
+                                    <span class="garden-home-entry-menu-item-title">牧场</span>
+                                    <span class="garden-home-entry-menu-item-desc">照料动物与产出</span>
+                                </span>
+                                <span class="garden-home-entry-menu-item-badge">前往</span>
+                            </button>
+                            <button class="garden-home-entry-menu-item" data-garden-home-entry="kitchen" type="button">
+                                <span class="garden-home-entry-menu-item-icon is-kitchen"><i class="fas fa-utensils"></i></span>
+                                <span class="garden-home-entry-menu-item-copy">
+                                    <span class="garden-home-entry-menu-item-title">厨房</span>
+                                    <span class="garden-home-entry-menu-item-desc">烹饪料理与加工</span>
+                                </span>
+                                <span class="garden-home-entry-menu-item-badge">前往</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            <div id="garden-farm-screen" class="garden-farm-screen" aria-hidden="true">
+                    <div class="garden-farm-world">
+                        <div class="garden-farm-cloud garden-farm-cloud-1"></div>
+                        <div class="garden-farm-cloud garden-farm-cloud-2"></div>
+
+                        <div class="garden-farm-top-bar">
+                            <div class="garden-farm-user-stats">
+                                <div class="garden-farm-stat-item"><i class="ri-copper-coin-fill garden-farm-coin-icon"></i><span id="garden-farm-coins">100</span></div>
+                                <div class="garden-farm-stat-item"><i class="ri-star-smile-fill garden-farm-level-icon"></i><span id="garden-farm-level">1</span>级</div>
+                            </div>
+                            <button id="garden-farm-close-btn" class="garden-farm-close-btn" type="button" aria-label="退出农场并返回家园">
+                                <i class="ri-close-line"></i>
+                            </button>
+                        </div>
+
+                        <div class="garden-farm-area">
+                            <div class="garden-farm-grid" id="garden-farm-grid"></div>
+                        </div>
+
+                        <div class="garden-farm-bottom-panel">
+                            <div class="garden-farm-inventory-panel" id="garden-farm-seed-panel">
+                                <div class="garden-farm-inventory-title">种子背包</div>
+                                <div class="garden-farm-seed-list" id="garden-farm-seed-list"></div>
+                            </div>
+
+                            <div class="garden-farm-toolbar">
+                                <button class="garden-farm-tool-btn active" data-farm-tool="pointer" type="button">
+                                    <i class="ri-cursor-fill garden-farm-tool-icon"></i>
+                                    <span class="garden-farm-tool-name">选择</span>
+                                </button>
+                                <button class="garden-farm-tool-btn" data-farm-tool="plant" type="button">
+                                    <i class="ri-seedling-fill garden-farm-tool-icon"></i>
+                                    <span class="garden-farm-tool-name">播种</span>
+                                </button>
+                                <button class="garden-farm-tool-btn" data-farm-tool="water" type="button">
+                                    <i class="ri-drop-fill garden-farm-tool-icon"></i>
+                                    <span class="garden-farm-tool-name">浇水</span>
+                                </button>
+                                <button class="garden-farm-tool-btn" data-farm-tool="harvest" type="button">
+                                    <i class="ri-shopping-basket-2-fill garden-farm-tool-icon"></i>
+                                    <span class="garden-farm-tool-name">收获</span>
+                                </button>
+                                <button class="garden-farm-tool-btn" data-farm-tool="shovel" type="button">
+                                    <i class="ri-drag-move-fill garden-farm-tool-icon garden-farm-tool-icon-shovel"></i>
+                                    <span class="garden-farm-tool-name">铲除</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="garden-farm-toast" id="garden-farm-toast">提示信息</div>
+                    </div>
+                </div>
+
+            <div id="garden-kitchen-screen" class="garden-kitchen-screen" aria-hidden="true">
+                <div class="garden-kitchen-world">
+                    <div class="garden-kitchen-top-bar">
+                        <div class="garden-kitchen-title">🍳 厨房</div>
+                        <button id="garden-kitchen-close-btn" class="garden-kitchen-close-btn" type="button" aria-label="退出厨房并返回家园">
+                            <i class="ri-close-line"></i>
+                        </button>
+                    </div>
+
+                    <div class="garden-kitchen-area" id="garden-kitchen-area">
+                        <div class="garden-kitchen-recipe-card" data-kitchen-recipe="bread">
+                            <div class="garden-kitchen-recipe-icon">🍞</div>
+                            <div class="garden-kitchen-recipe-info">
+                                <div class="garden-kitchen-recipe-name">香喷喷面包</div>
+                                <div class="garden-kitchen-recipe-reqs"><span>🌾 小麦 x2</span><span>🥚 鸡蛋 x1</span></div>
+                            </div>
+                            <button class="garden-kitchen-cook-btn" data-kitchen-cook="bread" type="button">烹饪</button>
+                        </div>
+
+                        <div class="garden-kitchen-recipe-card" data-kitchen-recipe="cake">
+                            <div class="garden-kitchen-recipe-icon">🍰</div>
+                            <div class="garden-kitchen-recipe-info">
+                                <div class="garden-kitchen-recipe-name">美味蛋糕</div>
+                                <div class="garden-kitchen-recipe-reqs"><span>🌾 小麦 x3</span><span>🥛 牛奶 x1</span></div>
+                            </div>
+                            <button class="garden-kitchen-cook-btn" data-kitchen-cook="cake" type="button">烹饪</button>
+                        </div>
+
+                        <div class="garden-kitchen-recipe-card" data-kitchen-recipe="salad">
+                            <div class="garden-kitchen-recipe-icon">🥗</div>
+                            <div class="garden-kitchen-recipe-info">
+                                <div class="garden-kitchen-recipe-name">田园沙拉</div>
+                                <div class="garden-kitchen-recipe-reqs"><span>🍅 番茄 x2</span><span>🥕 胡萝卜 x1</span></div>
+                            </div>
+                            <button class="garden-kitchen-cook-btn" data-kitchen-cook="salad" type="button">烹饪</button>
+                        </div>
+
+                        <div class="garden-kitchen-recipe-card" data-kitchen-recipe="pizza">
+                            <div class="garden-kitchen-recipe-icon">🍕</div>
+                            <div class="garden-kitchen-recipe-info">
+                                <div class="garden-kitchen-recipe-name">农家披萨</div>
+                                <div class="garden-kitchen-recipe-reqs"><span>🌾 小麦 x3</span><span>🍅 番茄 x2</span><span>🥓 猪肉 x1</span></div>
+                            </div>
+                            <button class="garden-kitchen-cook-btn" data-kitchen-cook="pizza" type="button">烹饪</button>
+                        </div>
+
+                        <div class="garden-kitchen-recipe-card" data-kitchen-recipe="taco">
+                            <div class="garden-kitchen-recipe-icon">🌮</div>
+                            <div class="garden-kitchen-recipe-info">
+                                <div class="garden-kitchen-recipe-name">烤肉卷饼</div>
+                                <div class="garden-kitchen-recipe-reqs"><span>🌾 小麦 x2</span><span>🥓 猪肉 x2</span></div>
+                            </div>
+                            <button class="garden-kitchen-cook-btn" data-kitchen-cook="taco" type="button">烹饪</button>
+                        </div>
+
+                        <div class="garden-kitchen-recipe-card" data-kitchen-recipe="icecream">
+                            <div class="garden-kitchen-recipe-icon">🍨</div>
+                            <div class="garden-kitchen-recipe-info">
+                                <div class="garden-kitchen-recipe-name">奶香冰淇淋</div>
+                                <div class="garden-kitchen-recipe-reqs"><span>🥛 牛奶 x2</span><span>🥚 鸡蛋 x1</span></div>
+                            </div>
+                            <button class="garden-kitchen-cook-btn" data-kitchen-cook="icecream" type="button">烹饪</button>
+                        </div>
+
+                        <div class="garden-kitchen-recipe-card is-disabled" data-kitchen-recipe="stirfry">
+                            <div class="garden-kitchen-recipe-icon">🥘</div>
+                            <div class="garden-kitchen-recipe-info">
+                                <div class="garden-kitchen-recipe-name">营养炖菜</div>
+                                <div class="garden-kitchen-recipe-reqs"><span>🥕 胡萝卜 x2</span><span>🥓 猪肉 x1</span></div>
+                            </div>
+                            <button class="garden-kitchen-cook-btn" type="button" disabled>材料不足</button>
+                        </div>
+                    </div>
+
+                    <div id="garden-kitchen-overlay" class="garden-kitchen-overlay">
+                        <div id="garden-kitchen-qte-hint" class="garden-kitchen-qte-hint">看准时机，点击屏幕任意位置！</div>
+                        <div id="garden-kitchen-qte-container" class="garden-kitchen-qte-container">
+                            <div id="garden-kitchen-qte-dial" class="garden-kitchen-qte-dial"></div>
+                            <div class="garden-kitchen-qte-center"></div>
+                            <div id="garden-kitchen-qte-pointer" class="garden-kitchen-qte-pointer"></div>
+                        </div>
+                    </div>
+
+                    <div id="garden-kitchen-toast" class="garden-kitchen-toast"></div>
+                </div>
+            </div>
+
             <div id="garden-flora-screen" class="garden-flora-screen" aria-hidden="true">
                 <div id="garden-flora-app" class="garden-flora-app garden-flora-bg-healthy">
                     <div class="garden-flora-header-nav">
@@ -6972,7 +7158,7 @@
     <script src="js/meeting.js"></script>
     <script src="js/apps.js"></script>
     <script src="js/icity.js"></script>
-    <script src="js/garden_app.js?v=4"></script>
+    <script src="js/garden_app.js?v=5"></script>
     <script src="js/mood_flora.js"></script>
     <script src="js/home.js"></script>
     <script src="js/calendar_app.js"></script>
@@ -7285,3 +7471,7 @@
 
 </body>
 </html>
+
+
+
+
