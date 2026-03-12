@@ -1,4 +1,4 @@
-﻿#garden-app {
+#garden-app {
     color: #4a5568;
     background: linear-gradient(180deg, #fffbea 0%, #fef7ec 100%);
 }
@@ -1555,7 +1555,7 @@
 
 #garden-app .garden-kitchen-top-bar {
     position: absolute;
-    top: max(44px, calc(env(safe-area-inset-top, 0px) + 32px));
+    top: 18px;
     left: 20px;
     right: 20px;
     z-index: 3;
@@ -1592,7 +1592,7 @@
 
 #garden-app .garden-kitchen-area {
     position: absolute;
-    top: 104px;
+    top: 82px;
     left: 0;
     right: 0;
     bottom: 0;
@@ -1843,12 +1843,13 @@
     }
 
     #garden-app .garden-kitchen-top-bar {
+        top: 14px;
         left: 14px;
         right: 14px;
     }
 
     #garden-app .garden-kitchen-area {
-        top: 104px;
+        top: 72px;
         padding-left: 14px;
         padding-right: 14px;
     }
@@ -2289,6 +2290,7 @@
     70% { opacity: 1; transform: translateY(-60px) scale(1.2); }
     100% { transform: translateY(-80px) scale(1); opacity: 0; }
 }
+
 
 
 
