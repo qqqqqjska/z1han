@@ -607,6 +607,7 @@
     height: 100%;
     display: flex;
     flex-direction: column;
+    position: relative;
     padding-top: max(47px, env(safe-area-inset-top, 0px));
     color: #333;
     font-family: 'Segoe UI', sans-serif;
@@ -707,6 +708,18 @@
     padding: 15px 10px;
     border-radius: 12px;
     background: #f5f5f5;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+#garden-app .garden-storage-item:active {
+    transform: scale(0.97);
+}
+
+#garden-app .garden-storage-item:hover {
+    background: #f8f1ed;
+    box-shadow: 0 10px 20px rgba(121, 85, 72, 0.12);
 }
 
 #garden-app .garden-storage-item-count {
@@ -733,12 +746,191 @@
     text-align: center;
 }
 
+#garden-app .garden-storage-item-price {
+    font-size: 12px;
+    color: #8d6e63;
+    text-align: center;
+}
+
 #garden-app .garden-storage-empty {
     grid-column: 1 / -1;
     margin-top: 50px;
     text-align: center;
     color: #999;
     font-size: 14px;
+}
+
+#garden-app .garden-storage-sell-sheet {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 30;
+}
+
+#garden-app .garden-storage-sell-sheet.is-open {
+    pointer-events: auto;
+}
+
+#garden-app .garden-storage-sell-backdrop {
+    position: absolute;
+    inset: 0;
+    border: none;
+    background: rgba(23, 15, 12, 0.28);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+#garden-app .garden-storage-sell-sheet.is-open .garden-storage-sell-backdrop {
+    opacity: 1;
+}
+
+#garden-app .garden-storage-sell-panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #fffdf8;
+    border-radius: 24px 24px 0 0;
+    padding: 12px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 30px rgba(52, 36, 32, 0.18);
+    transform: translateY(100%);
+    transition: transform 0.25s ease;
+}
+
+#garden-app .garden-storage-sell-sheet.is-open .garden-storage-sell-panel {
+    transform: translateY(0);
+}
+
+#garden-app .garden-storage-sell-handle {
+    width: 44px;
+    height: 5px;
+    border-radius: 999px;
+    background: #dbc8bc;
+    margin: 0 auto 14px;
+}
+
+#garden-app .garden-storage-sell-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+#garden-app .garden-storage-sell-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#garden-app .garden-storage-sell-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    background: #f7efe8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+}
+
+#garden-app .garden-storage-sell-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: #4f342b;
+}
+
+#garden-app .garden-storage-sell-stock,
+#garden-app .garden-storage-sell-price,
+#garden-app .garden-storage-sell-label {
+    font-size: 13px;
+    color: #8d6e63;
+}
+
+#garden-app .garden-storage-sell-price {
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+#garden-app .garden-storage-sell-qty-row,
+#garden-app .garden-storage-sell-total-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 0;
+}
+
+#garden-app .garden-storage-sell-total-row {
+    border-top: 1px solid rgba(121, 85, 72, 0.12);
+    margin-top: 4px;
+}
+
+#garden-app .garden-storage-sell-total-row strong {
+    color: #4f342b;
+    font-size: 18px;
+}
+
+#garden-app .garden-storage-sell-stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#garden-app .garden-storage-sell-stepper button,
+#garden-app .garden-storage-sell-actions button {
+    appearance: none;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    font-weight: 700;
+}
+
+#garden-app .garden-storage-sell-stepper button {
+    min-width: 40px;
+    height: 40px;
+    padding: 0 12px;
+    background: #f2e8e0;
+    color: #6d4c41;
+}
+
+#garden-app .garden-storage-sell-qty {
+    min-width: 24px;
+}
+
+#garden-app #garden-storage-sell-qty {
+    min-width: 26px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 700;
+    color: #4f342b;
+}
+
+#garden-app .garden-storage-sell-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+#garden-app .garden-storage-sell-actions button {
+    height: 46px;
+}
+
+#garden-app .garden-storage-sell-actions .is-cancel {
+    background: #efe7e1;
+    color: #6d4c41;
+}
+
+#garden-app .garden-storage-sell-actions .is-confirm {
+    background: #795548;
+    color: #fff;
+}
+
+#garden-app .garden-storage-sell-actions .is-confirm:disabled {
+    background: #d7ccc8;
+    color: rgba(255, 255, 255, 0.85);
+    cursor: not-allowed;
 }
 
 #garden-app .garden-activities-view {
@@ -1448,8 +1640,10 @@
     position: relative;
     aspect-ratio: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 14px;
     background-color: var(--farm-dirt-color);
     border: 4px solid #6d4c41;
     border-radius: 12px;
@@ -1469,19 +1663,29 @@
     filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.8));
 }
 
+#garden-app .garden-farm-plot.planted {
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.24), 0 4px 0 #5d4037;
+}
+
 @keyframes gardenFarmBounce {
     0%,
     100% { transform: translateY(0); }
     50% { transform: translateY(-10px); }
 }
 
-#garden-app .garden-farm-progress-container {
-    position: absolute;
-    left: 10%;
-    bottom: -15px;
-    width: 80%;
-    height: 8px;
+#garden-app .garden-farm-progress-meta {
+    position: static;
+    width: 72%;
     display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+#garden-app .garden-farm-progress-container {
+    width: 100%;
+    height: 8px;
     overflow: hidden;
     background: rgba(0, 0, 0, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.3);
@@ -1495,8 +1699,23 @@
     transition: width 0.1s linear;
 }
 
-#garden-app .garden-farm-plot.growing .garden-farm-progress-container {
+#garden-app .garden-farm-progress-time {
+    min-width: 0;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff7dc;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+#garden-app .garden-farm-crop {
     display: block;
+    line-height: 1;
+}
+
+#garden-app .garden-farm-plot.planted .garden-farm-progress-meta,
+#garden-app .garden-farm-plot.growing .garden-farm-progress-meta {
+    display: flex;
 }
 
 #garden-app .garden-farm-bottom-panel {
@@ -1592,6 +1811,13 @@
     gap: 2px;
     font-size: 12px;
     color: #555;
+}
+
+#garden-app .garden-farm-seed-time {
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #7c6b5c;
 }
 
 #garden-app .garden-farm-toolbar {

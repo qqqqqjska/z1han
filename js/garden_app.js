@@ -3,6 +3,7 @@
 
     const GARDEN_TITLE_STORAGE_KEY = 'garden_app_custom_title_v1';
     const GARDEN_LAYOUT_STORAGE_KEY = 'garden_app_contact_layouts_v1';
+    const GARDEN_GAME_STATE_STORAGE_KEY = 'garden_game_state_v1';
     const GARDEN_FIGURE_ASSET_DB_NAME = 'garden_app_figure_assets_v1';
     const GARDEN_FIGURE_ASSET_STORE = 'resident_character_assets';
     const GARDEN_TITLE_DEFAULT = '\u840c\u5ba0\u76f8\u4f34\u7684\u5bb6';
@@ -19,44 +20,60 @@
         kitchen: { label: '厨房' }
     };
 
+    const ITEM_META = {
+        wheat: { id: 'wheat', name: '小麦', emoji: '🌾', category: 'crops', sellPrice: 20 },
+        carrot: { id: 'carrot', name: '胡萝卜', emoji: '🥕', category: 'crops', sellPrice: 35 },
+        tomato: { id: 'tomato', name: '番茄', emoji: '🍅', category: 'crops', sellPrice: 50 },
+        corn: { id: 'corn', name: '玉米', emoji: '🌽', category: 'crops', sellPrice: 65 },
+        pumpkin: { id: 'pumpkin', name: '南瓜', emoji: '🎃', category: 'crops', sellPrice: 90 },
+        egg: { id: 'egg', name: '鸡蛋', emoji: '🥚', category: 'products', sellPrice: 30 },
+        milk: { id: 'milk', name: '牛奶', emoji: '🥛', category: 'products', sellPrice: 200 },
+        pork: { id: 'pork', name: '猪肉', emoji: '🥩', category: 'products', sellPrice: 80 },
+        wool: { id: 'wool', name: '羊毛', emoji: '🧶', category: 'products', sellPrice: 130 },
+        bread: { id: 'bread', name: '香喷喷面包', emoji: '🍞', category: 'cooked', sellPrice: 90 },
+        cake: { id: 'cake', name: '美味蛋糕', emoji: '🍰', category: 'cooked', sellPrice: 320 },
+        salad: { id: 'salad', name: '田园沙拉', emoji: '🥗', category: 'cooked', sellPrice: 170 },
+        pizza: { id: 'pizza', name: '农家披萨', emoji: '🍕', category: 'cooked', sellPrice: 290 },
+        taco: { id: 'taco', name: '烤肉卷饼', emoji: '🌮', category: 'cooked', sellPrice: 240 },
+        icecream: { id: 'icecream', name: '奶香冰淇淋', emoji: '🍨', category: 'cooked', sellPrice: 520 },
+        stirfry: { id: 'stirfry', name: '营养炖菜', emoji: '🥘', category: 'cooked', sellPrice: 180 }
+    };
+
+    const STORAGE_TABS = {
+        crops: { id: 'crops', label: '作物', itemIds: ['wheat', 'carrot', 'tomato', 'corn', 'pumpkin'] },
+        products: { id: 'products', label: '畜产', itemIds: ['egg', 'milk', 'pork', 'wool'] },
+        cooked: { id: 'cooked', label: '熟食', itemIds: ['bread', 'cake', 'salad', 'pizza', 'taco', 'icecream', 'stirfry'] }
+    };
+
+    const INVENTORY_ITEM_IDS = Object.keys(ITEM_META);
+
+    function getFarmSeedGrowTimeByCost(cost) {
+        return Math.max(60 * 1000, cost * 6000);
+    }
+
     const FARM_SEEDS = {
-        wheat: { id: 'wheat', name: '小麦', emoji: '🌾', cost: 10, reward: 20, time: 4000 },
-        carrot: { id: 'carrot', name: '胡萝卜', emoji: '🥕', cost: 15, reward: 35, time: 6000 },
-        tomato: { id: 'tomato', name: '番茄', emoji: '🍅', cost: 20, reward: 50, time: 8000 },
-        corn: { id: 'corn', name: '玉米', emoji: '🌽', cost: 25, reward: 65, time: 10000 },
-        pumpkin: { id: 'pumpkin', name: '南瓜', emoji: '🎃', cost: 35, reward: 90, time: 15000 }
+        wheat: { id: 'wheat', inventoryId: 'wheat', name: '小麦', emoji: '🌾', cost: 10, time: getFarmSeedGrowTimeByCost(10) },
+        carrot: { id: 'carrot', inventoryId: 'carrot', name: '胡萝卜', emoji: '🥕', cost: 15, time: getFarmSeedGrowTimeByCost(15) },
+        tomato: { id: 'tomato', inventoryId: 'tomato', name: '番茄', emoji: '🍅', cost: 20, time: getFarmSeedGrowTimeByCost(20) },
+        corn: { id: 'corn', inventoryId: 'corn', name: '玉米', emoji: '🌽', cost: 25, time: getFarmSeedGrowTimeByCost(25) },
+        pumpkin: { id: 'pumpkin', inventoryId: 'pumpkin', name: '南瓜', emoji: '🎃', cost: 35, time: getFarmSeedGrowTimeByCost(35) }
     };
 
     const KITCHEN_RECIPES = {
-        bread: { name: '香喷喷面包', emoji: '🍞' },
-        cake: { name: '美味蛋糕', emoji: '🍰' },
-        salad: { name: '田园沙拉', emoji: '🥗' },
-        pizza: { name: '农家披萨', emoji: '🍕' },
-        taco: { name: '烤肉卷饼', emoji: '🌮' },
-        icecream: { name: '奶香冰淇淋', emoji: '🍨' }
+        bread: { id: 'bread', name: '香喷喷面包', emoji: '🍞', ingredients: { wheat: 2, egg: 1 } },
+        cake: { id: 'cake', name: '美味蛋糕', emoji: '🍰', ingredients: { wheat: 3, milk: 1 } },
+        salad: { id: 'salad', name: '田园沙拉', emoji: '🥗', ingredients: { tomato: 2, carrot: 1 } },
+        pizza: { id: 'pizza', name: '农家披萨', emoji: '🍕', ingredients: { wheat: 3, tomato: 2, pork: 1 } },
+        taco: { id: 'taco', name: '烤肉卷饼', emoji: '🌮', ingredients: { wheat: 2, pork: 2 } },
+        icecream: { id: 'icecream', name: '奶香冰淇淋', emoji: '🍨', ingredients: { milk: 2, egg: 1 } },
+        stirfry: { id: 'stirfry', name: '营养炖菜', emoji: '🥘', ingredients: { carrot: 2, pork: 1 } }
     };
 
     const PASTURE_ANIMAL_DATA = {
-        chicken: { babyEmoji: '🐥', adultEmoji: '🐓', food: '🌾', produce: '🥚', name: '鸡蛋', cost: 20, growTime: 5000, produceTime: 6000, reward: 30 },
-        pig: { babyEmoji: '🐷', adultEmoji: '🐖', food: '🥬', produce: '🥩', name: '猪肉', cost: 50, growTime: 8000, produceTime: 10000, reward: 80 },
-        sheep: { babyEmoji: '🐑', adultEmoji: '🐏', food: '🌿', produce: '🧶', name: '羊毛', cost: 80, growTime: 12000, produceTime: 15000, reward: 130 },
-        cow: { babyEmoji: '🐮', adultEmoji: '🐄', food: '🌽', produce: '🥛', name: '牛奶', cost: 120, growTime: 15000, produceTime: 20000, reward: 200 }
-    };
-
-    const GARDEN_STORAGE_ITEMS = {
-        crops: [
-            { id: 'wheat', name: '小麦', emoji: '🌾', count: 12 },
-            { id: 'carrot', name: '胡萝卜', emoji: '🥕', count: 5 },
-            { id: 'tomato', name: '番茄', emoji: '🍅', count: 0 },
-            { id: 'corn', name: '玉米', emoji: '🌽', count: 3 },
-            { id: 'pumpkin', name: '南瓜', emoji: '🎃', count: 2 }
-        ],
-        products: [
-            { id: 'egg', name: '鸡蛋', emoji: '🥚', count: 8 },
-            { id: 'milk', name: '牛奶', emoji: '🥛', count: 2 },
-            { id: 'meat', name: '猪肉', emoji: '🥓', count: 0 },
-            { id: 'honey', name: '蜂蜜', emoji: '🍯', count: 4 }
-        ]
+        chicken: { id: 'chicken', babyEmoji: '🐥', adultEmoji: '🐓', food: '🌾', inventoryId: 'egg', produceName: '鸡蛋', produceEmoji: '🥚', cost: 20, growTime: 5000, produceTime: 6000 },
+        pig: { id: 'pig', babyEmoji: '🐷', adultEmoji: '🐖', food: '🥬', inventoryId: 'pork', produceName: '猪肉', produceEmoji: '🥩', cost: 50, growTime: 8000, produceTime: 10000 },
+        sheep: { id: 'sheep', babyEmoji: '🐑', adultEmoji: '🐏', food: '🌿', inventoryId: 'wool', produceName: '羊毛', produceEmoji: '🧶', cost: 80, growTime: 12000, produceTime: 15000 },
+        cow: { id: 'cow', babyEmoji: '🐮', adultEmoji: '🐄', food: '🌽', inventoryId: 'milk', produceName: '牛奶', produceEmoji: '🥛', cost: 120, growTime: 15000, produceTime: 20000 }
     };
 
     const PANEL_TABS = [
@@ -234,6 +251,7 @@
 
     const state = {
         initialized: false,
+        gardenGame: null,
         activeTab: 'pet',
         currentView: 'home',
         drawerOpen: false,
@@ -247,16 +265,15 @@
         kitchenToastTimeout: null,
         farmGame: {
             initialized: false,
-            coins: 100,
-            level: 1,
-            exp: 0,
+            progressTimer: null,
             currentTool: 'pointer',
             currentSeed: 'wheat'
         },
         pastureGame: {
             initialized: false,
-            coins: 150,
-            level: 2,
+            progressTimer: null,
+            roamTimer: null,
+            visualEatingUntil: {},
             currentTool: 'pointer',
             selectedAnimalToBuy: 'chicken'
         },
@@ -272,7 +289,10 @@
             yellowStart: 0,
             yellowEnd: 0
         },
-        storageTab: 'crops',
+        storageSell: {
+            itemId: null,
+            qty: 1
+        },
         toastTimeout: null,
         saveResetTimer: null,
         saveDoneTimer: null,
@@ -315,6 +335,15 @@
     let storageViewEl;
     let storageGridEl;
     let storageTabBtns = [];
+    let storageSellSheetEl;
+    let storageSellBackdropEl;
+    let storageSellIconEl;
+    let storageSellNameEl;
+    let storageSellStockEl;
+    let storageSellPriceEl;
+    let storageSellQtyEl;
+    let storageSellTotalEl;
+    let storageSellConfirmBtn;
     let homeEntryMenuEl;
     let farmScreenEl;
     let farmCloseBtn;
@@ -361,6 +390,253 @@
     let contactFigureRunLeftPreviewEl;
     let contactFigureRunRightPreviewEl;
 
+    function createEmptyInventory() {
+        return INVENTORY_ITEM_IDS.reduce((result, itemId) => {
+            result[itemId] = 0;
+            return result;
+        }, {});
+    }
+
+    function createEmptyFarmPlotState() {
+        return {
+            state: 'empty',
+            seedId: '',
+            readyAt: null
+        };
+    }
+
+    function createInitialPastureAnimals() {
+        return [
+            { id: 'starter_chicken_1', type: 'chicken', age: 'baby', state: 'hungry', x: 30, y: 40, stateEndsAt: null },
+            { id: 'starter_chicken_2', type: 'chicken', age: 'adult', state: 'hungry', x: 70, y: 60, stateEndsAt: null }
+        ];
+    }
+
+    function createDefaultGardenGameState() {
+        return {
+            coins: 250,
+            inventory: createEmptyInventory(),
+            farm: {
+                level: 1,
+                exp: 0,
+                plots: Array.from({ length: 9 }, () => createEmptyFarmPlotState())
+            },
+            pasture: {
+                level: 2,
+                animals: createInitialPastureAnimals()
+            },
+            storage: {
+                tab: 'crops'
+            }
+        };
+    }
+
+    function isFiniteNumber(value) {
+        return typeof value === 'number' && Number.isFinite(value);
+    }
+
+    function formatFarmDuration(ms) {
+        const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function sanitizeStorageTab(tab) {
+        return STORAGE_TABS[tab] ? tab : 'crops';
+    }
+
+    function normalizeInventory(rawInventory) {
+        const inventory = createEmptyInventory();
+        if (!rawInventory || typeof rawInventory !== 'object') return inventory;
+        INVENTORY_ITEM_IDS.forEach((itemId) => {
+            const count = Number(rawInventory[itemId]);
+            inventory[itemId] = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+        });
+        return inventory;
+    }
+
+    function advanceFarmPlotByClock(plot, now) {
+        if (!plot || plot.state !== 'growing' || !isFiniteNumber(plot.readyAt)) return false;
+        if (plot.readyAt > now) return false;
+        plot.state = 'ready';
+        plot.readyAt = null;
+        return true;
+    }
+
+    function normalizeFarmPlot(rawPlot, now) {
+        const plot = createEmptyFarmPlotState();
+        if (!rawPlot || typeof rawPlot !== 'object') return plot;
+
+        const nextState = rawPlot.state;
+        plot.state = nextState === 'planted' || nextState === 'growing' || nextState === 'ready' ? nextState : 'empty';
+        plot.seedId = FARM_SEEDS[rawPlot.seedId] ? rawPlot.seedId : '';
+        plot.readyAt = isFiniteNumber(rawPlot.readyAt) ? rawPlot.readyAt : null;
+
+        if (!plot.seedId) {
+            return createEmptyFarmPlotState();
+        }
+        if (plot.state === 'empty') {
+            return createEmptyFarmPlotState();
+        }
+        if (plot.state === 'ready') {
+            plot.readyAt = null;
+            return plot;
+        }
+        if (plot.state === 'planted') {
+            plot.readyAt = null;
+            return plot;
+        }
+        if (!isFiniteNumber(plot.readyAt)) {
+            plot.state = 'planted';
+            plot.readyAt = null;
+            return plot;
+        }
+        advanceFarmPlotByClock(plot, now);
+        return plot;
+    }
+
+    function advancePastureAnimalByClock(animal, now) {
+        let changed = false;
+        while (animal && isFiniteNumber(animal.stateEndsAt) && animal.stateEndsAt <= now) {
+            if (animal.state === 'growing') {
+                animal.age = 'adult';
+                animal.state = 'hungry';
+                animal.stateEndsAt = null;
+                changed = true;
+                continue;
+            }
+            if (animal.state === 'producing') {
+                animal.state = 'ready';
+                animal.stateEndsAt = null;
+                changed = true;
+                continue;
+            }
+            animal.stateEndsAt = null;
+            changed = true;
+        }
+        return changed;
+    }
+
+    function normalizePastureAnimal(rawAnimal, now) {
+        if (!rawAnimal || typeof rawAnimal !== 'object') return null;
+        if (!PASTURE_ANIMAL_DATA[rawAnimal.type]) return null;
+
+        const animal = {
+            id: rawAnimal.id ? String(rawAnimal.id) : `animal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            type: rawAnimal.type,
+            age: rawAnimal.age === 'adult' ? 'adult' : 'baby',
+            state: ['hungry', 'growing', 'producing', 'ready'].includes(rawAnimal.state) ? rawAnimal.state : 'hungry',
+            x: isFiniteNumber(Number(rawAnimal.x)) ? Number(rawAnimal.x) : 50,
+            y: isFiniteNumber(Number(rawAnimal.y)) ? Number(rawAnimal.y) : 50,
+            stateEndsAt: isFiniteNumber(Number(rawAnimal.stateEndsAt)) ? Number(rawAnimal.stateEndsAt) : null
+        };
+        if (animal.age === 'baby' && animal.state === 'ready') {
+            animal.state = 'hungry';
+        }
+        if (animal.age === 'baby' && animal.state === 'producing') {
+            animal.state = 'growing';
+        }
+        advancePastureAnimalByClock(animal, now);
+        return animal;
+    }
+
+    function normalizeGardenGameState(rawState) {
+        const defaults = createDefaultGardenGameState();
+        const now = Date.now();
+        if (!rawState || typeof rawState !== 'object') return defaults;
+
+        const farmPlots = Array.from({ length: 9 }, (_, index) => normalizeFarmPlot(rawState.farm && rawState.farm.plots ? rawState.farm.plots[index] : null, now));
+        const hasPastureAnimals = !!(rawState.pasture && Array.isArray(rawState.pasture.animals));
+        const animalsSource = hasPastureAnimals ? rawState.pasture.animals : defaults.pasture.animals;
+        const animals = animalsSource
+            .map((animal) => normalizePastureAnimal(animal, now))
+            .filter(Boolean);
+
+        return {
+            coins: isFiniteNumber(Number(rawState.coins)) ? Math.max(0, Math.floor(Number(rawState.coins))) : defaults.coins,
+            inventory: normalizeInventory(rawState.inventory),
+            farm: {
+                level: isFiniteNumber(Number(rawState.farm && rawState.farm.level)) ? Math.max(1, Math.floor(Number(rawState.farm.level))) : defaults.farm.level,
+                exp: isFiniteNumber(Number(rawState.farm && rawState.farm.exp)) ? Math.max(0, Math.floor(Number(rawState.farm.exp))) : defaults.farm.exp,
+                plots: farmPlots
+            },
+            pasture: {
+                level: isFiniteNumber(Number(rawState.pasture && rawState.pasture.level)) ? Math.max(1, Math.floor(Number(rawState.pasture.level))) : defaults.pasture.level,
+                animals: hasPastureAnimals ? animals : createInitialPastureAnimals()
+            },
+            storage: {
+                tab: sanitizeStorageTab(rawState.storage && rawState.storage.tab)
+            }
+        };
+    }
+
+    function loadGardenGameState() {
+        try {
+            const raw = window.localStorage.getItem(GARDEN_GAME_STATE_STORAGE_KEY);
+            if (!raw) return createDefaultGardenGameState();
+            return normalizeGardenGameState(JSON.parse(raw));
+        } catch (error) {
+            return createDefaultGardenGameState();
+        }
+    }
+
+    function saveGardenGameState() {
+        if (!state.gardenGame) return;
+        try {
+            window.localStorage.setItem(GARDEN_GAME_STATE_STORAGE_KEY, JSON.stringify(state.gardenGame));
+        } catch (error) {
+            return;
+        }
+    }
+
+    function getInventoryCount(itemId) {
+        return state.gardenGame && state.gardenGame.inventory && isFiniteNumber(Number(state.gardenGame.inventory[itemId]))
+            ? Math.max(0, Math.floor(Number(state.gardenGame.inventory[itemId])))
+            : 0;
+    }
+
+    function addInventoryItem(itemId, amount) {
+        if (!state.gardenGame || !ITEM_META[itemId]) return;
+        const nextAmount = Math.max(0, getInventoryCount(itemId) + amount);
+        state.gardenGame.inventory[itemId] = nextAmount;
+    }
+
+    function hasInventoryItems(ingredients) {
+        return Object.entries(ingredients || {}).every(([itemId, requiredCount]) => getInventoryCount(itemId) >= requiredCount);
+    }
+
+    function spendInventoryItems(ingredients) {
+        if (!hasInventoryItems(ingredients)) return false;
+        Object.entries(ingredients || {}).forEach(([itemId, requiredCount]) => {
+            addInventoryItem(itemId, -requiredCount);
+        });
+        return true;
+    }
+
+    function getFarmPlots() {
+        return state.gardenGame ? state.gardenGame.farm.plots : [];
+    }
+
+    function getPastureAnimals() {
+        return state.gardenGame ? state.gardenGame.pasture.animals : [];
+    }
+
+    function updateGardenCoins(amount) {
+        if (!state.gardenGame) return;
+        state.gardenGame.coins = Math.max(0, state.gardenGame.coins + amount);
+        syncFarmStats();
+        syncPastureStats();
+    }
+
+    function refreshGardenEconomyUi() {
+        syncFarmStats();
+        syncPastureStats();
+        syncKitchenCookButtons();
+        renderStorageItems(state.gardenGame && state.gardenGame.storage ? state.gardenGame.storage.tab : 'crops');
+        syncStorageSellSheetUi();
+    }
+
     function createEmptyContactFigureDraftFiles() {
         return {
             idle: null,
@@ -384,6 +660,15 @@
         storageViewEl = document.querySelector('#garden-app [data-garden-view="gallery"]');
         storageGridEl = document.getElementById('garden-storage-grid');
         storageTabBtns = Array.from(document.querySelectorAll('#garden-app [data-storage-tab]'));
+        storageSellSheetEl = document.getElementById('garden-storage-sell-sheet');
+        storageSellBackdropEl = document.getElementById('garden-storage-sell-backdrop');
+        storageSellIconEl = document.getElementById('garden-storage-sell-icon');
+        storageSellNameEl = document.getElementById('garden-storage-sell-name');
+        storageSellStockEl = document.getElementById('garden-storage-sell-stock');
+        storageSellPriceEl = document.getElementById('garden-storage-sell-price');
+        storageSellQtyEl = document.getElementById('garden-storage-sell-qty');
+        storageSellTotalEl = document.getElementById('garden-storage-sell-total');
+        storageSellConfirmBtn = document.getElementById('garden-storage-sell-confirm');
         homeEntryMenuEl = document.getElementById('garden-home-entry-menu');
         farmScreenEl = document.getElementById('garden-farm-screen');
         farmCloseBtn = document.getElementById('garden-farm-close-btn');
@@ -423,6 +708,9 @@
         if (!screenEl || !closeBtn || !togglePanelBtn || !saveBtn || !editorHost) {
             return;
         }
+
+        state.gardenGame = loadGardenGameState();
+        saveGardenGameState();
 
         closeBtn.addEventListener('click', closeApp);
         bindGardenTitleEditing();
@@ -675,46 +963,130 @@
 
     function initFarmScreen() {
         if (!farmGridEl || !farmSeedListEl) return;
-        if (state.farmGame.initialized) {
-            syncFarmStats();
-            syncFarmToolUi();
-            return;
+        if (!state.farmGame.initialized) {
+            farmGridEl.innerHTML = '';
+            for (let index = 0; index < 9; index += 1) {
+                const plot = document.createElement('div');
+                plot.className = 'garden-farm-plot';
+                plot.dataset.plotIndex = String(index);
+                plot.innerHTML = '<span class="garden-farm-crop"></span><div class="garden-farm-progress-meta"><div class="garden-farm-progress-container"><div class="garden-farm-progress-fill"></div></div><div class="garden-farm-progress-time"></div></div>';
+                plot.addEventListener('click', () => handleFarmPlotClick(plot));
+                farmGridEl.appendChild(plot);
+            }
+
+            farmSeedListEl.innerHTML = '';
+            Object.values(FARM_SEEDS).forEach((seed, index) => {
+                const item = document.createElement('div');
+                item.className = `garden-farm-seed-item${index === 0 ? ' active' : ''}`;
+                item.dataset.farmSeed = seed.id;
+                item.innerHTML = `<div class="garden-farm-seed-emoji">${seed.emoji}</div><div class="garden-farm-seed-info"><i class="ri-copper-coin-fill" style="color:#FFD700;"></i>${seed.cost}</div><div class="garden-farm-seed-time">${formatFarmDuration(seed.time)}</div>`;
+                item.addEventListener('click', () => setFarmSeed(seed.id));
+                farmSeedListEl.appendChild(item);
+            });
+
+            farmToolBtns.forEach((button) => {
+                button.addEventListener('click', () => setFarmTool(button.dataset.farmTool));
+            });
+
+            state.farmGame.initialized = true;
         }
 
-        farmGridEl.innerHTML = '';
-        for (let index = 0; index < 9; index += 1) {
-            const plot = document.createElement('div');
-            plot.className = 'garden-farm-plot';
-            plot.dataset.state = 'empty';
-            plot.dataset.seedId = '';
-            plot.dataset.progress = '0';
-            plot.innerHTML = '<span class="garden-farm-crop"></span><div class="garden-farm-progress-container"><div class="garden-farm-progress-fill"></div></div>';
-            plot.addEventListener('click', () => handleFarmPlotClick(plot));
-            farmGridEl.appendChild(plot);
-        }
-
-        farmSeedListEl.innerHTML = '';
-        Object.values(FARM_SEEDS).forEach((seed, index) => {
-            const item = document.createElement('div');
-            item.className = `garden-farm-seed-item${index === 0 ? ' active' : ''}`;
-            item.dataset.farmSeed = seed.id;
-            item.innerHTML = `<div class="garden-farm-seed-emoji">${seed.emoji}</div><div class="garden-farm-seed-info"><i class="ri-copper-coin-fill" style="color:#FFD700;"></i>${seed.cost}</div>`;
-            item.addEventListener('click', () => setFarmSeed(seed.id));
-            farmSeedListEl.appendChild(item);
-        });
-
-        farmToolBtns.forEach((button) => {
-            button.addEventListener('click', () => setFarmTool(button.dataset.farmTool));
-        });
-
+        ensureFarmProgressTimer();
+        renderFarmPlots();
         syncFarmStats();
         syncFarmToolUi();
-        state.farmGame.initialized = true;
     }
 
     function syncFarmStats() {
-        if (farmCoinsEl) farmCoinsEl.textContent = String(state.farmGame.coins);
-        if (farmLevelEl) farmLevelEl.textContent = String(state.farmGame.level);
+        if (farmCoinsEl) farmCoinsEl.textContent = String(state.gardenGame ? state.gardenGame.coins : 0);
+        if (farmLevelEl) farmLevelEl.textContent = String(state.gardenGame ? state.gardenGame.farm.level : 1);
+    }
+
+    function ensureFarmProgressTimer() {
+        if (state.farmGame.progressTimer) return;
+        state.farmGame.progressTimer = window.setInterval(() => {
+            const changed = advanceFarmPlotsByClock();
+            renderFarmPlots();
+            if (changed) saveGardenGameState();
+        }, 250);
+    }
+
+    function advanceFarmPlotsByClock() {
+        const now = Date.now();
+        let changed = false;
+        getFarmPlots().forEach((plot) => {
+            changed = advanceFarmPlotByClock(plot, now) || changed;
+        });
+        return changed;
+    }
+
+    function getFarmPlotStateByElement(plotEl) {
+        if (!plotEl) return null;
+        const plotIndex = Number(plotEl.dataset.plotIndex);
+        return getFarmPlots()[plotIndex] || null;
+    }
+
+    function getFarmPlotProgress(plot) {
+        if (!plot || plot.state !== 'growing' || !plot.seedId || !isFiniteNumber(plot.readyAt)) return 0;
+        const seed = FARM_SEEDS[plot.seedId];
+        if (!seed) return 0;
+        const remaining = Math.max(0, plot.readyAt - Date.now());
+        return Math.max(0, Math.min(100, ((seed.time - remaining) / seed.time) * 100));
+    }
+
+    function renderFarmPlots() {
+        if (!farmGridEl) return;
+        const now = Date.now();
+        let changed = false;
+        Array.from(farmGridEl.children).forEach((plotEl, index) => {
+            const plot = getFarmPlots()[index] || createEmptyFarmPlotState();
+            changed = advanceFarmPlotByClock(plot, now) || changed;
+            const cropEl = plotEl.querySelector('.garden-farm-crop');
+            const progressMetaEl = plotEl.querySelector('.garden-farm-progress-meta');
+            const progressFillEl = plotEl.querySelector('.garden-farm-progress-fill');
+            const progressTimeEl = plotEl.querySelector('.garden-farm-progress-time');
+            plotEl.dataset.state = plot.state;
+            plotEl.dataset.seedId = plot.seedId || '';
+            plotEl.classList.remove('planted', 'growing', 'ready');
+
+            if (plot.state === 'empty' || !plot.seedId) {
+                if (cropEl) cropEl.textContent = '';
+                if (progressFillEl) progressFillEl.style.width = '0%';
+                if (progressTimeEl) progressTimeEl.textContent = '';
+                if (progressMetaEl) progressMetaEl.style.display = 'none';
+                return;
+            }
+
+            const seed = FARM_SEEDS[plot.seedId];
+            if (plot.state === 'ready') {
+                plotEl.classList.add('ready');
+                if (cropEl) cropEl.textContent = seed ? seed.emoji : '🌾';
+                if (progressFillEl) progressFillEl.style.width = '100%';
+                if (progressTimeEl) progressTimeEl.textContent = '';
+                if (progressMetaEl) progressMetaEl.style.display = 'none';
+                return;
+            }
+
+            if (progressMetaEl) progressMetaEl.style.display = 'flex';
+            if (plot.state === 'planted') {
+                plotEl.classList.add('planted');
+                if (cropEl) cropEl.textContent = '🌱';
+                if (progressFillEl) progressFillEl.style.width = '0%';
+                if (progressTimeEl) progressTimeEl.textContent = `成熟 ${seed ? formatFarmDuration(seed.time) : '01:00'}`;
+                return;
+            }
+
+            if (plot.state === 'growing') {
+                plotEl.classList.add('growing');
+            }
+            if (cropEl) cropEl.textContent = '🌱';
+            if (progressFillEl) progressFillEl.style.width = `${getFarmPlotProgress(plot)}%`;
+            if (progressTimeEl) {
+                progressTimeEl.textContent = `剩余 ${formatFarmDuration(Math.max(0, (plot.readyAt || now) - now))}`;
+            }
+        });
+
+        if (changed) saveGardenGameState();
     }
 
     function syncFarmToolUi() {
@@ -780,21 +1152,29 @@
             }
             const seed = FARM_SEEDS[state.farmGame.currentSeed];
             if (!seed) return;
-            if (state.farmGame.coins < seed.cost) {
+            if (!state.gardenGame || state.gardenGame.coins < seed.cost) {
                 showFarmToast('金币不足啦');
                 return;
             }
-            updateFarmCoins(-seed.cost);
+            updateGardenCoins(-seed.cost);
             plantFarmSeed(plotEl, seed);
             return;
         }
 
         if (currentTool === 'water') {
-            if (plotState !== 'growing') {
-                showFarmToast('只有生长中的作物才能浇水');
+            if (plotState === 'planted') {
+                waterFarmPlot(plotEl);
                 return;
             }
-            waterFarmPlot(plotEl);
+            if (plotState === 'growing') {
+                showFarmToast('已经浇过水啦，等现实时间过去后成熟');
+                return;
+            }
+            if (plotState === 'ready') {
+                showFarmToast('已经成熟啦，快去收获');
+                return;
+            }
+            showFarmToast('先种下种子再浇水');
             return;
         }
 
@@ -803,7 +1183,8 @@
                 showFarmToast('还没成熟，先等等');
                 return;
             }
-            const seed = FARM_SEEDS[plotEl.dataset.seedId];
+            const plot = getFarmPlotStateByElement(plotEl);
+            const seed = plot ? FARM_SEEDS[plot.seedId] : null;
             if (!seed) return;
             harvestFarmCrop(plotEl, seed);
             return;
@@ -820,97 +1201,81 @@
         }
 
         if (plotState === 'ready') {
-            const seed = FARM_SEEDS[plotEl.dataset.seedId];
+            const plot = getFarmPlotStateByElement(plotEl);
+            const seed = plot ? FARM_SEEDS[plot.seedId] : null;
             showFarmToast(seed ? `${seed.name} 已成熟，快去收获` : '作物已成熟');
             return;
         }
+        if (plotState === 'planted') {
+            showFarmToast('种子已经种下，记得先浇水');
+            return;
+        }
         if (plotState === 'growing') {
-            showFarmToast('作物正在努力生长中');
+            showFarmToast('已经浇过水，等待现实时间成熟');
             return;
         }
         showFarmToast('切换工具后就能开始种地啦');
     }
 
     function plantFarmSeed(plotEl, seed) {
-        clearFarmPlot(plotEl, { keepToast: true });
-        plotEl.dataset.state = 'growing';
-        plotEl.dataset.seedId = seed.id;
-        plotEl.dataset.progress = '0';
-        plotEl.classList.add('growing');
-        const cropEl = plotEl.querySelector('.garden-farm-crop');
-        const progressFillEl = plotEl.querySelector('.garden-farm-progress-fill');
-        if (cropEl) cropEl.textContent = '🌱';
-        if (progressFillEl) progressFillEl.style.width = '0%';
-
-        const updateInterval = 100;
-        const step = (updateInterval / seed.time) * 100;
-        plotEl.growInterval = window.setInterval(() => {
-            advanceFarmPlotGrowth(plotEl, step);
-        }, updateInterval);
-        showFarmToast(`已种下${seed.name}`);
-    }
-
-    function advanceFarmPlotGrowth(plotEl, amount) {
-        if (!plotEl || plotEl.dataset.state !== 'growing') return;
-        const progressFillEl = plotEl.querySelector('.garden-farm-progress-fill');
-        let progress = Number(plotEl.dataset.progress || '0');
-        progress = Math.min(100, progress + amount);
-        plotEl.dataset.progress = String(progress);
-        if (progressFillEl) progressFillEl.style.width = `${progress}%`;
-        if (progress < 100) return;
-
-        window.clearInterval(plotEl.growInterval);
-        plotEl.growInterval = null;
-        plotEl.dataset.state = 'ready';
-        plotEl.classList.remove('growing');
-        plotEl.classList.add('ready');
-        const seed = FARM_SEEDS[plotEl.dataset.seedId];
-        const cropEl = plotEl.querySelector('.garden-farm-crop');
-        if (cropEl) cropEl.textContent = seed ? seed.emoji : '🌾';
+        const plot = getFarmPlotStateByElement(plotEl);
+        if (!plot) return;
+        plot.state = 'planted';
+        plot.seedId = seed.id;
+        plot.readyAt = null;
+        renderFarmPlots();
+        saveGardenGameState();
+        showFarmToast(`已种下${seed.name}，记得浇水`);
     }
 
     function waterFarmPlot(plotEl) {
-        if (!plotEl) return;
+        const plot = getFarmPlotStateByElement(plotEl);
+        if (!plot || plot.state !== 'planted' || !plot.seedId) return;
+        const seed = FARM_SEEDS[plot.seedId];
+        if (!seed) return;
         plotEl.style.backgroundColor = 'var(--farm-dirt-wet)';
         window.setTimeout(() => {
             plotEl.style.backgroundColor = '';
         }, 500);
-        advanceFarmPlotGrowth(plotEl, 18);
-        showFarmToast('已浇水，生长加速');
+        plot.state = 'growing';
+        plot.readyAt = Date.now() + seed.time;
+        renderFarmPlots();
+        saveGardenGameState();
+        showFarmToast('已浇水，开始按现实时间生长');
     }
 
     function harvestFarmCrop(plotEl, seed) {
-        clearFarmPlot(plotEl, { keepToast: true });
-        updateFarmCoins(seed.reward);
-        state.farmGame.exp += 10;
-        showFarmToast(`收获 ${seed.name}，获得 ${seed.reward} 金币`);
-        if (state.farmGame.exp < 100) return;
+        const plot = getFarmPlotStateByElement(plotEl);
+        if (!plot) return;
+        addInventoryItem(seed.inventoryId, 1);
+        plot.state = 'empty';
+        plot.seedId = '';
+        plot.readyAt = null;
+        state.gardenGame.farm.exp += 10;
 
-        state.farmGame.level += 1;
-        state.farmGame.exp = 0;
-        syncFarmStats();
-        showFarmToast(`升级啦！当前等级 ${state.farmGame.level}`);
+        let leveledUp = false;
+        while (state.gardenGame.farm.exp >= 100) {
+            state.gardenGame.farm.exp -= 100;
+            state.gardenGame.farm.level += 1;
+            leveledUp = true;
+        }
+
+        renderFarmPlots();
+        saveGardenGameState();
+        refreshGardenEconomyUi();
+        showFarmToast(leveledUp
+            ? `收获 ${seed.name}，已存入仓库 · 升到 ${state.gardenGame.farm.level} 级`
+            : `收获 ${seed.name}，已存入仓库`);
     }
 
     function clearFarmPlot(plotEl) {
-        if (!plotEl) return;
-        if (plotEl.growInterval) {
-            window.clearInterval(plotEl.growInterval);
-            plotEl.growInterval = null;
-        }
-        plotEl.dataset.state = 'empty';
-        plotEl.dataset.seedId = '';
-        plotEl.dataset.progress = '0';
-        plotEl.classList.remove('growing', 'ready');
-        const cropEl = plotEl.querySelector('.garden-farm-crop');
-        const progressFillEl = plotEl.querySelector('.garden-farm-progress-fill');
-        if (cropEl) cropEl.textContent = '';
-        if (progressFillEl) progressFillEl.style.width = '0%';
-    }
-
-    function updateFarmCoins(amount) {
-        state.farmGame.coins += amount;
-        syncFarmStats();
+        const plot = getFarmPlotStateByElement(plotEl);
+        if (!plot) return;
+        plot.state = 'empty';
+        plot.seedId = '';
+        plot.readyAt = null;
+        renderFarmPlots();
+        saveGardenGameState();
     }
 
     function showFarmToast(message) {
@@ -925,38 +1290,33 @@
 
     function initPastureScreen() {
         if (!pastureFieldEl || !pastureShopPanelEl || !pastureCoinsEl || !pastureExpEl) return;
-        if (state.pastureGame.initialized) {
-            syncPastureStats();
-            syncPastureToolUi();
-            return;
+        if (!state.pastureGame.initialized) {
+            pastureFieldEl.addEventListener('click', handlePastureAreaClick);
+            pastureToolBtns.forEach((button) => {
+                button.addEventListener('click', () => {
+                    const tool = button.dataset.pastureTool;
+                    if (tool) setPastureTool(tool);
+                });
+            });
+            pastureShopItems.forEach((button) => {
+                button.addEventListener('click', () => {
+                    const animalType = button.dataset.pastureAnimal;
+                    if (animalType) selectPastureAnimalToBuy(animalType);
+                });
+            });
+            state.pastureGame.initialized = true;
         }
 
-        pastureFieldEl.addEventListener('click', handlePastureAreaClick);
-        pastureToolBtns.forEach((button) => {
-            button.addEventListener('click', () => {
-                const tool = button.dataset.pastureTool;
-                if (tool) setPastureTool(tool);
-            });
-        });
-        pastureShopItems.forEach((button) => {
-            button.addEventListener('click', () => {
-                const animalType = button.dataset.pastureAnimal;
-                if (animalType) selectPastureAnimalToBuy(animalType);
-            });
-        });
-
+        ensurePastureTimers();
         syncPastureStats();
         syncPastureToolUi();
         selectPastureAnimalToBuy(state.pastureGame.selectedAnimalToBuy, false);
-        spawnPastureAnimal('chicken', 30, 40, false);
-        spawnPastureAnimal('chicken', 70, 60, true);
-
-        state.pastureGame.initialized = true;
+        renderPastureAnimals();
     }
 
     function syncPastureStats() {
-        if (pastureCoinsEl) pastureCoinsEl.textContent = String(state.pastureGame.coins);
-        if (pastureExpEl) pastureExpEl.textContent = `Lv.${state.pastureGame.level}`;
+        if (pastureCoinsEl) pastureCoinsEl.textContent = String(state.gardenGame ? state.gardenGame.coins : 0);
+        if (pastureExpEl) pastureExpEl.textContent = `Lv.${state.gardenGame ? state.gardenGame.pasture.level : 1}`;
     }
 
     function syncPastureToolUi() {
@@ -1000,6 +1360,8 @@
         state.currentHomeSection = 'pasture';
         pastureScreenEl.classList.add('is-open');
         pastureScreenEl.setAttribute('aria-hidden', 'false');
+        renderPastureAnimals();
+        syncPastureStats();
         vibrate(20);
     }
 
@@ -1013,9 +1375,28 @@
         if (!silent) vibrate(20);
     }
 
-    function updatePastureCoins(amount) {
-        state.pastureGame.coins += amount;
-        syncPastureStats();
+    function ensurePastureTimers() {
+        if (!state.pastureGame.progressTimer) {
+            state.pastureGame.progressTimer = window.setInterval(() => {
+                const changed = advancePastureAnimalsProgress();
+                renderPastureAnimals();
+                if (changed) saveGardenGameState();
+            }, 1000);
+        }
+        if (!state.pastureGame.roamTimer) {
+            state.pastureGame.roamTimer = window.setInterval(() => {
+                roamPastureAnimals();
+            }, 2000);
+        }
+    }
+
+    function advancePastureAnimalsProgress() {
+        const now = Date.now();
+        let changed = false;
+        getPastureAnimals().forEach((animal) => {
+            changed = advancePastureAnimalByClock(animal, now) || changed;
+        });
+        return changed;
     }
 
     function showPastureToast(message) {
@@ -1036,7 +1417,7 @@
         const animalType = state.pastureGame.selectedAnimalToBuy;
         const animalData = PASTURE_ANIMAL_DATA[animalType];
         if (!animalData) return;
-        if (state.pastureGame.coins < animalData.cost) {
+        if (!state.gardenGame || state.gardenGame.coins < animalData.cost) {
             showPastureToast('金币不足！');
             return;
         }
@@ -1044,9 +1425,24 @@
         const rect = pastureFieldEl.getBoundingClientRect();
         const x = ((event.clientX - rect.left) / rect.width) * 100;
         const y = ((event.clientY - rect.top) / rect.height) * 100;
-        updatePastureCoins(-animalData.cost);
-        spawnPastureAnimal(animalType, x, y, false);
+        updateGardenCoins(-animalData.cost);
+        getPastureAnimals().push(createPastureAnimalState(animalType, x, y, false));
+        renderPastureAnimals();
+        saveGardenGameState();
+        refreshGardenEconomyUi();
         showPastureToast(`购买了幼崽 ${animalData.babyEmoji}`);
+    }
+
+    function createPastureAnimalState(type, x, y, isAdult) {
+        return {
+            id: `animal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            type,
+            age: isAdult ? 'adult' : 'baby',
+            state: 'hungry',
+            x: Math.max(10, Math.min(90, x)),
+            y: Math.max(15, Math.min(85, y)),
+            stateEndsAt: null
+        };
     }
 
     function setPastureAnimalPosition(wrapper, x, y) {
@@ -1059,37 +1455,69 @@
         wrapper.style.top = `calc(${nextY}% - 30px)`;
     }
 
-    function spawnPastureAnimal(type, x, y, isAdult) {
-        if (!pastureFieldEl || !PASTURE_ANIMAL_DATA[type]) return;
-        const data = PASTURE_ANIMAL_DATA[type];
-        const wrapper = document.createElement('div');
-        wrapper.className = `garden-pasture-animal-wrapper garden-pasture-state-hungry garden-pasture-show-bubble ${isAdult ? 'garden-pasture-age-adult' : 'garden-pasture-age-baby'}`;
-        wrapper.dataset.type = type;
-        wrapper.dataset.state = 'hungry';
-        wrapper.dataset.age = isAdult ? 'adult' : 'baby';
-        wrapper.innerHTML = `
-            <div class="garden-pasture-bubble">饿了 😫</div>
-            <div class="garden-pasture-animal-emoji">${isAdult ? data.adultEmoji : data.babyEmoji}</div>
-        `;
-        setPastureAnimalPosition(wrapper, x, y);
-        wrapper.addEventListener('click', (event) => {
-            event.stopPropagation();
-            interactWithPastureAnimal(wrapper);
+    function getPastureAnimalById(animalId) {
+        return getPastureAnimals().find((animal) => animal.id === animalId) || null;
+    }
+
+    function getPastureAnimalBubble(animal, data, isEating) {
+        if (isEating) {
+            return { text: `${data.food} 吃吃吃...`, color: '#333' };
+        }
+        if (animal.state === 'ready') {
+            return { text: `可收获 ${data.produceEmoji}`, color: '#2e7d32' };
+        }
+        if (animal.state === 'growing') {
+            return { text: '成长中 ⏳', color: '#333' };
+        }
+        if (animal.state === 'producing') {
+            return { text: '生产中 ⏳', color: '#333' };
+        }
+        return { text: '饿了 😫', color: '#333' };
+    }
+
+    function renderPastureAnimals() {
+        if (!pastureFieldEl) return;
+        const now = Date.now();
+        pastureFieldEl.innerHTML = '';
+        getPastureAnimals().forEach((animal) => {
+            const data = PASTURE_ANIMAL_DATA[animal.type];
+            if (!data) return;
+            const isEating = Number(state.pastureGame.visualEatingUntil[animal.id] || 0) > now;
+            const bubbleMeta = getPastureAnimalBubble(animal, data, isEating);
+            const wrapper = document.createElement('div');
+            const classNames = ['garden-pasture-animal-wrapper', animal.age === 'adult' ? 'garden-pasture-age-adult' : 'garden-pasture-age-baby'];
+            if (animal.state === 'hungry') classNames.push('garden-pasture-state-hungry');
+            if (animal.state === 'ready') classNames.push('garden-pasture-state-ready');
+            if (isEating || animal.state === 'hungry' || animal.state === 'ready') classNames.push('garden-pasture-show-bubble');
+            wrapper.className = classNames.join(' ');
+            wrapper.dataset.pastureId = animal.id;
+            wrapper.dataset.type = animal.type;
+            wrapper.dataset.state = animal.state;
+            wrapper.dataset.age = animal.age;
+            wrapper.innerHTML = `
+                <div class="garden-pasture-bubble" style="color:${bubbleMeta.color};">${bubbleMeta.text}</div>
+                <div class="garden-pasture-animal-emoji">${animal.age === 'adult' ? data.adultEmoji : data.babyEmoji}</div>
+            `;
+            setPastureAnimalPosition(wrapper, animal.x, animal.y);
+            wrapper.addEventListener('click', (clickEvent) => {
+                clickEvent.stopPropagation();
+                interactWithPastureAnimal(wrapper);
+            });
+            pastureFieldEl.appendChild(wrapper);
         });
-        pastureFieldEl.appendChild(wrapper);
-        startPastureRoaming(wrapper);
     }
 
     function interactWithPastureAnimal(wrapper) {
         if (!wrapper) return;
-        const data = PASTURE_ANIMAL_DATA[wrapper.dataset.type];
+        const animal = getPastureAnimalById(wrapper.dataset.pastureId);
+        if (!animal) return;
+        const data = PASTURE_ANIMAL_DATA[animal.type];
         if (!data) return;
 
-        const animalState = wrapper.dataset.state;
-        const animalAge = wrapper.dataset.age;
+        const animalState = animal.state;
+        const animalAge = animal.age;
         const bubble = wrapper.querySelector('.garden-pasture-bubble');
-        const emojiEl = wrapper.querySelector('.garden-pasture-animal-emoji');
-        if (!bubble || !emojiEl) return;
+        if (!bubble) return;
 
         if (state.pastureGame.currentTool === 'pointer') {
             wrapper.classList.add('garden-pasture-show-bubble');
@@ -1103,43 +1531,16 @@
         }
 
         if (state.pastureGame.currentTool === 'feed' && animalState === 'hungry') {
-            wrapper.dataset.state = 'eating';
-            wrapper.classList.remove('garden-pasture-state-hungry', 'garden-pasture-state-ready');
-            bubble.innerText = `${data.food} 吃吃吃...`;
-            bubble.style.color = '#333';
-            wrapper.classList.add('garden-pasture-show-bubble');
-            showPastureFoodAnimation(wrapper, data.food);
-
-            window.setTimeout(() => {
-                if (!wrapper.isConnected) return;
-                if (animalAge === 'baby') {
-                    wrapper.dataset.state = 'growing';
-                    bubble.innerText = '成长中 ⏳';
-
-                    window.setTimeout(() => {
-                        if (!wrapper.isConnected) return;
-                        wrapper.dataset.age = 'adult';
-                        wrapper.dataset.state = 'hungry';
-                        wrapper.classList.remove('garden-pasture-age-baby');
-                        wrapper.classList.add('garden-pasture-age-adult', 'garden-pasture-state-hungry', 'garden-pasture-show-bubble');
-                        emojiEl.innerText = data.adultEmoji;
-                        bubble.innerText = '长大啦，饿了 😫';
-                        bubble.style.color = '#333';
-                        showPastureGrowAnimation(wrapper);
-                    }, data.growTime);
-                    return;
-                }
-
-                wrapper.dataset.state = 'producing';
-                bubble.innerText = '生产中 ⏳';
-                window.setTimeout(() => {
-                    if (!wrapper.isConnected) return;
-                    wrapper.dataset.state = 'ready';
-                    wrapper.classList.add('garden-pasture-state-ready', 'garden-pasture-show-bubble');
-                    bubble.innerText = `可收获 ${data.produce}`;
-                    bubble.style.color = '#2e7d32';
-                }, data.produceTime);
-            }, 1500);
+            animal.state = animalAge === 'baby' ? 'growing' : 'producing';
+            animal.stateEndsAt = Date.now() + (animalAge === 'baby' ? data.growTime : data.produceTime);
+            state.pastureGame.visualEatingUntil[animal.id] = Date.now() + 1500;
+            saveGardenGameState();
+            renderPastureAnimals();
+            const refreshedWrapper = pastureFieldEl ? pastureFieldEl.querySelector(`[data-pasture-id="${animal.id}"]`) : null;
+            if (refreshedWrapper) {
+                showPastureFoodAnimation(refreshedWrapper, data.food);
+            }
+            showPastureToast(animalAge === 'baby' ? '喂食成功，开始成长' : '喂食成功，开始生产');
             return;
         }
 
@@ -1153,14 +1554,13 @@
                 return;
             }
 
-            wrapper.dataset.state = 'hungry';
-            wrapper.classList.remove('garden-pasture-state-ready');
-            wrapper.classList.add('garden-pasture-state-hungry', 'garden-pasture-show-bubble');
-            bubble.innerText = '饿了 😫';
-            bubble.style.color = '#333';
-            updatePastureCoins(data.reward);
-            showPastureToast(`获得 ${data.name} ${data.produce}，+${data.reward}金币`);
-            showPastureCoinAnimation(wrapper);
+            animal.state = 'hungry';
+            animal.stateEndsAt = null;
+            addInventoryItem(data.inventoryId, 1);
+            renderPastureAnimals();
+            saveGardenGameState();
+            refreshGardenEconomyUi();
+            showPastureToast(`获得 ${data.produceName} ${data.produceEmoji}，已存入仓库`);
         }
     }
 
@@ -1242,38 +1642,59 @@
     }
 
     function startPastureRoaming(wrapper) {
-        if (!wrapper || wrapper.pastureRoamTimer) return;
-        wrapper.pastureRoamTimer = window.setInterval(() => {
-            if (!wrapper.isConnected) return;
-            if (wrapper.dataset.state === 'eating') return;
-            if (Math.random() >= 0.2) return;
+        if (!wrapper) return;
+    }
 
-            const currentX = Number(wrapper.dataset.x || '50');
-            const currentY = Number(wrapper.dataset.y || '50');
-            const nextX = currentX + (Math.random() * 20 - 10);
-            const nextY = currentY + (Math.random() * 20 - 10);
-            setPastureAnimalPosition(wrapper, nextX, nextY);
-        }, 2000);
+    function roamPastureAnimals() {
+        if (!getPastureAnimals().length) return;
+        const now = Date.now();
+        let moved = false;
+        getPastureAnimals().forEach((animal) => {
+            if (Number(state.pastureGame.visualEatingUntil[animal.id] || 0) > now) return;
+            if (Math.random() >= 0.2) return;
+            animal.x = Math.max(10, Math.min(90, animal.x + (Math.random() * 20 - 10)));
+            animal.y = Math.max(15, Math.min(85, animal.y + (Math.random() * 20 - 10)));
+            moved = true;
+        });
+        if (!moved) return;
+        renderPastureAnimals();
+        saveGardenGameState();
     }
 
     function initKitchenScreen() {
         if (!kitchenOverlayEl) return;
-        if (state.kitchenGame.initialized) return;
-
-        kitchenCookBtns.forEach((button) => {
-            button.addEventListener('click', () => {
-                const recipeId = button.dataset.kitchenCook;
-                if (recipeId) cookKitchenRecipe(recipeId);
+        if (!state.kitchenGame.initialized) {
+            kitchenCookBtns.forEach((button) => {
+                button.addEventListener('click', () => {
+                    const recipeId = button.dataset.kitchenCook;
+                    if (recipeId) cookKitchenRecipe(recipeId);
+                });
             });
-        });
 
-        kitchenOverlayEl.addEventListener('click', (event) => {
-            if (!state.kitchenGame.qteActive) return;
-            event.stopPropagation();
-            handleKitchenQteHit();
-        });
+            kitchenOverlayEl.addEventListener('click', (event) => {
+                if (!state.kitchenGame.qteActive) return;
+                event.stopPropagation();
+                handleKitchenQteHit();
+            });
 
-        state.kitchenGame.initialized = true;
+            state.kitchenGame.initialized = true;
+        }
+
+        syncKitchenCookButtons();
+    }
+
+    function syncKitchenCookButtons() {
+        kitchenCookBtns.forEach((button) => {
+            const recipeId = button.dataset.kitchenCook;
+            const recipe = recipeId ? KITCHEN_RECIPES[recipeId] : null;
+            const canCook = !!recipe && hasInventoryItems(recipe.ingredients);
+            const card = button.closest('[data-kitchen-recipe]');
+            button.disabled = !canCook;
+            button.textContent = canCook ? '烹饪' : '材料不足';
+            if (card) {
+                card.classList.toggle('is-disabled', !canCook);
+            }
+        });
     }
 
     function openKitchenScreen() {
@@ -1288,6 +1709,7 @@
         state.currentHomeSection = 'kitchen';
         kitchenScreenEl.classList.add('is-open');
         kitchenScreenEl.setAttribute('aria-hidden', 'false');
+        syncKitchenCookButtons();
         vibrate(20);
     }
 
@@ -1303,7 +1725,13 @@
     }
 
     function cookKitchenRecipe(recipeId) {
-        if (!KITCHEN_RECIPES[recipeId]) return;
+        const recipe = KITCHEN_RECIPES[recipeId];
+        if (!recipe) return;
+        if (!hasInventoryItems(recipe.ingredients)) {
+            syncKitchenCookButtons();
+            showKitchenToast('材料不足');
+            return;
+        }
         state.kitchenGame.currentRecipeId = recipeId;
         startKitchenQte();
     }
@@ -1374,9 +1802,19 @@
                 return;
             }
 
-            const recipe = KITCHEN_RECIPES[state.kitchenGame.currentRecipeId] || { name: '料理', emoji: '🍳' };
+            const recipe = KITCHEN_RECIPES[state.kitchenGame.currentRecipeId] || { id: null, name: '料理', emoji: '🍳', ingredients: {} };
+            if (!spendInventoryItems(recipe.ingredients)) {
+                syncKitchenCookButtons();
+                showKitchenToast('材料不足，未能完成烹饪');
+                return;
+            }
+            if (recipe.id) {
+                addInventoryItem(recipe.id, 1);
+            }
+            saveGardenGameState();
+            refreshGardenEconomyUi();
             const prefix = quality === 'perfect' ? '✨[完美品质]✨' : '✅';
-            showKitchenToast(`${prefix} 获得 ${recipe.name} ${recipe.emoji}`);
+            showKitchenToast(`${prefix} ${recipe.name} ${recipe.emoji} 已存入仓库`);
         }, 500);
     }
 
@@ -1488,7 +1926,8 @@
     }
 
     function initStorageView() {
-        renderStorageItems(state.storageTab);
+        renderStorageItems(state.gardenGame && state.gardenGame.storage ? state.gardenGame.storage.tab : 'crops');
+        syncStorageSellSheetUi();
         if (!storageViewEl || storageViewEl.dataset.bound === 'true') return;
 
         storageViewEl.dataset.bound = 'true';
@@ -1503,12 +1942,45 @@
                 return;
             }
 
+            const sellActionButton = event.target.closest('[data-storage-sell-action]');
+            if (sellActionButton) {
+                const sellAction = sellActionButton.dataset.storageSellAction;
+                if (sellAction === 'cancel') {
+                    closeStorageSellSheet();
+                }
+                if (sellAction === 'confirm' && state.storageSell.itemId) {
+                    confirmStorageSell(state.storageSell.itemId, state.storageSell.qty);
+                }
+                vibrate(15);
+                return;
+            }
+
+            const sellStepButton = event.target.closest('[data-storage-sell-step]');
+            if (sellStepButton) {
+                const step = sellStepButton.dataset.storageSellStep;
+                if (step === 'all') {
+                    setStorageSellQty(getInventoryCount(state.storageSell.itemId));
+                } else {
+                    setStorageSellQty((state.storageSell.qty || 1) + Number(step));
+                }
+                vibrate(12);
+                return;
+            }
+
+            const itemCard = event.target.closest('[data-storage-item-id]');
+            if (itemCard) {
+                openStorageSellSheet(itemCard.dataset.storageItemId);
+                vibrate(15);
+                return;
+            }
+
             const tabButton = event.target.closest('[data-storage-tab]');
             if (!tabButton) return;
 
             const nextTab = tabButton.dataset.storageTab;
-            if (!nextTab || !GARDEN_STORAGE_ITEMS[nextTab]) return;
-            state.storageTab = nextTab;
+            if (!nextTab || !STORAGE_TABS[nextTab] || !state.gardenGame) return;
+            state.gardenGame.storage.tab = nextTab;
+            saveGardenGameState();
             renderStorageItems(nextTab);
             vibrate(15);
         });
@@ -1517,25 +1989,99 @@
     function renderStorageItems(type) {
         if (!storageGridEl) return;
 
-        const nextType = GARDEN_STORAGE_ITEMS[type] ? type : 'crops';
-        const items = GARDEN_STORAGE_ITEMS[nextType].filter((item) => item.count > 0);
+        const nextType = sanitizeStorageTab(type);
+        const items = STORAGE_TABS[nextType].itemIds
+            .map((itemId) => ({ ...ITEM_META[itemId], count: getInventoryCount(itemId) }))
+            .filter((item) => item.count > 0);
+
+        if (state.gardenGame && state.gardenGame.storage) {
+            state.gardenGame.storage.tab = nextType;
+        }
 
         storageTabBtns.forEach((button) => {
             button.classList.toggle('active', button.dataset.storageTab === nextType);
         });
 
         if (!items.length) {
-            storageGridEl.innerHTML = '<div class="garden-storage-empty">空空如也</div>';
+            storageGridEl.innerHTML = '<div class="garden-storage-empty">当前分类暂无库存</div>';
             return;
         }
 
         storageGridEl.innerHTML = items.map((item) => (
-            `<div class="garden-storage-item">
+            `<button class="garden-storage-item" data-storage-item-id="${item.id}" type="button">
                 <div class="garden-storage-item-count">${item.count}</div>
                 <div class="garden-storage-item-icon">${item.emoji}</div>
                 <div class="garden-storage-item-name">${item.name}</div>
-            </div>`
+                <div class="garden-storage-item-price">${item.sellPrice} 金币/个</div>
+            </button>`
         )).join('');
+
+        syncStorageSellSheetUi();
+    }
+
+    function openStorageSellSheet(itemId) {
+        if (!ITEM_META[itemId] || getInventoryCount(itemId) <= 0) return;
+        state.storageSell.itemId = itemId;
+        state.storageSell.qty = 1;
+        syncStorageSellSheetUi();
+    }
+
+    function closeStorageSellSheet() {
+        state.storageSell.itemId = null;
+        state.storageSell.qty = 1;
+        syncStorageSellSheetUi();
+    }
+
+    function setStorageSellQty(nextQty) {
+        if (!state.storageSell.itemId) return;
+        const maxQty = getInventoryCount(state.storageSell.itemId);
+        const normalizedQty = Math.max(1, Math.min(maxQty, Math.floor(nextQty || 1)));
+        state.storageSell.qty = normalizedQty;
+        syncStorageSellSheetUi();
+    }
+
+    function syncStorageSellSheetUi() {
+        if (!storageSellSheetEl) return;
+        const itemId = state.storageSell.itemId;
+        const meta = itemId ? ITEM_META[itemId] : null;
+        const stockCount = itemId ? getInventoryCount(itemId) : 0;
+        const isOpen = !!meta && stockCount > 0;
+        storageSellSheetEl.classList.toggle('is-open', isOpen);
+        storageSellSheetEl.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+        if (!isOpen) return;
+
+        state.storageSell.qty = Math.max(1, Math.min(stockCount, state.storageSell.qty || 1));
+        if (storageSellIconEl) storageSellIconEl.textContent = meta.emoji;
+        if (storageSellNameEl) storageSellNameEl.textContent = meta.name;
+        if (storageSellStockEl) storageSellStockEl.textContent = `当前持有 ${stockCount}`;
+        if (storageSellPriceEl) storageSellPriceEl.textContent = `单价 ${meta.sellPrice} 金币`;
+        if (storageSellQtyEl) storageSellQtyEl.textContent = String(state.storageSell.qty);
+        if (storageSellTotalEl) storageSellTotalEl.textContent = `${state.storageSell.qty * meta.sellPrice} 金币`;
+        if (storageSellConfirmBtn) {
+            const disabled = state.storageSell.qty < 1 || state.storageSell.qty > stockCount;
+            storageSellConfirmBtn.disabled = disabled;
+        }
+    }
+
+    function confirmStorageSell(itemId, qty) {
+        const meta = ITEM_META[itemId];
+        if (!meta) return;
+        const stockCount = getInventoryCount(itemId);
+        const sellQty = Math.max(0, Math.min(stockCount, Math.floor(qty || 0)));
+        if (sellQty < 1 || sellQty > stockCount) return;
+
+        addInventoryItem(itemId, -sellQty);
+        updateGardenCoins(meta.sellPrice * sellQty);
+        saveGardenGameState();
+        refreshGardenEconomyUi();
+
+        if (getInventoryCount(itemId) > 0) {
+            state.storageSell.qty = Math.min(state.storageSell.qty, getInventoryCount(itemId));
+            syncStorageSellSheetUi();
+            return;
+        }
+
+        closeStorageSellSheet();
     }
 
     function hasResidentCharacterAssetDbSupport() {
@@ -3037,6 +3583,9 @@
     function switchView(viewKey) {
         state.currentView = viewKey;
         setHomeEntryMenuOpen(false);
+        if (viewKey !== 'gallery') {
+            closeStorageSellSheet();
+        }
         if (viewKey !== 'home') {
             closeFarmScreen({ silent: true });
             closePastureScreen({ silent: true });
@@ -3148,6 +3697,11 @@
     function openApp() {
         init();
         if (!screenEl) return;
+        state.gardenGame = loadGardenGameState();
+        saveGardenGameState();
+        refreshGardenEconomyUi();
+        renderFarmPlots();
+        renderPastureAnimals();
         syncGardenTitle();
         syncGardenLayoutFromActiveContact();
         closeFarmScreen({ silent: true });
@@ -3167,6 +3721,7 @@
         closeFarmScreen({ silent: true });
         closePastureScreen({ silent: true });
         closeKitchenScreen({ silent: true });
+        closeStorageSellSheet();
         setHomeEntryMenuOpen(false);
         setDrawerOpen(false);
         closeFloraScreen();

@@ -1660,12 +1660,47 @@
 
                             <div class="garden-storage-area">
                                 <div class="garden-storage-tabs" role="tablist" aria-label="仓库分类">
-                                    <button class="garden-storage-tab active" data-storage-tab="crops" type="button">农作物</button>
-                                    <button class="garden-storage-tab" data-storage-tab="products" type="button">农副产品</button>
+                                    <button class="garden-storage-tab active" data-storage-tab="crops" type="button">作物</button>
+                                    <button class="garden-storage-tab" data-storage-tab="products" type="button">畜产</button>
+                                    <button class="garden-storage-tab" data-storage-tab="cooked" type="button">熟食</button>
                                 </div>
 
                                 <div class="garden-storage-grid" id="garden-storage-grid">
                                     <!-- storage items rendered by JS -->
+                                </div>
+
+                                <div id="garden-storage-sell-sheet" class="garden-storage-sell-sheet" aria-hidden="true">
+                                    <button id="garden-storage-sell-backdrop" class="garden-storage-sell-backdrop" data-storage-sell-action="cancel" type="button" aria-label="关闭售卖弹层"></button>
+                                    <div class="garden-storage-sell-panel">
+                                        <div class="garden-storage-sell-handle"></div>
+                                        <div class="garden-storage-sell-head">
+                                            <div class="garden-storage-sell-item-meta">
+                                                <div id="garden-storage-sell-icon" class="garden-storage-sell-icon">🌾</div>
+                                                <div class="garden-storage-sell-item-copy">
+                                                    <div id="garden-storage-sell-name" class="garden-storage-sell-name">小麦</div>
+                                                    <div id="garden-storage-sell-stock" class="garden-storage-sell-stock">当前持有 0</div>
+                                                </div>
+                                            </div>
+                                            <div id="garden-storage-sell-price" class="garden-storage-sell-price">单价 20 金币</div>
+                                        </div>
+                                        <div class="garden-storage-sell-qty-row">
+                                            <span class="garden-storage-sell-label">售卖数量</span>
+                                            <div class="garden-storage-sell-stepper">
+                                                <button data-storage-sell-step="-1" type="button">-</button>
+                                                <span id="garden-storage-sell-qty">1</span>
+                                                <button data-storage-sell-step="1" type="button">+</button>
+                                                <button data-storage-sell-step="all" type="button">全部</button>
+                                            </div>
+                                        </div>
+                                        <div class="garden-storage-sell-total-row">
+                                            <span>合计金币</span>
+                                            <strong id="garden-storage-sell-total">20 金币</strong>
+                                        </div>
+                                        <div class="garden-storage-sell-actions">
+                                            <button class="is-cancel" data-storage-sell-action="cancel" type="button">取消</button>
+                                            <button id="garden-storage-sell-confirm" class="is-confirm" data-storage-sell-action="confirm" type="button">确认售卖</button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1690,8 +1725,8 @@
                         <span>仓库</span>
                     </button>
                     <button class="garden-bottom-nav-btn" data-garden-view="gallery" type="button">
-                        <i class="fas fa-book-open"></i>
-                        <span>图鉴</span>
+                        <i class="fas fa-box-open"></i>
+                        <span>仓库</span>
                     </button>
                     <button class="garden-bottom-nav-btn" data-garden-view="profile" type="button">
                         <i class="fas fa-user"></i>
@@ -1924,13 +1959,13 @@
                             <button class="garden-kitchen-cook-btn" data-kitchen-cook="icecream" type="button">烹饪</button>
                         </div>
 
-                        <div class="garden-kitchen-recipe-card is-disabled" data-kitchen-recipe="stirfry">
+                        <div class="garden-kitchen-recipe-card" data-kitchen-recipe="stirfry">
                             <div class="garden-kitchen-recipe-icon">🥘</div>
                             <div class="garden-kitchen-recipe-info">
                                 <div class="garden-kitchen-recipe-name">营养炖菜</div>
-                                <div class="garden-kitchen-recipe-reqs"><span>🥕 胡萝卜 x2</span><span>🥓 猪肉 x1</span></div>
+                                <div class="garden-kitchen-recipe-reqs"><span>🥕 胡萝卜 x2</span><span>🥩 猪肉 x1</span></div>
                             </div>
-                            <button class="garden-kitchen-cook-btn" type="button" disabled>材料不足</button>
+                            <button class="garden-kitchen-cook-btn" data-kitchen-cook="stirfry" type="button">烹饪</button>
                         </div>
                     </div>
 
