@@ -1,0 +1,156 @@
+/* 自定义聊天气泡样式 */
+
+/* 基础聊天消息容器 */
+.chat-message {
+    display: flex !important;
+    margin-bottom: 15px !important;
+    align-items: flex-end !important;
+}
+
+/* 接收方消息（左侧白底） */
+.chat-message.receiver {
+    justify-content: flex-start !important;
+}
+
+/* 发送方消息（右侧粉底） */
+.chat-message.sender {
+    justify-content: flex-end !important;
+}
+
+/* 气泡本体基础样式 */
+.chat-bubble {
+    position: relative !important;
+    max-width: 70% !important;
+    padding: 10px 15px !important;
+    border-radius: 12px !important; /* 默认所有圆角12px，供中间消息使用 */
+    font-size: 16px !important;
+    line-height: 1.5 !important;
+    word-break: break-word !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+}
+
+/* ========================================= */
+/* --- 接收方（白底）气泡样式及圆角逻辑 --- */
+/* ========================================= */
+.chat-message.receiver .chat-bubble {
+    background-color: #ffffff !important;
+    color: #333333 !important;
+    margin-left: 10px !important; /* 给尾巴留出空间 */
+}
+
+/* 接收方第一条消息（带尾巴，左上角直角） */
+.chat-message.receiver.first-msg .chat-bubble {
+    border-top-left-radius: 4px !important;
+}
+
+/* 接收方第一条消息的气泡尾巴 */
+.chat-message.receiver.first-msg .chat-bubble::before {
+    content: "" !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: -10px !important; /* 根据贴图大小调整位置 */
+    width: 20px !important; /* 尾巴贴图宽度 */
+    height: 20px !important; /* 尾巴贴图高度 */
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    
+    /* ❗❗❗ 请在这里填入接收方（左侧白底）气泡尾巴的图片URL ❗❗❗ */
+    background-image: url('填入你的接收方尾巴图片URL') !important; 
+}
+
+/* 接收方最后一条消息（左下角直角，可根据需要调整） */
+.chat-message.receiver.last-msg .chat-bubble {
+    border-bottom-left-radius: 4px !important;
+}
+
+
+/* ========================================= */
+/* --- 发送方（粉底）气泡样式及圆角逻辑 --- */
+/* ========================================= */
+.chat-message.sender .chat-bubble {
+    background-color: #f7e1e6 !important; /* 粉色背景，参考图片 */
+    color: #333333 !important;
+    margin-right: 10px !important; /* 给尾巴留出空间 */
+    /* 给右下角的对钩图标留出空间 */
+    padding-bottom: 20px !important; 
+}
+
+/* 发送方第一条消息（带尾巴，右上角直角） */
+.chat-message.sender.first-msg .chat-bubble {
+    border-top-right-radius: 4px !important;
+}
+
+/* 发送方第一条消息的气泡尾巴 */
+.chat-message.sender.first-msg .chat-bubble::after {
+    content: "" !important;
+    position: absolute !important;
+    top: 0 !important;
+    right: -10px !important; /* 根据贴图大小调整位置 */
+    width: 20px !important; /* 尾巴贴图宽度 */
+    height: 20px !important; /* 尾巴贴图高度 */
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    
+    /* ❗❗❗ 请在这里填入发送方（右侧粉底）气泡尾巴的图片URL ❗❗❗ */
+    background-image: url('填入你的发送方尾巴图片URL') !important; 
+}
+
+/* 发送方最后一条消息（右下角直角，可根据需要调整） */
+.chat-message.sender.last-msg .chat-bubble {
+    border-bottom-right-radius: 4px !important;
+}
+
+
+/* ========================================= */
+/* --- ❗ 已读对钩图标配置区域 ❗ --- */
+/* ========================================= */
+
+/* 发送方气泡右下角的对钩图标 */
+.chat-message.sender .chat-bubble .read-receipt {
+    position: absolute !important;
+    bottom: 5px !important;
+    right: 5px !important;
+    width: 18px !important; /* 对钩图标宽度 */
+    height: 18px !important; /* 对钩图标高度 */
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    
+    /* ❗❗❗ 请在这里填入右下角已读对钩的图片URL ❗❗❗ */
+    background-image: url('填入你的对钩图片URL') !important; 
+}
+
+/* 附加说明：
+在您的HTML页面中，需要为消息增加 `first-msg`（第一条），`last-msg`（最后一条）的类名。
+中间的消息什么都不加，就会使用默认的四个大圆角（12px）。
+
+<!-- 接收方第一条消息（带尾巴） -->
+<div class="chat-message receiver first-msg">
+    <div class="chat-bubble">
+        你好👋
+    </div>
+</div>
+
+<!-- 发送方第一条消息（带尾巴） -->
+<div class="chat-message sender first-msg">
+    <div class="chat-bubble">
+        你好
+        <span class="read-receipt"></span>
+    </div>
+</div>
+
+<!-- 发送方中间消息（全圆角，无尾巴） -->
+<div class="chat-message sender">
+    <div class="chat-bubble">
+        以后就用这个聊天 (o^^o)
+        <span class="read-receipt"></span>
+    </div>
+</div>
+
+<!-- 发送方最后一条消息（全圆角/右下角直角，无尾巴） -->
+<div class="chat-message sender last-msg">
+    <div class="chat-bubble">
+        我发现消息已读的话右下角的勾就会多个撇
+        <span class="read-receipt"></span>
+    </div>
+</div>
+*/

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <title>iPhone Simulator</title>
@@ -48,7 +48,7 @@
     <link rel="stylesheet" href="css/chat_ui_v1_overrides.css">
     <link rel="stylesheet" href="css/screen_share.css">
     <link rel="stylesheet" href="css/calendar_app.css">
-    <link rel="stylesheet" href="css/garden_app.css?v=15">
+    <link rel="stylesheet" href="css/garden_app.css?v=20">
 </head>
 <body>
     <div class="screen-container" id="screen-container">
@@ -1649,11 +1649,25 @@
                         </div>
                     </section>
 
-                    <section class="garden-app-view garden-app-placeholder-view" data-garden-view="gallery">
-                        <div class="garden-placeholder-card">
-                            <div class="garden-placeholder-icon"><i class="fas fa-images"></i></div>
-                            <h3>图鉴</h3>
-                            <p>图鉴页先保留占位，后续可以扩展为家具图鉴、宠物图鉴或布置灵感页。</p>
+                    <section class="garden-app-view garden-storage-view" data-garden-view="gallery">
+                        <div class="garden-storage-screen">
+                            <div class="garden-storage-top-bar">
+                                <button class="garden-storage-exit-btn" data-storage-action="exit" type="button" aria-label="退出仓库并返回主屏幕">
+                                    <i class="ri-arrow-left-line"></i>
+                                </button>
+                                <div class="garden-storage-title">📦 仓库</div>
+                            </div>
+
+                            <div class="garden-storage-area">
+                                <div class="garden-storage-tabs" role="tablist" aria-label="仓库分类">
+                                    <button class="garden-storage-tab active" data-storage-tab="crops" type="button">农作物</button>
+                                    <button class="garden-storage-tab" data-storage-tab="products" type="button">农副产品</button>
+                                </div>
+
+                                <div class="garden-storage-grid" id="garden-storage-grid">
+                                    <!-- storage items rendered by JS -->
+                                </div>
+                            </div>
                         </div>
                     </section>
 
@@ -1784,6 +1798,68 @@
                     </div>
                 </div>
 
+            
+            <div id="garden-pasture-screen" class="garden-pasture-screen" aria-hidden="true">
+                <div class="garden-pasture-world">
+                    <div class="garden-pasture-sun"></div>
+                    <div class="garden-pasture-cloud garden-pasture-cloud-1"></div>
+                    <div class="garden-pasture-cloud garden-pasture-cloud-2"></div>
+
+                    <div class="garden-pasture-top-bar">
+                        <div class="garden-pasture-user-stats">
+                            <div class="garden-pasture-stat-item"><i class="ri-copper-coin-fill garden-pasture-coin-icon"></i><span id="garden-pasture-coins">150</span></div>
+                            <div class="garden-pasture-stat-item"><i class="ri-star-smile-fill garden-pasture-level-icon"></i><span id="garden-pasture-exp">Lv.2</span></div>
+                        </div>
+                        <button id="garden-pasture-close-btn" class="garden-pasture-close-btn" type="button" aria-label="退出牧场并返回家园">
+                            <i class="ri-close-line"></i>
+                        </button>
+                    </div>
+
+                    <div class="garden-pasture-container" id="garden-pasture-field"></div>
+
+                    <div class="garden-pasture-bottom-panel">
+                        <div class="garden-pasture-shop-panel" id="garden-pasture-shop-panel">
+                            <button class="garden-pasture-shop-item" data-pasture-animal="chicken" type="button">
+                                <div class="garden-pasture-shop-icon">🐥</div>
+                                <div class="garden-pasture-shop-name">小鸡</div>
+                                <div class="garden-pasture-shop-price"><i class="ri-copper-coin-fill"></i>20</div>
+                            </button>
+                            <button class="garden-pasture-shop-item" data-pasture-animal="pig" type="button">
+                                <div class="garden-pasture-shop-icon">🐷</div>
+                                <div class="garden-pasture-shop-name">小猪</div>
+                                <div class="garden-pasture-shop-price"><i class="ri-copper-coin-fill"></i>50</div>
+                            </button>
+                            <button class="garden-pasture-shop-item" data-pasture-animal="sheep" type="button">
+                                <div class="garden-pasture-shop-icon">🐑</div>
+                                <div class="garden-pasture-shop-name">小羊</div>
+                                <div class="garden-pasture-shop-price"><i class="ri-copper-coin-fill"></i>80</div>
+                            </button>
+                            <button class="garden-pasture-shop-item" data-pasture-animal="cow" type="button">
+                                <div class="garden-pasture-shop-icon">🐮</div>
+                                <div class="garden-pasture-shop-name">小牛</div>
+                                <div class="garden-pasture-shop-price"><i class="ri-copper-coin-fill"></i>120</div>
+                            </button>
+                        </div>
+
+                        <div class="garden-pasture-toolbar">
+                            <button class="garden-pasture-tool-btn active" data-pasture-tool="pointer" type="button">
+                                <i class="ri-cursor-fill garden-pasture-tool-icon"></i><span class="garden-pasture-tool-name">选择</span>
+                            </button>
+                            <button class="garden-pasture-tool-btn" data-pasture-tool="feed" type="button">
+                                <i class="ri-restaurant-2-fill garden-pasture-tool-icon"></i><span class="garden-pasture-tool-name">喂食</span>
+                            </button>
+                            <button class="garden-pasture-tool-btn" data-pasture-tool="harvest" type="button">
+                                <i class="ri-shopping-basket-2-fill garden-pasture-tool-icon"></i><span class="garden-pasture-tool-name">收获</span>
+                            </button>
+                            <button class="garden-pasture-tool-btn" data-pasture-tool="shop" type="button">
+                                <i class="ri-store-2-fill garden-pasture-tool-icon"></i><span class="garden-pasture-tool-name">买幼崽</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="garden-pasture-toast" id="garden-pasture-toast">提示信息</div>
+                </div>
+            </div>
             <div id="garden-kitchen-screen" class="garden-kitchen-screen" aria-hidden="true">
                 <div class="garden-kitchen-world">
                     <div class="garden-kitchen-top-bar">
@@ -7158,7 +7234,7 @@
     <script src="js/meeting.js"></script>
     <script src="js/apps.js"></script>
     <script src="js/icity.js"></script>
-    <script src="js/garden_app.js?v=5"></script>
+    <script src="js/garden_app.js?v=8"></script>
     <script src="js/mood_flora.js"></script>
     <script src="js/home.js"></script>
     <script src="js/calendar_app.js"></script>

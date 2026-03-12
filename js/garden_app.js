@@ -36,6 +36,29 @@
         icecream: { name: '奶香冰淇淋', emoji: '🍨' }
     };
 
+    const PASTURE_ANIMAL_DATA = {
+        chicken: { babyEmoji: '🐥', adultEmoji: '🐓', food: '🌾', produce: '🥚', name: '鸡蛋', cost: 20, growTime: 5000, produceTime: 6000, reward: 30 },
+        pig: { babyEmoji: '🐷', adultEmoji: '🐖', food: '🥬', produce: '🥩', name: '猪肉', cost: 50, growTime: 8000, produceTime: 10000, reward: 80 },
+        sheep: { babyEmoji: '🐑', adultEmoji: '🐏', food: '🌿', produce: '🧶', name: '羊毛', cost: 80, growTime: 12000, produceTime: 15000, reward: 130 },
+        cow: { babyEmoji: '🐮', adultEmoji: '🐄', food: '🌽', produce: '🥛', name: '牛奶', cost: 120, growTime: 15000, produceTime: 20000, reward: 200 }
+    };
+
+    const GARDEN_STORAGE_ITEMS = {
+        crops: [
+            { id: 'wheat', name: '小麦', emoji: '🌾', count: 12 },
+            { id: 'carrot', name: '胡萝卜', emoji: '🥕', count: 5 },
+            { id: 'tomato', name: '番茄', emoji: '🍅', count: 0 },
+            { id: 'corn', name: '玉米', emoji: '🌽', count: 3 },
+            { id: 'pumpkin', name: '南瓜', emoji: '🎃', count: 2 }
+        ],
+        products: [
+            { id: 'egg', name: '鸡蛋', emoji: '🥚', count: 8 },
+            { id: 'milk', name: '牛奶', emoji: '🥛', count: 2 },
+            { id: 'meat', name: '猪肉', emoji: '🥓', count: 0 },
+            { id: 'honey', name: '蜂蜜', emoji: '🍯', count: 4 }
+        ]
+    };
+
     const PANEL_TABS = [
         {
             key: 'pet',
@@ -217,8 +240,10 @@
         currentHomeSection: 'home',
         homeEntryMenuOpen: false,
         farmScreenOpen: false,
+        pastureScreenOpen: false,
         kitchenScreenOpen: false,
         farmToastTimeout: null,
+        pastureToastTimeout: null,
         kitchenToastTimeout: null,
         farmGame: {
             initialized: false,
@@ -227,6 +252,13 @@
             exp: 0,
             currentTool: 'pointer',
             currentSeed: 'wheat'
+        },
+        pastureGame: {
+            initialized: false,
+            coins: 150,
+            level: 2,
+            currentTool: 'pointer',
+            selectedAnimalToBuy: 'chicken'
         },
         kitchenGame: {
             initialized: false,
@@ -240,6 +272,7 @@
             yellowStart: 0,
             yellowEnd: 0
         },
+        storageTab: 'crops',
         toastTimeout: null,
         saveResetTimer: null,
         saveDoneTimer: null,
@@ -279,6 +312,9 @@
     let viewEls;
     let navBtns;
     let activitiesViewEl;
+    let storageViewEl;
+    let storageGridEl;
+    let storageTabBtns = [];
     let homeEntryMenuEl;
     let farmScreenEl;
     let farmCloseBtn;
@@ -289,6 +325,15 @@
     let farmLevelEl;
     let farmToolBtns = [];
     let farmToastEl;
+    let pastureScreenEl;
+    let pastureCloseBtn;
+    let pastureFieldEl;
+    let pastureShopPanelEl;
+    let pastureCoinsEl;
+    let pastureExpEl;
+    let pastureToolBtns = [];
+    let pastureShopItems = [];
+    let pastureToastEl;
     let kitchenScreenEl;
     let kitchenCloseBtn;
     let kitchenOverlayEl;
@@ -336,6 +381,9 @@
         viewEls = Array.from(document.querySelectorAll('#garden-app .garden-app-view'));
         navBtns = Array.from(document.querySelectorAll('#garden-app .garden-bottom-nav-btn'));
         activitiesViewEl = document.querySelector('#garden-app [data-garden-view="activities"]');
+        storageViewEl = document.querySelector('#garden-app [data-garden-view="gallery"]');
+        storageGridEl = document.getElementById('garden-storage-grid');
+        storageTabBtns = Array.from(document.querySelectorAll('#garden-app [data-storage-tab]'));
         homeEntryMenuEl = document.getElementById('garden-home-entry-menu');
         farmScreenEl = document.getElementById('garden-farm-screen');
         farmCloseBtn = document.getElementById('garden-farm-close-btn');
@@ -346,6 +394,15 @@
         farmLevelEl = document.getElementById('garden-farm-level');
         farmToolBtns = Array.from(document.querySelectorAll('#garden-app [data-farm-tool]'));
         farmToastEl = document.getElementById('garden-farm-toast');
+        pastureScreenEl = document.getElementById('garden-pasture-screen');
+        pastureCloseBtn = document.getElementById('garden-pasture-close-btn');
+        pastureFieldEl = document.getElementById('garden-pasture-field');
+        pastureShopPanelEl = document.getElementById('garden-pasture-shop-panel');
+        pastureCoinsEl = document.getElementById('garden-pasture-coins');
+        pastureExpEl = document.getElementById('garden-pasture-exp');
+        pastureToolBtns = Array.from(document.querySelectorAll('#garden-app [data-pasture-tool]'));
+        pastureShopItems = Array.from(document.querySelectorAll('#garden-app [data-pasture-animal]'));
+        pastureToastEl = document.getElementById('garden-pasture-toast');
         kitchenScreenEl = document.getElementById('garden-kitchen-screen');
         kitchenCloseBtn = document.getElementById('garden-kitchen-close-btn');
         kitchenOverlayEl = document.getElementById('garden-kitchen-overlay');
@@ -372,6 +429,7 @@
         syncGardenTitle();
         syncActivitiesNavButton();
         bindActivitiesInteractions();
+        initStorageView();
         ensureContactFigureModal();
         togglePanelBtn.addEventListener('click', () => {
             if (state.currentView !== 'home') return;
@@ -400,6 +458,9 @@
         if (farmCloseBtn) {
             farmCloseBtn.addEventListener('click', closeFarmScreen);
         }
+        if (pastureCloseBtn) {
+            pastureCloseBtn.addEventListener('click', closePastureScreen);
+        }
         if (kitchenCloseBtn) {
             kitchenCloseBtn.addEventListener('click', closeKitchenScreen);
         }
@@ -412,6 +473,7 @@
 
         initEditor();
         initFarmScreen();
+        initPastureScreen();
         initKitchenScreen();
         syncGardenLayoutFromActiveContact();
         syncFloraFromEngine();
@@ -579,6 +641,11 @@
             return;
         }
 
+        if (targetKey === 'pasture') {
+            openPastureScreen();
+            return;
+        }
+
         if (targetKey === 'kitchen') {
             openKitchenScreen();
             return;
@@ -679,6 +746,7 @@
     function openFarmScreen() {
         initFarmScreen();
         if (!farmScreenEl) return;
+        closePastureScreen({ silent: true });
         closeKitchenScreen({ silent: true });
         setHomeEntryMenuOpen(false);
         setDrawerOpen(false);
@@ -855,6 +923,339 @@
         }, 2000);
     }
 
+    function initPastureScreen() {
+        if (!pastureFieldEl || !pastureShopPanelEl || !pastureCoinsEl || !pastureExpEl) return;
+        if (state.pastureGame.initialized) {
+            syncPastureStats();
+            syncPastureToolUi();
+            return;
+        }
+
+        pastureFieldEl.addEventListener('click', handlePastureAreaClick);
+        pastureToolBtns.forEach((button) => {
+            button.addEventListener('click', () => {
+                const tool = button.dataset.pastureTool;
+                if (tool) setPastureTool(tool);
+            });
+        });
+        pastureShopItems.forEach((button) => {
+            button.addEventListener('click', () => {
+                const animalType = button.dataset.pastureAnimal;
+                if (animalType) selectPastureAnimalToBuy(animalType);
+            });
+        });
+
+        syncPastureStats();
+        syncPastureToolUi();
+        selectPastureAnimalToBuy(state.pastureGame.selectedAnimalToBuy, false);
+        spawnPastureAnimal('chicken', 30, 40, false);
+        spawnPastureAnimal('chicken', 70, 60, true);
+
+        state.pastureGame.initialized = true;
+    }
+
+    function syncPastureStats() {
+        if (pastureCoinsEl) pastureCoinsEl.textContent = String(state.pastureGame.coins);
+        if (pastureExpEl) pastureExpEl.textContent = `Lv.${state.pastureGame.level}`;
+    }
+
+    function syncPastureToolUi() {
+        pastureToolBtns.forEach((button) => {
+            button.classList.toggle('active', button.dataset.pastureTool === state.pastureGame.currentTool);
+        });
+        pastureShopItems.forEach((button) => {
+            button.classList.toggle('selected', button.dataset.pastureAnimal === state.pastureGame.selectedAnimalToBuy);
+        });
+        if (pastureShopPanelEl) {
+            pastureShopPanelEl.style.display = state.pastureGame.currentTool === 'shop' ? 'flex' : 'none';
+        }
+    }
+
+    function setPastureTool(tool) {
+        if (!tool) return;
+        state.pastureGame.currentTool = tool;
+        if (tool === 'shop' && !state.pastureGame.selectedAnimalToBuy) {
+            state.pastureGame.selectedAnimalToBuy = 'chicken';
+        }
+        syncPastureToolUi();
+        vibrate(15);
+    }
+
+    function selectPastureAnimalToBuy(type, shouldVibrate = true) {
+        if (!PASTURE_ANIMAL_DATA[type]) return;
+        state.pastureGame.selectedAnimalToBuy = type;
+        syncPastureToolUi();
+        if (shouldVibrate) vibrate(15);
+    }
+
+    function openPastureScreen() {
+        initPastureScreen();
+        if (!pastureScreenEl) return;
+        closeFarmScreen({ silent: true });
+        closeKitchenScreen({ silent: true });
+        setHomeEntryMenuOpen(false);
+        setDrawerOpen(false);
+        closeFloraScreen();
+        state.pastureScreenOpen = true;
+        state.currentHomeSection = 'pasture';
+        pastureScreenEl.classList.add('is-open');
+        pastureScreenEl.setAttribute('aria-hidden', 'false');
+        vibrate(20);
+    }
+
+    function closePastureScreen(options) {
+        if (!pastureScreenEl) return;
+        const silent = !!(options && options.silent);
+        state.pastureScreenOpen = false;
+        state.currentHomeSection = 'home';
+        pastureScreenEl.classList.remove('is-open');
+        pastureScreenEl.setAttribute('aria-hidden', 'true');
+        if (!silent) vibrate(20);
+    }
+
+    function updatePastureCoins(amount) {
+        state.pastureGame.coins += amount;
+        syncPastureStats();
+    }
+
+    function showPastureToast(message) {
+        if (!pastureToastEl || !message) return;
+        pastureToastEl.textContent = message;
+        pastureToastEl.classList.add('is-visible');
+        window.clearTimeout(state.pastureToastTimeout);
+        state.pastureToastTimeout = window.setTimeout(() => {
+            if (pastureToastEl) pastureToastEl.classList.remove('is-visible');
+        }, 2000);
+    }
+
+    function handlePastureAreaClick(event) {
+        if (!pastureFieldEl) return;
+        if (event.target.closest('.garden-pasture-animal-wrapper')) return;
+        if (state.pastureGame.currentTool !== 'shop' || !state.pastureGame.selectedAnimalToBuy) return;
+
+        const animalType = state.pastureGame.selectedAnimalToBuy;
+        const animalData = PASTURE_ANIMAL_DATA[animalType];
+        if (!animalData) return;
+        if (state.pastureGame.coins < animalData.cost) {
+            showPastureToast('金币不足！');
+            return;
+        }
+
+        const rect = pastureFieldEl.getBoundingClientRect();
+        const x = ((event.clientX - rect.left) / rect.width) * 100;
+        const y = ((event.clientY - rect.top) / rect.height) * 100;
+        updatePastureCoins(-animalData.cost);
+        spawnPastureAnimal(animalType, x, y, false);
+        showPastureToast(`购买了幼崽 ${animalData.babyEmoji}`);
+    }
+
+    function setPastureAnimalPosition(wrapper, x, y) {
+        if (!wrapper) return;
+        const nextX = Math.max(10, Math.min(90, x));
+        const nextY = Math.max(15, Math.min(85, y));
+        wrapper.dataset.x = String(nextX);
+        wrapper.dataset.y = String(nextY);
+        wrapper.style.left = `calc(${nextX}% - 25px)`;
+        wrapper.style.top = `calc(${nextY}% - 30px)`;
+    }
+
+    function spawnPastureAnimal(type, x, y, isAdult) {
+        if (!pastureFieldEl || !PASTURE_ANIMAL_DATA[type]) return;
+        const data = PASTURE_ANIMAL_DATA[type];
+        const wrapper = document.createElement('div');
+        wrapper.className = `garden-pasture-animal-wrapper garden-pasture-state-hungry garden-pasture-show-bubble ${isAdult ? 'garden-pasture-age-adult' : 'garden-pasture-age-baby'}`;
+        wrapper.dataset.type = type;
+        wrapper.dataset.state = 'hungry';
+        wrapper.dataset.age = isAdult ? 'adult' : 'baby';
+        wrapper.innerHTML = `
+            <div class="garden-pasture-bubble">饿了 😫</div>
+            <div class="garden-pasture-animal-emoji">${isAdult ? data.adultEmoji : data.babyEmoji}</div>
+        `;
+        setPastureAnimalPosition(wrapper, x, y);
+        wrapper.addEventListener('click', (event) => {
+            event.stopPropagation();
+            interactWithPastureAnimal(wrapper);
+        });
+        pastureFieldEl.appendChild(wrapper);
+        startPastureRoaming(wrapper);
+    }
+
+    function interactWithPastureAnimal(wrapper) {
+        if (!wrapper) return;
+        const data = PASTURE_ANIMAL_DATA[wrapper.dataset.type];
+        if (!data) return;
+
+        const animalState = wrapper.dataset.state;
+        const animalAge = wrapper.dataset.age;
+        const bubble = wrapper.querySelector('.garden-pasture-bubble');
+        const emojiEl = wrapper.querySelector('.garden-pasture-animal-emoji');
+        if (!bubble || !emojiEl) return;
+
+        if (state.pastureGame.currentTool === 'pointer') {
+            wrapper.classList.add('garden-pasture-show-bubble');
+            window.setTimeout(() => {
+                if (!wrapper.isConnected) return;
+                if (wrapper.dataset.state !== 'ready' && wrapper.dataset.state !== 'hungry') {
+                    wrapper.classList.remove('garden-pasture-show-bubble');
+                }
+            }, 2000);
+            return;
+        }
+
+        if (state.pastureGame.currentTool === 'feed' && animalState === 'hungry') {
+            wrapper.dataset.state = 'eating';
+            wrapper.classList.remove('garden-pasture-state-hungry', 'garden-pasture-state-ready');
+            bubble.innerText = `${data.food} 吃吃吃...`;
+            bubble.style.color = '#333';
+            wrapper.classList.add('garden-pasture-show-bubble');
+            showPastureFoodAnimation(wrapper, data.food);
+
+            window.setTimeout(() => {
+                if (!wrapper.isConnected) return;
+                if (animalAge === 'baby') {
+                    wrapper.dataset.state = 'growing';
+                    bubble.innerText = '成长中 ⏳';
+
+                    window.setTimeout(() => {
+                        if (!wrapper.isConnected) return;
+                        wrapper.dataset.age = 'adult';
+                        wrapper.dataset.state = 'hungry';
+                        wrapper.classList.remove('garden-pasture-age-baby');
+                        wrapper.classList.add('garden-pasture-age-adult', 'garden-pasture-state-hungry', 'garden-pasture-show-bubble');
+                        emojiEl.innerText = data.adultEmoji;
+                        bubble.innerText = '长大啦，饿了 😫';
+                        bubble.style.color = '#333';
+                        showPastureGrowAnimation(wrapper);
+                    }, data.growTime);
+                    return;
+                }
+
+                wrapper.dataset.state = 'producing';
+                bubble.innerText = '生产中 ⏳';
+                window.setTimeout(() => {
+                    if (!wrapper.isConnected) return;
+                    wrapper.dataset.state = 'ready';
+                    wrapper.classList.add('garden-pasture-state-ready', 'garden-pasture-show-bubble');
+                    bubble.innerText = `可收获 ${data.produce}`;
+                    bubble.style.color = '#2e7d32';
+                }, data.produceTime);
+            }, 1500);
+            return;
+        }
+
+        if (state.pastureGame.currentTool === 'harvest') {
+            if (animalAge === 'baby') {
+                showPastureToast('还在幼崽期，不能收获哦！');
+                return;
+            }
+            if (animalState !== 'ready') {
+                showPastureToast('还没有可以收获的产物');
+                return;
+            }
+
+            wrapper.dataset.state = 'hungry';
+            wrapper.classList.remove('garden-pasture-state-ready');
+            wrapper.classList.add('garden-pasture-state-hungry', 'garden-pasture-show-bubble');
+            bubble.innerText = '饿了 😫';
+            bubble.style.color = '#333';
+            updatePastureCoins(data.reward);
+            showPastureToast(`获得 ${data.name} ${data.produce}，+${data.reward}金币`);
+            showPastureCoinAnimation(wrapper);
+        }
+    }
+
+    function showPastureFoodAnimation(animalWrapper, foodEmoji) {
+        if (!pastureFieldEl || !animalWrapper) return;
+        const food = document.createElement('div');
+        food.className = 'garden-pasture-food-bowl';
+        food.textContent = foodEmoji;
+        pastureFieldEl.appendChild(food);
+
+        const animalRect = animalWrapper.getBoundingClientRect();
+        const pastureRect = pastureFieldEl.getBoundingClientRect();
+        food.style.left = `${(animalRect.left - pastureRect.left) + 40}px`;
+        food.style.top = `${(animalRect.top - pastureRect.top) - 50}px`;
+        food.style.opacity = '1';
+        food.style.transform = 'scale(0.5)';
+
+        window.setTimeout(() => {
+            food.style.transform = 'scale(1.2) translateY(50px)';
+            window.setTimeout(() => {
+                food.style.opacity = '0';
+                window.setTimeout(() => {
+                    if (food.parentNode) food.parentNode.removeChild(food);
+                }, 500);
+            }, 1000);
+        }, 50);
+    }
+
+    function showPastureCoinAnimation(animalWrapper) {
+        if (!pastureFieldEl || !animalWrapper) return;
+        const coin = document.createElement('div');
+        const animalRect = animalWrapper.getBoundingClientRect();
+        const pastureRect = pastureFieldEl.getBoundingClientRect();
+        coin.textContent = '🪙';
+        coin.style.position = 'absolute';
+        coin.style.left = `${(animalRect.left - pastureRect.left) + 25}px`;
+        coin.style.top = `${animalRect.top - pastureRect.top}px`;
+        coin.style.fontSize = '30px';
+        coin.style.pointerEvents = 'none';
+        coin.style.zIndex = '25';
+        coin.style.transition = 'all 1s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        pastureFieldEl.appendChild(coin);
+
+        window.setTimeout(() => {
+            coin.style.transform = 'translateY(-100px) scale(1.5)';
+            coin.style.opacity = '0';
+            window.setTimeout(() => {
+                if (coin.parentNode) coin.parentNode.removeChild(coin);
+            }, 1000);
+        }, 50);
+    }
+
+    function showPastureGrowAnimation(wrapper) {
+        if (!pastureFieldEl || !wrapper) return;
+        const effect = document.createElement('div');
+        const animalRect = wrapper.getBoundingClientRect();
+        const pastureRect = pastureFieldEl.getBoundingClientRect();
+        effect.textContent = '✨';
+        effect.style.position = 'absolute';
+        effect.style.left = `${(animalRect.left - pastureRect.left) + 20}px`;
+        effect.style.top = `${animalRect.top - pastureRect.top}px`;
+        effect.style.fontSize = '40px';
+        effect.style.pointerEvents = 'none';
+        effect.style.zIndex = '25';
+        effect.style.transition = 'all 1s';
+        pastureFieldEl.appendChild(effect);
+
+        wrapper.style.transform = 'scale(1.3)';
+        window.setTimeout(() => {
+            if (wrapper.isConnected) wrapper.style.transform = 'scale(1)';
+        }, 300);
+        window.setTimeout(() => {
+            effect.style.transform = 'translateY(-60px) scale(1.5)';
+            effect.style.opacity = '0';
+            window.setTimeout(() => {
+                if (effect.parentNode) effect.parentNode.removeChild(effect);
+            }, 1000);
+        }, 50);
+    }
+
+    function startPastureRoaming(wrapper) {
+        if (!wrapper || wrapper.pastureRoamTimer) return;
+        wrapper.pastureRoamTimer = window.setInterval(() => {
+            if (!wrapper.isConnected) return;
+            if (wrapper.dataset.state === 'eating') return;
+            if (Math.random() >= 0.2) return;
+
+            const currentX = Number(wrapper.dataset.x || '50');
+            const currentY = Number(wrapper.dataset.y || '50');
+            const nextX = currentX + (Math.random() * 20 - 10);
+            const nextY = currentY + (Math.random() * 20 - 10);
+            setPastureAnimalPosition(wrapper, nextX, nextY);
+        }, 2000);
+    }
+
     function initKitchenScreen() {
         if (!kitchenOverlayEl) return;
         if (state.kitchenGame.initialized) return;
@@ -878,6 +1279,7 @@
     function openKitchenScreen() {
         initKitchenScreen();
         if (!kitchenScreenEl) return;
+        closePastureScreen({ silent: true });
         closeFarmScreen({ silent: true });
         setHomeEntryMenuOpen(false);
         setDrawerOpen(false);
@@ -1083,6 +1485,57 @@
                 triggerActivitiesPlayFeedback(card.querySelector('.garden-activities-play-btn'));
             }
         });
+    }
+
+    function initStorageView() {
+        renderStorageItems(state.storageTab);
+        if (!storageViewEl || storageViewEl.dataset.bound === 'true') return;
+
+        storageViewEl.dataset.bound = 'true';
+        storageViewEl.addEventListener('click', (event) => {
+            const actionButton = event.target.closest('[data-storage-action]');
+            if (actionButton) {
+                const action = actionButton.dataset.storageAction;
+                vibrate(20);
+                if (action === 'exit') {
+                    closeApp();
+                }
+                return;
+            }
+
+            const tabButton = event.target.closest('[data-storage-tab]');
+            if (!tabButton) return;
+
+            const nextTab = tabButton.dataset.storageTab;
+            if (!nextTab || !GARDEN_STORAGE_ITEMS[nextTab]) return;
+            state.storageTab = nextTab;
+            renderStorageItems(nextTab);
+            vibrate(15);
+        });
+    }
+
+    function renderStorageItems(type) {
+        if (!storageGridEl) return;
+
+        const nextType = GARDEN_STORAGE_ITEMS[type] ? type : 'crops';
+        const items = GARDEN_STORAGE_ITEMS[nextType].filter((item) => item.count > 0);
+
+        storageTabBtns.forEach((button) => {
+            button.classList.toggle('active', button.dataset.storageTab === nextType);
+        });
+
+        if (!items.length) {
+            storageGridEl.innerHTML = '<div class="garden-storage-empty">空空如也</div>';
+            return;
+        }
+
+        storageGridEl.innerHTML = items.map((item) => (
+            `<div class="garden-storage-item">
+                <div class="garden-storage-item-count">${item.count}</div>
+                <div class="garden-storage-item-icon">${item.emoji}</div>
+                <div class="garden-storage-item-name">${item.name}</div>
+            </div>`
+        )).join('');
     }
 
     function hasResidentCharacterAssetDbSupport() {
@@ -2586,6 +3039,7 @@
         setHomeEntryMenuOpen(false);
         if (viewKey !== 'home') {
             closeFarmScreen({ silent: true });
+            closePastureScreen({ silent: true });
             closeKitchenScreen({ silent: true });
         }
         viewEls.forEach((viewEl) => {
@@ -2596,6 +3050,7 @@
         });
         if (screenEl) {
             screenEl.classList.toggle('is-activities-view', viewKey === 'activities');
+            screenEl.classList.toggle('is-storage-view', viewKey === 'gallery');
         }
 
         const isHome = viewKey === 'home';
@@ -2696,6 +3151,7 @@
         syncGardenTitle();
         syncGardenLayoutFromActiveContact();
         closeFarmScreen({ silent: true });
+        closePastureScreen({ silent: true });
         closeKitchenScreen({ silent: true });
         switchView('home');
         setHomeEntryMenuOpen(false);
@@ -2709,6 +3165,7 @@
         if (!screenEl) return;
         persistGardenLayoutForContact();
         closeFarmScreen({ silent: true });
+        closePastureScreen({ silent: true });
         closeKitchenScreen({ silent: true });
         setHomeEntryMenuOpen(false);
         setDrawerOpen(false);
@@ -2733,6 +3190,8 @@
         closeApp,
         openFarmScreen,
         closeFarmScreen,
+        openPastureScreen,
+        closePastureScreen,
         openKitchenScreen,
         closeKitchenScreen,
         openActivitiesView,
