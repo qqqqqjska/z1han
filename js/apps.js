@@ -2117,30 +2117,30 @@ const NATURAL_SUMMARY_LENGTH_POLICY = {
     auto: {
         base: 360,
         slope: 6.2,
-        minTarget: 420,
-        maxTarget: 780,
+        minTarget: 200,
+        maxTarget: 300,
         minCap: 320,
         padRatio: 0.18,
         padMin: 55,
         minGap: 50,
         countCap: 120,
         retryMin: 360,
-        maxTokens: 1200,
-        retryTokens: 1450
+        maxTokens: 2000,
+        retryTokens: 2200
     },
     manual: {
         base: 560,
         slope: 8.4,
-        minTarget: 650,
-        maxTarget: 1200,
+        minTarget: 200,
+        maxTarget: 300,
         minCap: 520,
         padRatio: 0.2,
         padMin: 80,
         minGap: 70,
         countCap: 160,
         retryMin: 580,
-        maxTokens: 1800,
-        retryTokens: 2000
+        maxTokens: 3000,
+        retryTokens: 3500
     }
 };
 
@@ -2555,8 +2555,7 @@ async function requestNaturalSummaryText(settings, requestConfig = {}) {
         const body = {
             model: settings.model,
             messages,
-            temperature: clampFloat(requestConfig.temperature, 0.45, 0, 1.5),
-            max_tokens: clampInt(requestConfig.maxTokens, 1200, 256, 4000)
+            temperature: clampFloat(requestConfig.temperature, 0.45, 0, 1.5)
         };
         if (includePenalties) {
             body.presence_penalty = clampFloat(requestConfig.presencePenalty, 0.2, -2, 2);

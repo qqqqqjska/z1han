@@ -3735,6 +3735,9 @@
     box-shadow: 0 -12px 30px rgba(15, 23, 42, 0.16);
     transform: translateY(16px);
     transition: transform 0.22s ease;
+    max-height: calc(100% - max(28px, env(safe-area-inset-top, 0px) + 24px));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 #garden-app .garden-rogue-panel.is-open .garden-rogue-panel-sheet {
@@ -3756,6 +3759,13 @@
     justify-content: space-between;
     gap: 12px;
     margin-bottom: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    padding-top: max(18px, env(safe-area-inset-top, 0px) + 8px);
+    padding-bottom: 10px;
+    background: #fffdf6;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 #garden-app .garden-rogue-panel-title {
@@ -3780,6 +3790,11 @@
     background: rgba(255, 237, 213, 0.85);
     color: #92400e;
     font-size: 18px;
+    flex-shrink: 0;
+}
+
+#garden-app #garden-rogue-workshop .garden-rogue-panel-sheet {
+    padding-top: 8px;
 }
 
 #garden-app .garden-rogue-panel-section {

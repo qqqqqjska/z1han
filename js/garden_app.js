@@ -100,64 +100,48 @@
     };
 
     const ROGUE_V2_STARTER_LOADOUTS = {
-        planter: {
-            id: 'planter',
-            name: '种植流',
-            desc: '从高频作物循环起步，快速滚出原料海。',
+        farmer: {
+            id: 'farmer',
+            name: '老农夫',
+            desc: '初始农地更多，适合走高频种植和素食速推。',
             icon: '🌾',
-            startCoins: 180,
-            startInventory: { wheat: 3, carrot: 2 },
-            starterRelicId: 'seed_catalog'
-        },
-        rancher: {
-            id: 'rancher',
-            name: '畜牧流',
-            desc: '靠动物高产和成长压缩，稳定产出稀缺畜产。',
-            icon: '🐮',
-            startCoins: 180,
-            startInventory: { egg: 2, milk: 1 },
-            starterRelicId: 'pasture_whistle'
+            startCoins: 160,
+            startInventory: { wheat: 4, carrot: 2 },
+            starterRelicId: 'golden_watering_can'
         },
         chef: {
             id: 'chef',
-            name: '厨艺流',
-            desc: '从半成品与减耗起手，尽早进入连做链条。',
+            name: '落魄主厨',
+            desc: '开局自带高级菜谱，更容易走高价值加工路线。',
             icon: '🍳',
-            startCoins: 170,
-            startInventory: { wheat: 2, egg: 1, tomato: 2 },
-            starterRelicId: 'seasoning_kit'
+            startCoins: 150,
+            startInventory: { wheat: 2, egg: 2, tomato: 2 },
+            starterRelicId: 'lucky_pan'
         },
-        trader: {
-            id: 'trader',
-            name: '贸易流',
-            desc: '更快摸到订单与溢价，走卖货爆金路线。',
-            icon: '💰',
-            startCoins: 220,
-            startInventory: { wheat: 1, pork: 1 },
-            starterRelicId: 'ledger_book'
+        rancher: {
+            id: 'rancher',
+            name: '牧场经理',
+            desc: '初始动物更强，适合走自动化牧场和高价畜产路线。',
+            icon: '🐮',
+            startCoins: 170,
+            startInventory: { corn: 3, egg: 1 },
+            starterRelicId: 'auto_feeder'
         }
     };
 
     const ROGUE_RELIC_POOL_V2 = {
-        seed_catalog: { id: 'seed_catalog', rarity: 'starter', category: 'yield', title: '种子图录', desc: '农场节点收获额外 +1，且更容易出现农场路线。', effects: { farmHarvestBonus: 1, farmNodeWeight: 2 } },
-        pasture_whistle: { id: 'pasture_whistle', rarity: 'starter', category: 'yield', title: '牧场口哨', desc: '牧场节点的成长/生产速度提升，畜产额外 +1。', effects: { pastureSpeed: 0.75, pastureHarvestBonus: 1 } },
-        seasoning_kit: { id: 'seasoning_kit', rarity: 'starter', category: 'conversion', title: '调味套组', desc: '厨房节点首次烹饪不消耗主材料，成品额外 +1。', effects: { kitchenPrimaryRefund: 1, kitchenOutputBonus: 1 } },
-        ledger_book: { id: 'ledger_book', rarity: 'starter', category: 'economy', title: '记账本', desc: '市场节点收益 +20%，更容易出现市场路线。', effects: { marketSellBonus: 0.2, marketNodeWeight: 2 } },
-        twin_basket: { id: 'twin_basket', rarity: 'common', category: 'yield', title: '双层收纳篮', desc: '所有原材料产出有 35% 概率额外 +1。', effects: { rawDoubleChance: 0.35 } },
-        greenhouse_glass: { id: 'greenhouse_glass', rarity: 'common', category: 'yield', title: '温室玻璃', desc: '农场节点内成熟时间 x0.65。', effects: { farmSpeed: 0.65 } },
-        auto_feeder: { id: 'auto_feeder', rarity: 'common', category: 'yield', title: '自动饲喂器', desc: '牧场节点内喂食后成长/生产时间 x0.65。', effects: { pastureSpeed: 0.65 } },
-        surplus_contract: { id: 'surplus_contract', rarity: 'common', category: 'economy', title: '余量合约', desc: '单次售卖数量 >= 3 时，收益 +25%。', effects: { bulkSellBonus: 0.25 } },
-        prep_station: { id: 'prep_station', rarity: 'common', category: 'conversion', title: '预处理台', desc: '厨房节点烹饪消耗 -1 随机原料，最低保留 1。', effects: { kitchenDiscount: 1 } },
-        chain_timer: { id: 'chain_timer', rarity: 'common', category: 'chain', title: '连锁计时器', desc: '连续成功完成同类节点时，奖励倍率逐层提升。', effects: { chainBonusPerWin: 0.15 } },
-        morale_badge: { id: 'morale_badge', rarity: 'common', category: 'survival', title: '士气徽章', desc: '士气上限 +1，并立即恢复 1 点士气。', effects: { moraleCapBonus: 1, moraleHeal: 1 } },
-        miracle_oven: { id: 'miracle_oven', rarity: 'rare', category: 'conversion', title: '奇迹烤炉', desc: '成功烹饪后 40% 概率再复制 1 份成品。', effects: { cookedDuplicateChance: 0.4 } },
-        freight_coupon: { id: 'freight_coupon', rarity: 'rare', category: 'economy', title: '货运券', desc: '每到市场节点，获得 1 张本节点专用双倍订单券。', effects: { marketTicketPerNode: 1 } },
-        fusion_order: { id: 'fusion_order', rarity: 'rare', category: 'conversion', title: '联动订单', desc: '原材料收获时有概率直接转成对应熟食订单进度。', effects: { convertToOrderChance: 0.25 } },
-        harvest_frenzy: { id: 'harvest_frenzy', rarity: 'rare', category: 'chain', title: '丰收狂热', desc: '连续完成 3 个普通节点后，下一节点所有掉落 x2。', effects: { frenzyThreshold: 3, frenzyMultiplier: 2 } },
-        second_wind: { id: 'second_wind', rarity: 'rare', category: 'survival', title: '第二口气', desc: '本局首次士气归零时，立刻回到 1 点并继续。', effects: { reviveOnce: 1 } },
-        kings_manifest: { id: 'kings_manifest', rarity: 'blessing', category: 'economy', title: '王家货单', desc: '市场与 Boss 订单奖励 +40%。', effects: { orderBonus: 0.4 } },
-        golden_mixer: { id: 'golden_mixer', rarity: 'blessing', category: 'conversion', title: '黄金搅拌机', desc: '厨房每次成功都额外生成 1 份熟食。', effects: { kitchenOutputBonus: 1 } },
-        cornucopia: { id: 'cornucopia', rarity: 'blessing', category: 'yield', title: '丰饶之角', desc: '所有收获固定额外 +2。', effects: { allHarvestFlatBonus: 2 } }
+        golden_watering_can: { id: 'golden_watering_can', rarity: 'starter', category: 'farm', title: '黄金水壶', desc: '浇水不消耗行动力，暴雨日额外提升变异率。', effects: { freeWatering: 1, rainMutationBonus: 0.15 } },
+        lucky_pan: { id: 'lucky_pan', rarity: 'starter', category: 'kitchen', title: '幸运平底锅', desc: '烹饪大成功率提高，发光料理售价更高。', effects: { cookingCritChance: 0.18, glowingDishBonus: 1 } },
+        auto_feeder: { id: 'auto_feeder', rarity: 'starter', category: 'pasture', title: '自动投喂机', desc: '每天自动喂养 1 次动物，适合牧场自动化。', effects: { autoFeedPerDay: 1 } },
+        catalyst_fertilizer: { id: 'catalyst_fertilizer', rarity: 'common', category: 'farm', title: '催熟肥料', desc: '所有作物生长周期 -1 天。', effects: { cropGrowDaysDelta: -1 } },
+        twin_harvest: { id: 'twin_harvest', rarity: 'common', category: 'farm', title: '双生果穗', desc: '农场收获有 30% 概率额外 +1。', effects: { extraCropChance: 0.3 } },
+        gourmet_salt: { id: 'gourmet_salt', rarity: 'common', category: 'kitchen', title: '秘制香料', desc: '厨房成功料理有 25% 概率升级为发光料理。', effects: { glowingDishChance: 0.25 } },
+        bulk_freezer: { id: 'bulk_freezer', rarity: 'common', category: 'warehouse', title: '冷藏柜', desc: '仓库容量 +4，食材更不容易腐烂。', effects: { inventoryCapacity: 4, spoilageGuard: 1 } },
+        price_board: { id: 'price_board', rarity: 'common', category: 'market', title: '行情板', desc: '每天提前预知 1 类涨价商品。', effects: { marketPreview: 1 } },
+        mutant_gene: { id: 'mutant_gene', rarity: 'rare', category: 'farm', title: '变异基因', desc: '流星雨和特殊天气下更容易出现变异作物。', effects: { mutationChanceBonus: 0.25 } },
+        dark_contract: { id: 'dark_contract', rarity: 'rare', category: 'market', title: '黑市契约', desc: '黑暗料理无视市场波动，按高价卖给地下商人。', effects: { darkDishMarketIgnore: 1 } },
+        carnivore_brand: { id: 'carnivore_brand', rarity: 'rare', category: 'pasture', title: '肉食招牌', desc: '肉类相关成品在热卖日额外获得高倍率收益。', effects: { meatDishBonus: 0.5 } },
+        vegetarian_manifesto: { id: 'vegetarian_manifesto', rarity: 'rare', category: 'kitchen', title: '素食主义', desc: '纯素料理收益 +50%，但动物每日维护成本更高。', effects: { veganDishBonus: 0.5, animalFeedPenalty: 1 } }
     };
 
     const ROGUE_EVENT_POOL_V2 = {
@@ -603,7 +587,7 @@
             workshopCurrency: 0,
             ascensionLevel: 0,
             highestActCleared: 0,
-            unlockedLoadouts: ['planter', 'rancher', 'chef', 'trader'],
+            unlockedLoadouts: ['farmer', 'chef', 'rancher'],
             workshopLevels: {},
             seenRelics: [],
             seenEvents: []
@@ -691,7 +675,7 @@
     }
 
     function createDefaultRogueRunStateV2(loadoutId) {
-        const loadout = ROGUE_V2_STARTER_LOADOUTS[loadoutId] || ROGUE_V2_STARTER_LOADOUTS.planter;
+        const loadout = ROGUE_V2_STARTER_LOADOUTS[loadoutId] || ROGUE_V2_STARTER_LOADOUTS.farmer;
         const inventory = createEmptyInventory();
         Object.entries(loadout.startInventory || {}).forEach(([itemId, amount]) => {
             if (!ITEM_META[itemId]) return;
@@ -699,37 +683,41 @@
         });
         return {
             version: 2,
-            loadoutId: loadout.id,
-            actIndex: 1,
-            depthIndex: 0,
-            routeIndex: null,
-            mapSeed: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-            map: createRogueMapStateV2(),
-            currentNode: null,
-            morale: 3,
-            moraleCap: 3,
+            starterRoleId: loadout.id,
+            day: 1,
+            cycleIndex: 1,
+            cycleDay: 1,
+            dailyAP: 6,
+            apRemaining: 6,
             runCoins: loadout.startCoins,
+            cycleDebtTarget: 240,
+            cycleDebtPaid: 0,
+            inventoryCapacity: 16,
+            currentWeather: 'sunny',
+            currentMarket: { focus: 'crops', modifiers: { crops: 1, products: 1, cooked: 1 } },
+            currentGuestEvent: null,
             runInventory: inventory,
             farm: {
-                plots: Array.from({ length: 6 }, () => createEmptyFarmPlotState())
+                level: 1,
+                plots: Array.from({ length: loadout.id === 'farmer' ? 9 : 6 }, () => ({ ...createEmptyFarmPlotState(), growDaysLeft: 0, wateredToday: false, mutated: false }))
             },
             pasture: {
-                animals: createInitialPastureAnimals()
+                level: 1,
+                animals: createInitialPastureAnimals().slice(0, loadout.id === 'rancher' ? 3 : 2)
+            },
+            kitchen: {
+                level: 1,
+                glowingDishChance: 0
             },
             relics: loadout.starterRelicId ? [loadout.starterRelicId] : [],
-            blessings: [],
-            consumables: [],
-            relicDraftsClaimed: 0,
-            clearedNormalNodes: 0,
+            recipesUnlocked: loadout.id === 'chef' ? ['bread', 'salad', 'pizza'] : ['bread', 'salad'],
             currentDraft: null,
-            currentEvent: null,
-            currentMerchant: null,
-            currentBoss: null,
-            currentMarketOrder: null,
-            failShieldUsed: false,
-            reviveUsed: false,
             completed: false,
-            victory: false
+            victory: false,
+            gameOverReason: '',
+            storage: { tab: 'crops' },
+            introConfirmed: false,
+            runTools: {}
         };
     }
 
@@ -773,41 +761,40 @@
 
     function normalizeRogueRunStateV2(rawState) {
         if (!rawState || typeof rawState !== 'object' || Number(rawState.version) !== 2) return null;
-        const loadoutId = ROGUE_V2_STARTER_LOADOUTS[rawState.loadoutId] ? rawState.loadoutId : 'planter';
-        const defaults = createDefaultRogueRunStateV2(loadoutId);
+        const roleId = ROGUE_V2_STARTER_LOADOUTS[rawState.starterRoleId] ? rawState.starterRoleId : 'farmer';
+        const defaults = createDefaultRogueRunStateV2(roleId);
         const inventory = createEmptyInventory();
         Object.keys(inventory).forEach((itemId) => {
             inventory[itemId] = Math.max(0, Math.floor(Number(rawState.runInventory && rawState.runInventory[itemId]) || 0));
         });
         return {
             ...defaults,
-            loadoutId,
-            actIndex: Math.max(1, Math.min(3, Math.floor(Number(rawState.actIndex) || 1))),
-            depthIndex: Math.max(0, Math.min(3, Math.floor(Number(rawState.depthIndex) || 0))),
-            routeIndex: Number.isFinite(Number(rawState.routeIndex)) ? Number(rawState.routeIndex) : null,
-            mapSeed: rawState.mapSeed ? String(rawState.mapSeed) : defaults.mapSeed,
-            map: rawState.map && typeof rawState.map === 'object' ? rawState.map : defaults.map,
-            currentNode: rawState.currentNode && typeof rawState.currentNode === 'object' ? rawState.currentNode : null,
-            morale: Math.max(0, Math.floor(Number(rawState.morale) || defaults.morale)),
-            moraleCap: Math.max(1, Math.floor(Number(rawState.moraleCap) || defaults.moraleCap)),
+            starterRoleId: roleId,
+            day: Math.max(1, Math.floor(Number(rawState.day) || defaults.day)),
+            cycleIndex: Math.max(1, Math.floor(Number(rawState.cycleIndex) || defaults.cycleIndex)),
+            cycleDay: Math.max(1, Math.min(7, Math.floor(Number(rawState.cycleDay) || defaults.cycleDay))),
+            dailyAP: Math.max(1, Math.floor(Number(rawState.dailyAP) || defaults.dailyAP)),
+            apRemaining: Math.max(0, Math.floor(Number(rawState.apRemaining) || defaults.apRemaining)),
             runCoins: Math.max(0, Math.floor(Number(rawState.runCoins) || defaults.runCoins)),
+            cycleDebtTarget: Math.max(0, Math.floor(Number(rawState.cycleDebtTarget) || defaults.cycleDebtTarget)),
+            cycleDebtPaid: Math.max(0, Math.floor(Number(rawState.cycleDebtPaid) || defaults.cycleDebtPaid)),
+            inventoryCapacity: Math.max(4, Math.floor(Number(rawState.inventoryCapacity) || defaults.inventoryCapacity)),
+            currentWeather: rawState.currentWeather ? String(rawState.currentWeather) : defaults.currentWeather,
+            currentMarket: rawState.currentMarket && typeof rawState.currentMarket === 'object' ? rawState.currentMarket : defaults.currentMarket,
+            currentGuestEvent: rawState.currentGuestEvent || null,
             runInventory: inventory,
             farm: rawState.farm && typeof rawState.farm === 'object' ? rawState.farm : defaults.farm,
             pasture: rawState.pasture && typeof rawState.pasture === 'object' ? rawState.pasture : defaults.pasture,
+            kitchen: rawState.kitchen && typeof rawState.kitchen === 'object' ? rawState.kitchen : defaults.kitchen,
             relics: Array.isArray(rawState.relics) ? rawState.relics.filter((id) => !!ROGUE_RELIC_POOL_V2[id]) : defaults.relics,
-            blessings: Array.isArray(rawState.blessings) ? rawState.blessings.filter((id) => !!ROGUE_RELIC_POOL_V2[id]) : [],
-            consumables: Array.isArray(rawState.consumables) ? rawState.consumables : [],
-            relicDraftsClaimed: Math.max(0, Math.floor(Number(rawState.relicDraftsClaimed) || 0)),
-            clearedNormalNodes: Math.max(0, Math.floor(Number(rawState.clearedNormalNodes) || 0)),
+            recipesUnlocked: Array.isArray(rawState.recipesUnlocked) ? rawState.recipesUnlocked.filter((id) => !!KITCHEN_RECIPES[id]) : defaults.recipesUnlocked,
             currentDraft: rawState.currentDraft || null,
-            currentEvent: rawState.currentEvent || null,
-            currentMerchant: rawState.currentMerchant || null,
-            currentBoss: rawState.currentBoss || null,
-            currentMarketOrder: rawState.currentMarketOrder || null,
-            failShieldUsed: !!rawState.failShieldUsed,
-            reviveUsed: !!rawState.reviveUsed,
             completed: !!rawState.completed,
-            victory: !!rawState.victory
+            victory: !!rawState.victory,
+            gameOverReason: rawState.gameOverReason ? String(rawState.gameOverReason) : '',
+            storage: rawState.storage && typeof rawState.storage === 'object' ? rawState.storage : defaults.storage,
+            introConfirmed: !!rawState.introConfirmed,
+            runTools: rawState.runTools && typeof rawState.runTools === 'object' ? rawState.runTools : {}
         };
     }
 
@@ -1252,19 +1239,21 @@
         const run = getRogueRunV2();
         if (!rogueIntroModalEl || !run) return;
         ensureRogueGoalsV2(run);
-        const loadout = ROGUE_V2_STARTER_LOADOUTS[run.loadoutId] || ROGUE_V2_STARTER_LOADOUTS.planter;
+        const roleId = run.starterRoleId || run.loadoutId;
+        const loadout = ROGUE_V2_STARTER_LOADOUTS[roleId] || ROGUE_V2_STARTER_LOADOUTS.farmer;
         const starterRelic = loadout.starterRelicId ? ROGUE_RELIC_POOL_V2[loadout.starterRelicId] : null;
         if (rogueIntroTitleEl) rogueIntroTitleEl.textContent = '本局要做什么';
-        if (rogueIntroDescEl) rogueIntroDescEl.textContent = '先看这 20 秒简报，再开始这趟远征。';
+        if (rogueIntroDescEl) rogueIntroDescEl.textContent = '这次不是走路线节点，而是按天经营、每 7 天还债。';
         if (rogueIntroBodyEl) {
             rogueIntroBodyEl.innerHTML = `
-                <div class="garden-rogue-intro-section"><strong>长期目标</strong><span>${run.runGoal.title}</span><em>${run.runGoal.summary}</em></div>
-                <div class="garden-rogue-intro-section"><strong>本幕目标</strong><span>${run.actGoal.title}</span><em>${run.actGoal.summary}</em></div>
-                <div class="garden-rogue-intro-section"><strong>开局第一步</strong><span>优先选能补原料的节点，先做出第一波库存，再转去厨房或市场兑现。</span><em>去节点完成目标 → 拿奖励堆 build → 最后靠厨房 / 市场 / Boss 爆发。</em></div>
+                <div class="garden-rogue-intro-section"><strong>长期目标</strong><span>活过多个 7 天周期，不断还清越来越高的债务。</span><em>每个周期结束时都要交钱，不够就直接破产出局。</em></div>
+                <div class="garden-rogue-intro-section"><strong>本局核心</strong><span>农场种原料 → 牧场产高级食材 → 厨房做高价料理 → 仓库择机出售。</span><em>这局怎么挣钱，取决于你抽到的遗物、菜谱、天气和市场。</em></div>
+                <div class="garden-rogue-intro-section"><strong>开局第一步</strong><span>先用有限行动力搭起第一条赚钱链，再盯住市场和订单把债务凑够。</span><em>建议优先补基础原料，别急着乱卖，先看今天什么最值钱。</em></div>
                 <div class="garden-rogue-intro-stats">
-                    <div>起始流派：${loadout.name}</div>
+                    <div>起始角色：${loadout.name}</div>
                     <div>局内金币：${run.runCoins}</div>
-                    <div>初始士气：${run.morale}/${run.moraleCap}</div>
+                    <div>每日行动力：${run.dailyAP}</div>
+                    <div>本旬债务：${run.cycleDebtTarget}</div>
                     <div>起始遗物：${starterRelic ? starterRelic.title : '暂无'}</div>
                 </div>
             `;
@@ -1289,10 +1278,9 @@
         closeRogueIntroV2();
         if (run.currentDraft) {
             renderRogueOfferModal();
-        } else if (run.currentNode) {
-            openCurrentRogueStageScreen();
         } else {
-            openRogueNodeChoicesV2();
+            setRogueProgressPanelOpen(true);
+            renderRogueUiV2();
         }
     }
 
@@ -1752,24 +1740,22 @@
             rogueProgressStageEl.textContent = run ? (ROGUE_V2_ACT_LABELS[run.actIndex] || '远征中') : '未开始';
         }
         if (rogueProgressCardsEl) {
-            const morale = run ? `${run.morale}/${run.moraleCap}` : '3/3';
-            rogueProgressCardsEl.textContent = `遗物 ${relics.length} / 士气 ${morale}`;
+            rogueProgressCardsEl.textContent = run ? `遗物 ${relics.length} / 行动力 ${run.apRemaining || 0}/${run.dailyAP || 0}` : '遗物 0 / 行动力 0';
         }
         if (rogueProgressGoalEl) {
-            rogueProgressGoalEl.textContent = `${taskCard.title}｜${taskCard.progress}｜${run && run.actGoal ? run.actGoal.title : '未开始'}`;
+            rogueProgressGoalEl.textContent = run ? `第 ${run.day} 天｜第 ${run.cycleIndex} 旬｜债务 ${run.cycleDebtTarget}` : '未开始';
         }
         if (rogueProgressOrderEl) {
-            rogueProgressOrderEl.textContent = `${taskCard.action}｜${taskCard.value}`;
+            rogueProgressOrderEl.textContent = run ? `金币 ${run.runCoins}｜天气 ${run.currentWeather}｜市场 ${run.currentMarket && run.currentMarket.focus ? run.currentMarket.focus : '平稳'}` : '等待开局';
         }
         if (rogueProgressPanelStageEl) {
-            rogueProgressPanelStageEl.textContent = run ? getRogueCurrentNodeLabel() : '请选择起始流派';
+            rogueProgressPanelStageEl.textContent = run ? `第 ${run.day} 天 · 第 ${run.cycleIndex} 旬 · 本旬第 ${run.cycleDay} 天` : '请选择起始角色';
         }
         if (rogueProgressPanelGoalEl) {
-            const nodeGoal = run ? getRogueNodeObjectiveV2() : null;
             rogueProgressPanelGoalEl.textContent = run
-                ? `${run.runGoal.title}
-${run.actGoal.title}
-${nodeGoal ? nodeGoal.title : taskCard.title}`
+                ? `本旬目标：在第 7 天前凑够 ${run.cycleDebtTarget} 金币。
+今天先安排农场、牧场、厨房与仓库的行动顺序。
+优先让第一条赚钱链跑起来。`
                 : `${taskCard.title}
 ${taskCard.progress}
 ${taskCard.action}`;
@@ -1780,13 +1766,15 @@ ${taskCard.action}`;
                 : '<div class="garden-rogue-empty-text">当前还没有拿到遗物。</div>';
         }
         if (rogueProgressPanelOrderEl) {
-            rogueProgressPanelOrderEl.innerHTML = `<div class="garden-rogue-empty-text">${taskCard.value}</div>`;
+            rogueProgressPanelOrderEl.innerHTML = run
+                ? `<div class="garden-rogue-empty-text">已还债 ${run.cycleDebtPaid} / ${run.cycleDebtTarget} · 仓库容量 ${run.inventoryCapacity} · 剩余行动力 ${run.apRemaining}</div>`
+                : `<div class="garden-rogue-empty-text">${taskCard.value}</div>`;
         }
         syncRogueBuffSummaryUi();
         syncKitchenToolPanelUi();
         renderRogueBuffPanelV2();
         if (startRunBtn) {
-            startRunBtn.textContent = run ? (run.currentNode ? '继续当前节点' : '选择下一节点') : '开始远征';
+            startRunBtn.textContent = run ? '继续经营' : '开始经营';
         }
         renderRogueWorkshopListV2();
     }
@@ -1884,7 +1872,7 @@ ${taskCard.action}`;
             result[category] = (result[category] || 0) + 1;
             return result;
         }, {});
-        let bestKey = run.loadoutId || 'balanced';
+        let bestKey = run.starterRoleId || run.loadoutId || 'balanced';
         let bestScore = -1;
         Object.keys(counts).forEach((key) => {
             if (counts[key] > bestScore) {
@@ -2266,7 +2254,7 @@ ${taskCard.action}`;
         saveRogueRunStateV2();
         renderRogueUiV2();
         closeRogueOfferV2();
-        showRogueToast(`已开始 ${ROGUE_V2_STARTER_LOADOUTS[loadoutId] ? ROGUE_V2_STARTER_LOADOUTS[loadoutId].name : '种植流'} 远征`);
+        showRogueToast(`已开始 ${ROGUE_V2_STARTER_LOADOUTS[loadoutId] ? ROGUE_V2_STARTER_LOADOUTS[loadoutId].name : '老农夫'} 远征`);
         openRogueRunIntroV2();
     }
 
@@ -2278,10 +2266,11 @@ ${taskCard.action}`;
                 <button class="garden-rogue-card-choice" data-rogue-v2-start="${loadout.id}" type="button">
                     <div class="garden-rogue-card-choice-title">${loadout.icon} ${loadout.name}</div>
                     <div class="garden-rogue-card-choice-desc">${loadout.desc}</div>
+                    <div class="garden-rogue-card-choice-desc">起始金币 ${loadout.startCoins} · 起始遗物 ${ROGUE_RELIC_POOL_V2[loadout.starterRelicId] ? ROGUE_RELIC_POOL_V2[loadout.starterRelicId].title : '无'}</div>
                 </button>
             `;
         }).join('');
-        openRogueOfferV2('选择起始流派', '起始流派会决定你的开局资源和专属遗物。', choices);
+        openRogueOfferV2('选择起始角色', '角色会决定你的开局资源、初始土地/动物倾向和专属遗物。', choices);
     }
 
     function openRogueEntryChoiceV2() {
