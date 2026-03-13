@@ -1871,6 +1871,24 @@ function renderUserPerception(contact) {
     const cancelBtn = document.getElementById('cancel-user-perception-btn');
     const input = document.getElementById('user-perception-input');
 
+    // 性别设置
+    const genderDisplay = document.getElementById('user-gender-display');
+    if (genderDisplay) {
+        const currentGender = window.iphoneSimState.userProfile?.gender || 'female';
+        const genderText = currentGender === 'male' ? '男' : '女';
+        genderDisplay.textContent = `性别：${genderText}`;
+        
+        genderDisplay.onclick = () => {
+            const newGender = currentGender === 'male' ? 'female' : 'male';
+            if (!window.iphoneSimState.userProfile) {
+                window.iphoneSimState.userProfile = {};
+            }
+            window.iphoneSimState.userProfile.gender = newGender;
+            saveConfig();
+            renderUserPerception(contact);
+        };
+    }
+
     if (!list) return;
 
     if (!contact.userPerception) {

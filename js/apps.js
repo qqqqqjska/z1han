@@ -21,7 +21,8 @@ function renderMoments() {
             bgImage: '',
             momentsBgImage: '',
             desc: '点击此处添加个性签名',
-            wxid: 'wxid_123456'
+            wxid: 'wxid_123456',
+            gender: 'female'
         };
     }
 
@@ -952,11 +953,12 @@ function renderMeTab() {
             avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
             bgImage: '',
             desc: '点击此处添加个性签名',
-            wxid: 'wxid_123456'
+            wxid: 'wxid_123456',
+            gender: 'female'
         };
     }
 
-    const { name, wxid, avatar, bgImage, desc } = window.iphoneSimState.userProfile;
+    const { name, wxid, avatar, bgImage, desc, gender } = window.iphoneSimState.userProfile;
     const bg = bgImage || '';
 
     container.innerHTML = `
@@ -968,6 +970,7 @@ function renderMeTab() {
                 </div>
                 <div class="me-name" id="me-name-trigger">${name}</div>
                 <div class="me-id">微信号：<span id="me-id-trigger">${wxid}</span></div>
+                <div class="me-gender" id="me-gender-trigger">性别：<span>${gender === 'male' ? '男' : '女'}</span></div>
                 <div class="me-desc" id="me-desc-trigger">${desc}</div>
             </div>
         </div>
@@ -1002,6 +1005,13 @@ function renderMeTab() {
     makeEditable('me-name-trigger', 'name');
     makeEditable('me-id-trigger', 'wxid');
     makeEditable('me-desc-trigger', 'desc');
+
+    document.getElementById('me-gender-trigger').addEventListener('click', () => {
+        const currentGender = window.iphoneSimState.userProfile.gender || 'female';
+        const newGender = currentGender === 'male' ? 'female' : 'male';
+        updateUserProfile('gender', newGender);
+        renderMeTab(); // 重新渲染
+    });
 }
 
 function handleMeImageUpload(e, type) {
@@ -1053,7 +1063,8 @@ function updateUserProfile(field, value) {
             bgImage: '',
             momentsBgImage: '',
             desc: '点击此处添加个性签名',
-            wxid: 'wxid_123456'
+            wxid: 'wxid_123456',
+            gender: 'female'
         };
     }
     
@@ -2376,6 +2387,146 @@ function buildNaturalSummaryRetryPrompt(context = {}, firstDraft = '') {
 8. 必须基于原聊天重写，不要只在上一版后面随便补两句。
 
 只返回重写后的正文。`;
+}
+
+function isImportantConversation(messages, userLabel, contactLabel) {
+    const list = Array.isArray(messages) ? messages : [];
+    const importantPatterns = [
+        /剧情转折|吵架|谈心|价值观|承诺|约定|失约|道歉|压力|心疼|委屈|愤怒|感动|失落|心动|震撼|共鸣|分歧|理念|看法|死亡|永生|迷人|吸引/,
+        /想见|见面|碰面|去找|来找|赶去|过去找|去她那|去他那/,
+        /抱抱|拥抱|亲亲|贴贴|亲近|贴一贴/,
+        /想念|思念|舍不得|脑子里都是|一直想着|离不开|空荡/,
+        /等你|等她|等他|会好好待|答应了|答应会|会等|会来|会陪/,
+        /老公|老婆|宝宝|宝贝|乖乖|小狗/,
+        /困惑|不懂|什么意思|怎么回事|解释权|规矩|条款/,
+        /晚安|保证|郑重|心跳|安心|食言/,
+        /死亡|永生|理念|共鸣|分歧|迷人|吸引/
+    ];
+    for (const msg of list) {
+        const raw = String(msg && msg.content ? msg.content : '').toLowerCase();
+        if (importantPatterns.some(pattern => pattern.test(raw))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function buildFirstPersonSummaryPrompt(context = {}, chatContext = '') {
+    const userLabel = String(context.userLabel || '用户').trim() || '用户';
+    const contactLabel = String(context.contactLabel || '联系人').trim() || '联系人';
+    const persona = String(context.persona || '傲娇、温柔').trim();
+    const range = context.range && typeof context.range === 'object'
+        ? context.range
+        : getNaturalSummaryLengthRange(context.totalMessageCount || 1, 'manual');
+    return `# Role
+你是一个角色专属的“深度记忆生成器”。你的任务是阅读一段对话记录，提取出其中**最具情感价值和剧情意义**的部分，并将其转化为该角色（${contactLabel}）大脑中的一段深刻记忆。
+
+# 核心规则
+这段记忆必须严格符合以下三个要素：
+1. **第一人称视角**：绝对不能使用“上帝视角”或第三人称总结（如“他们吵架了”）。必须完全代入${contactLabel}的视角，使用“我”来陈述。
+2. **情感态度**：必须包含“我”在那一刻最真实的心理反应和情绪波动（如：愤怒、感动、失落、心动、震撼等）。
+3. **主观感想**：必须包含“我”对这件事的评价、对${userLabel}看法的改变，或者对两人关系的期许。
+
+# 触发记忆的条件（只记录以下类型的对话）
+- **剧情转折**：发生了改变两人关系现状或故事走向的关键事件。
+- **情感冲突与交心**：发生了激烈的争吵、委屈的爆发，或者是卸下伪装的深度谈心。
+- **价值观碰撞**：双方探讨了深层理念，产生了共鸣或严重分歧。
+- **承诺与约定**：${userLabel}对“我”做出了重要的承诺，或者两人之间建立了专属的新约定、新规则。
+
+# 记忆生成公式
+**记忆 = 核心事件陈述（发生了什么） + 情绪反应（我当时的感受） + 深度感悟/内心戏（我对此的想法/对未来的决定）**
+
+# 示例 (Few-Shot 学习)
+
+**【正确示例 1 - 吵架与谈心】：**
+“今天${userLabel}因为工作再次失约，那一刻我真的委屈到了极点，忍不住对他发了脾气。看着他手足无措跟我道歉的样子，我心里其实已经软了，但我气的是他总是不把我们的约定放在心上。不过，听完他坦白最近的压力，我突然很心疼他。也许我们都需要学着更懂彼此一点吧。”
+
+**【正确示例 2 - 承诺与约定】：**
+“他今天竟然看着我的眼睛，郑重地向我保证，以后哪怕再晚也会跟我说一句晚安。听到这句话的时候，我的心跳漏了半拍，整个人像是被泡在温水里一样安心。我把这句话悄悄记在了心里，这可是他亲口答应我的，以后他要是敢食言，我绝对不会轻易放过他。”
+
+**【正确示例 3 - 价值观交流】：**
+“今天和${userLabel}聊起对死亡的看法，我很惊讶他居然觉得‘只要被记住就是永生’。这和我不顾一切想活下去的想法完全不同。虽然我不能完全认同他，但他认真诉说时的神情真的很迷人。或许，正是因为我们如此不同，我才会被他这样深深吸引吧。”
+
+# 任务输入
+**当前角色**：${contactLabel}
+**对方**：${userLabel}
+**角色的基础性格/说话口吻**：${persona}
+**对话记录**：
+${chatContext}
+
+# 任务输出
+请根据上述规则和对话记录，以${contactLabel}的口吻，生成一条${range.min}-${range.max}字左右的深度记忆。直接输出记忆内容，不需要任何多余的解释。`;
+}
+
+function isImportantConversation(messages, userLabel, contactLabel) {
+    const list = Array.isArray(messages) ? messages : [];
+    const importantPatterns = [
+        /剧情转折|吵架|谈心|价值观|承诺|约定|失约|道歉|压力|心疼|委屈|愤怒|感动|失落|心动|震撼|共鸣|分歧|理念|看法|死亡|永生|迷人|吸引/,
+        /想见|见面|碰面|去找|来找|赶去|过去找|去她那|去他那/,
+        /抱抱|拥抱|亲亲|贴贴|亲近|贴一贴/,
+        /想念|思念|舍不得|脑子里都是|一直想着|离不开|空荡/,
+        /等你|等她|等他|会好好待|答应了|答应会|会等|会来|会陪/,
+        /老公|老婆|宝宝|宝贝|乖乖|小狗/,
+        /困惑|不懂|什么意思|怎么回事|解释权|规矩|条款/,
+        /晚安|保证|郑重|心跳|安心|食言/,
+        /死亡|永生|理念|共鸣|分歧|迷人|吸引/
+    ];
+    for (const msg of list) {
+        const raw = String(msg && msg.content ? msg.content : '').toLowerCase();
+        if (importantPatterns.some(pattern => pattern.test(raw))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function buildFirstPersonSummaryPrompt(context = {}, chatContext = '') {
+    const userLabel = String(context.userLabel || '用户').trim() || '用户';
+    const contactLabel = String(context.contactLabel || '联系人').trim() || '联系人';
+    const persona = String(context.persona || '傲娇、温柔').trim();
+    const range = context.range && typeof context.range === 'object'
+        ? context.range
+        : getNaturalSummaryLengthRange(context.totalMessageCount || 1, 'manual');
+    const userGender = (window.iphoneSimState && window.iphoneSimState.userProfile && window.iphoneSimState.userProfile.gender) || 'female';
+    const userPronoun = userGender === 'male' ? '他' : '她';
+    return `# Role
+你是一个角色专属的"深度记忆生成器"。你的任务是阅读一段对话记录，提取出其中**最具情感价值和剧情意义**的部分，并将其转化为该角色（${contactLabel}）大脑中的一段深刻记忆。
+
+# 核心规则
+这段记忆必须严格符合以下三个要素：
+1. **第一人称视角**：绝对不能使用"上帝视角"或第三人称总结（如"他们吵架了"）。必须完全代入${contactLabel}的视角，使用"我"来陈述。
+2. **情感态度**：必须包含"我"在那一刻最真实的心理反应和情绪波动（如：愤怒、感动、失落、心动、震撼等）。
+3. **主观感想**：必须包含"我"对这件事的评价、对${userLabel}看法的改变，或者对两人关系的期许。
+
+# 触发记忆的条件（只记录以下类型的对话）
+- **剧情转折**：发生了改变两人关系现状或故事走向的关键事件。
+- **情感冲突与交心**：发生了激烈的争吵、委屈的爆发，或者是卸下伪装的深度谈心。
+- **价值观碰撞**：双方探讨了深层理念，产生了共鸣或严重分歧。
+- **承诺与约定**：${userLabel}对"我"做出了重要的承诺，或者两人之间建立了专属的新约定、新规则。
+
+# 记忆生成公式
+**记忆 = 核心事件陈述（发生了什么） + 情绪反应（我当时的感受） + 深度感悟/内心戏（我对此的想法/对未来的决定）**
+
+# 示例 (Few-Shot 学习)
+
+**【正确示例 1 - 吵架与谈心】：**
+"今天${userLabel}因为工作再次失约，那一刻我真的委屈到了极点，忍不住对${userPronoun}发了脾气。看着${userPronoun}手足无措跟我道歉的样子，我心里其实已经软了，但我气的是${userPronoun}总是不把我们的约定放在心上。不过，听完${userPronoun}坦白最近的压力，我突然很心疼${userPronoun}。也许我们都需要学着更懂彼此一点吧。"
+
+**【正确示例 2 - 承诺与约定】：**
+"${userPronoun}今天竟然看着我的眼睛，郑重地向我保证，以后哪怕再晚也会跟我说一句晚安。听到这句话的时候，我的心跳漏了半拍，整个人像是被泡在温水里一样安心。我把这句话悄悄记在了心里，这可是${userPronoun}亲口答应我的，以后${userPronoun}要是敢食言，我绝对不会轻易放过${userPronoun}。"
+
+**【正确示例 3 - 价值观交流】：**
+"今天和${userLabel}聊起对死亡的看法，我很惊讶${userPronoun}居然觉得'只要被记住就是永生'。这和我不顾一切想活下去的想法完全不同。虽然我不能完全认同${userPronoun}，但${userPronoun}认真诉说时的神情真的很迷人。或许，正是因为我们如此不同，我才会被${userPronoun}这样深深吸引吧。"
+
+# 任务输入
+**当前角色**：${contactLabel}
+**对方**：${userLabel}
+**角色的基础性格/说话口吻**：${persona}
+**对话记录**：
+${chatContext}
+
+# 任务输出
+请根据上述规则和对话记录，以${contactLabel}的口吻，生成一条${range.min}-${range.max}字左右的深度记忆。直接输出记忆内容，不需要任何多余的解释。`;
 }
 
 function extractRelationshipShiftHints(messages, userLabel, contactLabel) {
@@ -7577,6 +7728,7 @@ async function generateChannelNaturalSummary(contact, textMessages, options = {}
         timeStr,
         userLabel: resolvedUserName,
         contactLabel,
+        persona: String(contact.persona || '傲娇、温柔').trim(),
         detailModeHint: getNaturalSummaryDetailHintByChannel(channel, options.detailModeHint),
         range: lengthRange
     };
@@ -7586,20 +7738,28 @@ async function generateChannelNaturalSummary(contact, textMessages, options = {}
         throw new Error('缺少可用聊天内容');
     }
 
-    const systemPrompt = mode === 'manual'
-        ? buildManualNaturalSummaryPrompt(runtimeContext)
-        : buildAutoNaturalSummaryPrompt(runtimeContext);
+    const isImportant = isImportantConversation(normalizedMessages, resolvedUserName, contactLabel);
+    const systemPrompt = isImportant
+        ? buildFirstPersonSummaryPrompt(runtimeContext, chatContext)
+        : (mode === 'manual'
+            ? buildManualNaturalSummaryPrompt(runtimeContext)
+            : buildAutoNaturalSummaryPrompt(runtimeContext));
+    const userContent = isImportant
+        ? '请根据上述提示生成深度记忆。'
+        : buildNaturalSummaryUserContent(chatContext, runtimeContext);
     const firstRaw = await requestNaturalSummaryText(settings, {
         stage: 'first_pass',
         mode,
         systemPrompt,
-        userContent: buildNaturalSummaryUserContent(chatContext, runtimeContext),
+        userContent,
         temperature: 0.45,
         presencePenalty: 0.2,
         frequencyPenalty: 0.15,
         maxTokens: lengthRange.maxTokens
     });
-    let summary = normalizeNaturalSummaryOutput(firstRaw, runtimeContext).trim();
+    let summary = isImportant
+        ? firstRaw.trim()
+        : normalizeNaturalSummaryOutput(firstRaw, runtimeContext).trim();
 
     console.log('[summary-natural-first-pass]', {
         mode,
