@@ -1761,6 +1761,72 @@ textarea {
     justify-content: center;
     gap: 8px;
 }
+#chat-settings-screen .chat-token-preview {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#chat-settings-screen .chat-token-preview-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+#chat-settings-screen .chat-token-preview-count {
+    font-size: 20px;
+    line-height: 1.3;
+    font-weight: 600;
+    color: #111;
+}
+
+#chat-settings-screen .chat-token-preview-breakdown {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+}
+
+#chat-settings-screen .chat-token-preview-item {
+    min-width: 0;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: #f5f5f7;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+#chat-settings-screen .chat-token-preview-item > span {
+    font-size: 12px;
+    color: #8e8e93;
+    line-height: 1.3;
+}
+
+#chat-settings-screen .chat-token-preview-item > strong {
+    font-size: 14px;
+    color: #111;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+#chat-settings-screen .chat-token-preview-visual,
+#chat-settings-screen .chat-token-preview-meta {
+    font-size: 12px;
+    line-height: 1.5;
+    color: #8e8e93;
+}
+
+#chat-settings-screen .chat-token-preview.is-loading .chat-token-preview-count,
+#chat-settings-screen .chat-token-preview.is-loading .chat-token-preview-visual,
+#chat-settings-screen .chat-token-preview.is-loading .chat-token-preview-meta {
+    color: #8e8e93;
+}
+
+#chat-settings-screen .chat-token-preview.has-error .chat-token-preview-count {
+    color: #d14b4b;
+}
 
 .chat-setting-tab-content {
     display: none;

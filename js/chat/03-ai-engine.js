@@ -4887,9 +4887,270 @@ function optimizePromptForNovelAI(text) {
 
 
 
-window.buildAiPromptMessages = async function(contactId, instruction = null) {
-    const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
-    if (!contact) return [];
+function cloneAiPromptHistoryMessage(message) {
+    if (!message || typeof message !== 'object') return message;
+    return {
+        ...message,
+        replyTo: message.replyTo && typeof message.replyTo === 'object'
+            ? { ...message.replyTo }
+            : message.replyTo
+    };
+}
+
+function estimateAiTextTokens(text) {
+    if (typeof text !== 'string' || !text) return 0;
+
+    let total = 0;
+    for (let i = 0; i < text.length;) {
+        const char = text[i];
+
+        if (/\s/.test(char)) {
+            i += 1;
+            continue;
+        }
+
+        if (/[A-Za-z0-9_]/.test(char)) {
+            let end = i + 1;
+            while (end < text.length && /[A-Za-z0-9_]/.test(text[end])) {
+                end += 1;
+            }
+            total += Math.ceil((end - i) / 4);
+            i = end;
+            continue;
+        }
+
+        if (/[\x00-\x7F]/.test(char)) {
+            total += 1;
+            i += 1;
+            continue;
+        }
+
+        const codePoint = text.codePointAt(i);
+        total += 1;
+        i += codePoint > 0xFFFF ? 2 : 1;
+    }
+
+    return total;
+}
+
+function collectAiPromptContentStats(content) {
+    const stats = {
+        textTokens: 0,
+        imageCount: 0,
+        screenShareCount: 0,
+        screenShareImageCount: 0
+    };
+
+    if (typeof content === 'string') {
+        stats.textTokens = estimateAiTextTokens(content);
+        return stats;
+    }
+
+    if (!Array.isArray(content)) {
+        return stats;
+    }
+
+    let inScreenShareSection = false;
+    content.forEach(part => {
+        if (!part) return;
+
+        if (part.type === 'text') {
+            const text = typeof part.text === 'string' ? part.text : String(part.text || '');
+            if (text === '【当前共享屏幕补充】') {
+                stats.screenShareCount += 1;
+                inScreenShareSection = true;
+            }
+            stats.textTokens += estimateAiTextTokens(text);
+            return;
+        }
+
+        if (part.type === 'image_url') {
+            if (inScreenShareSection) {
+                stats.screenShareImageCount += 1;
+            } else {
+                stats.imageCount += 1;
+            }
+        }
+    });
+
+    return stats;
+}
+
+function appendAiPromptPart(parts, group, label, content) {
+    const normalizedContent = trimWechatPromptSection(content);
+    if (!normalizedContent) return;
+    parts.push({ group, label, content: normalizedContent });
+}
+
+function buildWechatStickerPrompt(contact) {
+    if (!(window.iphoneSimState.stickerCategories && window.iphoneSimState.stickerCategories.length > 0)) {
+        return '';
+    }
+
+    let activeStickers = [];
+    let hasLinkedCategories = false;
+
+    if (Array.isArray(contact.linkedStickerCategories)) {
+        if (contact.linkedStickerCategories.length > 0) {
+            hasLinkedCategories = true;
+            window.iphoneSimState.stickerCategories.forEach(cat => {
+                if (contact.linkedStickerCategories.includes(cat.id)) {
+                    activeStickers = activeStickers.concat(cat.list);
+                }
+            });
+        } else {
+            hasLinkedCategories = true;
+        }
+    }
+
+    if (!hasLinkedCategories && !contact.linkedStickerCategories) {
+        window.iphoneSimState.stickerCategories.forEach(cat => {
+            activeStickers = activeStickers.concat(cat.list);
+        });
+    }
+
+    if (activeStickers.length > 0) {
+        const descriptions = activeStickers.map(s => s.desc).join(', ');
+        return `【可用表情包列表】\n${descriptions}\n只能使用上面列出的名称，且必须完全匹配；如果列表里没有合适的表情包，就不要输出 sticker_message，改用文字回复。`;
+    }
+
+    return '【可用表情包列表】\n（当前没有可用的表情包）\n当前不要输出 sticker_message，请仅使用文字或其他非表情包类型。';
+}
+
+function buildWechatWorldbookPrompt(contact, history) {
+    if (!(window.iphoneSimState.worldbook && window.iphoneSimState.worldbook.length > 0)) {
+        return '';
+    }
+
+    let activeEntries = window.iphoneSimState.worldbook.filter(e => e.enabled);
+
+    if (contact.linkedWbCategories) {
+        activeEntries = activeEntries.filter(e => contact.linkedWbCategories.includes(e.categoryId));
+    }
+
+    if (activeEntries.length === 0) {
+        return '';
+    }
+
+    const historyText = history.map(h => h.content).join('\n');
+    const matchedContents = [];
+    activeEntries.forEach(entry => {
+        let shouldAdd = false;
+        if (entry.keys && entry.keys.length > 0) {
+            shouldAdd = entry.keys.some(key => historyText.includes(key));
+        } else {
+            shouldAdd = true;
+        }
+
+        if (shouldAdd) {
+            matchedContents.push(entry.content);
+        }
+    });
+
+    if (matchedContents.length === 0) {
+        return '';
+    }
+
+    return `世界书信息：\n${matchedContents.join('\n')}`;
+}
+
+window.estimateAiTextTokens = estimateAiTextTokens;
+
+window.buildAiPromptTokenPreview = async function(contactId, options = {}) {
+    const emptySections = {
+        systemBase: { label: '系统基础', tokens: 0, messageCount: 0 },
+        memory: { label: '记忆', tokens: 0, messageCount: 0 },
+        worldbook: { label: '世界书', tokens: 0, messageCount: 0 },
+        context: { label: '聊天上下文', tokens: 0, messageCount: 0 },
+        extra: { label: '场景附加', tokens: 0, messageCount: 0 }
+    };
+
+    try {
+        const instruction = Object.prototype.hasOwnProperty.call(options, 'instruction')
+            ? options.instruction
+            : null;
+        const messages = await window.buildAiPromptMessages(contactId, instruction, options);
+        const systemPromptParts = Array.isArray(messages && messages._systemPromptParts)
+            ? messages._systemPromptParts
+            : [];
+        const sections = {
+            systemBase: { ...emptySections.systemBase },
+            memory: { ...emptySections.memory },
+            worldbook: { ...emptySections.worldbook },
+            context: { ...emptySections.context },
+            extra: { ...emptySections.extra }
+        };
+        const visualInputs = {
+            imageCount: 0,
+            screenShareCount: 0,
+            screenShareImageCount: 0,
+            summary: '未检测到'
+        };
+
+        systemPromptParts.forEach(part => {
+            const bucket = sections[part && part.group] || sections.systemBase;
+            const stats = collectAiPromptContentStats(part && part.content);
+            bucket.tokens += stats.textTokens;
+            bucket.messageCount += 1;
+        });
+
+        (Array.isArray(messages) ? messages : []).slice(1).forEach(message => {
+            const bucket = message && message.role === 'system'
+                ? sections.extra
+                : sections.context;
+            const stats = collectAiPromptContentStats(message && message.content);
+            bucket.tokens += stats.textTokens;
+            bucket.messageCount += 1;
+            visualInputs.imageCount += stats.imageCount;
+            visualInputs.screenShareCount += stats.screenShareCount;
+            visualInputs.screenShareImageCount += stats.screenShareImageCount;
+        });
+
+        const visualParts = [];
+        if (visualInputs.imageCount > 0) {
+            visualParts.push(`${visualInputs.imageCount} 张图片`);
+        }
+        if (visualInputs.screenShareCount > 0) {
+            visualParts.push(`${visualInputs.screenShareCount} 次共享屏幕`);
+        }
+        visualInputs.summary = visualParts.length > 0 ? visualParts.join(' / ') : '未检测到';
+
+        return {
+            status: 'ok',
+            totalTextTokens: sections.systemBase.tokens + sections.memory.tokens + sections.worldbook.tokens + sections.context.tokens + sections.extra.tokens,
+            sections,
+            visualInputs,
+            messageCount: Array.isArray(messages) ? messages.length : 0
+        };
+    } catch (error) {
+        return {
+            status: 'error',
+            totalTextTokens: 0,
+            sections: {
+                systemBase: { ...emptySections.systemBase },
+                memory: { ...emptySections.memory },
+                worldbook: { ...emptySections.worldbook },
+                context: { ...emptySections.context },
+                extra: { ...emptySections.extra }
+            },
+            visualInputs: {
+                imageCount: 0,
+                screenShareCount: 0,
+                screenShareImageCount: 0,
+                summary: '无法估算'
+            },
+            messageCount: 0,
+            error: error && error.message ? error.message : String(error)
+        };
+    }
+};
+
+window.buildAiPromptMessages = async function(contactId, instruction = null, options = {}) {
+    const baseContact = window.iphoneSimState.contacts.find(c => c.id === contactId);
+    if (!baseContact) return [];
+    const contact = options && options.contactOverride
+        ? { ...baseContact, ...options.contactOverride }
+        : baseContact;
     const history = window.iphoneSimState.chatHistory[contactId] || [];
 
     let userPromptInfo = '';
@@ -5173,18 +5434,6 @@ window.buildAiPromptMessages = async function(contactId, instruction = null) {
         }
     }
 
-    const backgroundPrompt = buildWechatBackgroundPrompt({
-        importantStateContext,
-        momentContext,
-        icityContext,
-        lookusContext,
-        memoryContext,
-        meetingContext,
-        icityBookContext,
-        timeContext,
-        calendarContext,
-        itineraryContext
-    });
     const conditionalCapabilityPrompt = buildWechatConditionalCapabilityPrompt({
         minesweeperContext,
         witchGameContext,
@@ -5192,83 +5441,33 @@ window.buildAiPromptMessages = async function(contactId, instruction = null) {
         transferDecisionContext,
         musicTogetherContext
     });
-    let systemPrompt = joinWechatPromptSections([
-        buildWechatRolePrompt(contact, userPromptInfo),
-        buildWechatProtocolPrompt(contact),
-        buildWechatHumanFeelPrompt(contact),
-        buildWechatBaseCapabilityPrompt(contact),
-        backgroundPrompt,
-        conditionalCapabilityPrompt,
-        '请回复对方的消息。'
-    ]);
+    const systemPromptParts = [];
+    appendAiPromptPart(systemPromptParts, 'systemBase', '角色设定', buildWechatRolePrompt(contact, userPromptInfo));
+    appendAiPromptPart(systemPromptParts, 'systemBase', '输出协议', buildWechatProtocolPrompt(contact));
+    appendAiPromptPart(systemPromptParts, 'systemBase', '活人感', buildWechatHumanFeelPrompt(contact));
+    appendAiPromptPart(systemPromptParts, 'systemBase', '基础能力', buildWechatBaseCapabilityPrompt(contact));
+    appendAiPromptPart(systemPromptParts, 'systemBase', '状态', importantStateContext);
+    appendAiPromptPart(systemPromptParts, 'systemBase', '朋友圈', momentContext);
+    appendAiPromptPart(systemPromptParts, 'systemBase', 'iCity', icityContext);
+    appendAiPromptPart(systemPromptParts, 'systemBase', 'LookUs', lookusContext);
+    appendAiPromptPart(systemPromptParts, 'memory', '记忆', memoryContext);
+    appendAiPromptPart(systemPromptParts, 'systemBase', '线下见面', meetingContext);
+    appendAiPromptPart(systemPromptParts, 'systemBase', 'iCity书籍', icityBookContext);
+    appendAiPromptPart(systemPromptParts, 'systemBase', '时间', timeContext);
+    appendAiPromptPart(systemPromptParts, 'systemBase', '日历', calendarContext);
+    appendAiPromptPart(systemPromptParts, 'systemBase', '行程', itineraryContext);
+    appendAiPromptPart(systemPromptParts, 'systemBase', '条件能力', conditionalCapabilityPrompt);
+    appendAiPromptPart(systemPromptParts, 'systemBase', '回复指令', '请回复对方的消息。');
+    appendAiPromptPart(systemPromptParts, 'systemBase', '表情包', buildWechatStickerPrompt(contact));
+    appendAiPromptPart(systemPromptParts, 'worldbook', '世界书', buildWechatWorldbookPrompt(contact, history));
 
-    if (window.iphoneSimState.stickerCategories && window.iphoneSimState.stickerCategories.length > 0) {
-        let activeStickers = [];
-        let hasLinkedCategories = false;
-        
-        // 修正逻辑：只有当 contact.linkedStickerCategories 存在且为数组时才进行过滤
-        if (Array.isArray(contact.linkedStickerCategories)) {
-            // 如果数组为空，说明没有关联任何表情包（用户可能特意取消了所有关联）
-            // 如果数组不为空，只添加关联的表情包
-            if (contact.linkedStickerCategories.length > 0) {
-                hasLinkedCategories = true;
-                window.iphoneSimState.stickerCategories.forEach(cat => {
-                    if (contact.linkedStickerCategories.includes(cat.id)) {
-                        activeStickers = activeStickers.concat(cat.list);
-                    }
-                });
-            } else {
-                // 显式设置为空数组，表示不使用任何表情包
-                hasLinkedCategories = true; 
-            }
-        } 
-        
-        // 如果没有设置关联属性（新联系人或旧数据），默认使用所有
-        if (!hasLinkedCategories && !contact.linkedStickerCategories) {
-            window.iphoneSimState.stickerCategories.forEach(cat => {
-                activeStickers = activeStickers.concat(cat.list);
-            });
-        }
-
-        if (activeStickers.length > 0) {
-            systemPrompt += '\n\n【可用表情包列表】\n';
-            const descriptions = activeStickers.map(s => s.desc).join(', ');
-            systemPrompt += descriptions + '\n';
-            systemPrompt += '只能使用上面列出的名称，且必须完全匹配；如果列表里没有合适的表情包，就不要输出 sticker_message，改用文字回复。\n';
-        } else {
-            systemPrompt += '\n\n【可用表情包列表】\n（当前没有可用的表情包）\n';
-            systemPrompt += '当前不要输出 sticker_message，请仅使用文字或其他非表情包类型。\n';
-        }
-    }
-
-    if (window.iphoneSimState.worldbook && window.iphoneSimState.worldbook.length > 0) {
-        let activeEntries = window.iphoneSimState.worldbook.filter(e => e.enabled);
-        
-        if (contact.linkedWbCategories) {
-            activeEntries = activeEntries.filter(e => contact.linkedWbCategories.includes(e.categoryId));
-        }
-        
-        if (activeEntries.length > 0) {
-            systemPrompt += '\n\n世界书信息：\n';
-            activeEntries.forEach(entry => {
-                let shouldAdd = false;
-                if (entry.keys && entry.keys.length > 0) {
-                    const historyText = history.map(h => h.content).join('\n');
-                    const match = entry.keys.some(key => historyText.includes(key));
-                    if (match) shouldAdd = true;
-                } else {
-                    shouldAdd = true;
-                }
-                
-                if (shouldAdd) {
-                    systemPrompt += `${entry.content}\n`;
-                }
-            });
-        }
-    }
+    const systemPrompt = joinWechatPromptSections(systemPromptParts.map(part => part.content));
 
     let limit = contact.contextLimit && contact.contextLimit > 0 ? contact.contextLimit : 50;
-    let contextMessages = history.filter(h => !shouldExcludeFromAiContext(h)).slice(-limit);
+    let contextMessages = history
+        .filter(h => !shouldExcludeFromAiContext(h))
+        .slice(-limit)
+        .map(cloneAiPromptHistoryMessage);
 
     let imageCount = 0;
     for (let i = contextMessages.length - 1; i >= 0; i--) {
@@ -5593,6 +5792,8 @@ window.buildAiPromptMessages = async function(contactId, instruction = null) {
             content: `[系统提示]: ${instruction}`
         });
     }
+
+    messages._systemPromptParts = systemPromptParts.map(part => ({ ...part }));
 
 
     return messages;

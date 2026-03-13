@@ -1784,7 +1784,11 @@
             return;
         }
 
-        state.gardenGame = loadGardenGameState();
+        state.casualGardenGame = loadGardenGameState('casual');
+        if (hasPersistedRogueActivitySave()) {
+            state.rogueActivityGame = loadGardenGameState('rogue_activity');
+        }
+        setGardenMode('casual');
         state.homeTutorialDismissed = readHomeTutorialDismissed();
         saveGardenGameState();
         syncHomeTutorialVisibility();
@@ -2003,17 +2007,17 @@
         }
 
         if (targetKey === 'farm') {
-            openFarmScreen();
+            openCasualFarmScreen();
             return;
         }
 
         if (targetKey === 'pasture') {
-            openPastureScreen();
+            openCasualPastureScreen();
             return;
         }
 
         if (targetKey === 'kitchen') {
-            openKitchenScreen();
+            openCasualKitchenScreen();
             return;
         }
 
@@ -2037,6 +2041,47 @@
         const entryButton = event.target.closest('[data-garden-home-entry]');
         if (!entryButton) return;
         handleHomeEntrySelection(entryButton.dataset.gardenHomeEntry);
+    }
+
+    function enterCasualGardenMode() {
+        setGardenMode('casual');
+        saveGardenGameState();
+        refreshGardenEconomyUi();
+        renderFarmPlots();
+        renderPastureAnimals();
+    }
+
+    function enterRogueActivityMode() {
+        if (!state.rogueActivityGame) {
+            state.rogueActivityGame = loadGardenGameState('rogue_activity');
+        }
+        setGardenMode('rogue_activity');
+        syncRogueStateConsistency();
+        saveGardenGameState();
+        refreshGardenEconomyUi();
+        renderFarmPlots();
+        renderPastureAnimals();
+    }
+
+    function openCasualFarmScreen() {
+        enterCasualGardenMode();
+        openFarmScreen();
+    }
+
+    function openCasualPastureScreen() {
+        enterCasualGardenMode();
+        openPastureScreen();
+    }
+
+    function openCasualKitchenScreen() {
+        enterCasualGardenMode();
+        openKitchenScreen();
+    }
+
+    function openFarmRogueChallengeFromActivities() {
+        openActivitiesView();
+        enterRogueActivityMode();
+        openCurrentRogueStageScreen();
     }
 
     function initFarmScreen() {
@@ -3046,6 +3091,10 @@
                     openWhisperChallengeFromActivities();
                     return;
                 }
+                if (playCard && playCard.dataset.activitiesCard === 'farm') {
+                    openFarmRogueChallengeFromActivities();
+                    return;
+                }
                 triggerActivitiesPlayFeedback(playButton);
                 return;
             }
@@ -3055,6 +3104,10 @@
                 vibrate(20);
                 if (card.dataset.activitiesCard === 'whisper') {
                     openWhisperChallengeFromActivities();
+                    return;
+                }
+                if (card.dataset.activitiesCard === 'farm') {
+                    openFarmRogueChallengeFromActivities();
                     return;
                 }
                 triggerActivitiesPlayFeedback(card.querySelector('.garden-activities-play-btn'));
@@ -4846,7 +4899,11 @@
     function openApp() {
         init();
         if (!screenEl) return;
-        state.gardenGame = loadGardenGameState();
+        state.casualGardenGame = loadGardenGameState('casual');
+        if (hasPersistedRogueActivitySave()) {
+            state.rogueActivityGame = loadGardenGameState('rogue_activity');
+        }
+        setGardenMode('casual');
         syncRogueStateConsistency();
         saveGardenGameState();
         refreshGardenEconomyUi();

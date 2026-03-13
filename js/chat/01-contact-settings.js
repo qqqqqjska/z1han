@@ -1,21 +1,50 @@
 ﻿// 聊天功能模块 (聊天, 联系人, AI, 语音)
 
-// Token统计函数（近似GPT分词，适用于中英文混合）
+function estimateChatPromptTextTokensLocal(text) {
+    if (typeof text !== 'string' || !text) return 0;
+
+    let total = 0;
+    for (let i = 0; i < text.length;) {
+        const char = text[i];
+
+        if (/\s/.test(char)) {
+            i += 1;
+            continue;
+        }
+
+        if (/[A-Za-z0-9_]/.test(char)) {
+            let end = i + 1;
+            while (end < text.length && /[A-Za-z0-9_]/.test(text[end])) {
+                end += 1;
+            }
+            total += Math.ceil((end - i) / 4);
+            i = end;
+            continue;
+        }
+
+        if (/[\x00-\x7F]/.test(char)) {
+            total += 1;
+            i += 1;
+            continue;
+        }
+
+        const codePoint = text.codePointAt(i);
+        total += 1;
+        i += codePoint > 0xFFFF ? 2 : 1;
+    }
+
+    return total;
+}
+
+// Token统计函数（与真实提示词预览使用同一估算规则）
 function countTokensForPrompts(prompts) {
     if (!Array.isArray(prompts)) return 0;
     let total = 0;
     for (const p of prompts) {
         if (typeof p !== 'string') continue;
-        // 英文按空格分词，中文每字1token，标点也算
-        total += p.split(/\s+/).reduce((sum, seg) => {
-            // 中文分字
-            if (/^[\u4e00-\u9fa5]+$/.test(seg)) {
-                return sum + seg.length;
-            } else {
-                // 英文及其他
-                return sum + seg.split(/[^\w]+/).filter(Boolean).length;
-            }
-        }, 0);
+        total += typeof window.estimateAiTextTokens === 'function'
+            ? window.estimateAiTextTokens(p)
+            : estimateChatPromptTextTokensLocal(p);
     }
     return total;
 }
@@ -1562,11 +1591,6 @@ function openChatSettings() {
         }
     }
 
-    // 刷新当前联系人对应的提示词token数（异步）
-    if (contact.id) {
-        refreshTokenCountForContact(contact.id);
-    }
-
     document.getElementById('chat-setting-context-limit').value = contact.contextLimit || '';
     document.getElementById('chat-setting-summary-limit').value = contact.summaryLimit || '';
     document.getElementById('chat-setting-show-thought').checked = contact.showThought || false;
@@ -1730,7 +1754,15 @@ function openChatSettings() {
         const selectedId = userPersonaSelect.value;
         const p = window.iphoneSimState.userPersonas.find(p => p.id == selectedId);
         userPromptTextarea.value = p ? (p.aiPrompt || '') : '';
+        scheduleChatSettingsTokenPreviewRefresh();
     };
+
+    if (userPromptTextarea && !userPromptTextarea.dataset.tokenPreviewBound) {
+        userPromptTextarea.dataset.tokenPreviewBound = '1';
+        userPromptTextarea.addEventListener('input', () => {
+            scheduleChatSettingsTokenPreviewRefresh();
+        });
+    }
 
     const userBgContainer = document.getElementById('user-setting-bg-container');
     if (userBgContainer) {
@@ -1823,7 +1855,11 @@ function openChatSettings() {
     if (window.renderChatCssPresets) window.renderChatCssPresets();
 
     normalizeChatSettingsListRows();
+    ensureChatSettingsTokenPreviewBindings();
     document.getElementById('chat-settings-screen').classList.remove('hidden');
+    if (contact.id) {
+        refreshTokenCountForContact(contact.id);
+    }
 }
 
 function renderUserPerception(contact) {
@@ -2342,68 +2378,233 @@ function handleSaveChatSettings() {
     });
 }
 
+const CHAT_SETTINGS_TOKEN_REFRESH_DEBOUNCE_MS = 180;
+const CHAT_SETTINGS_MEMORY_TOKEN_WARNING_THRESHOLD = 2500;
+let chatSettingsTokenRefreshTimer = null;
+let chatSettingsTokenRefreshVersion = 0;
+
+function getChatSettingsCheckedIds(selector) {
+    return Array.from(document.querySelectorAll(selector))
+        .filter(input => input && input.checked)
+        .map(input => parseInt(input.dataset.id, 10))
+        .filter(Number.isFinite);
+}
+
+function getChatSettingsNumberValue(id, fallback = 0) {
+    const input = document.getElementById(id);
+    if (!input) return fallback;
+    const rawValue = String(input.value || '').trim();
+    if (!rawValue) return fallback;
+    const parsedValue = parseInt(rawValue, 10);
+    return Number.isFinite(parsedValue) ? parsedValue : fallback;
+}
+
+function buildChatSettingsDraftContact(contact) {
+    if (!contact) return null;
+
+    const nameInput = document.getElementById('chat-setting-name');
+    const personaInput = document.getElementById('chat-setting-persona');
+    const userPersonaInput = document.getElementById('chat-setting-user-persona');
+    const userPromptInput = document.getElementById('chat-setting-user-prompt');
+    const showThoughtInput = document.getElementById('chat-setting-show-thought');
+    const thoughtVisibleInput = document.getElementById('chat-setting-thought-visible');
+    const realTimeVisibleInput = document.getElementById('chat-setting-real-time-visible');
+    const calendarAwareInput = document.getElementById('chat-setting-calendar-aware');
+    const userPersonaId = userPersonaInput ? parseInt(userPersonaInput.value, 10) : NaN;
+
+    return {
+        name: nameInput ? (nameInput.value.trim() || contact.name || '') : (contact.name || ''),
+        persona: personaInput ? personaInput.value : (contact.persona || ''),
+        contextLimit: getChatSettingsNumberValue('chat-setting-context-limit', 0),
+        showThought: showThoughtInput ? !!showThoughtInput.checked : !!contact.showThought,
+        thoughtVisible: thoughtVisibleInput ? !!thoughtVisibleInput.checked : !!contact.thoughtVisible,
+        realTimeVisible: realTimeVisibleInput ? !!realTimeVisibleInput.checked : !!contact.realTimeVisible,
+        calendarAwareEnabled: calendarAwareInput ? !!calendarAwareInput.checked : contact.calendarAwareEnabled !== false,
+        userPersonaId: Number.isFinite(userPersonaId) ? userPersonaId : null,
+        userPersonaPromptOverride: userPromptInput ? userPromptInput.value : (contact.userPersonaPromptOverride || ''),
+        linkedWbCategories: getChatSettingsCheckedIds('.wb-category-checkbox'),
+        linkedStickerCategories: getChatSettingsCheckedIds('.sticker-category-checkbox')
+    };
+}
+
+function renderChatTokenPreviewState(state = {}) {
+    const previewEl = document.getElementById('chat-setting-token-preview');
+    const countEl = document.getElementById('chat-setting-token-count');
+    const systemBaseEl = document.getElementById('chat-setting-token-system-base');
+    const memoryEl = document.getElementById('chat-setting-token-memory');
+    const worldbookEl = document.getElementById('chat-setting-token-worldbook');
+    const contextEl = document.getElementById('chat-setting-token-context');
+    const extraEl = document.getElementById('chat-setting-token-extra');
+    const visualEl = document.getElementById('chat-setting-token-visual');
+    const metaEl = document.getElementById('chat-setting-token-meta');
+    if (!previewEl || !countEl || !systemBaseEl || !memoryEl || !worldbookEl || !contextEl || !extraEl || !visualEl || !metaEl) return;
+
+    previewEl.classList.toggle('is-loading', !!state.loading);
+    previewEl.classList.toggle('has-error', !!state.error);
+
+    if (state.loading) {
+        countEl.textContent = state.message || '计算中...';
+        systemBaseEl.textContent = '--';
+        memoryEl.textContent = '--';
+        worldbookEl.textContent = '--';
+        contextEl.textContent = '--';
+        extraEl.textContent = '--';
+        visualEl.textContent = '视觉输入：检测中...';
+        metaEl.textContent = '按当前未保存设置实时估算';
+        return;
+    }
+
+    if (state.error) {
+        countEl.textContent = state.message || '本轮输入文本估算失败';
+        systemBaseEl.textContent = '--';
+        memoryEl.textContent = '--';
+        worldbookEl.textContent = '--';
+        contextEl.textContent = '--';
+        extraEl.textContent = '--';
+        visualEl.textContent = '视觉输入：无法估算';
+        metaEl.textContent = state.detail || '按当前未保存设置实时估算';
+        return;
+    }
+
+    const preview = state.preview || {};
+    const sections = preview.sections || {};
+    const systemBaseTokens = Number(sections.systemBase && sections.systemBase.tokens ? sections.systemBase.tokens : 0);
+    const memoryTokens = Number(sections.memory && sections.memory.tokens ? sections.memory.tokens : 0);
+    const worldbookTokens = Number(sections.worldbook && sections.worldbook.tokens ? sections.worldbook.tokens : 0);
+    const contextTokens = Number(sections.context && sections.context.tokens ? sections.context.tokens : 0);
+    const extraTokens = Number(sections.extra && sections.extra.tokens ? sections.extra.tokens : 0);
+    const totalTextTokens = Number(preview.totalTextTokens || 0);
+    const visualInputs = preview.visualInputs || {};
+    const visualParts = [];
+    const metaParts = [`共 ${(preview.messageCount || 0).toLocaleString()} 条请求消息`, '按当前未保存设置实时估算'];
+
+    if (visualInputs.imageCount > 0) {
+        visualParts.push(`${visualInputs.imageCount} 张图片`);
+    }
+    if (visualInputs.screenShareCount > 0) {
+        visualParts.push(`${visualInputs.screenShareCount} 次共享屏幕`);
+    }
+
+    countEl.textContent = `本轮输入文本约 ${totalTextTokens.toLocaleString()} tokens`;
+    systemBaseEl.textContent = systemBaseTokens.toLocaleString();
+    memoryEl.textContent = memoryTokens.toLocaleString();
+    worldbookEl.textContent = worldbookTokens.toLocaleString();
+    contextEl.textContent = contextTokens.toLocaleString();
+    extraEl.textContent = extraTokens.toLocaleString();
+    if (memoryTokens >= CHAT_SETTINGS_MEMORY_TOKEN_WARNING_THRESHOLD) {
+        metaParts.push('记忆注入较长，可能显著增加本轮提示词长度');
+    }
+    visualEl.textContent = visualParts.length > 0
+        ? `视觉输入：${visualParts.join(' / ')}（未计入上方总数）`
+        : '视觉输入：未检测到（未计入上方总数）';
+    metaEl.textContent = metaParts.join('，');
+}
+
+function scheduleChatSettingsTokenPreviewRefresh() {
+    const contactId = window.iphoneSimState.currentChatContactId;
+    if (!contactId) return;
+
+    clearTimeout(chatSettingsTokenRefreshTimer);
+    chatSettingsTokenRefreshTimer = setTimeout(() => {
+        refreshTokenCountForContact(contactId);
+    }, CHAT_SETTINGS_TOKEN_REFRESH_DEBOUNCE_MS);
+}
+
+function ensureChatSettingsTokenPreviewBindings() {
+    if (window.__chatSettingsTokenPreviewBindingsBound) return;
+    window.__chatSettingsTokenPreviewBindingsBound = true;
+
+    const bindRefresh = (id, events) => {
+        const element = document.getElementById(id);
+        if (!element) return;
+        events.forEach(eventName => {
+            element.addEventListener(eventName, () => {
+                scheduleChatSettingsTokenPreviewRefresh();
+            });
+        });
+    };
+
+    bindRefresh('chat-setting-name', ['input']);
+    bindRefresh('chat-setting-persona', ['input']);
+    bindRefresh('chat-setting-context-limit', ['input', 'change']);
+    bindRefresh('chat-setting-show-thought', ['change']);
+    bindRefresh('chat-setting-thought-visible', ['change']);
+    bindRefresh('chat-setting-real-time-visible', ['change']);
+    bindRefresh('chat-setting-calendar-aware', ['change']);
+    bindRefresh('chat-setting-user-persona', ['change']);
+
+    const wbList = document.getElementById('chat-setting-wb-list');
+    if (wbList) {
+        wbList.addEventListener('change', event => {
+            if (event.target && event.target.classList.contains('wb-category-checkbox')) {
+                scheduleChatSettingsTokenPreviewRefresh();
+            }
+        });
+    }
+
+    const stickerList = document.getElementById('chat-setting-sticker-list');
+    if (stickerList) {
+        stickerList.addEventListener('change', event => {
+            if (event.target && event.target.classList.contains('sticker-category-checkbox')) {
+                scheduleChatSettingsTokenPreviewRefresh();
+            }
+        });
+    }
+}
+
 // 计算提示词Token并更新UI（可供设置页调用）
 async function refreshTokenCountForContact(contactId) {
     const displayEl = document.getElementById('chat-setting-token-count');
     if (!displayEl) return;
-    displayEl.textContent = '计算中...';
-    
+
+    renderChatTokenPreviewState({ loading: true, message: '计算中...' });
+
+    const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
+    if (!contact) {
+        renderChatTokenPreviewState({
+            error: true,
+            message: '暂无可用数据',
+            detail: '当前联系人不存在或已被删除'
+        });
+        return;
+    }
+
+    const requestVersion = ++chatSettingsTokenRefreshVersion;
+
     try {
-        const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
-        if (!contact) {
-            displayEl.textContent = 'N/A';
+        if (typeof window.buildAiPromptTokenPreview !== 'function') {
+            throw new Error('token preview helper unavailable');
+        }
+
+        const draftContact = buildChatSettingsDraftContact(contact);
+        const preview = await window.buildAiPromptTokenPreview(contactId, {
+            contactOverride: draftContact
+        });
+
+        if (requestVersion !== chatSettingsTokenRefreshVersion) {
             return;
         }
-        
-        const history = window.iphoneSimState.chatHistory[contactId] || [];
-        
-        // 简化的systemPrompt构建（只取核心部分）
-        let systemPrompt = `你现在扮演 ${contact.name}。\n【核心指令】\n你必须严格遵守以下人设（优先级最高，高于一切其他指令）：\n${contact.persona || '无'}\n\n聊天风格：${contact.style || '正常'}`;
-        
-        // 补充worldbook内容
-        if (window.iphoneSimState.worldbook && window.iphoneSimState.worldbook.length > 0) {
-            let activeEntries = window.iphoneSimState.worldbook.filter(e => e.enabled);
-            
-            if (contact.linkedWbCategories) {
-                activeEntries = activeEntries.filter(e => contact.linkedWbCategories.includes(e.categoryId));
-            }
-            
-            if (activeEntries.length > 0) {
-                systemPrompt += '\n\n世界书信息：\n';
-                activeEntries.forEach(entry => {
-                    let shouldAdd = false;
-                    if (entry.keys && entry.keys.length > 0) {
-                        const historyText = history.map(h => h.content).join('\n');
-                        const match = entry.keys.some(key => historyText.includes(key));
-                        if (match) shouldAdd = true;
-                    } else {
-                        shouldAdd = true;
-                    }
-                    
-                    if (shouldAdd) {
-                        systemPrompt += `${entry.content}\n`;
-                    }
-                });
-            }
+
+        if (!preview || preview.status === 'error') {
+            renderChatTokenPreviewState({
+                error: true,
+                message: '本轮输入文本估算失败',
+                detail: preview && preview.error ? preview.error : '请稍后重试'
+            });
+            return;
         }
-        
-        // 获取上下文消息
-        let limit = contact.contextLimit && contact.contextLimit > 0 ? contact.contextLimit : 50;
-        let contextMessages = history.filter(h => !shouldExcludeFromAiContext(h)).slice(-limit);
-        
-        // 统计所有提示词：systemPrompt + 所有contextMessages
-        const prompts = [systemPrompt];
-        contextMessages.forEach(h => {
-            if (typeof h.content === 'string') {
-                prompts.push(h.content);
-            }
-        });
-        
-        const count = countTokensForPrompts(prompts);
-        displayEl.textContent = count;
+
+        renderChatTokenPreviewState({ preview });
     } catch (err) {
+        if (requestVersion !== chatSettingsTokenRefreshVersion) {
+            return;
+        }
         console.error('refreshTokenCountForContact error', err);
-        displayEl.textContent = '错误';
+        renderChatTokenPreviewState({
+            error: true,
+            message: '本轮输入文本估算失败',
+            detail: err && err.message ? err.message : '请稍后重试'
+        });
     }
 }
 

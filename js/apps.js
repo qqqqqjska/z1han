@@ -6084,18 +6084,7 @@ function buildLegacyMemoryContext(contact, history) {
         })
         .sort((a, b) => (b.time || 0) - (a.time || 0));
     if (memories.length === 0) return '';
-    const limit = clampInt(settings.injectQuota.maxTotal, 7, 1, 100);
-    const contextText = history.slice(-20).map(item => String(item.content || '')).join(' ').toLowerCase();
-    const recentCount = Math.min(3, limit);
-    const recent = memories.slice(0, recentCount);
-    const remaining = memories.slice(recentCount);
-    const relevant = remaining
-        .map(memory => ({ memory, score: computeMemoryRelevance(memory.content, contextText) }))
-        .filter(item => item.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, Math.max(0, limit - recentCount))
-        .map(item => item.memory);
-    const finalList = [...recent, ...relevant].sort((a, b) => (a.time || 0) - (b.time || 0));
+    const finalList = memories.slice().sort((a, b) => (a.time || 0) - (b.time || 0));
     if (finalList.length === 0) return '';
     let output = '\n【历史记忆 (已知事实)】\n⚠️ 注意：以下内容是你们过去的共同经历或已知事实，请勿重复向用户复述，除非用户主动询问或需要回忆。\n';
     finalList.forEach(memory => {
@@ -6173,6 +6162,15 @@ function buildMemoryContextByPolicy(contact, history, debugSource = 'chat') {
         if (clone.memoryTags.includes('state')) normalizeStateMetaForMemory(clone);
         return clone;
     });
+    
+    // [调试] 显示配置和过滤情况
+    console.log('[buildMemoryContextByPolicy] 总记忆数:', all.length);
+    console.log('[buildMemoryContextByPolicy] 配置:', {
+        daysBase: settings.injectRecentDays,
+        importanceBase: settings.injectImportanceMin,
+        legacyQuota: settings.injectQuota
+    });
+    
     if (all.length === 0) {
         const noMemImportance = Object.assign({}, settings.injectImportanceMin, contact.memoryInjectImportanceMin || {});
         emitMemoryInjectDebug(contact, {
@@ -6180,8 +6178,8 @@ function buildMemoryContextByPolicy(contact, history, debugSource = 'chat') {
             reason: 'no_memories',
             settings: {
                 injectRecentDays: settings.injectRecentDays,
-                injectQuota: settings.injectQuota,
-                injectImportanceMin: noMemImportance
+                injectImportanceMin: noMemImportance,
+                legacyInjectQuota: settings.injectQuota
             },
             selectedRows: [],
             sectionCounts: {},
@@ -6192,9 +6190,9 @@ function buildMemoryContextByPolicy(contact, history, debugSource = 'chat') {
 
     const historyText = history.slice(-20).map(item => String(item.content || '')).join(' ');
     const now = Date.now();
-    const quotaBase = Object.assign({}, settings.injectQuota, contact.memoryInjectQuota || {});
     const daysBase = Object.assign({}, settings.injectRecentDays, contact.memoryInjectRecentDays || {});
     const importanceBase = Object.assign({}, settings.injectImportanceMin, contact.memoryInjectImportanceMin || {});
+    const legacyQuota = Object.assign({}, settings.injectQuota, contact.memoryInjectQuota || {});
     const dayMs = 24 * 60 * 60 * 1000;
     const getDaysLimit = (bucket) => clampInt(daysBase[bucket], settings.injectRecentDays[bucket], 0, 3650);
     const getImportanceLimit = (bucket) => clampFloat(importanceBase[bucket], settings.injectImportanceMin[bucket], 0.1, 1);
@@ -6218,8 +6216,6 @@ function buildMemoryContextByPolicy(contact, history, debugSource = 'chat') {
     const hasActiveRecentDaysLimit = ['short_term', 'long_term', 'state', 'refined']
         .some(bucket => getDaysLimit(bucket) > 0);
 
-    let maxTotal = clampInt(quotaBase.maxTotal, 7, 1, 100);
-
     const withScore = all.map(memory => {
         const relevance = computeMemoryRelevance(memory.content, historyText);
         const freshness = 1 - Math.min(1, Math.max(0, (now - (Number(memory.time) || now)) / (30 * 24 * 60 * 60 * 1000)));
@@ -6229,48 +6225,35 @@ function buildMemoryContextByPolicy(contact, history, debugSource = 'chat') {
         return { memory, relevance, freshness, confidence, importance, score };
     });
 
-    const stateQuota = clampInt(quotaBase.state, 2, 0, 50);
     const stateCandidates = withScore
         .filter(item => item.memory.memoryTags.includes('state'))
         .filter(item => isWithinRecentDays(item.memory, 'state'))
         .filter(item => isAboveImportanceLimit(item.memory, 'state'))
         .filter(item => !item.memory.stateMeta || item.memory.stateMeta.phase === 'active')
         .sort((a, b) => b.score - a.score);
-    const userStateCandidates = stateCandidates.filter(item => getMemoryStateOwner(item.memory, 'user') === 'user');
-    const contactStateCandidates = stateCandidates.filter(item => getMemoryStateOwner(item.memory, 'user') === 'contact');
-    const stateList = [];
-    if (stateQuota > 0) {
-        if (contactStateCandidates.length > 0) stateList.push(contactStateCandidates[0]);
-        if (stateList.length < stateQuota && userStateCandidates.length > 0) stateList.push(userStateCandidates[0]);
-    }
-    if (stateList.length < stateQuota) {
-        const selectedIds = new Set(stateList.map(item => Number(item.memory.id)));
-        stateCandidates.forEach(item => {
-            if (stateList.length >= stateQuota) return;
-            const id = Number(item.memory.id);
-            if (selectedIds.has(id)) return;
-            stateList.push(item);
-            selectedIds.add(id);
-        });
-    }
+    const stateList = stateCandidates.slice();
     const shortList = withScore
         .filter(item => item.memory.memoryTags.includes('short_term'))
         .filter(item => isWithinRecentDays(item.memory, 'short_term'))
         .filter(item => isAboveImportanceLimit(item.memory, 'short_term'))
-        .sort((a, b) => (b.freshness + b.relevance) - (a.freshness + a.relevance))
-        .slice(0, clampInt(quotaBase.short_term, 2, 0, 50));
+        .sort((a, b) => (b.freshness + b.relevance) - (a.freshness + a.relevance));
     const longList = withScore
         .filter(item => item.memory.memoryTags.includes('long_term'))
         .filter(item => isWithinRecentDays(item.memory, 'long_term'))
         .filter(item => isAboveImportanceLimit(item.memory, 'long_term'))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, clampInt(quotaBase.long_term, 2, 0, 50));
+        .sort((a, b) => b.score - a.score);
+    
+    // [调试] 显示每个类别的过滤结果
+    const longTermTotal = withScore.filter(item => item.memory.memoryTags.includes('long_term')).length;
+    const longTermRecentDays = withScore.filter(item => item.memory.memoryTags.includes('long_term')).filter(item => isWithinRecentDays(item.memory, 'long_term')).length;
+    const longTermImportance = withScore.filter(item => item.memory.memoryTags.includes('long_term')).filter(item => isWithinRecentDays(item.memory, 'long_term')).filter(item => isAboveImportanceLimit(item.memory, 'long_term')).length;
+    console.log('[buildMemoryContextByPolicy] 长期记忆: 总数', longTermTotal, '过滤后(时间)', longTermRecentDays, '过滤后(重要性)', longTermImportance, '最终发送', longList.length);
+    console.log('[buildMemoryContextByPolicy] state:', stateList.length, 'short_term:', shortList.length, 'long_term:', longList.length);
     const refinedList = withScore
         .filter(item => item.memory.memoryTags.includes('refined'))
         .filter(item => isWithinRecentDays(item.memory, 'refined'))
         .filter(item => isAboveImportanceLimit(item.memory, 'refined'))
-        .sort((a, b) => (b.memory.time || 0) - (a.memory.time || 0))
-        .slice(0, clampInt(quotaBase.refined, 1, 0, 50));
+        .sort((a, b) => (b.memory.time || 0) - (a.memory.time || 0));
 
     let selected = [
         ...stateList.map(item => ({ bucket: 'state', item })),
@@ -6285,19 +6268,14 @@ function buildMemoryContextByPolicy(contact, history, debugSource = 'chat') {
             reason: hasActiveRecentDaysLimit ? 'empty_after_recent_days_filter' : 'empty_policy_use_legacy_fallback',
             settings: {
                 injectRecentDays: settings.injectRecentDays,
-                injectQuota: settings.injectQuota,
                 injectImportanceMin: effectiveImportanceMin,
-                maxTotal
+                legacyInjectQuota: legacyQuota
             },
             selectedRows: [],
             sectionCounts: { state: 0, short_term: 0, long_term: 0, refined: 0 },
             memoryContext: fallbackContext
         });
         return fallbackContext;
-    }
-
-    if (selected.length > maxTotal) {
-        selected = selected.sort((a, b) => b.item.score - a.item.score).slice(0, maxTotal);
     }
 
     const sections = { state: [], short_term: [], long_term: [], refined: [] };
@@ -6337,9 +6315,8 @@ function buildMemoryContextByPolicy(contact, history, debugSource = 'chat') {
             reason: hasActiveRecentDaysLimit ? 'empty_output_after_section_build' : 'empty_output_use_legacy_fallback',
             settings: {
                 injectRecentDays: settings.injectRecentDays,
-                injectQuota: settings.injectQuota,
                 injectImportanceMin: effectiveImportanceMin,
-                maxTotal
+                legacyInjectQuota: legacyQuota
             },
             selectedRows: selected.map(entry => buildMemoryInjectDebugRow(entry.item.memory, entry.bucket)),
             sectionCounts: {
@@ -6358,9 +6335,8 @@ function buildMemoryContextByPolicy(contact, history, debugSource = 'chat') {
         reason: 'policy_selected',
         settings: {
             injectRecentDays: settings.injectRecentDays,
-            injectQuota: settings.injectQuota,
             injectImportanceMin: effectiveImportanceMin,
-            maxTotal
+            legacyInjectQuota: legacyQuota
         },
         selectedRows: selected.map(entry => buildMemoryInjectDebugRow(entry.item.memory, entry.bucket)),
         sectionCounts: {
@@ -7298,6 +7274,11 @@ window.deleteMemory = function(id) {
     if (contactId) syncLegacyPerceptionAndState(contactId);
     saveConfig();
     renderMemoryList();
+    // 刷新设置页中的token计数
+    if (typeof window.refreshTokenCountForContact === 'function' && contactId) {
+        console.log('[删除记忆] 触发token刷新，contactId:', contactId);
+        window.refreshTokenCountForContact(contactId);
+    }
 };
 
 window.retagMemory = function(id) {

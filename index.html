@@ -816,8 +816,36 @@
                             </div>
                             <div class="list-item">
                                 <div class="list-content column">
-                                    <label>提示词Token数</label>
-                                    <span id="chat-setting-token-count" style="color:#888;">计算中...</span>
+                                    <label>本轮提示词 Token 概览</label>
+                                    <div id="chat-setting-token-preview" class="chat-token-preview is-loading">
+                                        <div class="chat-token-preview-main">
+                                            <strong id="chat-setting-token-count" class="chat-token-preview-count">计算中...</strong>
+                                        </div>
+                                        <div class="chat-token-preview-breakdown">
+                                            <div class="chat-token-preview-item">
+                                                <span>系统基础</span>
+                                                <strong id="chat-setting-token-system-base">--</strong>
+                                            </div>
+                                            <div class="chat-token-preview-item">
+                                                <span>记忆</span>
+                                                <strong id="chat-setting-token-memory">--</strong>
+                                            </div>
+                                            <div class="chat-token-preview-item">
+                                                <span>世界书</span>
+                                                <strong id="chat-setting-token-worldbook">--</strong>
+                                            </div>
+                                            <div class="chat-token-preview-item">
+                                                <span>聊天上下文</span>
+                                                <strong id="chat-setting-token-context">--</strong>
+                                            </div>
+                                            <div class="chat-token-preview-item">
+                                                <span>场景附加</span>
+                                                <strong id="chat-setting-token-extra">--</strong>
+                                            </div>
+                                        </div>
+                                        <div id="chat-setting-token-visual" class="chat-token-preview-visual">视觉输入：检测中...</div>
+                                        <div id="chat-setting-token-meta" class="chat-token-preview-meta">按当前未保存设置实时估算</div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="list-item">
@@ -3732,7 +3760,7 @@
                                     <input type="number" id="modal-memory-days-refined" min="0">
                                 </div>
                             </div>
-                            <div class="memory-setting-hint">例如“状态=7”表示只带入最近7天内的状态记忆。状态本身若未提到结束，会保持进行中。</div>
+                            <div class="memory-setting-hint">例如“状态=7”表示只带入最近7天内的状态记忆。状态本身若未提到结束，会保持进行中。满足这里时间条件的记忆会继续参与发送。</div>
                         </div>
                         <div class="setting-group">
                             <label>发送门槛：重要性至少达到（0.1-1.0）</label>
@@ -3754,12 +3782,12 @@
                                     <input type="number" id="modal-memory-importance-refined" min="0.1" max="1" step="0.01">
                                 </div>
                             </div>
-                            <div class="memory-setting-hint">仅发送“重要性 >= 该门槛”的记忆给 AI。建议先用 0.5，再按效果调高或调低。</div>
+                            <div class="memory-setting-hint">仅发送“重要性 >= 该门槛”的记忆给 AI。满足时间与重要性条件的记忆会全部发送给 AI。建议先用 0.5，再按效果调高或调低。</div>
                         </div>
                         <div class="setting-group">
                             <label>相似内容合并强度（越高越严格）</label>
                             <input type="number" id="modal-memory-dedupe-threshold" min="0.3" max="0.99" step="0.01">
-                            <div class="memory-setting-hint">推荐 0.7~0.85，避免重复记忆越积越多。</div>
+                            <div class="memory-setting-hint">推荐 0.7~0.85，避免重复记忆越积越多。当前不再按条数截断，而是把筛选后的记忆全部发送。</div>
                         </div>
                         <button id="save-memory-settings-btn" class="ios-btn-block">保存</button>
                     </div>
