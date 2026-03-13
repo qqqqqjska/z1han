@@ -4,7 +4,8 @@
     const GARDEN_TITLE_STORAGE_KEY = 'garden_app_custom_title_v1';
     const GARDEN_LAYOUT_STORAGE_KEY = 'garden_app_contact_layouts_v1';
     const GARDEN_GAME_STATE_STORAGE_KEY = 'garden_game_state_v1';
-    const GARDEN_ROGUE_ACTIVITY_STATE_STORAGE_KEY = 'garden_rogue_activity_state_v1';
+    const GARDEN_ROGUE_RUN_STORAGE_KEY_V2 = 'garden_rogue_run_v2';
+    const GARDEN_ROGUE_META_STORAGE_KEY_V2 = 'garden_rogue_meta_v2';
     const GARDEN_HOME_TUTORIAL_DISMISSED_KEY = 'garden_home_tutorial_dismissed_v1';
     const GARDEN_FIGURE_ASSET_DB_NAME = 'garden_app_figure_assets_v1';
     const GARDEN_FIGURE_ASSET_STORE = 'resident_character_assets';
@@ -41,6 +42,15 @@
         stirfry: { id: 'stirfry', name: '营养炖菜', emoji: '🥘', category: 'cooked', sellPrice: 180 }
     };
 
+    const ROGUE_ACTIVE_ITEM_POOL_V2 = {
+        fertilizer: { id: 'fertilizer', name: '丰产肥料', emoji: '🧪', scope: 'farm', desc: '对一块农田使用，本次收获有较高概率额外 +1。', recommendedUse: '适合当前缺基础材料时补一次高产。', effectType: 'farm_bonus_yield', charges: 1 },
+        greenhouse_spray: { id: 'greenhouse_spray', name: '温室喷雾', emoji: '💦', scope: 'farm', desc: '让一块作物立刻加速成熟。', recommendedUse: '适合赶当前节点进度或补最后一份原料。', effectType: 'farm_finish_now', charges: 1 },
+        pasture_whistle: { id: 'pasture_whistle', name: '牧场口哨', emoji: '📯', scope: 'pasture', desc: '立即推进一只动物到可收获状态。', recommendedUse: '适合急缺鸡蛋、牛奶、猪肉或羊毛时使用。', effectType: 'pasture_finish_now', charges: 1 },
+        nutrient_feed: { id: 'nutrient_feed', name: '营养饲料', emoji: '🥣', scope: 'pasture', desc: '对一只动物使用，下一次收获额外 +1。', recommendedUse: '适合想放大高价值畜产时使用。', effectType: 'pasture_bonus_yield', charges: 1 },
+        kitchen_spice: { id: 'kitchen_spice', name: '厨房香料', emoji: '🧂', scope: 'kitchen', desc: '下一次成功烹饪额外产出 1 份熟食。', recommendedUse: '适合做高价值熟食或冲市场订单时使用。', effectType: 'kitchen_bonus_output', charges: 1 },
+        market_coupon: { id: 'market_coupon', name: '市场加价券', emoji: '🎟️', scope: 'market', desc: '下一张市场订单奖励提升。', recommendedUse: '适合第三幕卖货爆发或冲 Boss 收益。', effectType: 'market_bonus_order', charges: 1 }
+    };
+
     const STORAGE_TABS = {
         crops: { id: 'crops', label: '作物', itemIds: ['wheat', 'carrot', 'tomato', 'corn', 'pumpkin'] },
         products: { id: 'products', label: '畜产', itemIds: ['egg', 'milk', 'pork', 'wool'] },
@@ -71,57 +81,126 @@
         stirfry: { id: 'stirfry', name: '营养炖菜', emoji: '🥘', primaryIngredient: 'carrot', ingredients: { carrot: 2, pork: 1 } }
     };
 
-    const ROGUE_STAGE_LABELS = {
-        farm: '农场阶段',
-        pasture: '牧场阶段',
-        kitchen: '厨房阶段',
-        sell_setup: '出售准备',
-        sell_orders: '出售阶段'
+    const ROGUE_V2_NODE_LABELS = {
+        farm: '农场节点',
+        pasture: '牧场节点',
+        kitchen: '厨房节点',
+        market: '市场节点',
+        event: '奇遇节点',
+        merchant: '商店节点',
+        rest: '休整节点',
+        elite: '精英节点',
+        boss: '最终 Boss'
     };
 
-    const ROGUE_CONTEXT_LABELS = {
-        farm: '农场',
-        pasture: '牧场',
-        kitchen: '厨房',
-        sell: '出售'
+    const ROGUE_V2_ACT_LABELS = {
+        1: '第一幕 · 开荒',
+        2: '第二幕 · 扩张',
+        3: '第三幕 · 爆仓'
     };
 
-    const ROGUE_STAGE_SEQUENCE = ['farm', 'pasture', 'kitchen', 'sell_setup', 'sell_orders'];
-
-    const ROGUE_CARD_POOL = {
-        farm_fast_water: { id: 'farm_fast_water', context: 'farm', title: '快浇快熟', desc: '接下来 3 次浇水后的作物，成熟时间 x0.75', effectType: 'farm_fast_water', values: { remaining: 3, value: 0.75 } },
-        farm_double_crop: { id: 'farm_double_crop', context: 'farm', title: '双倍丰收', desc: '接下来 5 次作物收获，各有 35% 概率额外 +1', effectType: 'farm_double_crop', values: { remaining: 5, value: 0.35 } },
-        farm_seed_rebate: { id: 'farm_seed_rebate', context: 'farm', title: '种子返利', desc: '本轮所有播种返还 30% 金币，向上取整', effectType: 'farm_seed_rebate', values: { value: 0.3 } },
-        farm_big_crop: { id: 'farm_big_crop', context: 'farm', title: '大果加成', desc: '本轮价格 >= 25 的作物收获固定额外 +1', effectType: 'farm_big_crop', values: { value: 1 } },
-        pasture_fast_feed: { id: 'pasture_fast_feed', context: 'pasture', title: '速喂速成', desc: '接下来 4 次喂食后，对应成长/生产时间 x0.7', effectType: 'pasture_fast_feed', values: { remaining: 4, value: 0.7 } },
-        pasture_twin_yield: { id: 'pasture_twin_yield', context: 'pasture', title: '双产祝福', desc: '接下来 5 次畜产收获，各有 35% 概率额外 +1', effectType: 'pasture_twin_yield', values: { remaining: 5, value: 0.35 } },
-        pasture_type_bonus: { id: 'pasture_type_bonus', context: 'pasture', title: '首收奖励', desc: '本轮每种动物类型的第一次收获固定额外 +1', effectType: 'pasture_type_bonus', values: { flags: [] } },
-        pasture_baby_boost: { id: 'pasture_baby_boost', context: 'pasture', title: '幼崽冲刺', desc: '本轮所有幼崽成长时间 x0.6', effectType: 'pasture_baby_boost', values: { value: 0.6 } },
-        kitchen_bonus_output: { id: 'kitchen_bonus_output', context: 'kitchen', title: '加量出锅', desc: '接下来 2 次成功烹饪，成品固定额外 +1', effectType: 'kitchen_bonus_output', values: { remaining: 2, value: 1 } },
-        kitchen_easy_qte: { id: 'kitchen_easy_qte', context: 'kitchen', title: '稳手厨师', desc: '接下来 5 次烹饪 QTE，白区和黄区宽度 x1.35', effectType: 'kitchen_easy_qte', values: { remaining: 5, value: 1.35 } },
-        kitchen_cooked_markup: { id: 'kitchen_cooked_markup', context: 'kitchen', title: '熟食溢价', desc: '本轮所有熟食出售价格 +20%', effectType: 'kitchen_cooked_markup', values: { value: 0.2 } },
-        kitchen_primary_save: { id: 'kitchen_primary_save', context: 'kitchen', title: '返料巧手', desc: '接下来 2 次成功烹饪，返还 1 份主材料', effectType: 'kitchen_primary_save', values: { remaining: 2, value: 1 } },
-        sell_bulk_bonus: { id: 'sell_bulk_bonus', context: 'sell', title: '整批出货', desc: '单次出售同一物品数量 >= 3 时，该物品金币 +15%', effectType: 'sell_bulk_bonus', values: { value: 0.15 } },
-        sell_cooked_order: { id: 'sell_cooked_order', context: 'sell', title: '熟食订单', desc: '熟食进入订单权重 x2，且熟食订单奖励 x1.3', effectType: 'sell_cooked_order', values: { value: 1.3 } },
-        sell_order_tip: { id: 'sell_order_tip', context: 'sell', title: '订单小费', desc: '每完成一张订单，额外获得 +60 金币', effectType: 'sell_order_tip', values: { value: 60 } },
-        sell_chain_bonus: { id: 'sell_chain_bonus', context: 'sell', title: '连单奖励', desc: '完成一张订单后，下一张订单奖励 x1.2', effectType: 'sell_chain_bonus', values: { flags: [] } }
+    const ROGUE_V2_STARTER_LOADOUTS = {
+        planter: {
+            id: 'planter',
+            name: '种植流',
+            desc: '从高频作物循环起步，快速滚出原料海。',
+            icon: '🌾',
+            startCoins: 180,
+            startInventory: { wheat: 3, carrot: 2 },
+            starterRelicId: 'seed_catalog'
+        },
+        rancher: {
+            id: 'rancher',
+            name: '畜牧流',
+            desc: '靠动物高产和成长压缩，稳定产出稀缺畜产。',
+            icon: '🐮',
+            startCoins: 180,
+            startInventory: { egg: 2, milk: 1 },
+            starterRelicId: 'pasture_whistle'
+        },
+        chef: {
+            id: 'chef',
+            name: '厨艺流',
+            desc: '从半成品与减耗起手，尽早进入连做链条。',
+            icon: '🍳',
+            startCoins: 170,
+            startInventory: { wheat: 2, egg: 1, tomato: 2 },
+            starterRelicId: 'seasoning_kit'
+        },
+        trader: {
+            id: 'trader',
+            name: '贸易流',
+            desc: '更快摸到订单与溢价，走卖货爆金路线。',
+            icon: '💰',
+            startCoins: 220,
+            startInventory: { wheat: 1, pork: 1 },
+            starterRelicId: 'ledger_book'
+        }
     };
 
-    const STAGE_SUPPLY_POOL = {
-        farm: [
-            { id: 'farm_supply_gold', stage: 'farm', title: '金币补给', desc: '立即获得 100 金币', rewardType: 'coins', amount: 100 },
-            { id: 'farm_supply_chicken', stage: 'farm', title: '小鸡支援', desc: '免费获得 1 只小鸡幼崽', rewardType: 'animal', animalType: 'chicken', amount: 1 },
-            { id: 'farm_supply_pig', stage: 'farm', title: '小猪支援', desc: '免费获得 1 只小猪幼崽', rewardType: 'animal', animalType: 'pig', amount: 1 }
+    const ROGUE_RELIC_POOL_V2 = {
+        seed_catalog: { id: 'seed_catalog', rarity: 'starter', category: 'yield', title: '种子图录', desc: '农场节点收获额外 +1，且更容易出现农场路线。', effects: { farmHarvestBonus: 1, farmNodeWeight: 2 } },
+        pasture_whistle: { id: 'pasture_whistle', rarity: 'starter', category: 'yield', title: '牧场口哨', desc: '牧场节点的成长/生产速度提升，畜产额外 +1。', effects: { pastureSpeed: 0.75, pastureHarvestBonus: 1 } },
+        seasoning_kit: { id: 'seasoning_kit', rarity: 'starter', category: 'conversion', title: '调味套组', desc: '厨房节点首次烹饪不消耗主材料，成品额外 +1。', effects: { kitchenPrimaryRefund: 1, kitchenOutputBonus: 1 } },
+        ledger_book: { id: 'ledger_book', rarity: 'starter', category: 'economy', title: '记账本', desc: '市场节点收益 +20%，更容易出现市场路线。', effects: { marketSellBonus: 0.2, marketNodeWeight: 2 } },
+        twin_basket: { id: 'twin_basket', rarity: 'common', category: 'yield', title: '双层收纳篮', desc: '所有原材料产出有 35% 概率额外 +1。', effects: { rawDoubleChance: 0.35 } },
+        greenhouse_glass: { id: 'greenhouse_glass', rarity: 'common', category: 'yield', title: '温室玻璃', desc: '农场节点内成熟时间 x0.65。', effects: { farmSpeed: 0.65 } },
+        auto_feeder: { id: 'auto_feeder', rarity: 'common', category: 'yield', title: '自动饲喂器', desc: '牧场节点内喂食后成长/生产时间 x0.65。', effects: { pastureSpeed: 0.65 } },
+        surplus_contract: { id: 'surplus_contract', rarity: 'common', category: 'economy', title: '余量合约', desc: '单次售卖数量 >= 3 时，收益 +25%。', effects: { bulkSellBonus: 0.25 } },
+        prep_station: { id: 'prep_station', rarity: 'common', category: 'conversion', title: '预处理台', desc: '厨房节点烹饪消耗 -1 随机原料，最低保留 1。', effects: { kitchenDiscount: 1 } },
+        chain_timer: { id: 'chain_timer', rarity: 'common', category: 'chain', title: '连锁计时器', desc: '连续成功完成同类节点时，奖励倍率逐层提升。', effects: { chainBonusPerWin: 0.15 } },
+        morale_badge: { id: 'morale_badge', rarity: 'common', category: 'survival', title: '士气徽章', desc: '士气上限 +1，并立即恢复 1 点士气。', effects: { moraleCapBonus: 1, moraleHeal: 1 } },
+        miracle_oven: { id: 'miracle_oven', rarity: 'rare', category: 'conversion', title: '奇迹烤炉', desc: '成功烹饪后 40% 概率再复制 1 份成品。', effects: { cookedDuplicateChance: 0.4 } },
+        freight_coupon: { id: 'freight_coupon', rarity: 'rare', category: 'economy', title: '货运券', desc: '每到市场节点，获得 1 张本节点专用双倍订单券。', effects: { marketTicketPerNode: 1 } },
+        fusion_order: { id: 'fusion_order', rarity: 'rare', category: 'conversion', title: '联动订单', desc: '原材料收获时有概率直接转成对应熟食订单进度。', effects: { convertToOrderChance: 0.25 } },
+        harvest_frenzy: { id: 'harvest_frenzy', rarity: 'rare', category: 'chain', title: '丰收狂热', desc: '连续完成 3 个普通节点后，下一节点所有掉落 x2。', effects: { frenzyThreshold: 3, frenzyMultiplier: 2 } },
+        second_wind: { id: 'second_wind', rarity: 'rare', category: 'survival', title: '第二口气', desc: '本局首次士气归零时，立刻回到 1 点并继续。', effects: { reviveOnce: 1 } },
+        kings_manifest: { id: 'kings_manifest', rarity: 'blessing', category: 'economy', title: '王家货单', desc: '市场与 Boss 订单奖励 +40%。', effects: { orderBonus: 0.4 } },
+        golden_mixer: { id: 'golden_mixer', rarity: 'blessing', category: 'conversion', title: '黄金搅拌机', desc: '厨房每次成功都额外生成 1 份熟食。', effects: { kitchenOutputBonus: 1 } },
+        cornucopia: { id: 'cornucopia', rarity: 'blessing', category: 'yield', title: '丰饶之角', desc: '所有收获固定额外 +2。', effects: { allHarvestFlatBonus: 2 } }
+    };
+
+    const ROGUE_EVENT_POOL_V2 = {
+        lucky_crate: { id: 'lucky_crate', title: '漂流补给箱', desc: '打开一箱随机补给。', choices: [{ id: 'open', label: '打开', result: { type: 'items', items: { wheat: 2, egg: 1, tomato: 1 } } }, { id: 'sell', label: '折现', result: { type: 'coins', amount: 90 } }] },
+        risky_bet: { id: 'risky_bet', title: '流浪商人', desc: '赌一把资源，可能直接摸到高稀有遗物。', choices: [{ id: 'bet', label: '下注 80 金币', result: { type: 'relicDraft', rarityBias: 'rare', costCoins: 80 } }, { id: 'leave', label: '离开', result: { type: 'nothing' } }] },
+        morale_campfire: { id: 'morale_campfire', title: '篝火夜话', desc: '在火边休息，恢复状态并整理背包。', choices: [{ id: 'rest', label: '恢复士气', result: { type: 'morale', amount: 1 } }, { id: 'sort', label: '复制一份库存', result: { type: 'copyHighestStack' } }] }
+    };
+
+    const ROGUE_NODE_POOL_V2 = {
+        1: {
+            normal: ['farm', 'farm', 'pasture', 'event', 'merchant', 'rest'],
+            elite: 'elite'
+        },
+        2: {
+            normal: ['farm', 'pasture', 'kitchen', 'event', 'merchant', 'rest'],
+            elite: 'elite'
+        },
+        3: {
+            normal: ['farm', 'pasture', 'kitchen', 'market', 'event', 'merchant', 'rest'],
+            elite: 'boss'
+        }
+    };
+
+    const ROGUE_META_TREE_V2 = {
+        opening: [
+            { id: 'start_coins_1', name: '启动资金', desc: '开局局内金币 +40', maxLevel: 5, costBase: 20, effects: { runCoinsFlat: 40 } },
+            { id: 'start_pack_1', name: '后勤补给', desc: '开局额外获得随机基础材料', maxLevel: 5, costBase: 25, effects: { bonusStartItems: 1 } }
         ],
-        pasture: [
-            { id: 'pasture_supply_basic', stage: 'pasture', title: '基础食材箱', desc: '获得 小麦 x2 + 鸡蛋 x2', rewardType: 'items', items: { wheat: 2, egg: 2 } },
-            { id: 'pasture_supply_milk', stage: 'pasture', title: '鲜奶拼箱', desc: '获得 牛奶 x1 + 鸡蛋 x1 + 番茄 x2', rewardType: 'items', items: { milk: 1, egg: 1, tomato: 2 } },
-            { id: 'pasture_supply_meat', stage: 'pasture', title: '炖锅食材箱', desc: '获得 猪肉 x1 + 小麦 x2 + 胡萝卜 x2', rewardType: 'items', items: { pork: 1, wheat: 2, carrot: 2 } }
+        relics: [
+            { id: 'relic_quality_1', name: '精制遗物', desc: '高品质遗物出现率提升', maxLevel: 5, costBase: 30, effects: { rareRelicRate: 0.06 } },
+            { id: 'shop_quality_1', name: '精选货架', desc: '商店商品质量提升', maxLevel: 5, costBase: 30, effects: { shopQuality: 1 } }
         ],
-        kitchen: [
-            { id: 'kitchen_supply_bread', stage: 'kitchen', title: '面包补给', desc: '获得 面包 x2', rewardType: 'items', items: { bread: 2 } },
-            { id: 'kitchen_supply_combo', stage: 'kitchen', title: '熟食双拼', desc: '获得 沙拉 x1 + 卷饼 x1', rewardType: 'items', items: { salad: 1, taco: 1 } },
-            { id: 'kitchen_supply_gold', stage: 'kitchen', title: '金币打赏', desc: '立即获得 120 金币', rewardType: 'coins', amount: 120 }
+        route: [
+            { id: 'route_scout_1', name: '路线侦察', desc: '每层多显示 1 个备选节点', maxLevel: 3, costBase: 40, effects: { extraNodeChoice: 1 } },
+            { id: 'route_reroll_1', name: '线路重绘', desc: '每幕可刷新 1 次路线', maxLevel: 3, costBase: 45, effects: { routeReroll: 1 } }
+        ],
+        survival: [
+            { id: 'morale_cap_1', name: '稳住阵脚', desc: '士气上限 +1', maxLevel: 3, costBase: 40, effects: { moraleCap: 1 } },
+            { id: 'safety_guard_1', name: '失误缓冲', desc: '每局首次失败不扣士气', maxLevel: 3, costBase: 50, effects: { failShield: 1 } }
+        ],
+        settlement: [
+            { id: 'settle_bonus_1', name: '满载而归', desc: '局外结算奖励提升', maxLevel: 5, costBase: 35, effects: { settlementBonus: 0.08 } },
+            { id: 'ascension_unlock', name: '更高难度', desc: '解锁更高 Ascension', maxLevel: 5, costBase: 60, effects: { ascensionUnlock: 1 } }
         ]
     };
 
@@ -310,7 +389,8 @@
         gardenMode: 'casual',
         gardenGame: null,
         casualGardenGame: null,
-        rogueActivityGame: null,
+        rogueRunV2: null,
+        rogueMetaV2: null,
         activeTab: 'pet',
         currentView: 'home',
         drawerOpen: false,
@@ -323,12 +403,15 @@
         pastureToastTimeout: null,
         kitchenToastTimeout: null,
         roguePanelOpen: false,
+        rogueIntroOpen: false,
+        rogueBuffPanelOpen: false,
         homeTutorialDismissed: false,
         farmGame: {
             initialized: false,
             progressTimer: null,
             currentTool: 'pointer',
-            currentSeed: 'wheat'
+            currentSeed: 'wheat',
+            selectedToolItemId: null
         },
         pastureGame: {
             initialized: false,
@@ -336,7 +419,9 @@
             roamTimer: null,
             visualEatingUntil: {},
             currentTool: 'pointer',
-            selectedAnimalToBuy: 'chicken'
+            selectedAnimalToBuy: 'chicken',
+            selectedToolItemId: null,
+            shopMarkup: ''
         },
         kitchenGame: {
             initialized: false,
@@ -348,11 +433,18 @@
             whiteStart: 0,
             whiteEnd: 0,
             yellowStart: 0,
-            yellowEnd: 0
+            yellowEnd: 0,
+            selectedToolItemId: null,
+            toolPanelOpen: false
         },
         storageSell: {
             itemId: null,
             qty: 1
+        },
+        miniMissionCollapsed: {
+            farm: true,
+            pasture: true,
+            kitchen: true
         },
         toastTimeout: null,
         saveResetTimer: null,
@@ -410,9 +502,13 @@
     let farmCloseBtn;
     let farmGridEl;
     let farmSeedPanelEl;
+    let farmPanelTitleEl;
     let farmSeedListEl;
     let farmCoinsEl;
     let farmLevelEl;
+    let farmBuffSummaryEl;
+    let farmBuffSummaryTextEl;
+    let farmBuffChipEl;
     let farmToolBtns = [];
     let farmToastEl;
     let pastureScreenEl;
@@ -421,6 +517,9 @@
     let pastureShopPanelEl;
     let pastureCoinsEl;
     let pastureExpEl;
+    let pastureBuffSummaryEl;
+    let pastureBuffSummaryTextEl;
+    let pastureBuffChipEl;
     let pastureToolBtns = [];
     let pastureShopItems = [];
     let pastureToastEl;
@@ -433,6 +532,11 @@
     let kitchenQteHintEl;
     let kitchenToastEl;
     let kitchenCookBtns = [];
+    let kitchenBuffSummaryEl;
+    let kitchenBuffSummaryTextEl;
+    let kitchenBuffChipEl;
+    let kitchenToolPanelEl;
+    let kitchenToolListEl;
     let rogueProgressStripEl;
     let rogueProgressStageEl;
     let rogueProgressCardsEl;
@@ -447,8 +551,26 @@
     let rogueOfferTitleEl;
     let rogueOfferDescEl;
     let rogueOfferChoicesEl;
+    let rogueIntroModalEl;
+    let rogueIntroTitleEl;
+    let rogueIntroDescEl;
+    let rogueIntroBodyEl;
+    let rogueBuffPanelEl;
+    let rogueBuffPanelListEl;
     let storageOrderCardEl;
     let kitchenSkipBtnEl;
+    let farmMissionEl;
+    let farmMissionTitleEl;
+    let farmMissionProgressEl;
+    let farmMissionActionEl;
+    let pastureMissionEl;
+    let pastureMissionTitleEl;
+    let pastureMissionProgressEl;
+    let pastureMissionActionEl;
+    let kitchenMissionEl;
+    let kitchenMissionTitleEl;
+    let kitchenMissionProgressEl;
+    let kitchenMissionActionEl;
     let homeTutorialCardEl;
     let homeTutorialReopenBtnEl;
     let editorHost;
@@ -476,6 +598,141 @@
         }, {});
     }
 
+    function createDefaultRogueMetaStateV2() {
+        return {
+            workshopCurrency: 0,
+            ascensionLevel: 0,
+            highestActCleared: 0,
+            unlockedLoadouts: ['planter', 'rancher', 'chef', 'trader'],
+            workshopLevels: {},
+            seenRelics: [],
+            seenEvents: []
+        };
+    }
+
+    function createDefaultRogueNodeState(nodeType, actIndex, depthIndex, options) {
+        return {
+            id: `rogue_v2_node_${actIndex}_${depthIndex}_${nodeType}_${Math.random().toString(36).slice(2, 7)}`,
+            type: nodeType,
+            actIndex,
+            depthIndex,
+            routeIndex: options && Number.isFinite(options.routeIndex) ? options.routeIndex : 0,
+            isCleared: false,
+            isElite: nodeType === 'elite',
+            isBoss: nodeType === 'boss'
+        };
+    }
+
+    function pickRandomNodeType(pool) {
+        if (!Array.isArray(pool) || !pool.length) return 'event';
+        return pool[Math.floor(Math.random() * pool.length)] || 'event';
+    }
+
+    function pickNodeChoicesForDepthV2(pool, actIndex, depthIndex) {
+        const sourcePool = Array.isArray(pool) && pool.length ? [...pool] : ['event'];
+        const uniqueTypes = [...new Set(sourcePool)];
+        const preferredByAct = actIndex === 1
+            ? ['farm', 'pasture', 'rest', 'event', 'merchant']
+            : actIndex === 2
+                ? ['kitchen', 'farm', 'pasture', 'event', 'merchant', 'rest']
+                : ['market', 'kitchen', 'farm', 'pasture', 'event', 'merchant', 'rest'];
+        const preferredAvailable = preferredByAct.filter((type) => uniqueTypes.includes(type));
+        const choices = [];
+
+        preferredAvailable.forEach((type) => {
+            if (choices.length >= 3) return;
+            if (!choices.includes(type)) choices.push(type);
+        });
+
+        const shuffledUnique = uniqueTypes.sort(() => Math.random() - 0.5);
+        shuffledUnique.forEach((type) => {
+            if (choices.length >= 3) return;
+            if (!choices.includes(type)) choices.push(type);
+        });
+
+        while (choices.length < 3) {
+            const fallback = pickRandomNodeType(sourcePool);
+            if (choices.length < 2 && choices.includes(fallback) && uniqueTypes.length > choices.length) continue;
+            choices.push(fallback);
+        }
+
+        if (depthIndex === 0 && actIndex === 1 && !choices.includes('farm')) {
+            choices[0] = 'farm';
+        }
+        if (depthIndex === 1 && actIndex >= 2 && !choices.includes('kitchen') && uniqueTypes.includes('kitchen')) {
+            choices[Math.min(1, choices.length - 1)] = 'kitchen';
+        }
+        if (depthIndex >= 1 && actIndex === 3 && !choices.includes('market') && uniqueTypes.includes('market')) {
+            choices[choices.length - 1] = 'market';
+        }
+
+        return choices.slice(0, 3);
+    }
+
+    function createRogueMapStateV2() {
+        const acts = [1, 2, 3].map((actIndex) => {
+            const actPool = ROGUE_NODE_POOL_V2[actIndex] || ROGUE_NODE_POOL_V2[1];
+            const routes = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => null));
+            Array.from({ length: 3 }, (_, depthIndex) => {
+                const nodeChoices = pickNodeChoicesForDepthV2(actPool.normal, actIndex, depthIndex);
+                nodeChoices.forEach((nodeType, routeIndex) => {
+                    routes[routeIndex][depthIndex] = createDefaultRogueNodeState(
+                        nodeType,
+                        actIndex,
+                        depthIndex,
+                        { routeIndex }
+                    );
+                });
+            });
+            const climaxNode = createDefaultRogueNodeState(actPool.elite, actIndex, 3, { routeIndex: 0 });
+            return { actIndex, routes, climaxNode };
+        });
+        return { acts };
+    }
+
+    function createDefaultRogueRunStateV2(loadoutId) {
+        const loadout = ROGUE_V2_STARTER_LOADOUTS[loadoutId] || ROGUE_V2_STARTER_LOADOUTS.planter;
+        const inventory = createEmptyInventory();
+        Object.entries(loadout.startInventory || {}).forEach(([itemId, amount]) => {
+            if (!ITEM_META[itemId]) return;
+            inventory[itemId] = Math.max(0, Math.floor(Number(amount) || 0));
+        });
+        return {
+            version: 2,
+            loadoutId: loadout.id,
+            actIndex: 1,
+            depthIndex: 0,
+            routeIndex: null,
+            mapSeed: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            map: createRogueMapStateV2(),
+            currentNode: null,
+            morale: 3,
+            moraleCap: 3,
+            runCoins: loadout.startCoins,
+            runInventory: inventory,
+            farm: {
+                plots: Array.from({ length: 6 }, () => createEmptyFarmPlotState())
+            },
+            pasture: {
+                animals: createInitialPastureAnimals()
+            },
+            relics: loadout.starterRelicId ? [loadout.starterRelicId] : [],
+            blessings: [],
+            consumables: [],
+            relicDraftsClaimed: 0,
+            clearedNormalNodes: 0,
+            currentDraft: null,
+            currentEvent: null,
+            currentMerchant: null,
+            currentBoss: null,
+            currentMarketOrder: null,
+            failShieldUsed: false,
+            reviveUsed: false,
+            completed: false,
+            victory: false
+        };
+    }
+
     function createEmptyFarmPlotState() {
         return {
             state: 'empty',
@@ -492,22 +749,65 @@
         ];
     }
 
-    function createDefaultRogueRun(completedRuns = 0) {
+    function normalizeRogueMetaStateV2(rawState) {
+        const defaults = createDefaultRogueMetaStateV2();
+        if (!rawState || typeof rawState !== 'object') return defaults;
+        const workshopLevels = rawState.workshopLevels && typeof rawState.workshopLevels === 'object'
+            ? Object.keys(rawState.workshopLevels).reduce((result, key) => {
+                result[key] = Math.max(0, Math.floor(Number(rawState.workshopLevels[key]) || 0));
+                return result;
+            }, {})
+            : {};
         return {
-            runId: `rogue_run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-            stage: 'farm',
-            progress: {
-                farmHarvests: 0,
-                pastureHarvests: 0,
-                kitchenSuccesses: 0,
-                ordersCompleted: 0
-            },
-            selectedCards: [],
-            activeModifiers: {},
-            currentOffer: null,
-            currentSupplyOffer: null,
-            currentOrder: null,
-            completedRuns: Math.max(0, Math.floor(Number(completedRuns) || 0))
+            workshopCurrency: Math.max(0, Math.floor(Number(rawState.workshopCurrency) || 0)),
+            ascensionLevel: Math.max(0, Math.floor(Number(rawState.ascensionLevel) || 0)),
+            highestActCleared: Math.max(0, Math.floor(Number(rawState.highestActCleared) || 0)),
+            unlockedLoadouts: Array.isArray(rawState.unlockedLoadouts)
+                ? rawState.unlockedLoadouts.filter((item) => !!ROGUE_V2_STARTER_LOADOUTS[item])
+                : defaults.unlockedLoadouts,
+            workshopLevels,
+            seenRelics: Array.isArray(rawState.seenRelics) ? rawState.seenRelics.filter((id) => !!ROGUE_RELIC_POOL_V2[id]) : [],
+            seenEvents: Array.isArray(rawState.seenEvents) ? rawState.seenEvents.filter((id) => !!ROGUE_EVENT_POOL_V2[id]) : []
+        };
+    }
+
+    function normalizeRogueRunStateV2(rawState) {
+        if (!rawState || typeof rawState !== 'object' || Number(rawState.version) !== 2) return null;
+        const loadoutId = ROGUE_V2_STARTER_LOADOUTS[rawState.loadoutId] ? rawState.loadoutId : 'planter';
+        const defaults = createDefaultRogueRunStateV2(loadoutId);
+        const inventory = createEmptyInventory();
+        Object.keys(inventory).forEach((itemId) => {
+            inventory[itemId] = Math.max(0, Math.floor(Number(rawState.runInventory && rawState.runInventory[itemId]) || 0));
+        });
+        return {
+            ...defaults,
+            loadoutId,
+            actIndex: Math.max(1, Math.min(3, Math.floor(Number(rawState.actIndex) || 1))),
+            depthIndex: Math.max(0, Math.min(3, Math.floor(Number(rawState.depthIndex) || 0))),
+            routeIndex: Number.isFinite(Number(rawState.routeIndex)) ? Number(rawState.routeIndex) : null,
+            mapSeed: rawState.mapSeed ? String(rawState.mapSeed) : defaults.mapSeed,
+            map: rawState.map && typeof rawState.map === 'object' ? rawState.map : defaults.map,
+            currentNode: rawState.currentNode && typeof rawState.currentNode === 'object' ? rawState.currentNode : null,
+            morale: Math.max(0, Math.floor(Number(rawState.morale) || defaults.morale)),
+            moraleCap: Math.max(1, Math.floor(Number(rawState.moraleCap) || defaults.moraleCap)),
+            runCoins: Math.max(0, Math.floor(Number(rawState.runCoins) || defaults.runCoins)),
+            runInventory: inventory,
+            farm: rawState.farm && typeof rawState.farm === 'object' ? rawState.farm : defaults.farm,
+            pasture: rawState.pasture && typeof rawState.pasture === 'object' ? rawState.pasture : defaults.pasture,
+            relics: Array.isArray(rawState.relics) ? rawState.relics.filter((id) => !!ROGUE_RELIC_POOL_V2[id]) : defaults.relics,
+            blessings: Array.isArray(rawState.blessings) ? rawState.blessings.filter((id) => !!ROGUE_RELIC_POOL_V2[id]) : [],
+            consumables: Array.isArray(rawState.consumables) ? rawState.consumables : [],
+            relicDraftsClaimed: Math.max(0, Math.floor(Number(rawState.relicDraftsClaimed) || 0)),
+            clearedNormalNodes: Math.max(0, Math.floor(Number(rawState.clearedNormalNodes) || 0)),
+            currentDraft: rawState.currentDraft || null,
+            currentEvent: rawState.currentEvent || null,
+            currentMerchant: rawState.currentMerchant || null,
+            currentBoss: rawState.currentBoss || null,
+            currentMarketOrder: rawState.currentMarketOrder || null,
+            failShieldUsed: !!rawState.failShieldUsed,
+            reviveUsed: !!rawState.reviveUsed,
+            completed: !!rawState.completed,
+            victory: !!rawState.victory
         };
     }
 
@@ -567,40 +867,7 @@
         };
     }
 
-    function normalizeRogueRun(rawRun) {
-        const defaults = createDefaultRogueRun(rawRun && rawRun.completedRuns);
-        if (!rawRun || typeof rawRun !== 'object') return defaults;
-        const progressSource = rawRun.progress && typeof rawRun.progress === 'object' ? rawRun.progress : {};
-        const activeModifiers = {};
-        Object.keys(ROGUE_CARD_POOL).forEach((cardId) => {
-            const normalizedModifier = normalizeRogueModifierState(rawRun.activeModifiers && rawRun.activeModifiers[cardId]);
-            if (!normalizedModifier) return;
-            if (normalizedModifier.remaining === 0 && normalizedModifier.value === null && !normalizedModifier.flags.length) return;
-            activeModifiers[cardId] = normalizedModifier;
-        });
-        return {
-            ...defaults,
-            runId: rawRun.runId ? String(rawRun.runId) : defaults.runId,
-            stage: ROGUE_STAGE_LABELS[rawRun.stage] ? rawRun.stage : defaults.stage,
-            progress: {
-                farmHarvests: isFiniteNumber(Number(progressSource.farmHarvests)) ? Math.max(0, Math.floor(Number(progressSource.farmHarvests))) : 0,
-                pastureHarvests: isFiniteNumber(Number(progressSource.pastureHarvests)) ? Math.max(0, Math.floor(Number(progressSource.pastureHarvests))) : 0,
-                kitchenSuccesses: isFiniteNumber(Number(progressSource.kitchenSuccesses)) ? Math.max(0, Math.floor(Number(progressSource.kitchenSuccesses))) : 0,
-                ordersCompleted: isFiniteNumber(Number(progressSource.ordersCompleted)) ? Math.max(0, Math.floor(Number(progressSource.ordersCompleted))) : 0
-            },
-            selectedCards: Array.isArray(rawRun.selectedCards)
-                ? Array.from(new Set(rawRun.selectedCards.filter((cardId) => ROGUE_CARD_POOL[cardId]))).slice(0, 4)
-                : [],
-            activeModifiers,
-            currentOffer: normalizeRogueOffer(rawRun.currentOffer),
-            currentSupplyOffer: normalizeRogueSupplyOffer(rawRun.currentSupplyOffer),
-            currentOrder: normalizeRogueOrder(rawRun.currentOrder),
-            completedRuns: isFiniteNumber(Number(rawRun.completedRuns)) ? Math.max(0, Math.floor(Number(rawRun.completedRuns))) : defaults.completedRuns
-        };
-    }
-
     function createDefaultGardenGameState(options) {
-        const includeRogue = !!(options && options.includeRogue);
         const baseState = {
             coins: 250,
             inventory: createEmptyInventory(),
@@ -617,14 +884,7 @@
                 tab: 'crops'
             }
         };
-        if (includeRogue) {
-            baseState.rogueRun = createDefaultRogueRun(0);
-        }
         return baseState;
-    }
-
-    function createDefaultRogueActivityGameState() {
-        return createDefaultGardenGameState({ includeRogue: true });
     }
 
     function isFiniteNumber(value) {
@@ -746,9 +1006,8 @@
         return animal;
     }
 
-    function normalizeGardenGameState(rawState, options) {
-        const includeRogue = !!(options && options.includeRogue);
-        const defaults = includeRogue ? createDefaultRogueActivityGameState() : createDefaultGardenGameState();
+    function normalizeGardenGameState(rawState) {
+        const defaults = createDefaultGardenGameState();
         const now = Date.now();
         if (!rawState || typeof rawState !== 'object') return defaults;
 
@@ -775,48 +1034,77 @@
                 tab: sanitizeStorageTab(rawState.storage && rawState.storage.tab)
             }
         };
-        if (includeRogue) {
-            normalizedState.rogueRun = normalizeRogueRun(rawState.rogueRun);
-        }
         return normalizedState;
     }
 
     function getGardenGameStorageKey(mode) {
-        return mode === 'rogue_activity' ? GARDEN_ROGUE_ACTIVITY_STATE_STORAGE_KEY : GARDEN_GAME_STATE_STORAGE_KEY;
+        return mode === 'casual' ? GARDEN_GAME_STATE_STORAGE_KEY : GARDEN_GAME_STATE_STORAGE_KEY;
     }
 
     function loadGardenGameState(mode = 'casual') {
-        const isRogueActivity = mode === 'rogue_activity';
-        const defaultState = isRogueActivity ? createDefaultRogueActivityGameState() : createDefaultGardenGameState();
+        const defaultState = createDefaultGardenGameState();
         try {
             const raw = window.localStorage.getItem(getGardenGameStorageKey(mode));
             if (!raw) return defaultState;
-            return normalizeGardenGameState(JSON.parse(raw), { includeRogue: isRogueActivity });
+            return normalizeGardenGameState(JSON.parse(raw));
         } catch (error) {
             return defaultState;
         }
     }
 
-    function hasPersistedRogueActivitySave() {
+    function hasPersistedRogueRunV2() {
         try {
-            return !!window.localStorage.getItem(GARDEN_ROGUE_ACTIVITY_STATE_STORAGE_KEY);
+            return !!window.localStorage.getItem(GARDEN_ROGUE_RUN_STORAGE_KEY_V2);
         } catch (error) {
             return false;
         }
     }
 
+    function loadRogueMetaStateV2() {
+        try {
+            const raw = window.localStorage.getItem(GARDEN_ROGUE_META_STORAGE_KEY_V2);
+            return raw ? normalizeRogueMetaStateV2(JSON.parse(raw)) : createDefaultRogueMetaStateV2();
+        } catch (error) {
+            return createDefaultRogueMetaStateV2();
+        }
+    }
+
+    function saveRogueMetaStateV2() {
+        if (!state.rogueMetaV2) return;
+        try {
+            window.localStorage.setItem(GARDEN_ROGUE_META_STORAGE_KEY_V2, JSON.stringify(state.rogueMetaV2));
+        } catch (error) {
+            return;
+        }
+    }
+
+    function loadRogueRunStateV2() {
+        try {
+            const raw = window.localStorage.getItem(GARDEN_ROGUE_RUN_STORAGE_KEY_V2);
+            return raw ? normalizeRogueRunStateV2(JSON.parse(raw)) : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function saveRogueRunStateV2() {
+        if (!state.rogueRunV2) return;
+        try {
+            window.localStorage.setItem(GARDEN_ROGUE_RUN_STORAGE_KEY_V2, JSON.stringify(state.rogueRunV2));
+        } catch (error) {
+            return;
+        }
+    }
+
     function syncGardenGameReference() {
-        state.gardenGame = state.gardenMode === 'rogue_activity'
-            ? state.rogueActivityGame
-            : state.casualGardenGame;
+        state.gardenGame = state.casualGardenGame;
     }
 
     function saveGardenGameState() {
-        const mode = state.gardenMode === 'rogue_activity' ? 'rogue_activity' : 'casual';
-        const gameState = mode === 'rogue_activity' ? state.rogueActivityGame : state.casualGardenGame;
+        const gameState = state.casualGardenGame;
         if (!gameState) return;
         try {
-            window.localStorage.setItem(getGardenGameStorageKey(mode), JSON.stringify(gameState));
+            window.localStorage.setItem(GARDEN_GAME_STATE_STORAGE_KEY, JSON.stringify(gameState));
         } catch (error) {
             return;
         }
@@ -824,9 +1112,6 @@
 
     function setGardenMode(mode) {
         const nextMode = mode === 'rogue_activity' ? 'rogue_activity' : 'casual';
-        if (nextMode === 'rogue_activity' && !state.rogueActivityGame) {
-            state.rogueActivityGame = loadGardenGameState('rogue_activity');
-        }
         if (nextMode === 'casual' && !state.casualGardenGame) {
             state.casualGardenGame = loadGardenGameState('casual');
         }
@@ -839,15 +1124,1202 @@
     }
 
     function getInventoryCount(itemId) {
+        if (!ITEM_META[itemId]) return 0;
+        if (isRogueActivityMode() && state.rogueRunV2 && state.rogueRunV2.runInventory) {
+            return Math.max(0, Math.floor(Number(state.rogueRunV2.runInventory[itemId]) || 0));
+        }
         return state.gardenGame && state.gardenGame.inventory && isFiniteNumber(Number(state.gardenGame.inventory[itemId]))
             ? Math.max(0, Math.floor(Number(state.gardenGame.inventory[itemId])))
             : 0;
     }
 
     function addInventoryItem(itemId, amount) {
-        if (!state.gardenGame || !ITEM_META[itemId]) return;
+        if (!ITEM_META[itemId]) return;
         const nextAmount = Math.max(0, getInventoryCount(itemId) + amount);
+        if (isRogueActivityMode() && state.rogueRunV2 && state.rogueRunV2.runInventory) {
+            state.rogueRunV2.runInventory[itemId] = nextAmount;
+            return;
+        }
+        if (!state.gardenGame) return;
         state.gardenGame.inventory[itemId] = nextAmount;
+    }
+
+    function getRogueRunV2() {
+        return state.rogueRunV2;
+    }
+
+    function ensureRogueMetaV2() {
+        if (!state.rogueMetaV2) {
+            state.rogueMetaV2 = loadRogueMetaStateV2();
+        }
+        return state.rogueMetaV2;
+    }
+
+    function getRogueRunInventoryCount(itemId) {
+        const run = getRogueRunV2();
+        if (!run || !ITEM_META[itemId]) return 0;
+        return Math.max(0, Math.floor(Number(run.runInventory[itemId]) || 0));
+    }
+
+    function addRogueRunInventoryItem(itemId, amount) {
+        const run = getRogueRunV2();
+        if (!run || !ITEM_META[itemId]) return;
+        run.runInventory[itemId] = Math.max(0, getRogueRunInventoryCount(itemId) + Math.floor(Number(amount) || 0));
+    }
+
+    function getRogueRelicDefs() {
+        const run = getRogueRunV2();
+        if (!run) return [];
+        return [...(run.relics || []), ...(run.blessings || [])]
+            .map((relicId) => ROGUE_RELIC_POOL_V2[relicId])
+            .filter(Boolean);
+    }
+
+    function getRogueRunToolsV2() {
+        const run = getRogueRunV2();
+        if (!run || !run.runTools) return {};
+        return run.runTools;
+    }
+
+    function getRogueToolCountV2(itemId) {
+        const tools = getRogueRunToolsV2();
+        return Math.max(0, Math.floor(Number(tools[itemId]) || 0));
+    }
+
+    function addRogueToolV2(itemId, amount) {
+        const run = getRogueRunV2();
+        if (!run || !ROGUE_ACTIVE_ITEM_POOL_V2[itemId]) return;
+        if (!run.runTools) run.runTools = {};
+        run.runTools[itemId] = Math.max(0, getRogueToolCountV2(itemId) + Math.floor(Number(amount) || 0));
+    }
+
+    function consumeRogueToolV2(itemId) {
+        if (getRogueToolCountV2(itemId) <= 0) return false;
+        addRogueToolV2(itemId, -1);
+        return true;
+    }
+
+    function ensureRogueGoalsV2(run) {
+        if (!run) return;
+        if (!run.runGoal) {
+            run.runGoal = {
+                title: '最终目标：完成三幕远征并击败最终 Boss 订单',
+                summary: '一路囤货、加工、卖货，把 build 叠到最后一波爆发。'
+            };
+        }
+        const actGoalMap = {
+            1: {
+                title: '第一幕目标：打好原料基础',
+                summary: '优先拿作物和畜产，攒出第一波能加工的库存。'
+            },
+            2: {
+                title: '第二幕目标：开始加工成型',
+                summary: '让农牧产出开始喂厨房，把原料变成高价值熟食。'
+            },
+            3: {
+                title: '第三幕目标：卖货爆仓',
+                summary: '围绕市场订单与 Boss 三段式目标，把收益一次性兑现。'
+            }
+        };
+        run.actGoal = actGoalMap[run.actIndex] || actGoalMap[1];
+        if (!run.nodeGoal || typeof run.nodeGoal !== 'object') {
+            run.nodeGoal = {
+                title: '当前节点目标待生成',
+                progressText: '待推进',
+                progressValue: 0,
+                progressMax: 1,
+                action: '进入当前节点后刷新',
+                reward: '推进本幕进度'
+            };
+        }
+    }
+
+    function getRogueRewardRecommendationV2(option, runState) {
+        const run = runState || getRogueRunV2();
+        if (!option || !run) return '适合作为当前过渡强化。';
+        const actTitle = run.actGoal && run.actGoal.title ? run.actGoal.title : '';
+        if (option.id === 'pasture_whistle' || option.id === 'nutrient_feed') return `推荐：你当前在${actTitle || '本幕'}里需要补畜产，拿了就能更快接厨房。`;
+        if (option.id === 'fertilizer' || option.id === 'greenhouse_spray') return `推荐：你当前在${actTitle || '本幕'}里需要基础原料，农场道具会更顺手。`;
+        if (option.id === 'kitchen_spice') return '推荐：适合把当前熟食产能再往上推一档。';
+        if (option.id === 'market_coupon') return '推荐：适合第三幕或订单节点冲一波高收益。';
+        if (option.effects && option.effects.orderBonus) return '推荐：你的后期收益主要靠订单兑现，这个会很值。';
+        if (option.effects && (option.effects.harvestBonus || option.effects.allHarvestFlatBonus)) return '推荐：你现在最缺的是把原料盘子做大。';
+        if (option.effects && option.effects.kitchenOutputBonus) return '推荐：适合把厨房节点变成真正的爆发点。';
+        return '推荐：作为当前 build 的稳定补强。';
+    }
+
+    function openRogueRunIntroV2() {
+        const run = getRogueRunV2();
+        if (!rogueIntroModalEl || !run) return;
+        ensureRogueGoalsV2(run);
+        const loadout = ROGUE_V2_STARTER_LOADOUTS[run.loadoutId] || ROGUE_V2_STARTER_LOADOUTS.planter;
+        const starterRelic = loadout.starterRelicId ? ROGUE_RELIC_POOL_V2[loadout.starterRelicId] : null;
+        if (rogueIntroTitleEl) rogueIntroTitleEl.textContent = '本局要做什么';
+        if (rogueIntroDescEl) rogueIntroDescEl.textContent = '先看这 20 秒简报，再开始这趟远征。';
+        if (rogueIntroBodyEl) {
+            rogueIntroBodyEl.innerHTML = `
+                <div class="garden-rogue-intro-section"><strong>长期目标</strong><span>${run.runGoal.title}</span><em>${run.runGoal.summary}</em></div>
+                <div class="garden-rogue-intro-section"><strong>本幕目标</strong><span>${run.actGoal.title}</span><em>${run.actGoal.summary}</em></div>
+                <div class="garden-rogue-intro-section"><strong>开局第一步</strong><span>优先选能补原料的节点，先做出第一波库存，再转去厨房或市场兑现。</span><em>去节点完成目标 → 拿奖励堆 build → 最后靠厨房 / 市场 / Boss 爆发。</em></div>
+                <div class="garden-rogue-intro-stats">
+                    <div>起始流派：${loadout.name}</div>
+                    <div>局内金币：${run.runCoins}</div>
+                    <div>初始士气：${run.morale}/${run.moraleCap}</div>
+                    <div>起始遗物：${starterRelic ? starterRelic.title : '暂无'}</div>
+                </div>
+            `;
+        }
+        state.rogueIntroOpen = true;
+        rogueIntroModalEl.classList.add('is-open');
+        rogueIntroModalEl.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeRogueIntroV2() {
+        state.rogueIntroOpen = false;
+        if (!rogueIntroModalEl) return;
+        rogueIntroModalEl.classList.remove('is-open');
+        rogueIntroModalEl.setAttribute('aria-hidden', 'true');
+    }
+
+    function confirmRogueRunIntroV2() {
+        const run = getRogueRunV2();
+        if (!run) return;
+        run.introConfirmed = true;
+        saveRogueRunStateV2();
+        closeRogueIntroV2();
+        if (run.currentDraft) {
+            renderRogueOfferModal();
+        } else if (run.currentNode) {
+            openCurrentRogueStageScreen();
+        } else {
+            openRogueNodeChoicesV2();
+        }
+    }
+
+    function openRogueBuffPanelV2() {
+        if (!rogueBuffPanelEl) return;
+        renderRogueBuffPanelV2();
+        state.rogueBuffPanelOpen = true;
+        rogueBuffPanelEl.classList.add('is-open');
+        rogueBuffPanelEl.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeRogueBuffPanelV2() {
+        state.rogueBuffPanelOpen = false;
+        if (!rogueBuffPanelEl) return;
+        rogueBuffPanelEl.classList.remove('is-open');
+        rogueBuffPanelEl.setAttribute('aria-hidden', 'true');
+    }
+
+    function getRogueBuffSummaryTextV2() {
+        const relics = getRogueRelicDefs().slice(0, 2).map((entry) => entry.title);
+        const tools = Object.keys(getRogueRunToolsV2()).filter((itemId) => getRogueToolCountV2(itemId) > 0).slice(0, 1).map((itemId) => `${ROGUE_ACTIVE_ITEM_POOL_V2[itemId].name} x${getRogueToolCountV2(itemId)}`);
+        const parts = [...relics, ...tools].filter(Boolean);
+        return parts.length ? parts.join(' · ') : '暂无强增益，先完成节点拿奖励';
+    }
+
+    function renderRogueBuffPanelV2() {
+        if (!rogueBuffPanelListEl) return;
+        const relicCards = getRogueRelicDefs().map((entry) => `
+            <div class="garden-rogue-buff-card">
+                <div class="garden-rogue-buff-card-title">${entry.title}</div>
+                <div class="garden-rogue-buff-card-desc">${entry.desc}</div>
+                <div class="garden-rogue-buff-card-tip">${getRogueRewardRecommendationV2(entry)}</div>
+            </div>
+        `).join('');
+        const toolCards = Object.keys(ROGUE_ACTIVE_ITEM_POOL_V2)
+            .filter((itemId) => getRogueToolCountV2(itemId) > 0)
+            .map((itemId) => {
+                const tool = ROGUE_ACTIVE_ITEM_POOL_V2[itemId];
+                return `
+                    <div class="garden-rogue-buff-card">
+                        <div class="garden-rogue-buff-card-title">${tool.emoji} ${tool.name} x${getRogueToolCountV2(itemId)}</div>
+                        <div class="garden-rogue-buff-card-desc">${tool.desc}</div>
+                        <div class="garden-rogue-buff-card-tip">${tool.recommendedUse}</div>
+                    </div>
+                `;
+            }).join('');
+        rogueBuffPanelListEl.innerHTML = relicCards || toolCards
+            ? `${relicCards}${toolCards}`
+            : '<div class="garden-rogue-buff-empty">当前还没有生效中的强增益，继续推进节点就会慢慢成型。</div>';
+    }
+
+    function getRogueCurrentNodeLabel() {
+        const run = getRogueRunV2();
+        if (!run || !run.currentNode) return '尚未进入节点';
+        const nodeLabel = ROGUE_V2_NODE_LABELS[run.currentNode.type] || run.currentNode.type;
+        return `${ROGUE_V2_ACT_LABELS[run.currentNode.actIndex] || '远征中'} · ${nodeLabel}`;
+    }
+
+    function getRogueGoalTextV2() {
+        const run = getRogueRunV2();
+        const isInActivitiesView = state.currentView === 'activities';
+        if (!run) return '先点“开始远征”，选一个起始流派后进入第一幕。';
+        if (run.completed) {
+            return run.victory ? '本轮已通关。下一步可以去工坊强化，或者重新开始新一局。' : '本轮已结束。下一步可以重新开始远征。';
+        }
+        if (!isInActivitiesView) {
+            return '当前任务：先切到底栏“活动”，再点“继续远征”进入当前节点。';
+        }
+        if (run.currentDraft) return '下一步：先从 3 个奖励里选 1 个，这是你 build 变强的核心来源。';
+        if (run.currentNode && run.currentNode.type === 'rest') return '下一步：在休整弹层里二选一，拿完收益后会自动进入下一层选路。';
+        if (run.currentEvent) return '下一步：先完成当前奇遇选择，拿收益或承担代价后再继续。';
+        if (run.currentMerchant) return '下一步：决定要不要在商店花局内金币补强遗物和资源。';
+        if (run.currentBoss) return '下一步：完成 Boss 的三段式目标，依次筹备原料、加工菜品、完成交付。';
+        if (run.currentMarketOrder) return '当前任务：完成市场订单，按要求卖出物资后拿局内金币与推进奖励。';
+        if (run.currentNode && run.currentNode.type === 'farm') return '当前任务：进入农场节点，完成这一轮播种 / 收获目标。';
+        if (run.currentNode && run.currentNode.type === 'pasture') return '当前任务：进入牧场节点，完成喂食 / 收获目标。';
+        if (run.currentNode && run.currentNode.type === 'kitchen') return '当前任务：进入厨房节点，做出本轮要求的料理。';
+        if (run.currentNode && run.currentNode.type === 'merchant') return '当前任务：打开商店，决定是否花局内金币购买强化。';
+        if (run.currentNode && run.currentNode.type === 'event') return '当前任务：处理当前奇遇，做出一次风险收益选择。';
+        if (run.currentNode && run.currentNode.type === 'elite') return '当前任务：完成精英经营挑战，这是本幕的强度检定点。';
+        if (run.currentNode) return `当前任务：进入${ROGUE_V2_NODE_LABELS[run.currentNode.type] || run.currentNode.type}节点并完成它。`;
+        return '下一步：从当前幕的分支路线里选 1 个节点继续推进。';
+    }
+
+    function getRogueHintTextV2() {
+        const run = getRogueRunV2();
+        const isInActivitiesView = state.currentView === 'activities';
+        if (!run) return '目标是用 3 幕大约 12 个遭遇，把遗物 build 叠起来，最后打爆最终 Boss 订单。';
+        if (run.completed) return run.victory ? '通关后会获得工坊徽章，可用来强化后续开局和路线控制。' : '失败也能积累经验，优先提升工坊开局资源和士气上限会更稳。';
+        if (!isInActivitiesView) return '你现在不在远征主界面，所以只看得到摘要。切到“活动”后，入口按钮会直接带你去当前节点。';
+        if (run.currentDraft) return '优先拿能跨阶段联动的遗物，例如产量 → 厨房减耗 → 市场溢价。';
+        if (run.currentNode && run.currentNode.type === 'farm') return '农场节点的价值在于给后续厨房和市场准备原料，不只是当前收益。';
+        if (run.currentNode && run.currentNode.type === 'pasture') return '牧场节点会补足蛋、奶、猪肉等高价值材料，后续很多强配方都靠它。';
+        if (run.currentNode && run.currentNode.type === 'kitchen') return '厨房节点要尽量把原料转成高价值熟食，方便第三幕爆发。';
+        if (run.currentNode && run.currentNode.type === 'market') return '市场节点是把 build 兑现成大量金币和订单奖励的关键节点。';
+        if (run.currentNode && run.currentNode.type === 'rest') return '如果士气低就优先回复；如果状态稳，就复制高价值库存滚雪球。';
+        if (run.currentBoss) return 'Boss 是整局爆发点，前面攒的库存、遗物和链式收益都会在这里兑现。';
+        return '普通节点每清 2 个会触发一次 3 选 1 奖励，所以路线长度本身就是强度来源。';
+    }
+
+    function getRogueTaskCardV2() {
+        const run = getRogueRunV2();
+        const isInActivitiesView = state.currentView === 'activities';
+        if (!run) {
+            return {
+                title: '主任务：开始一局远征',
+                progress: '进度：未开始',
+                action: '操作：点击“开始远征” → 选择起始流派',
+                value: '意义：先确定这一局的 build 方向和开局资源。'
+            };
+        }
+        if (run.completed) {
+            return {
+                title: run.victory ? '主任务：本轮已通关' : '主任务：本轮已结束',
+                progress: run.victory ? '进度：最终 Boss 已完成' : '进度：远征中断',
+                action: run.victory ? '操作：去工坊强化，或者重新开始新一局' : '操作：重新开始远征，并优先补强工坊',
+                value: '意义：把局内收益转成长期成长，下一局会更稳定。'
+            };
+        }
+        if (!isInActivitiesView) {
+            return {
+                title: '主任务：回到远征主界面',
+                progress: `进度：当前节点为 ${ROGUE_V2_NODE_LABELS[run.currentNode ? run.currentNode.type : 'farm'] || '未定节点'}`,
+                action: '操作：切到底栏“活动” → 点“继续远征”',
+                value: '意义：只有在活动页里，你才能真正进入当前节点并推进这一局。'
+            };
+        }
+        if (run.currentDraft) {
+            const draftCount = Array.isArray(run.currentDraft.relicIds) ? run.currentDraft.relicIds.length : 0;
+            return {
+                title: '主任务：选择 1 个奖励',
+                progress: `进度：可选奖励 ${draftCount}/3`,
+                action: '操作：从弹层 3 选 1，优先拿能跨阶段联动的遗物',
+                value: '意义：遗物是这一局最核心的强度来源，越早成型越容易滚雪球。'
+            };
+        }
+        if (run.currentNode && run.currentNode.type === 'farm') {
+            const readyPlots = (run.farm && Array.isArray(run.farm.plots) ? run.farm.plots : []).filter((plot) => plot && plot.state === 'ready').length;
+            const plantedPlots = (run.farm && Array.isArray(run.farm.plots) ? run.farm.plots : []).filter((plot) => plot && plot.state === 'growing').length;
+            const harvestCount = Math.max(0, Math.floor(Number(run.currentNode.harvestCount) || 0));
+            return {
+                title: '主任务：完成农场节点',
+                progress: `进度：已收获 ${harvestCount}/1 · 成熟地块 ${readyPlots} · 生长中 ${plantedPlots}`,
+                action: '操作：进入农场，先播种，再收获成熟作物',
+                value: '意义：农场原料会喂给后续厨房和市场，是整局经济的起点。'
+            };
+        }
+        if (run.currentNode && run.currentNode.type === 'pasture') {
+            const animals = run.pasture && Array.isArray(run.pasture.animals) ? run.pasture.animals : [];
+            const readyAnimals = animals.filter((animal) => animal && animal.state === 'ready').length;
+            const hungryAnimals = animals.filter((animal) => animal && animal.state === 'hungry').length;
+            const harvestCount = Math.max(0, Math.floor(Number(run.currentNode.harvestCount) || 0));
+            return {
+                title: '主任务：完成牧场节点',
+                progress: `进度：已收获 ${harvestCount}/1 · 可收获动物 ${readyAnimals} · 待喂食动物 ${hungryAnimals}`,
+                action: '操作：进入牧场，先喂食，再收获已经完成生产的动物',
+                value: '意义：蛋、奶、猪肉是高价值料理的重要原料。'
+            };
+        }
+        if (run.currentNode && run.currentNode.type === 'kitchen') {
+            const cookableRecipes = KITCHEN_RECIPES.filter((recipe) => hasInventoryItems(recipe.ingredients || {})).length;
+            return {
+                title: '主任务：完成厨房节点',
+                progress: `进度：当前可做配方 ${cookableRecipes} 个`,
+                action: '操作：进入厨房，选择可做菜谱并完成 QTE',
+                value: '意义：把原料加工成熟食，通常能显著提高第三幕的兑现效率。'
+            };
+        }
+        if (run.currentNode && run.currentNode.type === 'market') {
+            const lines = run.currentMarketOrder && Array.isArray(run.currentMarketOrder.lines) ? run.currentMarketOrder.lines : [];
+            const done = lines.filter((line) => (line.fulfilledQty || 0) >= (line.requiredQty || 0)).length;
+            return {
+                title: '主任务：完成市场订单',
+                progress: `进度：订单条目 ${done}/${lines.length || 0}`,
+                action: '操作：进入仓库，按订单卖出指定物资',
+                value: '意义：市场节点会把你前面囤的货直接兑现成大量局内收益。'
+            };
+        }
+        if (run.currentNode && run.currentNode.type === 'rest') {
+            return {
+                title: '主任务：完成休整选择',
+                progress: `进度：当前士气 ${run.morale}/${run.moraleCap}`,
+                action: '操作：在休整弹层里二选一，回复士气或复制库存',
+                value: '意义：休整能补容错，或者把优势库存继续滚大。'
+            };
+        }
+        if (run.currentNode && run.currentNode.type === 'merchant') {
+            return {
+                title: '主任务：处理商店节点',
+                progress: `进度：局内金币 ${run.runCoins || 0}`,
+                action: '操作：查看商店货物，决定是否花钱买强化',
+                value: '意义：商店能补遗物、资源和关键过渡强度。'
+            };
+        }
+        if (run.currentNode && run.currentNode.type === 'event') {
+            return {
+                title: '主任务：完成奇遇选择',
+                progress: '进度：等待做出一次事件决策',
+                action: '操作：选择更适合当前 build 的风险收益分支',
+                value: '意义：事件往往能提供爆发收益，但也可能带来代价。'
+            };
+        }
+        if (run.currentNode && run.currentNode.type === 'elite') {
+            return {
+                title: '主任务：击破精英经营节点',
+                progress: `进度：第 ${run.actIndex} 幕高潮节点`,
+                action: '操作：进入挑战，完成这一幕的高压经营目标',
+                value: '意义：精英奖励更强，是 build 成型的重要拐点。'
+            };
+        }
+        if (run.currentBoss) {
+            return {
+                title: '主任务：完成最终 Boss 订单',
+                progress: `进度：Boss 第 ${Math.max(1, Math.floor(Number(run.currentBoss.phase) || 1))}/3 段`,
+                action: '操作：按阶段准备原料、加工菜品并完成最终交付',
+                value: '意义：这是整局 build 的最终兑现点，通关奖励也最高。'
+            };
+        }
+        return {
+            title: '主任务：选择下一条路线',
+            progress: `进度：第 ${run.actIndex} 幕 · 第 ${Math.min(run.depthIndex + 1, 4)} 层`,
+            action: '操作：在分支路线中选择 1 个节点继续推进',
+            value: '意义：路线长度决定你能拿多少遗物和 build 组件。'
+        };
+    }
+
+    function getRogueNodeObjectiveV2() {
+        const run = getRogueRunV2();
+        if (!run) {
+            return {
+                title: '开始一局远征',
+                progressText: '未开始',
+                progressValue: 0,
+                progressMax: 1,
+                action: '点击开始远征并选择起始流派',
+                reward: '开始构筑本局 build',
+                purpose: '先明确这把的主线目标，再开局会更顺。',
+                recommendedNextStep: '选择流派并阅读开局简报'
+            };
+        }
+        ensureRogueGoalsV2(run);
+        if (run.completed) {
+            return {
+                title: run.victory ? '本轮远征已通关' : '本轮远征已结束',
+                progressText: run.victory ? '1/1' : '0/1',
+                progressValue: run.victory ? 1 : 0,
+                progressMax: 1,
+                action: run.victory ? '去工坊强化或直接开启新一局' : '重新开启一局远征',
+                reward: '结算局外成长与奖励',
+                purpose: '这一局已经收尾，下一步是结算和长期成长。',
+                recommendedNextStep: run.victory ? '先去工坊补强开局' : '重开并优先补稳定资源'
+            };
+        }
+        if (run.currentDraft) {
+            return {
+                title: '选择 1 个奖励',
+                progressText: `${Array.isArray(run.currentDraft.relicIds) ? run.currentDraft.relicIds.length : 0}/3 候选`,
+                progressValue: 0,
+                progressMax: 1,
+                action: '从 3 个奖励里选择当前最适合 build 的一个',
+                reward: '立即强化本局 build',
+                purpose: run.actGoal.summary,
+                recommendedNextStep: '优先拿最能服务当前幕目标的奖励'
+            };
+        }
+        if (!run.currentNode) {
+            return {
+                title: '选择下一条路线',
+                progressText: `第 ${run.actIndex} 幕 · 第 ${Math.min(run.depthIndex + 1, 4)} 层`,
+                progressValue: 0,
+                progressMax: 1,
+                action: '从这一层的 3 个节点里选 1 个继续推进',
+                reward: '进入新节点并推进本幕进度',
+                purpose: run.actGoal.summary,
+                recommendedNextStep: '优先选能补你当前短缺资源的节点'
+            };
+        }
+        if (run.currentNode.type === 'farm') {
+            const current = Math.max(0, Math.floor(Number(run.currentNode.harvestCount) || 0));
+            return {
+                title: '收获 1 次作物',
+                progressText: `${current}/1`,
+                progressValue: current,
+                progressMax: 1,
+                action: '先播种、浇水，等成熟后收获 1 次作物',
+                reward: '完成农场节点并进入下一步',
+                purpose: '先补基础原料，为后续厨房或市场做准备。',
+                recommendedNextStep: '收完后考虑接牧场补蛋奶肉，或者直接进厨房'
+            };
+        }
+        if (run.currentNode.type === 'elite') {
+            const current = Math.max(0, Math.floor(Number(run.currentNode.harvestCount) || 0));
+            return {
+                title: '精英挑战：收获 3 次作物',
+                progressText: `${current}/3`,
+                progressValue: current,
+                progressMax: 3,
+                action: '连续完成 3 次收获，扛住这一幕的精英压力',
+                reward: '高稀有奖励与下一幕推进',
+                purpose: '精英是 build 检查点，通过后通常能直接进入强势期。',
+                recommendedNextStep: '拿完高稀有奖励后围绕新 build 改路线'
+            };
+        }
+        if (run.currentNode.type === 'pasture') {
+            const current = Math.max(0, Math.floor(Number(run.currentNode.harvestCount) || 0));
+            return {
+                title: '收获 1 次畜产',
+                progressText: `${current}/1`,
+                progressValue: current,
+                progressMax: 1,
+                action: '先喂食动物，再收获已完成生产的畜产',
+                reward: '完成牧场节点并进入下一步',
+                purpose: '蛋、奶、猪肉是很多高价值料理的关键原料。',
+                recommendedNextStep: '有可做菜谱时优先转厨房提高单位价值'
+            };
+        }
+        if (run.currentNode.type === 'kitchen') {
+            const current = Math.max(0, Math.floor(Number(run.currentNode.cookCount) || 0));
+            return {
+                title: '成功烹饪 1 道料理',
+                progressText: `${current}/1`,
+                progressValue: current,
+                progressMax: 1,
+                action: '选择一个可做菜谱并完成 QTE',
+                reward: '完成厨房节点并推进 build',
+                purpose: '把原料转成高价值熟食，是后期卖货爆发的关键。',
+                recommendedNextStep: '做完后优先看市场/订单是否能兑现'
+            };
+        }
+        if (run.currentNode.type === 'market') {
+            const lines = run.currentMarketOrder && Array.isArray(run.currentMarketOrder.lines) ? run.currentMarketOrder.lines : [];
+            const done = lines.filter((line) => (line.fulfilledQty || 0) >= (line.requiredQty || 0)).length;
+            return {
+                title: '完成 1 张市场订单',
+                progressText: `${done}/${lines.length || 1}`,
+                progressValue: done,
+                progressMax: Math.max(1, lines.length),
+                action: '去仓库卖出订单需要的物资',
+                reward: '获得局内金币并完成市场节点',
+                purpose: '这是把 build 兑现成大量收益的核心节点。',
+                recommendedNextStep: '优先交付高价值订单线，准备下一次爆发'
+            };
+        }
+        if (run.currentNode.type === 'rest') {
+            return {
+                title: '完成 1 次休整选择',
+                progressText: `士气 ${run.morale}/${run.moraleCap}`,
+                progressValue: 0,
+                progressMax: 1,
+                action: '在休整弹层中选择恢复士气或复制库存',
+                reward: '立刻获得休整收益并进入下一层',
+                purpose: '休整是修复容错或补一波库存节奏的节点。',
+                recommendedNextStep: run.morale < run.moraleCap ? '士气低时优先回复' : '状态稳时复制高价值库存'
+            };
+        }
+        if (run.currentNode.type === 'event') {
+            return {
+                title: '完成 1 次奇遇决策',
+                progressText: '等待选择',
+                progressValue: 0,
+                progressMax: 1,
+                action: '在奇遇弹层里选择一个分支结果',
+                reward: '获得风险收益并推进节点',
+                purpose: '奇遇是低成本补资源、补道具或赌高收益的捷径。',
+                recommendedNextStep: '优先选能直接服务当前幕目标的分支'
+            };
+        }
+        if (run.currentNode.type === 'merchant') {
+            return {
+                title: '完成 1 次商店处理',
+                progressText: `局内金币 ${run.runCoins}`,
+                progressValue: 0,
+                progressMax: 1,
+                action: '购买遗物，或者直接离开商店',
+                reward: '补强 build 后进入下一层',
+                purpose: '花局内金币换强度，是这局滚雪球的重要手段。',
+                recommendedNextStep: '优先买立刻能生效的强补强，而不是平均分散'
+            };
+        }
+        if (run.currentBoss) {
+            const phase = Math.max(1, Math.floor(Number(run.currentBoss.phase) || 1));
+            return {
+                title: '完成最终 Boss 三段式订单',
+                progressText: `${phase}/3 段`,
+                progressValue: phase,
+                progressMax: 3,
+                action: '依次完成筹备原料、加工菜品、最终交付',
+                reward: '通关整局远征',
+                purpose: '这是整局 build 的最终兑现点。',
+                recommendedNextStep: '先补足缺口最大的那类资源，再追求高价交付'
+            };
+        }
+        return {
+            title: '完成当前节点',
+            progressText: '待推进',
+            progressValue: 0,
+            progressMax: 1,
+            action: '根据当前节点类型完成对应操作',
+            reward: '继续本幕进度',
+            purpose: run.actGoal ? run.actGoal.summary : '继续推进这一幕。',
+            recommendedNextStep: '围绕当前幕目标继续补强'
+        };
+    }
+
+    function getRogueOrderTextV2() {
+        const run = getRogueRunV2();
+        if (!run) return '未开始';
+        if (run.currentMarketOrder && Array.isArray(run.currentMarketOrder.lines)) {
+            return run.currentMarketOrder.lines.map((line) => {
+                const meta = ITEM_META[line.itemId];
+                return `${meta ? meta.emoji : '📦'} ${meta ? meta.name : line.itemId} ${line.fulfilledQty || 0}/${line.requiredQty || 0}`;
+            }).join(' / ');
+        }
+        if (run.currentBoss) {
+            return `Boss 进度：第 ${Math.max(1, Math.floor(Number(run.currentBoss.phase) || 1))} / 3 段`;
+        }
+        return '当前没有活跃订单';
+    }
+
+    function renderRogueWorkshopListV2() {
+        const listEl = document.getElementById('garden-rogue-workshop-list');
+        const currencyEl = document.getElementById('garden-rogue-workshop-currency');
+        const meta = ensureRogueMetaV2();
+        if (currencyEl) currencyEl.textContent = `${meta.workshopCurrency} 徽章`;
+        if (!listEl) return;
+        const rows = [];
+        Object.keys(ROGUE_META_TREE_V2).forEach((groupKey) => {
+            (ROGUE_META_TREE_V2[groupKey] || []).forEach((entry) => {
+                const level = Math.max(0, Math.floor(Number(meta.workshopLevels[entry.id]) || 0));
+                const isMax = level >= entry.maxLevel;
+                const cost = entry.costBase * (level + 1);
+                rows.push(`
+                    <div class="garden-rogue-workshop-item">
+                        <div class="garden-rogue-workshop-copy">
+                            <div class="garden-rogue-workshop-title">${entry.name}</div>
+                            <div class="garden-rogue-workshop-desc">${entry.desc}</div>
+                            <div class="garden-rogue-workshop-meta">Lv.${level}/${entry.maxLevel} · 升级消耗 ${cost} 徽章</div>
+                        </div>
+                        <button class="garden-rogue-workshop-btn" data-rogue-workshop-upgrade="${entry.id}" type="button" ${isMax || meta.workshopCurrency < cost ? 'disabled' : ''}>${isMax ? '已满' : '升级'}</button>
+                    </div>
+                `);
+            });
+        });
+        listEl.innerHTML = rows.join('');
+    }
+
+    function renderRogueUiV2() {
+        const run = getRogueRunV2();
+        const relics = getRogueRelicDefs();
+        const taskCard = getRogueTaskCardV2();
+        const startRunBtn = document.getElementById('garden-rogue-start-run');
+        if (run) {
+            ensureRogueGoalsV2(run);
+            run.nodeGoal = getRogueNodeObjectiveV2();
+        }
+        if (rogueProgressStageEl) {
+            rogueProgressStageEl.textContent = run ? (ROGUE_V2_ACT_LABELS[run.actIndex] || '远征中') : '未开始';
+        }
+        if (rogueProgressCardsEl) {
+            const morale = run ? `${run.morale}/${run.moraleCap}` : '3/3';
+            rogueProgressCardsEl.textContent = `遗物 ${relics.length} / 士气 ${morale}`;
+        }
+        if (rogueProgressGoalEl) {
+            rogueProgressGoalEl.textContent = `${taskCard.title}｜${taskCard.progress}｜${run && run.actGoal ? run.actGoal.title : '未开始'}`;
+        }
+        if (rogueProgressOrderEl) {
+            rogueProgressOrderEl.textContent = `${taskCard.action}｜${taskCard.value}`;
+        }
+        if (rogueProgressPanelStageEl) {
+            rogueProgressPanelStageEl.textContent = run ? getRogueCurrentNodeLabel() : '请选择起始流派';
+        }
+        if (rogueProgressPanelGoalEl) {
+            const nodeGoal = run ? getRogueNodeObjectiveV2() : null;
+            rogueProgressPanelGoalEl.textContent = run
+                ? `${run.runGoal.title}
+${run.actGoal.title}
+${nodeGoal ? nodeGoal.title : taskCard.title}`
+                : `${taskCard.title}
+${taskCard.progress}
+${taskCard.action}`;
+        }
+        if (rogueProgressPanelCardsEl) {
+            rogueProgressPanelCardsEl.innerHTML = relics.length
+                ? relics.map((relic) => `<span class="garden-rogue-chip">${relic.title}</span>`).join('')
+                : '<div class="garden-rogue-empty-text">当前还没有拿到遗物。</div>';
+        }
+        if (rogueProgressPanelOrderEl) {
+            rogueProgressPanelOrderEl.innerHTML = `<div class="garden-rogue-empty-text">${taskCard.value}</div>`;
+        }
+        syncRogueBuffSummaryUi();
+        syncKitchenToolPanelUi();
+        renderRogueBuffPanelV2();
+        if (startRunBtn) {
+            startRunBtn.textContent = run ? (run.currentNode ? '继续当前节点' : '选择下一节点') : '开始远征';
+        }
+        renderRogueWorkshopListV2();
+    }
+
+    function setRogueWorkshopOpen(open) {
+        const workshopEl = document.getElementById('garden-rogue-workshop');
+        if (!workshopEl) return;
+        workshopEl.classList.toggle('is-open', !!open);
+        workshopEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
+
+    function buildRogueDraftChoicesFromIds(relicIds, draftType) {
+        return relicIds.filter((relicId) => !!ROGUE_RELIC_POOL_V2[relicId]).map((relicId) => {
+            const relic = ROGUE_RELIC_POOL_V2[relicId];
+            return `
+                <button class="garden-rogue-card-choice" data-rogue-v2-pick="${relic.id}" data-rogue-v2-draft-type="${draftType}" type="button">
+                    <div class="garden-rogue-card-choice-title">${relic.title}</div>
+                    <div class="garden-rogue-card-choice-desc">${relic.desc}</div>
+                </button>
+            `;
+        }).join('');
+    }
+
+    function getRogueWorkshopBonusValue(entryId, effectKey) {
+        const meta = ensureRogueMetaV2();
+        let matchedEntry = null;
+        Object.keys(ROGUE_META_TREE_V2).some((groupKey) => {
+            matchedEntry = (ROGUE_META_TREE_V2[groupKey] || []).find((entry) => entry.id === entryId) || null;
+            return !!matchedEntry;
+        });
+        if (!matchedEntry || !matchedEntry.effects || !Object.prototype.hasOwnProperty.call(matchedEntry.effects, effectKey)) return 0;
+        const level = Math.max(0, Math.floor(Number(meta.workshopLevels[entryId]) || 0));
+        return level * (Number(matchedEntry.effects[effectKey]) || 0);
+    }
+
+    function getRogueActStateV2(actIndex) {
+        const run = getRogueRunV2();
+        if (!run || !run.map || !Array.isArray(run.map.acts)) return null;
+        return run.map.acts.find((act) => Number(act.actIndex) === Number(actIndex)) || null;
+    }
+
+    function getRogueAvailableNodesForCurrentDepthV2() {
+        const run = getRogueRunV2();
+        const act = getRogueActStateV2(run ? run.actIndex : 0);
+        if (!run || !act) return [];
+        if (run.depthIndex >= 3) return [act.climaxNode].filter(Boolean);
+        return (act.routes || []).map((route) => route[run.depthIndex]).filter(Boolean);
+    }
+
+    function createRogueDraftFromPoolV2(draftType) {
+        const run = getRogueRunV2();
+        if (!run) return null;
+        const owned = new Set([...(run.relics || []), ...(run.blessings || [])]);
+        const pool = Object.values(ROGUE_RELIC_POOL_V2).filter((relic) => {
+            if (!relic || owned.has(relic.id)) return false;
+            if (draftType === 'blessing') return relic.rarity === 'blessing';
+            if (draftType === 'elite') return relic.rarity === 'rare' || relic.rarity === 'epic' || relic.rarity === 'blessing';
+            return relic.rarity !== 'blessing';
+        });
+        const relicIds = pool.sort(() => Math.random() - 0.5).slice(0, 3).map((relic) => relic.id);
+        run.currentDraft = { type: draftType, relicIds };
+        saveRogueRunStateV2();
+        renderRogueUiV2();
+        return run.currentDraft;
+    }
+
+    function openRogueNodeChoicesV2() {
+        const run = getRogueRunV2();
+        if (!run || run.completed) return;
+        const nodes = getRogueAvailableNodesForCurrentDepthV2();
+        const html = nodes.map((node, index) => {
+            const label = ROGUE_V2_NODE_LABELS[node.type] || node.type;
+            const summary = getRogueNodeSummaryV2(node.type);
+            const reason = getRogueNodeReasonV2(node.type);
+            const recommendation = getRogueNodeRecommendationV2(node.type);
+            return `
+                <button class="garden-rogue-card-choice" data-rogue-v2-node="${index}" type="button">
+                    <div class="garden-rogue-card-choice-title">${label}</div>
+                    <div class="garden-rogue-card-choice-desc">第 ${node.depthIndex + 1} 层 · ${ROGUE_V2_ACT_LABELS[node.actIndex] || '远征'}</div>
+                    <div class="garden-rogue-card-choice-desc">${summary}</div>
+                    <div class="garden-rogue-card-choice-desc">${reason}</div>
+                    <div class="garden-rogue-card-choice-desc">${recommendation}</div>
+                </button>
+            `;
+        }).join('');
+        openRogueOfferV2('选择路线节点', '每一层选择一个遭遇推进 build。', html);
+    }
+
+    function getRogueBuildDirectionV2() {
+        const run = getRogueRunV2();
+        if (!run) return 'balanced';
+        const relics = getRogueRelicDefs();
+        const counts = relics.reduce((result, relic) => {
+            const category = relic && relic.category ? relic.category : 'balanced';
+            result[category] = (result[category] || 0) + 1;
+            return result;
+        }, {});
+        let bestKey = run.loadoutId || 'balanced';
+        let bestScore = -1;
+        Object.keys(counts).forEach((key) => {
+            if (counts[key] > bestScore) {
+                bestKey = key;
+                bestScore = counts[key];
+            }
+        });
+        return bestKey;
+    }
+
+    function getRogueNodeSummaryV2(nodeType) {
+        if (nodeType === 'farm') return '作用：补农作物原料，适合铺后续厨房和市场。';
+        if (nodeType === 'pasture') return '作用：补蛋奶肉毛，适合高价值料理链。';
+        if (nodeType === 'kitchen') return '作用：把原料转成熟食，提高后期兑现效率。';
+        if (nodeType === 'market') return '作用：卖货兑现 build，换取大量局内金币。';
+        if (nodeType === 'rest') return '作用：补士气或复制库存，偏稳扎稳打。';
+        if (nodeType === 'event') return '作用：拿一波风险收益，可能赚也可能亏。';
+        if (nodeType === 'merchant') return '作用：用局内金币补遗物和关键过渡强度。';
+        if (nodeType === 'elite') return '作用：高压挑战，但奖励更强。';
+        if (nodeType === 'boss') return '作用：最终三段式大订单，结算整局 build。';
+        return '作用：推进本幕路线。';
+    }
+
+    function getRogueNodeReasonV2(nodeType) {
+        const run = getRogueRunV2();
+        if (!run) return '当前没有进行中的 build 信息。';
+        if (nodeType === 'farm') return `当前仓库：小麦 ${getRogueRunInventoryCount('wheat')} / 胡萝卜 ${getRogueRunInventoryCount('carrot')} / 番茄 ${getRogueRunInventoryCount('tomato')}。`;
+        if (nodeType === 'pasture') return `当前仓库：鸡蛋 ${getRogueRunInventoryCount('egg')} / 牛奶 ${getRogueRunInventoryCount('milk')} / 猪肉 ${getRogueRunInventoryCount('pork')}。`;
+        if (nodeType === 'kitchen') return `当前可做配方 ${Object.values(KITCHEN_RECIPES).filter((recipe) => hasInventoryItems(recipe.ingredients || {})).length} 个。`;
+        if (nodeType === 'market') return `当前局内金币 ${run.runCoins}，适合把已有库存兑现。`;
+        if (nodeType === 'rest') return `当前士气 ${run.morale}/${run.moraleCap}。`;
+        if (nodeType === 'merchant') return `当前局内金币 ${run.runCoins}，可考虑买关键遗物。`;
+        if (nodeType === 'event') return '适合想赌资源、士气或高稀有奖励时选择。';
+        if (nodeType === 'elite') return '这是本幕高潮点，适合 build 已经成型时挑战。';
+        if (nodeType === 'boss') return '进入后就是最终检定，建议库存和遗物都准备好。';
+        return '继续推进当前路线。';
+    }
+
+    function getRogueNodeRecommendationV2(nodeType) {
+        const direction = getRogueBuildDirectionV2();
+        if (direction === 'yield' && (nodeType === 'farm' || nodeType === 'pasture')) return '推荐：符合你当前的产量向 build。';
+        if (direction === 'conversion' && nodeType === 'kitchen') return '推荐：符合你当前的加工向 build。';
+        if (direction === 'economy' && (nodeType === 'market' || nodeType === 'merchant')) return '推荐：符合你当前的卖货/经济向 build。';
+        if (direction === 'survival' && nodeType === 'rest') return '推荐：符合你当前的稳健向 build。';
+        if (nodeType === 'event') return '建议：想搏一把就选它，想稳一点就别选。';
+        if (nodeType === 'elite') return '建议：奖励高，但压力也高，适合强势期。';
+        if (nodeType === 'boss') return '建议：除非整局已成型，否则先别急着冲。';
+        return '建议：按你现在最缺的资源类型来选。';
+    }
+
+    function selectRogueNodeV2(choiceIndex) {
+        const run = getRogueRunV2();
+        const nodes = getRogueAvailableNodesForCurrentDepthV2();
+        const node = nodes[choiceIndex];
+        if (!run || !node) return;
+        run.currentNode = node;
+        run.routeIndex = Number.isFinite(Number(node.routeIndex)) ? Number(node.routeIndex) : run.routeIndex;
+        run.currentEvent = node.type === 'event' ? { nodeId: node.id } : null;
+        run.currentMerchant = node.type === 'merchant' ? { nodeId: node.id, refreshCost: 25 } : null;
+        run.currentMarketOrder = node.type === 'market' ? { nodeId: node.id, lines: [] } : null;
+        if (node.type === 'rest') {
+            run.currentEvent = { nodeId: node.id, eventType: 'rest' };
+        }
+        run.currentBoss = node.type === 'boss' ? { nodeId: node.id, phase: 1 } : null;
+        closeRogueOfferV2();
+        saveRogueRunStateV2();
+        renderRogueUiV2();
+        openCurrentRogueStageScreen();
+    }
+
+    function advanceRogueRunV2(nodeCleared) {
+        const run = getRogueRunV2();
+        if (!run || !nodeCleared) return;
+        let shouldOpenNextNodeChoices = false;
+        if (nodeCleared.type !== 'elite' && nodeCleared.type !== 'boss') {
+            run.clearedNormalNodes += 1;
+        }
+        nodeCleared.isCleared = true;
+        run.currentNode = null;
+        run.currentEvent = null;
+        run.currentMerchant = null;
+        run.currentMarketOrder = null;
+        if (nodeCleared.type === 'boss') {
+            run.currentBoss = null;
+            run.completed = true;
+            run.victory = true;
+            const meta = ensureRogueMetaV2();
+            meta.workshopCurrency += 60 + (run.actIndex * 20);
+            saveRogueMetaStateV2();
+            saveRogueRunStateV2();
+            renderRogueUiV2();
+            showRogueToast('远征通关，已获得工坊徽章');
+            return;
+        }
+        if (nodeCleared.type === 'elite') {
+            run.currentBoss = null;
+            if (run.actIndex >= 3) {
+                const act3 = getRogueActStateV2(3);
+                run.currentNode = act3 ? act3.climaxNode : null;
+                if (run.currentNode) {
+                    run.currentBoss = { nodeId: run.currentNode.id, phase: 1 };
+                }
+                saveRogueRunStateV2();
+                renderRogueUiV2();
+                return;
+            }
+            run.actIndex += 1;
+            run.depthIndex = 0;
+            run.routeIndex = null;
+            createRogueDraftFromPoolV2('elite');
+            saveRogueRunStateV2();
+            return;
+        }
+        if (run.clearedNormalNodes > 0 && run.clearedNormalNodes % 2 === 0) {
+            createRogueDraftFromPoolV2('relic');
+            return;
+        }
+        if (run.depthIndex < 2) {
+            run.depthIndex += 1;
+            shouldOpenNextNodeChoices = true;
+        } else {
+            run.depthIndex = 3;
+            const act = getRogueActStateV2(run.actIndex);
+            run.currentNode = act ? act.climaxNode : null;
+            if (run.currentNode && run.currentNode.type === 'boss') {
+                run.currentBoss = { nodeId: run.currentNode.id, phase: 1 };
+            }
+        }
+        saveRogueRunStateV2();
+        renderRogueUiV2();
+        if (shouldOpenNextNodeChoices) {
+            openRogueNodeChoicesV2();
+        }
+    }
+
+    function progressRogueFarmHarvestV2() {
+        const run = getRogueRunV2();
+        if (!isRogueActivityMode() || !run || !run.currentNode || !['farm', 'elite'].includes(run.currentNode.type)) return false;
+        run.currentNode.harvestCount = Math.max(0, Math.floor(Number(run.currentNode.harvestCount) || 0)) + 1;
+        const targetHarvests = run.currentNode.type === 'elite' ? 3 : 1;
+        saveRogueRunStateV2();
+        if (run.currentNode.harvestCount >= targetHarvests) {
+            const clearedNode = run.currentNode;
+            showRogueToast(clearedNode.type === 'elite' ? '精英农场目标完成，准备进入下一步奖励' : '农场节点完成，准备进入下一步');
+            advanceRogueRunV2(clearedNode);
+            return true;
+        }
+        showRogueToast(`农场节点进度 ${run.currentNode.harvestCount}/${targetHarvests}`);
+        return true;
+    }
+
+    function progressRoguePastureHarvestV2() {
+        const run = getRogueRunV2();
+        if (!isRogueActivityMode() || !run || !run.currentNode || run.currentNode.type !== 'pasture') return false;
+        run.currentNode.harvestCount = Math.max(0, Math.floor(Number(run.currentNode.harvestCount) || 0)) + 1;
+        const targetHarvests = 1;
+        saveRogueRunStateV2();
+        if (run.currentNode.harvestCount >= targetHarvests) {
+            const clearedNode = run.currentNode;
+            showRogueToast('牧场节点完成，准备进入下一步');
+            advanceRogueRunV2(clearedNode);
+            return true;
+        }
+        showRogueToast(`牧场节点进度 ${run.currentNode.harvestCount}/${targetHarvests}`);
+        return true;
+    }
+
+    function progressRogueKitchenSuccessV2() {
+        const run = getRogueRunV2();
+        if (!isRogueActivityMode() || !run || !run.currentNode || run.currentNode.type !== 'kitchen') return false;
+        run.currentNode.cookCount = Math.max(0, Math.floor(Number(run.currentNode.cookCount) || 0)) + 1;
+        const targetCooks = 1;
+        saveRogueRunStateV2();
+        if (run.currentNode.cookCount >= targetCooks) {
+            const clearedNode = run.currentNode;
+            run.lastNodeSummary = {
+                title: '厨房节点完成',
+                lines: ['+ 熟食已入库', '+ 节点目标已完成', '+ 更接近市场与 Boss 爆发'],
+                next: '下一步优先查看市场、订单或继续补缺材料'
+            };
+            showRogueToast('厨房节点完成，熟食已备好，适合去市场兑现');
+            advanceRogueRunV2(clearedNode);
+            return true;
+        }
+        showRogueToast(`厨房节点进度 ${run.currentNode.cookCount}/${targetCooks}`);
+        return true;
+    }
+
+    function openRogueRestModalV2() {
+        const run = getRogueRunV2();
+        if (!run || !run.currentNode || run.currentNode.type !== 'rest') return;
+        const inventoryEntries = Object.entries(run.runInventory || {})
+            .filter(([itemId, qty]) => ITEM_META[itemId] && Number(qty) > 0)
+            .sort((left, right) => Number(right[1]) - Number(left[1]));
+        const bestStack = inventoryEntries[0] || null;
+        const recoverDisabled = run.morale >= run.moraleCap;
+        const cloneDisabled = !bestStack;
+        const cloneText = bestStack
+            ? `复制 ${ITEM_META[bestStack[0]].emoji} ${ITEM_META[bestStack[0]].name} ×1`
+            : '当前没有可复制库存';
+        openRogueOfferV2(
+            '休整营地',
+            `选择一项休整收益。当前士气 ${run.morale}/${run.moraleCap}。`,
+            `
+                <button class="garden-rogue-card-choice" data-rogue-v2-rest="recover" type="button" ${recoverDisabled ? 'disabled' : ''}>
+                    <div class="garden-rogue-card-choice-title">回复士气</div>
+                    <div class="garden-rogue-card-choice-desc">恢复 1 点士气，提升后续容错。</div>
+                </button>
+                <button class="garden-rogue-card-choice" data-rogue-v2-rest="clone" type="button" ${cloneDisabled ? 'disabled' : ''}>
+                    <div class="garden-rogue-card-choice-title">复制库存</div>
+                    <div class="garden-rogue-card-choice-desc">${cloneText}</div>
+                </button>
+            `
+        );
+    }
+
+    function openRogueEventModalV2() {
+        const run = getRogueRunV2();
+        if (!run || !run.currentNode || run.currentNode.type !== 'event') return;
+        const eventPool = Object.values(ROGUE_EVENT_POOL_V2 || {});
+        if (!run.currentEvent || !run.currentEvent.eventId) {
+            const pickedEvent = eventPool[Math.floor(Math.random() * eventPool.length)] || null;
+            if (!pickedEvent) return;
+            run.currentEvent = { nodeId: run.currentNode.id, eventType: 'event', eventId: pickedEvent.id };
+            saveRogueRunStateV2();
+        }
+        const eventDef = ROGUE_EVENT_POOL_V2[run.currentEvent.eventId];
+        if (!eventDef) return;
+        const choicesHtml = (eventDef.choices || []).map((choice) => `
+            <button class="garden-rogue-card-choice" data-rogue-v2-event-choice="${choice.id}" type="button">
+                <div class="garden-rogue-card-choice-title">${choice.label}</div>
+                <div class="garden-rogue-card-choice-desc">${eventDef.desc}</div>
+            </button>
+        `).join('');
+        openRogueOfferV2(eventDef.title, eventDef.desc, choicesHtml);
+    }
+
+    function resolveRogueEventChoiceV2(choiceId) {
+        const run = getRogueRunV2();
+        const eventDef = run && run.currentEvent ? ROGUE_EVENT_POOL_V2[run.currentEvent.eventId] : null;
+        const choice = eventDef && Array.isArray(eventDef.choices) ? eventDef.choices.find((entry) => entry.id === choiceId) : null;
+        if (!run || !eventDef || !choice) return;
+        const result = choice.result || {};
+        if (result.costCoins) {
+            run.runCoins = Math.max(0, Math.floor(Number(run.runCoins) || 0) - Math.max(0, Math.floor(Number(result.costCoins) || 0)));
+        }
+        if (result.type === 'items' && result.items) {
+            Object.entries(result.items).forEach(([itemId, amount]) => addRogueRunInventoryItem(itemId, amount));
+        }
+        if (result.type === 'coins' && result.amount) {
+            run.runCoins = Math.max(0, Math.floor(Number(run.runCoins) || 0) + Math.floor(Number(result.amount) || 0));
+        }
+        if (result.type === 'morale' && result.amount) {
+            run.morale = Math.min(run.moraleCap, Math.max(0, run.morale + Math.floor(Number(result.amount) || 0)));
+        }
+        if (result.type === 'copyHighestStack') {
+            const inventoryEntries = Object.entries(run.runInventory || {}).filter(([itemId, qty]) => ITEM_META[itemId] && Number(qty) > 0).sort((a, b) => Number(b[1]) - Number(a[1]));
+            const bestStack = inventoryEntries[0] || null;
+            if (bestStack) addRogueRunInventoryItem(bestStack[0], 1);
+        }
+        if (result.type === 'relicDraft') {
+            run.currentNode = null;
+            run.currentEvent = null;
+            closeRogueOfferV2();
+            createRogueDraftFromPoolV2('elite');
+            return;
+        }
+        const clearedNode = run.currentNode;
+        run.currentEvent = null;
+        closeRogueOfferV2();
+        saveRogueRunStateV2();
+        if (clearedNode) advanceRogueRunV2(clearedNode);
+    }
+
+    function openRogueMerchantModalV2() {
+        const run = getRogueRunV2();
+        if (!run || !run.currentNode || run.currentNode.type !== 'merchant') return;
+        if (!run.currentMerchant || !Array.isArray(run.currentMerchant.stock)) {
+            const relicIds = Object.values(ROGUE_RELIC_POOL_V2)
+                .filter((relic) => relic && relic.rarity !== 'blessing')
+                .sort(() => Math.random() - 0.5)
+                .slice(0, 3)
+                .map((relic) => relic.id);
+            run.currentMerchant = { nodeId: run.currentNode.id, stock: relicIds.map((relicId, index) => ({ relicId, price: 90 + (index * 30) })), refreshCost: 25 };
+            saveRogueRunStateV2();
+        }
+        const html = (run.currentMerchant.stock || []).map((entry) => {
+            const relic = ROGUE_RELIC_POOL_V2[entry.relicId];
+            if (!relic) return '';
+            return `
+                <button class="garden-rogue-card-choice" data-rogue-v2-merchant-buy="${relic.id}" type="button" ${run.runCoins < entry.price ? 'disabled' : ''}>
+                    <div class="garden-rogue-card-choice-title">${relic.title} · ${entry.price} 金币</div>
+                    <div class="garden-rogue-card-choice-desc">${relic.desc}</div>
+                </button>
+            `;
+        }).join('') + `
+            <button class="garden-rogue-card-choice" data-rogue-v2-merchant-leave="true" type="button">
+                <div class="garden-rogue-card-choice-title">离开商店</div>
+                <div class="garden-rogue-card-choice-desc">不消费，直接进入下一步。</div>
+            </button>
+        `;
+        openRogueOfferV2('流动商店', `当前局内金币 ${run.runCoins}`, html);
+    }
+
+    function resolveRogueMerchantBuyV2(relicId) {
+        const run = getRogueRunV2();
+        if (!run || !run.currentMerchant || !Array.isArray(run.currentMerchant.stock)) return;
+        const stockEntry = run.currentMerchant.stock.find((entry) => entry.relicId === relicId);
+        const relic = ROGUE_RELIC_POOL_V2[relicId];
+        if (!stockEntry || !relic) return;
+        if (run.runCoins < stockEntry.price) return;
+        run.runCoins -= stockEntry.price;
+        run.relics.push(relicId);
+        run.currentMerchant.stock = run.currentMerchant.stock.filter((entry) => entry.relicId !== relicId);
+        saveRogueRunStateV2();
+        closeRogueOfferV2();
+        showRogueToast(`购入 ${relic.title}`);
+        openRogueMerchantModalV2();
+    }
+
+    function leaveRogueMerchantV2() {
+        const run = getRogueRunV2();
+        if (!run) return;
+        const clearedNode = run.currentNode;
+        run.currentNode = null;
+        run.currentMerchant = null;
+        closeRogueOfferV2();
+        saveRogueRunStateV2();
+        if (clearedNode) advanceRogueRunV2(clearedNode);
+    }
+
+    function resolveRogueRestChoiceV2(choice) {
+        const run = getRogueRunV2();
+        if (!run || !run.currentNode || run.currentNode.type !== 'rest') return;
+        if (choice === 'recover') {
+            run.morale = Math.min(run.moraleCap, run.morale + 1);
+            closeRogueOfferV2();
+            advanceRogueRunV2(run.currentNode);
+            showRogueToast('士气恢复了 1 点');
+            return;
+        }
+        if (choice === 'clone') {
+            const inventoryEntries = Object.entries(run.runInventory || {})
+                .filter(([itemId, qty]) => ITEM_META[itemId] && Number(qty) > 0)
+                .sort((left, right) => Number(right[1]) - Number(left[1]));
+            const bestStack = inventoryEntries[0] || null;
+            if (!bestStack) return;
+            addRogueRunInventoryItem(bestStack[0], 1);
+            closeRogueOfferV2();
+            advanceRogueRunV2(run.currentNode);
+            showRogueToast(`复制了 ${ITEM_META[bestStack[0]].name} ×1`);
+        }
+    }
+
+    function openRogueOfferV2(title, desc, html) {
+        if (!rogueOfferModalEl) return;
+        if (rogueOfferTitleEl) rogueOfferTitleEl.textContent = title;
+        if (rogueOfferDescEl) rogueOfferDescEl.textContent = desc;
+        if (rogueOfferChoicesEl) rogueOfferChoicesEl.innerHTML = html;
+        rogueOfferModalEl.classList.add('is-open');
+        rogueOfferModalEl.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeRogueOfferV2() {
+        if (!rogueOfferModalEl) return;
+        rogueOfferModalEl.classList.remove('is-open');
+        rogueOfferModalEl.setAttribute('aria-hidden', 'true');
+    }
+
+    function startRogueRunV2(loadoutId) {
+        state.rogueRunV2 = createDefaultRogueRunStateV2(loadoutId);
+        state.rogueRunV2.runCoins += getRogueWorkshopBonusValue('start_coins_1', 'runCoinsFlat');
+        state.rogueRunV2.moraleCap += getRogueWorkshopBonusValue('morale_cap_1', 'moraleCap');
+        state.rogueRunV2.morale = state.rogueRunV2.moraleCap;
+        ensureRogueGoalsV2(state.rogueRunV2);
+        addRogueToolV2('fertilizer', 1);
+        addRogueToolV2('pasture_whistle', 1);
+        setGardenMode('rogue_activity');
+        saveRogueRunStateV2();
+        renderRogueUiV2();
+        closeRogueOfferV2();
+        showRogueToast(`已开始 ${ROGUE_V2_STARTER_LOADOUTS[loadoutId] ? ROGUE_V2_STARTER_LOADOUTS[loadoutId].name : '种植流'} 远征`);
+        openRogueRunIntroV2();
+    }
+
+    function openRogueStartDraftV2() {
+        const meta = ensureRogueMetaV2();
+        const choices = (meta.unlockedLoadouts || Object.keys(ROGUE_V2_STARTER_LOADOUTS)).map((loadoutId) => {
+            const loadout = ROGUE_V2_STARTER_LOADOUTS[loadoutId];
+            return `
+                <button class="garden-rogue-card-choice" data-rogue-v2-start="${loadout.id}" type="button">
+                    <div class="garden-rogue-card-choice-title">${loadout.icon} ${loadout.name}</div>
+                    <div class="garden-rogue-card-choice-desc">${loadout.desc}</div>
+                </button>
+            `;
+        }).join('');
+        openRogueOfferV2('选择起始流派', '起始流派会决定你的开局资源和专属遗物。', choices);
+    }
+
+    function openRogueEntryChoiceV2() {
+        const hasRun = !!(state.rogueRunV2 && !state.rogueRunV2.completed);
+        const continueDisabled = hasRun ? '' : 'disabled';
+        openRogueOfferV2(
+            '丰收远征',
+            hasRun ? '你有一局进行中的远征。可以继续推进，或者直接重开一局。' : '当前没有进行中的远征，可以直接开始新一局。',
+            `
+                <button class="garden-rogue-card-choice" data-rogue-v2-entry="continue" type="button" ${continueDisabled}>
+                    <div class="garden-rogue-card-choice-title">继续上次进度</div>
+                    <div class="garden-rogue-card-choice-desc">从当前节点、当前遗物和当前库存继续。</div>
+                </button>
+                <button class="garden-rogue-card-choice" data-rogue-v2-entry="restart" type="button">
+                    <div class="garden-rogue-card-choice-title">重开一局</div>
+                    <div class="garden-rogue-card-choice-desc">重新选择起始流派，开始全新远征。</div>
+                </button>
+            `
+        );
+    }
+
+    function upgradeRogueWorkshopNode(entryId) {
+        const meta = ensureRogueMetaV2();
+        let matchedEntry = null;
+        Object.keys(ROGUE_META_TREE_V2).some((groupKey) => {
+            matchedEntry = (ROGUE_META_TREE_V2[groupKey] || []).find((entry) => entry.id === entryId) || null;
+            return !!matchedEntry;
+        });
+        if (!matchedEntry) return;
+        const level = Math.max(0, Math.floor(Number(meta.workshopLevels[entryId]) || 0));
+        if (level >= matchedEntry.maxLevel) return;
+        const cost = matchedEntry.costBase * (level + 1);
+        if (meta.workshopCurrency < cost) return;
+        meta.workshopCurrency -= cost;
+        meta.workshopLevels[entryId] = level + 1;
+        saveRogueMetaStateV2();
+        renderRogueUiV2();
+        showRogueToast(`${matchedEntry.name} 升到 Lv.${level + 1}`);
     }
 
     function hasInventoryItems(ingredients) {
@@ -863,18 +2335,38 @@
     }
 
     function getFarmPlots() {
+        if (isRogueActivityMode() && state.rogueRunV2 && state.rogueRunV2.farm) {
+            return state.rogueRunV2.farm.plots || [];
+        }
         return state.gardenGame ? state.gardenGame.farm.plots : [];
     }
 
     function getPastureAnimals() {
+        if (isRogueActivityMode() && state.rogueRunV2 && state.rogueRunV2.pasture) {
+            return state.rogueRunV2.pasture.animals || [];
+        }
         return state.gardenGame ? state.gardenGame.pasture.animals : [];
     }
 
     function updateGardenCoins(amount) {
+        if (isRogueActivityMode() && state.rogueRunV2) {
+            state.rogueRunV2.runCoins = Math.max(0, Math.floor(Number(state.rogueRunV2.runCoins) || 0) + amount);
+            syncFarmStats();
+            syncPastureStats();
+            return;
+        }
         if (!state.gardenGame) return;
         state.gardenGame.coins = Math.max(0, state.gardenGame.coins + amount);
         syncFarmStats();
         syncPastureStats();
+    }
+
+    function saveActiveGardenModeState() {
+        if (isRogueActivityMode() && state.rogueRunV2) {
+            saveRogueRunStateV2();
+            return;
+        }
+        saveGardenGameState();
     }
 
     function syncActivitiesFarmCardUi() {
@@ -887,14 +2379,14 @@
         const playBtn = farmCard.querySelector('.garden-activities-play-btn');
         const hasProgress = hasPendingRogueActivityProgress();
         if (descEl) {
-            descEl.textContent = '四阶段轻肉鸽周目：农场 → 牧场 → 厨房 → 出售。';
+            descEl.textContent = '三幕分支远征：选路线、叠遗物、打精英，并在最终 Boss 订单里爆仓。';
         }
         if (statsTextEl) {
-            statsTextEl.textContent = hasProgress ? '周目进行中 · 点击继续挑战' : '轻肉鸽挑战 · 点击进入挑战';
+            statsTextEl.textContent = hasProgress ? '远征进行中 · 点击继续推进' : '丰收远征 V2 · 点击开始';
         }
         if (playBtn) {
             playBtn.setAttribute('aria-label', hasProgress ? 'continue farm rogue challenge' : 'start farm rogue challenge');
-            playBtn.title = hasProgress ? '继续挑战' : '进入挑战';
+            playBtn.title = hasProgress ? '继续远征' : '开始远征';
         }
         farmCard.classList.toggle('is-highlight', true);
     }
@@ -903,7 +2395,12 @@
         syncFarmStats();
         syncPastureStats();
         syncKitchenCookButtons();
-        renderStorageItems(state.gardenGame && state.gardenGame.storage ? state.gardenGame.storage.tab : 'crops');
+        const activeStorageTab = isRogueActivityMode() && state.rogueRunV2 && state.rogueRunV2.storage
+            ? state.rogueRunV2.storage.tab
+            : state.gardenGame && state.gardenGame.storage
+                ? state.gardenGame.storage.tab
+                : 'crops';
+        renderStorageItems(activeStorageTab);
         syncStorageSellSheetUi();
         syncGardenRogueUi();
         syncActivitiesFarmCardUi();
@@ -913,6 +2410,55 @@
         refreshGardenEconomyUi();
         renderFarmPlots();
         renderPastureAnimals();
+        syncMiniGameMissionUi();
+    }
+
+    function syncMiniGameMissionUi() {
+        const objective = getRogueNodeObjectiveV2();
+        const isRogue = isRogueActivityMode() && !!state.rogueRunV2;
+        const currentNodeType = isRogue && state.rogueRunV2.currentNode ? state.rogueRunV2.currentNode.type : null;
+
+        if (farmMissionEl) {
+            farmMissionEl.hidden = !isRogue || state.miniMissionCollapsed.farm;
+            farmMissionEl.classList.toggle('is-expanded', !state.miniMissionCollapsed.farm);
+            const toggle = farmMissionEl.querySelector('[data-mini-mission-toggle="farm"]');
+            if (toggle) toggle.textContent = state.miniMissionCollapsed.farm ? '展开' : '收起';
+            if (!farmMissionEl.hidden) {
+                if (farmMissionTitleEl) farmMissionTitleEl.textContent = `目标：${objective.title}`;
+                if (farmMissionProgressEl) farmMissionProgressEl.textContent = `进度：${objective.progressText}`;
+                if (farmMissionActionEl) farmMissionActionEl.textContent = `完成后：${objective.reward}`;
+            }
+        }
+
+        if (pastureMissionEl) {
+            pastureMissionEl.hidden = !isRogue || state.miniMissionCollapsed.pasture;
+            pastureMissionEl.classList.toggle('is-expanded', !state.miniMissionCollapsed.pasture);
+            const toggle = pastureMissionEl.querySelector('[data-mini-mission-toggle="pasture"]');
+            if (toggle) toggle.textContent = state.miniMissionCollapsed.pasture ? '展开' : '收起';
+            if (!pastureMissionEl.hidden) {
+                if (pastureMissionTitleEl) pastureMissionTitleEl.textContent = `目标：${objective.title}`;
+                if (pastureMissionProgressEl) pastureMissionProgressEl.textContent = `进度：${objective.progressText}`;
+                if (pastureMissionActionEl) pastureMissionActionEl.textContent = `完成后：${objective.reward}`;
+            }
+        }
+
+        if (kitchenMissionEl) {
+            kitchenMissionEl.hidden = !isRogue || state.miniMissionCollapsed.kitchen;
+            kitchenMissionEl.classList.toggle('is-expanded', !state.miniMissionCollapsed.kitchen);
+            const toggle = kitchenMissionEl.querySelector('[data-mini-mission-toggle="kitchen"]');
+            if (toggle) toggle.textContent = state.miniMissionCollapsed.kitchen ? '展开' : '收起';
+            if (!kitchenMissionEl.hidden) {
+                if (kitchenMissionTitleEl) kitchenMissionTitleEl.textContent = `目标：${objective.title}`;
+                if (kitchenMissionProgressEl) kitchenMissionProgressEl.textContent = `进度：${objective.progressText}`;
+                if (kitchenMissionActionEl) kitchenMissionActionEl.textContent = `完成后：${objective.reward}`;
+            }
+        }
+    }
+
+    function toggleMiniMission(section) {
+        if (!['farm', 'pasture', 'kitchen'].includes(section)) return;
+        state.miniMissionCollapsed[section] = !state.miniMissionCollapsed[section];
+        syncMiniGameMissionUi();
     }
 
     function showRogueToast(message) {
@@ -931,15 +2477,18 @@
     }
 
     function getRogueRun() {
+        if (state.rogueRunV2) return state.rogueRunV2;
         return isRogueActivityMode() && state.gardenGame ? state.gardenGame.rogueRun : null;
     }
 
     function ensureRogueRun() {
-        if (!isRogueActivityMode() || !state.gardenGame) return null;
-        if (!state.gardenGame.rogueRun) {
-            state.gardenGame.rogueRun = createDefaultRogueRun(0);
+        if (state.rogueRunV2) return state.rogueRunV2;
+        if (!isRogueActivityMode()) return null;
+        if (hasPersistedRogueRunV2()) {
+            state.rogueRunV2 = loadRogueRunStateV2();
+            return state.rogueRunV2;
         }
-        return state.gardenGame.rogueRun;
+        return null;
     }
 
     function getRogueCardContextForStage(stage) {
@@ -996,11 +2545,15 @@
     }
 
     function hasPendingRogueActivityProgress() {
-        if (!hasPersistedRogueActivitySave()) return false;
-        const game = state.rogueActivityGame || loadGardenGameState('rogue_activity');
-        const run = game && game.rogueRun ? game.rogueRun : null;
-        if (!run) return false;
-        return true;
+        if (state.rogueRunV2) return !state.rogueRunV2.completed;
+        if (hasPersistedRogueRunV2()) {
+            const run = loadRogueRunStateV2();
+            return !!(run && !run.completed);
+        }
+        const legacyRun = state.rogueActivityGame && state.rogueActivityGame.rogueRun
+            ? state.rogueActivityGame.rogueRun
+            : null;
+        return !!legacyRun;
     }
 
     function getSelectedRogueCardDefs() {
@@ -1288,6 +2841,56 @@
             storageOrderCardEl.innerHTML = '';
             return;
         }
+        if (state.rogueRunV2) {
+            storageOrderCardEl.hidden = false;
+            if (state.rogueRunV2.currentBoss) {
+                storageOrderCardEl.classList.remove('is-idle');
+                storageOrderCardEl.innerHTML = `
+                    <div class="garden-storage-order-head">
+                        <div>
+                            <div class="garden-storage-order-title">最终 Boss</div>
+                            <div class="garden-storage-order-subtitle">三段式超级订单进行中</div>
+                        </div>
+                        <div class="garden-storage-order-reward">第 ${Math.max(1, Math.floor(Number(state.rogueRunV2.currentBoss.phase) || 1))} / 3 段</div>
+                    </div>
+                `;
+                return;
+            }
+            if (state.rogueRunV2.currentMarketOrder && Array.isArray(state.rogueRunV2.currentMarketOrder.lines)) {
+                const lineHtml = state.rogueRunV2.currentMarketOrder.lines.map((line) => {
+                    const meta = ITEM_META[line.itemId];
+                    return `
+                        <div class="garden-storage-order-line">
+                            <span>${meta ? meta.emoji : '📦'} ${meta ? meta.name : line.itemId}</span>
+                            <strong>${line.fulfilledQty || 0}/${line.requiredQty || 0}</strong>
+                        </div>
+                    `;
+                }).join('');
+                storageOrderCardEl.classList.remove('is-idle');
+                storageOrderCardEl.innerHTML = `
+                    <div class="garden-storage-order-head">
+                        <div>
+                            <div class="garden-storage-order-title">市场订单</div>
+                            <div class="garden-storage-order-subtitle">完成后获得局内金币与结算奖励</div>
+                        </div>
+                        <div class="garden-storage-order-reward">进行中</div>
+                    </div>
+                    <div class="garden-storage-order-lines">${lineHtml}</div>
+                `;
+                return;
+            }
+            storageOrderCardEl.classList.add('is-idle');
+            storageOrderCardEl.innerHTML = `
+                <div class="garden-storage-order-head">
+                    <div>
+                        <div class="garden-storage-order-title">远征订单</div>
+                        <div class="garden-storage-order-subtitle">进入市场或 Boss 节点后，这里会显示当前订单。</div>
+                    </div>
+                    <div class="garden-storage-order-reward">待触发</div>
+                </div>
+            `;
+            return;
+        }
         storageOrderCardEl.hidden = false;
         const run = ensureRogueRun();
         if (!run) {
@@ -1356,6 +2959,12 @@
 
     function syncKitchenSkipButton() {
         if (!kitchenSkipBtnEl) return;
+        if (state.rogueRunV2) {
+            const shouldShow = !!state.rogueRunV2.currentNode && state.rogueRunV2.currentNode.type === 'kitchen' && !state.rogueRunV2.currentBoss && !state.rogueRunV2.currentMarketOrder;
+            kitchenSkipBtnEl.hidden = !shouldShow;
+            kitchenSkipBtnEl.disabled = !shouldShow;
+            return;
+        }
         const run = getRogueRun();
         const shouldShow = !!run && run.stage === 'kitchen' && !run.currentOffer && !run.currentSupplyOffer && !canCookAnyKitchenRecipe();
         kitchenSkipBtnEl.hidden = !shouldShow;
@@ -1363,6 +2972,10 @@
     }
 
     function renderRogueProgressStrip() {
+        if (state.rogueRunV2) {
+            renderRogueUiV2();
+            return;
+        }
         const run = getRogueRun();
         if (!run) return;
         if (rogueProgressStageEl) rogueProgressStageEl.textContent = ROGUE_STAGE_LABELS[run.stage] || '农场阶段';
@@ -1379,6 +2992,10 @@
     }
 
     function renderRogueProgressPanel() {
+        if (state.rogueRunV2) {
+            renderRogueUiV2();
+            return;
+        }
         const run = getRogueRun();
         if (!run) return;
         if (rogueProgressPanelStageEl) rogueProgressPanelStageEl.textContent = ROGUE_STAGE_LABELS[run.stage] || '农场阶段';
@@ -1406,6 +3023,17 @@
     }
 
     function renderRogueOfferModal() {
+        if (state.rogueRunV2) {
+            if (state.rogueRunV2.currentDraft && Array.isArray(state.rogueRunV2.currentDraft.relicIds)) {
+                const draftType = state.rogueRunV2.currentDraft.type || 'relic';
+                openRogueOfferV2(
+                    draftType === 'blessing' ? '精英 / Boss 奖励' : '远征奖励',
+                    draftType === 'starter' ? '选择起始流派后会自动开局。' : '从以下奖励中选择一个，立即强化你的 build。',
+                    buildRogueDraftChoicesFromIds(state.rogueRunV2.currentDraft.relicIds, draftType)
+                );
+            }
+            return;
+        }
         if (!rogueOfferModalEl) return;
         const run = getRogueRun();
         const cardOffer = run ? run.currentOffer : null;
@@ -1478,10 +3106,17 @@
     }
 
     function handleRogueUiClick(event) {
+        const miniMissionToggle = event.target.closest('[data-mini-mission-toggle]');
+        if (miniMissionToggle) {
+            toggleMiniMission(miniMissionToggle.dataset.miniMissionToggle);
+            vibrate(10);
+            return;
+        }
         if (!isRogueActivityMode()) return;
         const openButton = event.target.closest('[data-rogue-open-panel]');
         if (openButton) {
             setRogueProgressPanelOpen(true);
+            renderRogueUiV2();
             vibrate(12);
             return;
         }
@@ -1489,6 +3124,168 @@
         if (closeButton) {
             setRogueProgressPanelOpen(false);
             vibrate(12);
+            return;
+        }
+        const workshopOpenButton = event.target.closest('[data-rogue-action="open-workshop"]');
+        if (workshopOpenButton) {
+            setRogueWorkshopOpen(true);
+            renderRogueUiV2();
+            vibrate(12);
+            return;
+        }
+        const workshopCloseButton = event.target.closest('[data-rogue-workshop-close]');
+        if (workshopCloseButton) {
+            setRogueWorkshopOpen(false);
+            vibrate(12);
+            return;
+        }
+        const startRunButton = event.target.closest('[data-rogue-action="open-start"]');
+        if (startRunButton) {
+            if (state.rogueRunV2) {
+                if (state.rogueRunV2.currentDraft) {
+                    renderRogueOfferModal();
+                } else if (state.rogueRunV2.currentNode) {
+                    openCurrentRogueStageScreen();
+                } else {
+                    openRogueNodeChoicesV2();
+                }
+                vibrate(15);
+                return;
+            }
+            openRogueStartDraftV2();
+            vibrate(15);
+            return;
+        }
+        const rogueEntryButton = event.target.closest('[data-rogue-v2-entry]');
+        if (rogueEntryButton) {
+            const action = rogueEntryButton.dataset.rogueV2Entry;
+            if (action === 'continue') {
+                closeRogueOfferV2();
+                if (state.rogueRunV2) {
+                    openRogueRunIntroV2();
+                }
+            } else if (action === 'restart') {
+                closeRogueOfferV2();
+                openRogueStartDraftV2();
+            }
+            vibrate(15);
+            return;
+        }
+        const startLoadoutButton = event.target.closest('[data-rogue-v2-start]');
+        if (startLoadoutButton) {
+            startRogueRunV2(startLoadoutButton.dataset.rogueV2Start);
+            vibrate(15);
+            return;
+        }
+        const introConfirmButton = event.target.closest('[data-rogue-intro-confirm]');
+        if (introConfirmButton) {
+            confirmRogueRunIntroV2();
+            vibrate(15);
+            return;
+        }
+        const introCancelButton = event.target.closest('[data-rogue-intro-cancel]');
+        if (introCancelButton) {
+            closeRogueIntroV2();
+            vibrate(12);
+            return;
+        }
+        const buffOpenButton = event.target.closest('#garden-farm-buff-chip, #garden-pasture-buff-chip, #garden-kitchen-buff-chip');
+        if (buffOpenButton) {
+            if (state.rogueBuffPanelOpen) {
+                closeRogueBuffPanelV2();
+            } else {
+                openRogueBuffPanelV2();
+            }
+            vibrate(12);
+            return;
+        }
+        const buffCloseButton = event.target.closest('[data-rogue-buff-close]');
+        if (buffCloseButton) {
+            closeRogueBuffPanelV2();
+            vibrate(12);
+            return;
+        }
+        const kitchenToolCloseButton = event.target.closest('[data-kitchen-tool-panel-close]');
+        if (kitchenToolCloseButton) {
+            state.kitchenGame.toolPanelOpen = false;
+            syncKitchenToolPanelUi();
+            vibrate(12);
+            return;
+        }
+        const rogueToolButton = event.target.closest('[data-rogue-tool-use]');
+        if (rogueToolButton) {
+            useRogueActiveItemV2(rogueToolButton.dataset.rogueToolUse);
+            vibrate(12);
+            return;
+        }
+        const nodeChoiceButton = event.target.closest('[data-rogue-v2-node]');
+        if (nodeChoiceButton) {
+            selectRogueNodeV2(Number(nodeChoiceButton.dataset.rogueV2Node));
+            vibrate(15);
+            return;
+        }
+        const restChoiceButton = event.target.closest('[data-rogue-v2-rest]');
+        if (restChoiceButton) {
+            resolveRogueRestChoiceV2(restChoiceButton.dataset.rogueV2Rest);
+            vibrate(15);
+            return;
+        }
+        const eventChoiceButton = event.target.closest('[data-rogue-v2-event-choice]');
+        if (eventChoiceButton) {
+            resolveRogueEventChoiceV2(eventChoiceButton.dataset.rogueV2EventChoice);
+            vibrate(15);
+            return;
+        }
+        const merchantBuyButton = event.target.closest('[data-rogue-v2-merchant-buy]');
+        if (merchantBuyButton) {
+            resolveRogueMerchantBuyV2(merchantBuyButton.dataset.rogueV2MerchantBuy);
+            vibrate(15);
+            return;
+        }
+        const merchantLeaveButton = event.target.closest('[data-rogue-v2-merchant-leave]');
+        if (merchantLeaveButton) {
+            leaveRogueMerchantV2();
+            vibrate(15);
+            return;
+        }
+        const workshopUpgradeButton = event.target.closest('[data-rogue-workshop-upgrade]');
+        if (workshopUpgradeButton) {
+            upgradeRogueWorkshopNode(workshopUpgradeButton.dataset.rogueWorkshopUpgrade);
+            vibrate(15);
+            return;
+        }
+        const relicPickButton = event.target.closest('[data-rogue-v2-pick]');
+        if (relicPickButton) {
+            const relicId = relicPickButton.dataset.rogueV2Pick;
+            const relic = ROGUE_RELIC_POOL_V2[relicId];
+            if (state.rogueRunV2 && relic) {
+                if (relic.rarity === 'blessing') {
+                    state.rogueRunV2.blessings.push(relicId);
+                } else {
+                    state.rogueRunV2.relics.push(relicId);
+                }
+                state.rogueRunV2.currentDraft = null;
+                ensureRogueMetaV2();
+                if (!state.rogueMetaV2.seenRelics.includes(relicId)) {
+                    state.rogueMetaV2.seenRelics.push(relicId);
+                }
+                saveRogueMetaStateV2();
+                saveRogueRunStateV2();
+                closeRogueOfferV2();
+                closeFarmScreen({ silent: true });
+                closePastureScreen({ silent: true });
+                closeKitchenScreen({ silent: true });
+                renderRogueUiV2();
+                showRogueToast(`获得 ${relic.title}`);
+                if (!state.rogueRunV2.completed) {
+                    if (state.rogueRunV2.currentNode) {
+                        openCurrentRogueStageScreen();
+                    } else {
+                        openRogueNodeChoicesV2();
+                    }
+                }
+            }
+            vibrate(15);
             return;
         }
         const cardButton = event.target.closest('[data-rogue-card-id]');
@@ -1512,6 +3309,60 @@
     }
 
     function openCurrentRogueStageScreen(options) {
+        if (state.rogueRunV2) {
+            const runV2 = state.rogueRunV2;
+            const preferActivitiesBase = !options || options.preferActivitiesBase !== false;
+            if (!runV2) return;
+            const currentNodeType = runV2.currentNode ? runV2.currentNode.type : null;
+            if ((currentNodeType === 'farm' || currentNodeType === 'elite') && preferActivitiesBase && state.currentView === 'gallery') {
+                switchView('activities');
+            }
+            if (currentNodeType === 'farm' || currentNodeType === 'elite') {
+                openFarmScreen();
+                return;
+            }
+            if (currentNodeType === 'pasture') {
+                if (preferActivitiesBase && state.currentView === 'gallery') {
+                    switchView('activities');
+                }
+                openPastureScreen();
+                return;
+            }
+            if (currentNodeType === 'kitchen' || currentNodeType === 'boss') {
+                if (preferActivitiesBase && state.currentView === 'gallery') {
+                    switchView('activities');
+                }
+                openKitchenScreen();
+                return;
+            }
+            if (currentNodeType === 'rest') {
+                if (preferActivitiesBase && state.currentView === 'gallery') {
+                    switchView('activities');
+                }
+                openRogueRestModalV2();
+                return;
+            }
+            if (currentNodeType === 'event') {
+                if (preferActivitiesBase && state.currentView === 'gallery') {
+                    switchView('activities');
+                }
+                openRogueEventModalV2();
+                return;
+            }
+            if (currentNodeType === 'merchant') {
+                if (preferActivitiesBase && state.currentView === 'gallery') {
+                    switchView('activities');
+                }
+                openRogueMerchantModalV2();
+                return;
+            }
+            if (currentNodeType === 'market') {
+                switchView('gallery');
+                return;
+            }
+            switchView('gallery');
+            return;
+        }
         const run = getRogueRun();
         const preferActivitiesBase = !options || options.preferActivitiesBase !== false;
         if (!run) return;
@@ -1576,7 +3427,7 @@
         run.currentOrder = null;
         showRogueToast('已无惩罚跳过厨房，进入出售准备');
         syncRogueStateConsistency();
-        saveGardenGameState();
+        saveActiveGardenModeState();
         refreshGardenEconomyUi();
         openCurrentRogueStageScreen({ preferActivitiesBase: false });
     }
@@ -1600,7 +3451,7 @@
             showRogueToast('出售卡已生效，去仓库完成 2 张特殊订单吧');
         }
         syncRogueStateConsistency();
-        saveGardenGameState();
+        saveActiveGardenModeState();
         refreshGardenEconomyUi();
         if (card.context === 'sell') {
             openCurrentRogueStageScreen({ preferActivitiesBase: false });
@@ -1621,7 +3472,7 @@
             }
         }
         syncRogueStateConsistency();
-        saveGardenGameState();
+        saveActiveGardenModeState();
         refreshGardenEconomyUi();
         if (nextStage) {
             showRogueToast(`补给已领取，进入${ROGUE_STAGE_LABELS[nextStage] || '下一阶段'}`);
@@ -1651,8 +3502,14 @@
         if (run.progress.ordersCompleted >= 2) {
             const completedRuns = Math.max(0, Math.floor(Number(run.completedRuns) || 0)) + 1;
             updateGardenCoins(120);
-            state.gardenGame.rogueRun = createDefaultRogueRun(completedRuns);
-            syncRogueStateConsistency();
+            if (state.rogueRunV2) {
+                state.rogueRunV2.completed = true;
+                state.rogueRunV2.victory = true;
+                saveRogueRunStateV2();
+                renderRogueUiV2();
+            } else if (state.gardenGame) {
+                state.gardenGame.rogueRun = null;
+            }
             showRogueToast(`本轮完成，额外获得 ${completedOrder.bonusGold + 120} 金币，已开启下一轮农场阶段`);
             return { finishedRun: true, reward: completedOrder.bonusGold, settlementGold: 120 };
         }
@@ -1731,9 +3588,13 @@
         farmCloseBtn = document.getElementById('garden-farm-close-btn');
         farmGridEl = document.getElementById('garden-farm-grid');
         farmSeedPanelEl = document.getElementById('garden-farm-seed-panel');
+        farmPanelTitleEl = document.getElementById('garden-farm-panel-title');
         farmSeedListEl = document.getElementById('garden-farm-seed-list');
         farmCoinsEl = document.getElementById('garden-farm-coins');
         farmLevelEl = document.getElementById('garden-farm-level');
+        farmBuffSummaryEl = document.getElementById('garden-farm-buff-summary');
+        farmBuffSummaryTextEl = document.getElementById('garden-farm-buff-summary-text');
+        farmBuffChipEl = document.getElementById('garden-farm-buff-chip');
         farmToolBtns = Array.from(document.querySelectorAll('#garden-app [data-farm-tool]'));
         farmToastEl = document.getElementById('garden-farm-toast');
         pastureScreenEl = document.getElementById('garden-pasture-screen');
@@ -1742,6 +3603,9 @@
         pastureShopPanelEl = document.getElementById('garden-pasture-shop-panel');
         pastureCoinsEl = document.getElementById('garden-pasture-coins');
         pastureExpEl = document.getElementById('garden-pasture-exp');
+        pastureBuffSummaryEl = document.getElementById('garden-pasture-buff-summary');
+        pastureBuffSummaryTextEl = document.getElementById('garden-pasture-buff-summary-text');
+        pastureBuffChipEl = document.getElementById('garden-pasture-buff-chip');
         pastureToolBtns = Array.from(document.querySelectorAll('#garden-app [data-pasture-tool]'));
         pastureShopItems = Array.from(document.querySelectorAll('#garden-app [data-pasture-animal]'));
         pastureToastEl = document.getElementById('garden-pasture-toast');
@@ -1754,6 +3618,11 @@
         kitchenQteHintEl = document.getElementById('garden-kitchen-qte-hint');
         kitchenToastEl = document.getElementById('garden-kitchen-toast');
         kitchenCookBtns = Array.from(document.querySelectorAll('#garden-app [data-kitchen-cook]'));
+        kitchenBuffSummaryEl = document.getElementById('garden-kitchen-buff-summary');
+        kitchenBuffSummaryTextEl = document.getElementById('garden-kitchen-buff-summary-text');
+        kitchenBuffChipEl = document.getElementById('garden-kitchen-buff-chip');
+        kitchenToolPanelEl = document.getElementById('garden-kitchen-tool-panel');
+        kitchenToolListEl = document.getElementById('garden-kitchen-tool-list');
         rogueProgressStripEl = document.getElementById('garden-rogue-strip');
         rogueProgressStageEl = document.getElementById('garden-rogue-stage');
         rogueProgressCardsEl = document.getElementById('garden-rogue-cards');
@@ -1768,8 +3637,26 @@
         rogueOfferTitleEl = document.getElementById('garden-rogue-offer-title');
         rogueOfferDescEl = document.getElementById('garden-rogue-offer-desc');
         rogueOfferChoicesEl = document.getElementById('garden-rogue-offer-choices');
+        rogueIntroModalEl = document.getElementById('garden-rogue-intro');
+        rogueIntroTitleEl = document.getElementById('garden-rogue-intro-title');
+        rogueIntroDescEl = document.getElementById('garden-rogue-intro-desc');
+        rogueIntroBodyEl = document.getElementById('garden-rogue-intro-body');
+        rogueBuffPanelEl = document.getElementById('garden-rogue-buff-panel');
+        rogueBuffPanelListEl = document.getElementById('garden-rogue-buff-panel-list');
         storageOrderCardEl = document.getElementById('garden-storage-order-card');
         kitchenSkipBtnEl = document.getElementById('garden-kitchen-skip-btn');
+        farmMissionEl = document.getElementById('garden-farm-mission');
+        farmMissionTitleEl = document.getElementById('garden-farm-mission-title');
+        farmMissionProgressEl = document.getElementById('garden-farm-mission-progress');
+        farmMissionActionEl = document.getElementById('garden-farm-mission-action');
+        pastureMissionEl = document.getElementById('garden-pasture-mission');
+        pastureMissionTitleEl = document.getElementById('garden-pasture-mission-title');
+        pastureMissionProgressEl = document.getElementById('garden-pasture-mission-progress');
+        pastureMissionActionEl = document.getElementById('garden-pasture-mission-action');
+        kitchenMissionEl = document.getElementById('garden-kitchen-mission');
+        kitchenMissionTitleEl = document.getElementById('garden-kitchen-mission-title');
+        kitchenMissionProgressEl = document.getElementById('garden-kitchen-mission-progress');
+        kitchenMissionActionEl = document.getElementById('garden-kitchen-mission-action');
         homeTutorialCardEl = document.getElementById('garden-home-tutorial-card');
         homeTutorialReopenBtnEl = document.getElementById('garden-home-tutorial-reopen');
         floraScreenEl = document.getElementById('garden-flora-screen');
@@ -1785,12 +3672,12 @@
         }
 
         state.casualGardenGame = loadGardenGameState('casual');
-        if (hasPersistedRogueActivitySave()) {
-            state.rogueActivityGame = loadGardenGameState('rogue_activity');
-        }
+        state.rogueMetaV2 = loadRogueMetaStateV2();
+        state.rogueRunV2 = loadRogueRunStateV2();
         setGardenMode('casual');
         state.homeTutorialDismissed = readHomeTutorialDismissed();
-        saveGardenGameState();
+        saveActiveGardenModeState();
+        renderRogueUiV2();
         syncHomeTutorialVisibility();
 
         closeBtn.addEventListener('click', closeApp);
@@ -2045,19 +3932,20 @@
 
     function enterCasualGardenMode() {
         setGardenMode('casual');
-        saveGardenGameState();
+        saveActiveGardenModeState();
         refreshGardenEconomyUi();
         renderFarmPlots();
         renderPastureAnimals();
     }
 
     function enterRogueActivityMode() {
-        if (!state.rogueActivityGame) {
-            state.rogueActivityGame = loadGardenGameState('rogue_activity');
+        if (!state.rogueMetaV2) state.rogueMetaV2 = loadRogueMetaStateV2();
+        if (!state.rogueRunV2 && hasPersistedRogueRunV2()) {
+            state.rogueRunV2 = loadRogueRunStateV2();
         }
         setGardenMode('rogue_activity');
-        syncRogueStateConsistency();
         saveGardenGameState();
+        renderRogueUiV2();
         refreshGardenEconomyUi();
         renderFarmPlots();
         renderPastureAnimals();
@@ -2081,7 +3969,10 @@
     function openFarmRogueChallengeFromActivities() {
         openActivitiesView();
         enterRogueActivityMode();
-        openCurrentRogueStageScreen();
+        if (rogueOfferModalEl && rogueOfferModalEl.classList.contains('is-open')) {
+            return;
+        }
+        openRogueEntryChoiceV2();
     }
 
     function initFarmScreen() {
@@ -2121,8 +4012,15 @@
     }
 
     function syncFarmStats() {
-        if (farmCoinsEl) farmCoinsEl.textContent = String(state.gardenGame ? state.gardenGame.coins : 0);
-        if (farmLevelEl) farmLevelEl.textContent = String(state.gardenGame ? state.gardenGame.farm.level : 1);
+        const isRogue = isRogueActivityMode() && !!state.rogueRunV2;
+        const coins = isRogue
+            ? Math.max(0, Math.floor(Number(state.rogueRunV2.runCoins) || 0))
+            : (state.gardenGame ? state.gardenGame.coins : 0);
+        const level = isRogue
+            ? Math.max(1, Math.floor(Number((state.rogueRunV2.farm && state.rogueRunV2.farm.level) || 1)))
+            : (state.gardenGame ? state.gardenGame.farm.level : 1);
+        if (farmCoinsEl) farmCoinsEl.textContent = String(coins);
+        if (farmLevelEl) farmLevelEl.textContent = String(level);
     }
 
     function ensureFarmProgressTimer() {
@@ -2218,12 +4116,39 @@
             button.classList.toggle('active', button.dataset.farmTool === state.farmGame.currentTool);
         });
         if (farmSeedPanelEl) {
-            farmSeedPanelEl.classList.toggle('is-open', state.farmGame.currentTool === 'plant');
+            farmSeedPanelEl.classList.toggle('is-open', state.farmGame.currentTool === 'plant' || state.farmGame.currentTool === 'tool');
+        }
+        if (farmPanelTitleEl) {
+            farmPanelTitleEl.textContent = state.farmGame.currentTool === 'tool' ? '局内道具' : '种子背包';
         }
         if (!farmSeedListEl) return;
+        if (state.farmGame.currentTool === 'tool' && isRogueActivityMode()) {
+            renderFarmToolListUi();
+            return;
+        }
         farmSeedListEl.querySelectorAll('[data-farm-seed]').forEach((item) => {
             item.classList.toggle('active', item.dataset.farmSeed === state.farmGame.currentSeed);
         });
+    }
+
+    function renderFarmToolListUi() {
+        if (!farmSeedListEl) return;
+        const rows = Object.keys(ROGUE_ACTIVE_ITEM_POOL_V2)
+            .filter((itemId) => ROGUE_ACTIVE_ITEM_POOL_V2[itemId].scope === 'farm' && getRogueToolCountV2(itemId) > 0)
+            .map((itemId) => {
+                const tool = ROGUE_ACTIVE_ITEM_POOL_V2[itemId];
+                const selected = state.farmGame.selectedToolItemId === itemId;
+                return `
+                    <button class="garden-farm-seed-item ${selected ? 'active' : ''}" data-rogue-tool-use="${itemId}" type="button">
+                        <div class="garden-farm-seed-icon">${tool.emoji}</div>
+                        <div class="garden-farm-seed-meta">
+                            <div class="garden-farm-seed-name">${tool.name} x${getRogueToolCountV2(itemId)}</div>
+                            <div class="garden-farm-seed-cost">${tool.desc}</div>
+                        </div>
+                    </button>
+                `;
+            }).join('');
+        farmSeedListEl.innerHTML = rows || '<div class="garden-rogue-empty-text">当前没有可用农场道具</div>';
     }
 
     function setFarmTool(toolKey) {
@@ -2251,6 +4176,8 @@
         state.currentHomeSection = 'farm';
         farmScreenEl.classList.add('is-open');
         farmScreenEl.setAttribute('aria-hidden', 'false');
+        syncMiniGameMissionUi();
+        syncRogueBuffSummaryUi();
         vibrate(20);
     }
 
@@ -2269,6 +4196,44 @@
         const plotState = plotEl.dataset.state || 'empty';
         const currentTool = state.farmGame.currentTool;
 
+        if (currentTool === 'tool' && isRogueActivityMode()) {
+            const selectedTool = state.farmGame.selectedToolItemId;
+            if (!selectedTool) {
+                showFarmToast('先从底栏选择一个农场道具');
+                return;
+            }
+            const plot = getFarmPlotStateByElement(plotEl);
+            if (!plot) return;
+            if (selectedTool === 'greenhouse_spray') {
+                if (plot.state !== 'growing' && plot.state !== 'planted') {
+                    showFarmToast('温室喷雾要对已种下的作物使用');
+                    return;
+                }
+                if (!consumeRogueToolV2(selectedTool)) return;
+                plot.state = 'ready';
+                plot.readyAt = Date.now();
+                state.farmGame.selectedToolItemId = null;
+                renderFarmPlots();
+                saveActiveGardenModeState();
+                syncRogueBuffSummaryUi();
+                showFarmToast('温室喷雾生效，这块地已立刻成熟');
+                return;
+            }
+            if (selectedTool === 'fertilizer') {
+                if (plot.state !== 'growing' && plot.state !== 'ready' && plot.state !== 'planted') {
+                    showFarmToast('肥料要对已经种下的作物使用');
+                    return;
+                }
+                if (!consumeRogueToolV2(selectedTool)) return;
+                plot.bonusYield = (Number(plot.bonusYield) || 0) + 1;
+                state.farmGame.selectedToolItemId = null;
+                saveActiveGardenModeState();
+                syncRogueBuffSummaryUi();
+                showFarmToast('施肥成功，这块地收获时会额外增产');
+                return;
+            }
+        }
+
         if (currentTool === 'plant') {
             if (plotState !== 'empty') {
                 showFarmToast('这块地已经种上啦');
@@ -2276,7 +4241,10 @@
             }
             const seed = FARM_SEEDS[state.farmGame.currentSeed];
             if (!seed) return;
-            if (!state.gardenGame || state.gardenGame.coins < seed.cost) {
+            const availableCoins = isRogueActivityMode() && state.rogueRunV2
+                ? Math.max(0, Math.floor(Number(state.rogueRunV2.runCoins) || 0))
+                : (state.gardenGame ? state.gardenGame.coins : 0);
+            if (availableCoins < seed.cost) {
                 showFarmToast('金币不足啦');
                 return;
             }
@@ -2385,6 +4353,10 @@
         const plot = getFarmPlotStateByElement(plotEl);
         if (!plot) return;
         let rewardQty = 1;
+        if (Number(plot.bonusYield || 0) > 0) {
+            rewardQty += Math.max(0, Math.floor(Number(plot.bonusYield) || 0));
+            plot.bonusYield = 0;
+        }
         if (consumeRogueModifier('farm_double_crop') && Math.random() < getRogueModifierValue('farm_double_crop', 0.35)) {
             rewardQty += 1;
         }
@@ -2397,21 +4369,27 @@
         plot.seedId = '';
         plot.readyAt = null;
         plot.growDuration = null;
-        state.gardenGame.farm.exp += 10;
-        progressRogueFarmHarvest();
+        if (isRogueActivityMode() && state.rogueRunV2) {
+            state.rogueRunV2.farm.exp = Math.max(0, Math.floor(Number(state.rogueRunV2.farm.exp) || 0) + 10);
+            progressRogueFarmHarvestV2();
+        } else if (state.gardenGame) {
+            state.gardenGame.farm.exp += 10;
+            progressRogueFarmHarvest();
+        }
 
         let leveledUp = false;
-        while (state.gardenGame.farm.exp >= 100) {
-            state.gardenGame.farm.exp -= 100;
-            state.gardenGame.farm.level += 1;
+        const farmState = isRogueActivityMode() && state.rogueRunV2 ? state.rogueRunV2.farm : state.gardenGame.farm;
+        while (farmState.exp >= 100) {
+            farmState.exp -= 100;
+            farmState.level += 1;
             leveledUp = true;
         }
 
         renderFarmPlots();
-        saveGardenGameState();
+        saveActiveGardenModeState();
         refreshGardenEconomyUi();
         showFarmToast(leveledUp
-            ? `收获 ${seed.name} x${rewardQty}，已存入仓库 · 升到 ${state.gardenGame.farm.level} 级`
+            ? `收获 ${seed.name} x${rewardQty}，已存入仓库 · 升到 ${farmState.level} 级`
             : `收获 ${seed.name} x${rewardQty}，已存入仓库`);
     }
 
@@ -2439,6 +4417,7 @@
     function initPastureScreen() {
         if (!pastureFieldEl || !pastureShopPanelEl || !pastureCoinsEl || !pastureExpEl) return;
         if (!state.pastureGame.initialized) {
+            state.pastureGame.shopMarkup = pastureShopPanelEl.innerHTML;
             pastureFieldEl.addEventListener('click', handlePastureAreaClick);
             pastureToolBtns.forEach((button) => {
                 button.addEventListener('click', () => {
@@ -2463,19 +4442,117 @@
     }
 
     function syncPastureStats() {
-        if (pastureCoinsEl) pastureCoinsEl.textContent = String(state.gardenGame ? state.gardenGame.coins : 0);
-        if (pastureExpEl) pastureExpEl.textContent = `Lv.${state.gardenGame ? state.gardenGame.pasture.level : 1}`;
+        const isRogue = isRogueActivityMode() && !!state.rogueRunV2;
+        const coins = isRogue
+            ? Math.max(0, Math.floor(Number(state.rogueRunV2.runCoins) || 0))
+            : (state.gardenGame ? state.gardenGame.coins : 0);
+        const level = isRogue
+            ? Math.max(1, Math.floor(Number((state.rogueRunV2.pasture && state.rogueRunV2.pasture.level) || 1)))
+            : (state.gardenGame ? state.gardenGame.pasture.level : 1);
+        if (pastureCoinsEl) pastureCoinsEl.textContent = String(coins);
+        if (pastureExpEl) pastureExpEl.textContent = `Lv.${level}`;
     }
 
     function syncPastureToolUi() {
         pastureToolBtns.forEach((button) => {
             button.classList.toggle('active', button.dataset.pastureTool === state.pastureGame.currentTool);
         });
-        pastureShopItems.forEach((button) => {
-            button.classList.toggle('selected', button.dataset.pastureAnimal === state.pastureGame.selectedAnimalToBuy);
-        });
         if (pastureShopPanelEl) {
-            pastureShopPanelEl.style.display = state.pastureGame.currentTool === 'shop' ? 'flex' : 'none';
+            pastureShopPanelEl.style.display = state.pastureGame.currentTool === 'shop' || state.pastureGame.currentTool === 'tool' ? 'flex' : 'none';
+            if (state.pastureGame.currentTool === 'shop') {
+                if (state.pastureGame.shopMarkup) {
+                    pastureShopPanelEl.innerHTML = state.pastureGame.shopMarkup;
+                    pastureShopItems = Array.from(document.querySelectorAll('#garden-app [data-pasture-animal]'));
+                    pastureShopItems.forEach((button) => {
+                        button.addEventListener('click', () => {
+                            const animalType = button.dataset.pastureAnimal;
+                            if (animalType) selectPastureAnimalToBuy(animalType);
+                        });
+                        button.classList.toggle('selected', button.dataset.pastureAnimal === state.pastureGame.selectedAnimalToBuy);
+                    });
+                }
+            } else if (state.pastureGame.currentTool === 'tool' && isRogueActivityMode()) {
+                renderPastureToolListUi();
+            }
+        }
+    }
+
+    function renderPastureToolListUi() {
+        if (!pastureShopPanelEl) return;
+        const rows = Object.keys(ROGUE_ACTIVE_ITEM_POOL_V2)
+            .filter((itemId) => ROGUE_ACTIVE_ITEM_POOL_V2[itemId].scope === 'pasture' && getRogueToolCountV2(itemId) > 0)
+            .map((itemId) => {
+                const tool = ROGUE_ACTIVE_ITEM_POOL_V2[itemId];
+                return `
+                    <button class="garden-pasture-shop-item" data-rogue-tool-use="${itemId}" type="button">
+                        <div class="garden-pasture-shop-icon">${tool.emoji}</div>
+                        <div class="garden-pasture-shop-name">${tool.name} x${getRogueToolCountV2(itemId)}</div>
+                        <div class="garden-pasture-shop-price">${tool.desc}</div>
+                    </button>
+                `;
+            }).join('');
+        pastureShopPanelEl.innerHTML = rows || '<div class="garden-rogue-empty-text">当前没有可用牧场道具</div>';
+    }
+
+    function syncKitchenToolPanelUi() {
+        if (!kitchenToolPanelEl || !kitchenToolListEl) return;
+        const shouldShow = isRogueActivityMode() && state.kitchenGame.toolPanelOpen;
+        kitchenToolPanelEl.hidden = !shouldShow;
+        if (!shouldShow) return;
+        const rows = Object.keys(ROGUE_ACTIVE_ITEM_POOL_V2)
+            .filter((itemId) => ROGUE_ACTIVE_ITEM_POOL_V2[itemId].scope === 'kitchen' && getRogueToolCountV2(itemId) > 0)
+            .map((itemId) => {
+                const tool = ROGUE_ACTIVE_ITEM_POOL_V2[itemId];
+                return `
+                    <button class="garden-kitchen-tool-item" data-rogue-tool-use="${itemId}" type="button">
+                        <span>${tool.emoji} ${tool.name} x${getRogueToolCountV2(itemId)}</span>
+                        <small>${tool.desc}</small>
+                    </button>
+                `;
+            }).join('');
+        kitchenToolListEl.innerHTML = rows || '<div class="garden-rogue-empty-text">当前没有可用厨房道具</div>';
+    }
+
+    function syncRogueBuffSummaryUi() {
+        const visible = isRogueActivityMode() && !!getRogueRunV2();
+        [farmBuffSummaryEl, pastureBuffSummaryEl, kitchenBuffSummaryEl].forEach((el) => {
+            if (el) el.hidden = !visible;
+        });
+        [farmBuffChipEl, pastureBuffChipEl, kitchenBuffChipEl].forEach((el) => {
+            if (el) el.hidden = !visible;
+        });
+        const text = getRogueBuffSummaryTextV2();
+        if (farmBuffSummaryTextEl) farmBuffSummaryTextEl.textContent = text;
+        if (pastureBuffSummaryTextEl) pastureBuffSummaryTextEl.textContent = text;
+        if (kitchenBuffSummaryTextEl) kitchenBuffSummaryTextEl.textContent = text;
+        if (farmBuffChipEl) farmBuffChipEl.textContent = state.rogueBuffPanelOpen ? '收起增益' : '增益';
+        if (pastureBuffChipEl) pastureBuffChipEl.textContent = state.rogueBuffPanelOpen ? '收起增益' : '增益';
+        if (kitchenBuffChipEl) kitchenBuffChipEl.textContent = state.rogueBuffPanelOpen ? '收起增益' : '增益';
+    }
+
+    function useRogueActiveItemV2(itemId) {
+        const run = getRogueRunV2();
+        const tool = ROGUE_ACTIVE_ITEM_POOL_V2[itemId];
+        if (!run || !tool || getRogueToolCountV2(itemId) <= 0) return;
+        if (tool.scope === 'kitchen') {
+            if (!consumeRogueToolV2(itemId)) return;
+            run.tempToolEffects = run.tempToolEffects || {};
+            run.tempToolEffects[itemId] = true;
+            state.kitchenGame.toolPanelOpen = false;
+            syncKitchenToolPanelUi();
+            saveRogueRunStateV2();
+            syncRogueBuffSummaryUi();
+            showKitchenToast(`${tool.name} 已就绪，下一次成功烹饪会触发效果`);
+            return;
+        }
+        if (tool.scope === 'farm') {
+            state.farmGame.selectedToolItemId = itemId;
+            showFarmToast(`已选中 ${tool.name}，现在点一块田地即可施放`);
+            return;
+        }
+        if (tool.scope === 'pasture') {
+            state.pastureGame.selectedToolItemId = itemId;
+            showPastureToast(`已选中 ${tool.name}，现在点一只动物即可施放`);
         }
     }
 
@@ -2510,6 +4587,8 @@
         pastureScreenEl.setAttribute('aria-hidden', 'false');
         renderPastureAnimals();
         syncPastureStats();
+        syncMiniGameMissionUi();
+        syncRogueBuffSummaryUi();
         vibrate(20);
     }
 
@@ -2565,7 +4644,10 @@
         const animalType = state.pastureGame.selectedAnimalToBuy;
         const animalData = PASTURE_ANIMAL_DATA[animalType];
         if (!animalData) return;
-        if (!state.gardenGame || state.gardenGame.coins < animalData.cost) {
+        const availableCoins = isRogueActivityMode() && state.rogueRunV2
+            ? Math.max(0, Math.floor(Number(state.rogueRunV2.runCoins) || 0))
+            : (state.gardenGame ? state.gardenGame.coins : 0);
+        if (availableCoins < animalData.cost) {
             showPastureToast('金币不足！');
             return;
         }
@@ -2667,6 +4749,38 @@
         const bubble = wrapper.querySelector('.garden-pasture-bubble');
         if (!bubble) return;
 
+        if (state.pastureGame.currentTool === 'tool' && isRogueActivityMode()) {
+            const selectedTool = state.pastureGame.selectedToolItemId;
+            if (!selectedTool) {
+                showPastureToast('先从底栏选择一个牧场道具');
+                return;
+            }
+            if (selectedTool === 'pasture_whistle') {
+                if (animalAge === 'baby') {
+                    showPastureToast('口哨更适合对成年动物使用');
+                    return;
+                }
+                if (!consumeRogueToolV2(selectedTool)) return;
+                animal.state = 'ready';
+                animal.stateEndsAt = null;
+                state.pastureGame.selectedToolItemId = null;
+                renderPastureAnimals();
+                saveActiveGardenModeState();
+                syncRogueBuffSummaryUi();
+                showPastureToast('牧场口哨生效，动物已可直接收获');
+                return;
+            }
+            if (selectedTool === 'nutrient_feed') {
+                if (!consumeRogueToolV2(selectedTool)) return;
+                animal.bonusYield = (Number(animal.bonusYield) || 0) + 1;
+                state.pastureGame.selectedToolItemId = null;
+                saveActiveGardenModeState();
+                syncRogueBuffSummaryUi();
+                showPastureToast('营养饲料生效，下次收获额外 +1');
+                return;
+            }
+        }
+
         if (state.pastureGame.currentTool === 'pointer') {
             wrapper.classList.add('garden-pasture-show-bubble');
             window.setTimeout(() => {
@@ -2713,6 +4827,10 @@
             animal.state = 'hungry';
             animal.stateEndsAt = null;
             let rewardQty = 1;
+            if (Number(animal.bonusYield || 0) > 0) {
+                rewardQty += Math.max(0, Math.floor(Number(animal.bonusYield) || 0));
+                animal.bonusYield = 0;
+            }
             if (consumeRogueModifier('pasture_twin_yield') && Math.random() < getRogueModifierValue('pasture_twin_yield', 0.35)) {
                 rewardQty += 1;
             }
@@ -2721,9 +4839,13 @@
                 rogueModifierAddFlag('pasture_type_bonus', animal.type);
             }
             addInventoryItem(data.inventoryId, rewardQty);
-            progressRoguePastureHarvest();
+            if (isRogueActivityMode() && state.rogueRunV2) {
+                progressRoguePastureHarvestV2();
+            } else {
+                progressRoguePastureHarvest();
+            }
             renderPastureAnimals();
-            saveGardenGameState();
+            saveActiveGardenModeState();
             refreshGardenEconomyUi();
             showPastureToast(`获得 ${data.produceName} ${data.produceEmoji} x${rewardQty}，已存入仓库`);
         }
@@ -2878,6 +5000,9 @@
         kitchenScreenEl.setAttribute('aria-hidden', 'false');
         syncKitchenCookButtons();
         syncGardenRogueUi();
+        syncMiniGameMissionUi();
+        syncRogueBuffSummaryUi();
+        syncKitchenToolPanelUi();
         vibrate(20);
     }
 
@@ -2984,6 +5109,10 @@
             if (consumeRogueModifier('kitchen_bonus_output')) {
                 outputQty += 1;
             }
+            if (isRogueActivityMode() && state.rogueRunV2 && state.rogueRunV2.tempToolEffects && state.rogueRunV2.tempToolEffects.kitchen_spice) {
+                outputQty += 1;
+                delete state.rogueRunV2.tempToolEffects.kitchen_spice;
+            }
             if (recipe.id) {
                 addInventoryItem(recipe.id, outputQty);
             }
@@ -2992,8 +5121,12 @@
                 addInventoryItem(recipe.primaryIngredient, 1);
                 returnedPrimary = true;
             }
-            progressRogueKitchenSuccess();
-            saveGardenGameState();
+            if (isRogueActivityMode() && state.rogueRunV2) {
+                progressRogueKitchenSuccessV2();
+            } else {
+                progressRogueKitchenSuccess();
+            }
+            saveActiveGardenModeState();
             refreshGardenEconomyUi();
             const prefix = quality === 'perfect' ? '✨[完美品质]✨' : '✅';
             showKitchenToast(`${prefix} ${recipe.name} ${recipe.emoji} x${outputQty} 已存入仓库${returnedPrimary ? ' · 已返还 1 份主材料' : ''}`);
@@ -3168,9 +5301,15 @@
             if (!tabButton) return;
 
             const nextTab = tabButton.dataset.storageTab;
-            if (!nextTab || !STORAGE_TABS[nextTab] || !state.gardenGame) return;
-            state.gardenGame.storage.tab = nextTab;
-            saveGardenGameState();
+            if (!nextTab || !STORAGE_TABS[nextTab]) return;
+            if (isRogueActivityMode() && state.rogueRunV2) {
+                state.rogueRunV2.storage = state.rogueRunV2.storage || { tab: 'crops' };
+                state.rogueRunV2.storage.tab = nextTab;
+            } else {
+                if (!state.gardenGame) return;
+                state.gardenGame.storage.tab = nextTab;
+            }
+            saveActiveGardenModeState();
             renderStorageItems(nextTab);
             vibrate(15);
         });
@@ -3185,7 +5324,10 @@
             .filter((item) => item.count > 0);
         renderStorageSpecialOrderCard();
 
-        if (state.gardenGame && state.gardenGame.storage) {
+        if (isRogueActivityMode() && state.rogueRunV2) {
+            state.rogueRunV2.storage = state.rogueRunV2.storage || { tab: 'crops' };
+            state.rogueRunV2.storage.tab = nextType;
+        } else if (state.gardenGame && state.gardenGame.storage) {
             state.gardenGame.storage.tab = nextType;
         }
 
@@ -3266,7 +5408,7 @@
         addInventoryItem(itemId, -sellQty);
         updateGardenCoins(totalGold);
         const orderResult = applySellToCurrentOrder(itemId, sellQty);
-        saveGardenGameState();
+        saveActiveGardenModeState();
         refreshGardenEconomyUi();
 
         if (orderResult && orderResult.finishedRun) {
@@ -4900,12 +7042,11 @@
         init();
         if (!screenEl) return;
         state.casualGardenGame = loadGardenGameState('casual');
-        if (hasPersistedRogueActivitySave()) {
-            state.rogueActivityGame = loadGardenGameState('rogue_activity');
-        }
+        state.rogueMetaV2 = loadRogueMetaStateV2();
+        state.rogueRunV2 = loadRogueRunStateV2();
         setGardenMode('casual');
-        syncRogueStateConsistency();
         saveGardenGameState();
+        renderRogueUiV2();
         refreshGardenEconomyUi();
         syncHomeTutorialVisibility();
         renderFarmPlots();

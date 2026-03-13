@@ -1599,25 +1599,25 @@
             <div id="garden-rogue-strip" class="garden-rogue-strip">
                 <button class="garden-rogue-strip-main" data-rogue-open-panel type="button">
                     <div class="garden-rogue-strip-head">
-                        <span class="garden-rogue-strip-title">本轮进度</span>
-                        <span id="garden-rogue-stage" class="garden-rogue-strip-pill">农场阶段</span>
-                        <span id="garden-rogue-cards" class="garden-rogue-strip-pill">已选卡牌 0/4</span>
+                        <span class="garden-rogue-strip-title">丰收远征</span>
+                        <span id="garden-rogue-stage" class="garden-rogue-strip-pill">未开始</span>
+                        <span id="garden-rogue-cards" class="garden-rogue-strip-pill">遗物 0 / 士气 3</span>
                     </div>
-                    <div id="garden-rogue-goal" class="garden-rogue-strip-goal">目标：收获作物 2 次（0/2）</div>
-                    <div id="garden-rogue-order" class="garden-rogue-strip-order">订单：未开始</div>
+                    <div id="garden-rogue-goal" class="garden-rogue-strip-goal">选择起始流派，进入 3 幕分支地图。</div>
+                    <div id="garden-rogue-order" class="garden-rogue-strip-order">局内独立经济 · 精英与 Boss 会给高稀有奖励</div>
                 </button>
                 <button id="garden-home-tutorial-reopen" class="garden-home-tutorial-reopen" data-home-tutorial-open type="button">教程</button>
                 <div id="garden-home-tutorial-card" class="garden-home-tutorial-card" aria-label="家园新手教程" hidden>
                     <button class="garden-home-tutorial-close" data-home-tutorial-close type="button" aria-label="关闭教程">
                         <i class="ri-close-line"></i>
                     </button>
-                    <div class="garden-home-tutorial-title">新手教程</div>
-                    <div class="garden-home-tutorial-item">1. 一轮顺序：农场 → 牧场 → 厨房 → 出售。</div>
-                    <div class="garden-home-tutorial-item">2. 每阶段完成目标后，可三选一拿本轮卡牌。</div>
-                    <div class="garden-home-tutorial-item">3. 出售阶段完成 2 张特殊订单，就能结算并开启下一轮。</div>
-                    <div class="garden-home-tutorial-item">4. 农场目标就是收获作物；牧场目标就是收获畜产；厨房目标是成功做出 1 道菜。</div>
-                    <div class="garden-home-tutorial-item">5. 厨房没材料时可直接跳过，不会失败。</div>
-                    <div class="garden-home-tutorial-tip">提示：进度条第二行显示的就是你当前阶段目标。</div>
+                    <div class="garden-home-tutorial-title">远征教程</div>
+                    <div class="garden-home-tutorial-item">1. 先点“开始远征”，选择一个起始流派后开局。</div>
+                    <div class="garden-home-tutorial-item">2. 每一幕有多层分支路线，每层只选 1 个节点推进。</div>
+                    <div class="garden-home-tutorial-item">3. 普通节点每清 2 个，会触发一次三选一遗物奖励。</div>
+                    <div class="garden-home-tutorial-item">4. 农场和牧场负责囤原料，厨房负责加工，市场和 Boss 负责兑现 build。</div>
+                    <div class="garden-home-tutorial-item">5. 当前任务看顶部第二行；第三行会告诉你这样做的价值和思路。</div>
+                    <div class="garden-home-tutorial-tip">提示：如果当前没有节点可进，再点一次“开心小农场/继续远征”会直接弹出下一层选路。</div>
                 </div>
             </div>
 
@@ -1846,10 +1846,11 @@
                         <div class="garden-farm-cloud garden-farm-cloud-2"></div>
 
                         <div class="garden-farm-top-bar">
-                            <div class="garden-farm-user-stats">
+                            <button class="garden-farm-user-stats" data-mini-mission-toggle="farm" type="button" aria-label="展开农场任务指引">
                                 <div class="garden-farm-stat-item"><i class="ri-copper-coin-fill garden-farm-coin-icon"></i><span id="garden-farm-coins">100</span></div>
                                 <div class="garden-farm-stat-item"><i class="ri-star-smile-fill garden-farm-level-icon"></i><span id="garden-farm-level">1</span>级</div>
-                            </div>
+                            </button>
+                            <button id="garden-farm-buff-chip" class="garden-rogue-buff-chip" type="button" hidden>增益</button>
                             <button id="garden-farm-close-btn" class="garden-farm-close-btn" type="button" aria-label="退出农场并返回家园">
                                 <i class="ri-close-line"></i>
                             </button>
@@ -1859,9 +1860,25 @@
                             <div class="garden-farm-grid" id="garden-farm-grid"></div>
                         </div>
 
+                        <div id="garden-farm-mission" class="garden-mini-mission garden-mini-mission-top" hidden>
+                            <div class="garden-mini-mission-head">
+                                <div id="garden-farm-mission-title" class="garden-mini-mission-title">当前任务</div>
+                                <button class="garden-mini-mission-toggle" data-mini-mission-toggle="farm" type="button">收起</button>
+                            </div>
+                            <div class="garden-mini-mission-body">
+                                <div id="garden-farm-mission-progress" class="garden-mini-mission-progress"></div>
+                                <div id="garden-farm-mission-action" class="garden-mini-mission-action"></div>
+                            </div>
+                        </div>
+
+                        <button id="garden-farm-buff-summary" class="garden-rogue-buff-summary" type="button" hidden>
+                            <span class="garden-rogue-buff-summary-label">当前增益</span>
+                            <span id="garden-farm-buff-summary-text" class="garden-rogue-buff-summary-text">暂无增益</span>
+                        </button>
+
                         <div class="garden-farm-bottom-panel">
                             <div class="garden-farm-inventory-panel" id="garden-farm-seed-panel">
-                                <div class="garden-farm-inventory-title">种子背包</div>
+                                <div id="garden-farm-panel-title" class="garden-farm-inventory-title">种子背包</div>
                                 <div class="garden-farm-seed-list" id="garden-farm-seed-list"></div>
                             </div>
 
@@ -1886,6 +1903,10 @@
                                     <i class="ri-drag-move-fill garden-farm-tool-icon garden-farm-tool-icon-shovel"></i>
                                     <span class="garden-farm-tool-name">铲除</span>
                                 </button>
+                                <button class="garden-farm-tool-btn" data-farm-tool="tool" type="button">
+                                    <i class="ri-flask-fill garden-farm-tool-icon"></i>
+                                    <span class="garden-farm-tool-name">道具</span>
+                                </button>
                             </div>
                         </div>
 
@@ -1901,16 +1922,33 @@
                     <div class="garden-pasture-cloud garden-pasture-cloud-2"></div>
 
                     <div class="garden-pasture-top-bar">
-                        <div class="garden-pasture-user-stats">
+                        <button class="garden-pasture-user-stats" data-mini-mission-toggle="pasture" type="button" aria-label="展开牧场任务指引">
                             <div class="garden-pasture-stat-item"><i class="ri-copper-coin-fill garden-pasture-coin-icon"></i><span id="garden-pasture-coins">150</span></div>
                             <div class="garden-pasture-stat-item"><i class="ri-star-smile-fill garden-pasture-level-icon"></i><span id="garden-pasture-exp">Lv.2</span></div>
-                        </div>
+                        </button>
+                        <button id="garden-pasture-buff-chip" class="garden-rogue-buff-chip" type="button" hidden>增益</button>
                         <button id="garden-pasture-close-btn" class="garden-pasture-close-btn" type="button" aria-label="退出牧场并返回家园">
                             <i class="ri-close-line"></i>
                         </button>
                     </div>
 
                     <div class="garden-pasture-container" id="garden-pasture-field"></div>
+
+                    <div id="garden-pasture-mission" class="garden-mini-mission garden-mini-mission-top" hidden>
+                        <div class="garden-mini-mission-head">
+                            <div id="garden-pasture-mission-title" class="garden-mini-mission-title">当前任务</div>
+                            <button class="garden-mini-mission-toggle" data-mini-mission-toggle="pasture" type="button">收起</button>
+                        </div>
+                        <div class="garden-mini-mission-body">
+                            <div id="garden-pasture-mission-progress" class="garden-mini-mission-progress"></div>
+                            <div id="garden-pasture-mission-action" class="garden-mini-mission-action"></div>
+                        </div>
+                    </div>
+
+                    <button id="garden-pasture-buff-summary" class="garden-rogue-buff-summary" type="button" hidden>
+                        <span class="garden-rogue-buff-summary-label">当前增益</span>
+                        <span id="garden-pasture-buff-summary-text" class="garden-rogue-buff-summary-text">暂无增益</span>
+                    </button>
 
                     <div class="garden-pasture-bottom-panel">
                         <div class="garden-pasture-shop-panel" id="garden-pasture-shop-panel">
@@ -1949,6 +1987,9 @@
                             <button class="garden-pasture-tool-btn" data-pasture-tool="shop" type="button">
                                 <i class="ri-store-2-fill garden-pasture-tool-icon"></i><span class="garden-pasture-tool-name">买幼崽</span>
                             </button>
+                            <button class="garden-pasture-tool-btn" data-pasture-tool="tool" type="button">
+                                <i class="ri-magic-fill garden-pasture-tool-icon"></i><span class="garden-pasture-tool-name">道具</span>
+                            </button>
                         </div>
                     </div>
 
@@ -1958,13 +1999,16 @@
             <div id="garden-kitchen-screen" class="garden-kitchen-screen" aria-hidden="true">
                 <div class="garden-kitchen-world">
                     <div class="garden-kitchen-top-bar">
-                        <div class="garden-kitchen-title">🍳 厨房</div>
+                        <div class="garden-kitchen-title-row">
+                            <button class="garden-kitchen-title" data-mini-mission-toggle="kitchen" type="button" aria-label="展开厨房任务指引">🍳 厨房</button>
+                            <button id="garden-kitchen-buff-chip" class="garden-rogue-buff-chip garden-rogue-buff-chip-kitchen" type="button" hidden>增益</button>
+                        </div>
                         <button id="garden-kitchen-close-btn" class="garden-kitchen-close-btn" type="button" aria-label="退出厨房并返回家园">
                             <i class="ri-close-line"></i>
                         </button>
                     </div>
 
-                    <button id="garden-kitchen-skip-btn" class="garden-kitchen-skip-btn" data-kitchen-skip-rogue type="button" hidden>当前没有可做料理，跳过厨房</button>
+                    <button id="garden-kitchen-skip-btn" class="garden-kitchen-skip-btn" data-kitchen-skip-rogue type="button" hidden>当前节点没有可做料理，跳过厨房节点</button>
 
                     <div class="garden-kitchen-area" id="garden-kitchen-area">
                         <div class="garden-kitchen-recipe-card" data-kitchen-recipe="bread">
@@ -2031,6 +2075,30 @@
                         </div>
                     </div>
 
+                    <div id="garden-kitchen-mission" class="garden-mini-mission garden-mini-mission-top" hidden>
+                        <div class="garden-mini-mission-head">
+                            <div id="garden-kitchen-mission-title" class="garden-mini-mission-title">当前任务</div>
+                            <button class="garden-mini-mission-toggle" data-mini-mission-toggle="kitchen" type="button">收起</button>
+                        </div>
+                        <div class="garden-mini-mission-body">
+                            <div id="garden-kitchen-mission-progress" class="garden-mini-mission-progress"></div>
+                            <div id="garden-kitchen-mission-action" class="garden-mini-mission-action"></div>
+                        </div>
+                    </div>
+
+                    <button id="garden-kitchen-buff-summary" class="garden-rogue-buff-summary garden-rogue-buff-summary-kitchen" type="button" hidden>
+                        <span class="garden-rogue-buff-summary-label">当前增益</span>
+                        <span id="garden-kitchen-buff-summary-text" class="garden-rogue-buff-summary-text">暂无增益</span>
+                    </button>
+
+                    <div id="garden-kitchen-tool-panel" class="garden-kitchen-tool-panel" hidden>
+                        <div class="garden-kitchen-tool-panel-head">
+                            <div class="garden-kitchen-tool-panel-title">局内道具</div>
+                            <button class="garden-kitchen-tool-panel-close" data-kitchen-tool-panel-close="true" type="button">收起</button>
+                        </div>
+                        <div id="garden-kitchen-tool-list" class="garden-kitchen-tool-list"></div>
+                    </div>
+
                     <div id="garden-kitchen-overlay" class="garden-kitchen-overlay">
                         <div id="garden-kitchen-qte-hint" class="garden-kitchen-qte-hint">看准时机，点击屏幕任意位置！</div>
                         <div id="garden-kitchen-qte-container" class="garden-kitchen-qte-container">
@@ -2046,40 +2114,44 @@
 
             <div id="garden-rogue-panel" class="garden-rogue-panel" aria-hidden="true">
                 <button class="garden-rogue-panel-backdrop" data-rogue-close-panel="true" type="button" aria-label="关闭本轮进度"></button>
-                <div class="garden-rogue-panel-sheet" role="dialog" aria-label="本轮进度">
+                <div class="garden-rogue-panel-sheet" role="dialog" aria-label="丰收远征面板">
                     <div class="garden-rogue-panel-handle"></div>
                     <div class="garden-rogue-panel-head">
                         <div>
-                            <div class="garden-rogue-panel-title">本轮进度</div>
-                            <div class="garden-rogue-panel-subtitle">轻肉鸽周目会在这里展示阶段、卡牌与订单</div>
+                            <div class="garden-rogue-panel-title">丰收远征</div>
+                            <div class="garden-rogue-panel-subtitle">分支地图 · 强 build · 重度工坊成长</div>
                         </div>
                         <button class="garden-rogue-panel-close" data-rogue-close-panel="true" type="button" aria-label="关闭本轮进度">
                             <i class="ri-close-line"></i>
                         </button>
                     </div>
                     <div class="garden-rogue-panel-section">
-                        <div class="garden-rogue-panel-label">当前阶段</div>
-                        <div id="garden-rogue-panel-stage" class="garden-rogue-panel-value">农场阶段</div>
+                        <div class="garden-rogue-panel-label">当前地图</div>
+                        <div id="garden-rogue-panel-stage" class="garden-rogue-panel-value">请选择起始流派</div>
                     </div>
                     <div class="garden-rogue-panel-section">
-                        <div class="garden-rogue-panel-label">本阶段目标</div>
-                        <div id="garden-rogue-panel-goal" class="garden-rogue-panel-value">收获作物 2 次（0/2）</div>
+                        <div class="garden-rogue-panel-label">当前目标</div>
+                        <div id="garden-rogue-panel-goal" class="garden-rogue-panel-value">完成节点、拿遗物、通过 3 幕并击败最终 Boss。</div>
                     </div>
                     <div class="garden-rogue-panel-section">
-                        <div class="garden-rogue-panel-label">已选卡牌</div>
+                        <div class="garden-rogue-panel-label">已获遗物 / 祝福</div>
                         <div id="garden-rogue-panel-cards" class="garden-rogue-panel-cards"></div>
                     </div>
                     <div class="garden-rogue-panel-section">
-                        <div class="garden-rogue-panel-label">当前订单</div>
+                        <div class="garden-rogue-panel-label">当前节点 / 订单</div>
                         <div id="garden-rogue-panel-order" class="garden-rogue-panel-order"></div>
                     </div>
                     <div class="garden-rogue-panel-section">
-                        <div class="garden-rogue-panel-label">简单教程</div>
+                        <div class="garden-rogue-panel-label">远征面板</div>
                         <div class="garden-rogue-tutorial">
-                            <div class="garden-rogue-tutorial-item">1. 一轮顺序固定为：农场 → 牧场 → 厨房 → 出售。</div>
-                            <div class="garden-rogue-tutorial-item">2. 每个阶段完成目标后，都能三选一拿到本轮卡牌加成。</div>
-                            <div class="garden-rogue-tutorial-item">3. 出售阶段完成 2 张特殊订单，就会自动结算并开启下一轮。</div>
-                            <div class="garden-rogue-tutorial-item">4. 厨房没有足够材料时，可以直接跳过，不会失败也不会受罚。</div>
+                            <div class="garden-rogue-tutorial-item">1. 开局选择流派，然后在每幕分支地图中选路推进。</div>
+                            <div class="garden-rogue-tutorial-item">2. 普通节点每清 2 个会触发一次三选一遗物草案。</div>
+                            <div class="garden-rogue-tutorial-item">3. 精英和 Boss 会给高稀有奖励，并强力影响后续 build。</div>
+                            <div class="garden-rogue-tutorial-item">4. 本模式经济独立，结算时再把奖励带回普通家园。</div>
+                        </div>
+                        <div class="garden-rogue-panel-actions">
+                            <button id="garden-rogue-start-run" class="garden-rogue-panel-primary" type="button" data-rogue-action="open-start">开始远征</button>
+                            <button id="garden-rogue-open-workshop" class="garden-rogue-panel-secondary" type="button" data-rogue-action="open-workshop">工坊成长</button>
                         </div>
                     </div>
                 </div>
@@ -2087,11 +2159,66 @@
 
             <div id="garden-rogue-offer" class="garden-rogue-offer" aria-hidden="true">
                 <div class="garden-rogue-offer-mask"></div>
-                <div class="garden-rogue-offer-card" role="dialog" aria-label="三选一卡牌">
+                <div class="garden-rogue-offer-card" role="dialog" aria-label="远征奖励弹层">
                     <div class="garden-rogue-offer-badge">三选一</div>
-                    <div id="garden-rogue-offer-title" class="garden-rogue-offer-title">农场三选一卡</div>
-                    <div id="garden-rogue-offer-desc" class="garden-rogue-offer-desc">选择后立即生效</div>
+                    <div id="garden-rogue-offer-title" class="garden-rogue-offer-title">远征奖励</div>
+                    <div id="garden-rogue-offer-desc" class="garden-rogue-offer-desc">选择起始流派、遗物或事件选项</div>
                     <div id="garden-rogue-offer-choices" class="garden-rogue-offer-choices"></div>
+                </div>
+            </div>
+
+            <div id="garden-rogue-intro" class="garden-rogue-offer" aria-hidden="true">
+                <div class="garden-rogue-offer-mask"></div>
+                <div class="garden-rogue-offer-card garden-rogue-intro-card" role="dialog" aria-label="远征开局说明">
+                    <div class="garden-rogue-offer-badge">开局简报</div>
+                    <div id="garden-rogue-intro-title" class="garden-rogue-offer-title">本局目标说明</div>
+                    <div id="garden-rogue-intro-desc" class="garden-rogue-offer-desc">看完再开局，会更清楚这把该怎么打。</div>
+                    <div id="garden-rogue-intro-body" class="garden-rogue-intro-body"></div>
+                    <div class="garden-rogue-panel-actions">
+                        <button id="garden-rogue-intro-confirm" class="garden-rogue-panel-primary" data-rogue-intro-confirm="true" type="button">开始本局</button>
+                        <button id="garden-rogue-intro-cancel" class="garden-rogue-panel-secondary" data-rogue-intro-cancel="true" type="button">返回</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="garden-rogue-buff-panel" class="garden-rogue-panel" aria-hidden="true">
+                <button class="garden-rogue-panel-backdrop" data-rogue-buff-close="true" type="button" aria-label="关闭增益面板"></button>
+                <div class="garden-rogue-panel-sheet" role="dialog" aria-label="当前增益详情">
+                    <div class="garden-rogue-panel-handle"></div>
+                    <div class="garden-rogue-panel-head">
+                        <div>
+                            <div class="garden-rogue-panel-title">当前增益</div>
+                            <div class="garden-rogue-panel-subtitle">遗物、祝福、主动道具与临时效果</div>
+                        </div>
+                        <button class="garden-rogue-panel-close" data-rogue-buff-close="true" type="button" aria-label="关闭增益面板">
+                            <i class="ri-close-line"></i>
+                        </button>
+                    </div>
+                    <div id="garden-rogue-buff-panel-list" class="garden-rogue-buff-panel-list"></div>
+                </div>
+            </div>
+
+            <div id="garden-rogue-workshop" class="garden-rogue-panel" aria-hidden="true">
+                <button class="garden-rogue-panel-backdrop" data-rogue-workshop-close="true" type="button" aria-label="关闭工坊"></button>
+                <div class="garden-rogue-panel-sheet" role="dialog" aria-label="丰收远征工坊">
+                    <div class="garden-rogue-panel-handle"></div>
+                    <div class="garden-rogue-panel-head">
+                        <div>
+                            <div class="garden-rogue-panel-title">远征工坊</div>
+                            <div class="garden-rogue-panel-subtitle">用远征徽章强化开局、路线、遗物和结算。</div>
+                        </div>
+                        <button class="garden-rogue-panel-close" data-rogue-workshop-close="true" type="button" aria-label="关闭工坊">
+                            <i class="ri-close-line"></i>
+                        </button>
+                    </div>
+                    <div class="garden-rogue-panel-section">
+                        <div class="garden-rogue-panel-label">远征徽章</div>
+                        <div id="garden-rogue-workshop-currency" class="garden-rogue-panel-value">0</div>
+                    </div>
+                    <div class="garden-rogue-panel-section">
+                        <div class="garden-rogue-panel-label">成长路线</div>
+                        <div id="garden-rogue-workshop-list" class="garden-rogue-workshop-list"></div>
+                    </div>
                 </div>
             </div>
 

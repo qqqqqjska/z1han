@@ -1643,11 +1643,14 @@
     right: 20px;
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     z-index: 3;
+    position: absolute;
 }
 
 #garden-app .garden-farm-user-stats {
+    appearance: none;
+    border: none;
     background: var(--farm-panel-bg);
     padding: 10px 20px;
     border-radius: 30px;
@@ -1658,6 +1661,7 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);
+    position: relative;
 }
 
 #garden-app .garden-farm-stat-item {
@@ -2078,10 +2082,13 @@
     z-index: 10;
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    position: absolute;
 }
 
 #garden-app .garden-pasture-user-stats {
+    appearance: none;
+    border: none;
     background: var(--pasture-panel-bg);
     padding: 8px 16px;
     border-radius: 30px;
@@ -2090,6 +2097,7 @@
     align-items: center;
     font-weight: 700;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    position: relative;
 }
 
 #garden-app .garden-pasture-stat-item {
@@ -2409,10 +2417,14 @@
     z-index: 3;
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    row-gap: 8px;
 }
 
 #garden-app .garden-kitchen-title {
+    appearance: none;
+    border: none;
     padding: 10px 20px;
     border-radius: 30px;
     background: var(--kitchen-panel-bg);
@@ -2436,6 +2448,246 @@
 
 #garden-app .garden-kitchen-close-btn:active {
     transform: scale(0.96);
+}
+
+#garden-app .garden-mini-mission {
+    margin: 8px 18px 0;
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: rgba(255, 248, 232, 0.92);
+    box-shadow: 0 8px 18px rgba(120, 86, 24, 0.08);
+    color: #8c5a12;
+}
+
+#garden-app .garden-mini-mission-title {
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.4;
+}
+
+#garden-app .garden-mini-mission-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+#garden-app .garden-mini-mission-toggle {
+    appearance: none;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.75);
+    color: #8c5a12;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+#garden-app .garden-mini-mission-body {
+    display: none;
+}
+
+#garden-app .garden-mini-mission.is-expanded .garden-mini-mission-body {
+    display: block;
+}
+
+#garden-app .garden-mini-mission-progress,
+#garden-app .garden-mini-mission-action {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+#garden-app .garden-mini-mission-top {
+    position: absolute;
+    top: calc(max(47px, env(safe-area-inset-top, 0px)) + 62px);
+    left: 20px;
+    right: 20px;
+    z-index: 4;
+    margin: 0;
+    border-radius: 14px;
+    background: rgba(255, 248, 232, 0.88);
+}
+
+#garden-app .garden-rogue-buff-summary {
+    display: none !important;
+}
+
+#garden-app .garden-rogue-buff-summary-kitchen {
+    display: none !important;
+}
+
+#garden-app .garden-rogue-buff-chip {
+    margin-left: 0;
+    margin-top: 8px;
+    padding: 6px 11px;
+    border-radius: 999px;
+    border: none;
+    background: rgba(255,255,255,0.78);
+    color: #8c5a12;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+
+#garden-app #garden-farm-buff-chip,
+#garden-app #garden-pasture-buff-chip {
+    position: absolute;
+    left: 12px;
+    top: calc(100% + 6px);
+}
+
+#garden-app .garden-rogue-buff-chip-kitchen {
+    background: rgba(255,255,255,0.86);
+    margin-left: 0;
+}
+
+#garden-app .garden-kitchen-title-row {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    max-width: calc(100% - 56px);
+}
+
+#garden-app .garden-rogue-buff-summary-label {
+    font-size: 12px;
+    font-weight: 800;
+    color: #9a6a21;
+    flex-shrink: 0;
+}
+
+#garden-app .garden-rogue-buff-summary-text {
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: right;
+}
+
+#garden-app .garden-rogue-intro-card {
+    max-width: 360px;
+}
+
+#garden-app .garden-rogue-intro-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-align: left;
+}
+
+#garden-app .garden-rogue-intro-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: #fff8ef;
+}
+
+#garden-app .garden-rogue-intro-section strong {
+    font-size: 12px;
+    color: #b36f17;
+}
+
+#garden-app .garden-rogue-intro-section span {
+    font-size: 14px;
+    font-weight: 700;
+    color: #533713;
+}
+
+#garden-app .garden-rogue-intro-section em {
+    font-style: normal;
+    font-size: 12px;
+    color: #8d6d44;
+    line-height: 1.45;
+}
+
+#garden-app .garden-rogue-intro-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    font-size: 12px;
+    color: #6a5334;
+}
+
+#garden-app .garden-rogue-buff-panel-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#garden-app .garden-rogue-buff-card {
+    padding: 12px;
+    border-radius: 16px;
+    background: #fff9f0;
+}
+
+#garden-app .garden-rogue-buff-card-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: #5e3d11;
+}
+
+#garden-app .garden-rogue-buff-card-desc,
+#garden-app .garden-rogue-buff-card-tip,
+#garden-app .garden-rogue-buff-empty {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #7d6240;
+}
+
+#garden-app .garden-kitchen-tool-panel {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    z-index: 5;
+    padding: 12px;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.96);
+    box-shadow: 0 12px 28px rgba(0,0,0,0.14);
+}
+
+#garden-app .garden-kitchen-tool-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+#garden-app .garden-kitchen-tool-panel-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: #6c4922;
+}
+
+#garden-app .garden-kitchen-tool-panel-close {
+    border: none;
+    background: #f3e3cb;
+    color: #8a5b24;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+#garden-app .garden-kitchen-tool-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#garden-app .garden-kitchen-tool-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 12px;
+    background: #fff6e8;
+    color: #5f4524;
 }
 
 #garden-app .garden-kitchen-area {
@@ -3264,6 +3516,95 @@
     font-weight: 800;
     color: #a16207;
     margin-right: 4px;
+}
+
+#garden-app .garden-rogue-panel-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+#garden-app .garden-rogue-panel-primary,
+#garden-app .garden-rogue-panel-secondary {
+    appearance: none;
+    border: none;
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    flex: 1;
+}
+
+#garden-app .garden-rogue-panel-primary {
+    background: linear-gradient(135deg, #f59e0b, #f97316);
+    color: #fff;
+}
+
+#garden-app .garden-rogue-panel-secondary {
+    background: rgba(255, 255, 255, 0.95);
+    color: #92400e;
+    border: 1px solid rgba(251, 191, 36, 0.28);
+}
+
+#garden-app .garden-rogue-workshop-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#garden-app .garden-rogue-workshop-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 8px 20px rgba(148, 163, 184, 0.10);
+}
+
+#garden-app .garden-rogue-workshop-copy {
+    flex: 1;
+    min-width: 0;
+}
+
+#garden-app .garden-rogue-workshop-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: #7c4a12;
+}
+
+#garden-app .garden-rogue-workshop-desc {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #92400e;
+}
+
+#garden-app .garden-rogue-workshop-meta {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #b45309;
+}
+
+#garden-app .garden-rogue-workshop-btn {
+    appearance: none;
+    border: none;
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+#garden-app .garden-rogue-workshop-btn:disabled {
+    background: #d1d5db;
+    color: #6b7280;
+    cursor: not-allowed;
 }
 
 #garden-app .garden-rogue-strip-pill {
