@@ -447,6 +447,8 @@
         currentGardenContactId: null,
         gardenLayouts: null,
         residentFigureEl: null,
+        residentFigureTriggerEl: null,
+        residentAssignmentBadgeEl: null,
         residentFigureLoopTimer: null,
         residentFigureMoveTimer: null,
         residentFigurePreloadToken: 0,
@@ -454,10 +456,17 @@
         residentFigureAssetDbPromise: null,
         residentFigureAssetUrlCache: new Map(),
         residentFigurePoseToken: 0,
+        residentFigureInteractionTimer: null,
+        residentFigureInteractionLocked: false,
+        residentStatusCardEl: null,
+        residentFeedSheetEl: null,
+        residentDispatchSheetEl: null,
         contactFigureDraftFiles: {
             idle: null,
             runLeft: null,
-            runRight: null
+            runRight: null,
+            pet: null,
+            feed: null
         },
         contactFigureEditingId: null
     };
@@ -571,9 +580,27 @@
     let contactFigureIdleInputEl;
     let contactFigureRunLeftInputEl;
     let contactFigureRunRightInputEl;
+    let contactFigurePetInputEl;
+    let contactFigureFeedInputEl;
     let contactFigureIdlePreviewEl;
     let contactFigureRunLeftPreviewEl;
     let contactFigureRunRightPreviewEl;
+    let contactFigurePetPreviewEl;
+    let contactFigureFeedPreviewEl;
+    let farmAssignmentFigureEl;
+    let pastureAssignmentFigureEl;
+    let farmAssignmentLayerEl;
+    let pastureAssignmentLayerEl;
+    let farmAssignmentLoopTimer = null;
+    let pastureAssignmentLoopTimer = null;
+
+    const CONTACT_STATUS_DEFAULTS = Object.freeze({ mood: 70, hunger: 75, energy: 80 });
+    const CONTACT_STATUS_MAX = 100;
+    const CONTACT_HUNGER_DECAY_MS = 10 * 60 * 1000;
+    const CONTACT_HUNGER_DECAY_AMOUNT = 4;
+    const CONTACT_ASSIGNMENT_COST = Object.freeze({ energy: 20, hunger: 15 });
+    const CONTACT_ASSIGNMENT_DURATIONS = Object.freeze({ farm: 2 * 60 * 1000, pasture: 3 * 60 * 1000, kitchen: 4 * 60 * 1000 });
+    const CONTACT_ASSIGNMENT_EMPTY_RETURN_DELAY = 5000;
 
     function createEmptyInventory() {
         return INVENTORY_ITEM_IDS.reduce((result, itemId) => {
@@ -858,6 +885,7 @@
         const baseState = {
             coins: 250,
             inventory: createEmptyInventory(),
+            contactStates: {},
             farm: {
                 level: 1,
                 exp: 0,
@@ -1008,6 +1036,7 @@
         const normalizedState = {
             coins: isFiniteNumber(Number(rawState.coins)) ? Math.max(0, Math.floor(Number(rawState.coins))) : defaults.coins,
             inventory: normalizeInventory(rawState.inventory),
+            contactStates: normalizeGardenContactStates(rawState.contactStates),
             farm: {
                 level: isFiniteNumber(Number(rawState.farm && rawState.farm.level)) ? Math.max(1, Math.floor(Number(rawState.farm.level))) : defaults.farm.level,
                 exp: isFiniteNumber(Number(rawState.farm && rawState.farm.exp)) ? Math.max(0, Math.floor(Number(rawState.farm.exp))) : defaults.farm.exp,
@@ -1022,6 +1051,50 @@
             }
         };
         return normalizedState;
+    }
+
+    function clampContactStatusValue(value) {
+        return Math.max(0, Math.min(CONTACT_STATUS_MAX, Math.round(Number(value) || 0)));
+    }
+
+    function createDefaultGardenContactState() {
+        return {
+            mood: CONTACT_STATUS_DEFAULTS.mood,
+            hunger: CONTACT_STATUS_DEFAULTS.hunger,
+            energy: CONTACT_STATUS_DEFAULTS.energy,
+            lastStatusUpdateAt: Date.now(),
+            activeAssignment: null
+        };
+    }
+
+    function sanitizeGardenContactAssignment(rawAssignment) {
+        if (!rawAssignment || typeof rawAssignment !== 'object') return null;
+        const type = ['farm', 'pasture', 'kitchen'].includes(rawAssignment.type) ? rawAssignment.type : null;
+        if (!type) return null;
+        const startedAt = isFiniteNumber(Number(rawAssignment.startedAt)) ? Number(rawAssignment.startedAt) : Date.now();
+        const finishAt = isFiniteNumber(Number(rawAssignment.finishAt)) ? Number(rawAssignment.finishAt) : startedAt + (CONTACT_ASSIGNMENT_DURATIONS[type] || 0);
+        return { type, startedAt, finishAt };
+    }
+
+    function sanitizeGardenContactState(rawState) {
+        const defaults = createDefaultGardenContactState();
+        const source = rawState && typeof rawState === 'object' ? rawState : {};
+        return {
+            mood: clampContactStatusValue(source.mood ?? defaults.mood),
+            hunger: clampContactStatusValue(source.hunger ?? defaults.hunger),
+            energy: clampContactStatusValue(source.energy ?? defaults.energy),
+            lastStatusUpdateAt: isFiniteNumber(Number(source.lastStatusUpdateAt)) ? Number(source.lastStatusUpdateAt) : defaults.lastStatusUpdateAt,
+            activeAssignment: sanitizeGardenContactAssignment(source.activeAssignment)
+        };
+    }
+
+    function normalizeGardenContactStates(rawStates) {
+        const result = {};
+        if (!rawStates || typeof rawStates !== 'object') return result;
+        Object.keys(rawStates).forEach((contactId) => {
+            result[String(contactId)] = sanitizeGardenContactState(rawStates[contactId]);
+        });
+        return result;
     }
 
     function getGardenGameStorageKey(mode) {
@@ -4161,10 +4234,12 @@ ${taskCard.action}`;
         setHomeEntryMenuOpen(false);
         setDrawerOpen(false);
         closeFloraScreen();
+        if (editorHost) editorHost.style.display = 'none';
         state.farmScreenOpen = true;
         state.currentHomeSection = 'farm';
         farmScreenEl.classList.add('is-open');
         farmScreenEl.setAttribute('aria-hidden', 'false');
+        syncAssignmentFigures();
         syncMiniGameMissionUi();
         syncRogueBuffSummaryUi();
         vibrate(20);
@@ -4174,9 +4249,11 @@ ${taskCard.action}`;
         if (!farmScreenEl) return;
         const silent = !!(options && options.silent);
         state.farmScreenOpen = false;
+        if (editorHost) editorHost.style.display = '';
         state.currentHomeSection = 'home';
         farmScreenEl.classList.remove('is-open');
         farmScreenEl.setAttribute('aria-hidden', 'true');
+        clearAssignmentFigures();
         if (!silent) vibrate(20);
     }
 
@@ -4570,11 +4647,13 @@ ${taskCard.action}`;
         setHomeEntryMenuOpen(false);
         setDrawerOpen(false);
         closeFloraScreen();
+        if (editorHost) editorHost.style.display = 'none';
         state.pastureScreenOpen = true;
         state.currentHomeSection = 'pasture';
         pastureScreenEl.classList.add('is-open');
         pastureScreenEl.setAttribute('aria-hidden', 'false');
         renderPastureAnimals();
+        syncAssignmentFigures();
         syncPastureStats();
         syncMiniGameMissionUi();
         syncRogueBuffSummaryUi();
@@ -4585,9 +4664,11 @@ ${taskCard.action}`;
         if (!pastureScreenEl) return;
         const silent = !!(options && options.silent);
         state.pastureScreenOpen = false;
+        if (editorHost) editorHost.style.display = '';
         state.currentHomeSection = 'home';
         pastureScreenEl.classList.remove('is-open');
         pastureScreenEl.setAttribute('aria-hidden', 'true');
+        clearAssignmentFigures();
         if (!silent) vibrate(20);
     }
 
@@ -4724,6 +4805,11 @@ ${taskCard.action}`;
             });
             pastureFieldEl.appendChild(wrapper);
         });
+        const contactState = getGardenContactState(state.currentGardenContactId);
+        const assignment = contactState.activeAssignment;
+        if (assignment && assignment.finishAt > Date.now() && assignment.type === 'pasture' && state.pastureScreenOpen) {
+            renderAssignmentFigureInPasture();
+        }
     }
 
     function interactWithPastureAnimal(wrapper) {
@@ -5568,6 +5654,24 @@ ${taskCard.action}`;
     }
 
     function getContactFigureFieldConfigMeta(fieldKey) {
+        if (fieldKey === 'pet') {
+            return {
+                urlKey: 'petUrl',
+                assetIdKey: 'petAssetId',
+                inputEl: contactFigurePetInputEl,
+                previewEl: contactFigurePetPreviewEl,
+                emptyLabel: '暂无摸头图'
+            };
+        }
+        if (fieldKey === 'feed') {
+            return {
+                urlKey: 'feedUrl',
+                assetIdKey: 'feedAssetId',
+                inputEl: contactFigureFeedInputEl,
+                previewEl: contactFigureFeedPreviewEl,
+                emptyLabel: '暂无喂食图'
+            };
+        }
         if (fieldKey === 'runLeft') {
             return {
                 urlKey: 'runLeftUrl',
@@ -5678,7 +5782,9 @@ ${taskCard.action}`;
         return sanitizeResidentCharacter({
             idleUrl: getContactFigureStoredValue(contactFigureIdleInputEl),
             runLeftUrl: getContactFigureStoredValue(contactFigureRunLeftInputEl),
-            runRightUrl: getContactFigureStoredValue(contactFigureRunRightInputEl)
+            runRightUrl: getContactFigureStoredValue(contactFigureRunRightInputEl),
+            petUrl: getContactFigureStoredValue(contactFigurePetInputEl),
+            feedUrl: getContactFigureStoredValue(contactFigureFeedInputEl)
         });
     }
 
@@ -5686,9 +5792,13 @@ ${taskCard.action}`;
         syncContactFigurePreview(contactFigureIdlePreviewEl, getContactFigureStoredValue(contactFigureIdleInputEl), '暂无站立图');
         syncContactFigurePreview(contactFigureRunLeftPreviewEl, getContactFigureStoredValue(contactFigureRunLeftInputEl), '暂无左跑图');
         syncContactFigurePreview(contactFigureRunRightPreviewEl, getContactFigureStoredValue(contactFigureRunRightInputEl), '暂无右跑图');
+        syncContactFigurePreview(contactFigurePetPreviewEl, getContactFigureStoredValue(contactFigurePetInputEl), '暂无摸头图');
+        syncContactFigurePreview(contactFigureFeedPreviewEl, getContactFigureStoredValue(contactFigureFeedInputEl), '暂无喂食图');
         updateContactFigureUploadStatus('idle', contactFigureIdleInputEl);
         updateContactFigureUploadStatus('runLeft', contactFigureRunLeftInputEl);
         updateContactFigureUploadStatus('runRight', contactFigureRunRightInputEl);
+        updateContactFigureUploadStatus('pet', contactFigurePetInputEl);
+        updateContactFigureUploadStatus('feed', contactFigureFeedInputEl);
     }
 
     function fillContactFigureForm(contactId) {
@@ -5711,6 +5821,14 @@ ${taskCard.action}`;
         if (contactFigureRunRightInputEl) {
             contactFigureRunRightInputEl.value = isInlineImageDataUrl(config.runRightUrl) ? '' : config.runRightUrl;
             contactFigureRunRightInputEl.dataset.uploadDataUrl = isInlineImageDataUrl(config.runRightUrl) ? config.runRightUrl : '';
+        }
+        if (contactFigurePetInputEl) {
+            contactFigurePetInputEl.value = isInlineImageDataUrl(config.petUrl) ? '' : config.petUrl;
+            contactFigurePetInputEl.dataset.uploadDataUrl = isInlineImageDataUrl(config.petUrl) ? config.petUrl : '';
+        }
+        if (contactFigureFeedInputEl) {
+            contactFigureFeedInputEl.value = isInlineImageDataUrl(config.feedUrl) ? '' : config.feedUrl;
+            contactFigureFeedInputEl.dataset.uploadDataUrl = isInlineImageDataUrl(config.feedUrl) ? config.feedUrl : '';
         }
         updateContactFigureFormPreviews();
     }
@@ -5753,6 +5871,8 @@ ${taskCard.action}`;
     function closeContactFigureModal() {
         if (!contactFigureModalEl) return;
         contactFigureModalEl.classList.remove('is-open');
+        contactFigureModalEl.style.pointerEvents = 'none';
+        contactFigureModalEl.style.display = 'none';
         state.contactFigureEditingId = null;
         window.setTimeout(() => {
             if (contactFigureModalEl && !contactFigureModalEl.classList.contains('is-open')) {
@@ -5768,6 +5888,8 @@ ${taskCard.action}`;
 
         fillContactFigureForm(contactId);
         contactFigureModalEl.hidden = false;
+        contactFigureModalEl.style.display = 'flex';
+        contactFigureModalEl.style.pointerEvents = 'auto';
         window.requestAnimationFrame(() => {
             if (!contactFigureModalEl) return;
             contactFigureModalEl.classList.add('is-open');
@@ -5780,9 +5902,10 @@ ${taskCard.action}`;
         const modal = document.createElement('div');
         modal.className = 'garden-contact-figure-modal';
         modal.hidden = true;
+        modal.style.cssText = 'position:absolute;inset:0;z-index:320;display:none;align-items:flex-end;justify-content:center;padding:calc(env(safe-area-inset-top, 0px) + 20px) 12px calc(env(safe-area-inset-bottom, 0px) + 12px);box-sizing:border-box;pointer-events:none;';
         modal.innerHTML = `
             <div class="garden-contact-figure-backdrop"></div>
-            <div class="garden-contact-figure-panel" role="dialog" aria-modal="true" aria-label="联系人形象设置">
+            <div class="garden-contact-figure-panel" role="dialog" aria-modal="true" aria-label="联系人形象设置" style="position:relative;width:min(100%,520px);max-height:100%;overflow:auto;border-radius:22px 22px 18px 18px;margin-top:auto;">
                 <div class="garden-contact-figure-handle"></div>
                 <div class="garden-contact-figure-head">
                     <div class="garden-contact-figure-title">联系人形象设置</div>
@@ -5826,6 +5949,30 @@ ${taskCard.action}`;
                         </div>
                         <input id="garden-contact-figure-run-right-file" type="file" accept="image/*" hidden />
                     </div>
+                    <div class="garden-contact-figure-field">
+                        <div class="garden-contact-figure-field-top">
+                            <label class="garden-contact-figure-label" for="garden-contact-figure-pet">被摸头动图链接</label>
+                            <div class="garden-contact-figure-preview is-empty" id="garden-contact-figure-pet-preview"><span class="garden-contact-figure-preview-label">暂无摸头图</span></div>
+                        </div>
+                        <input id="garden-contact-figure-pet" class="garden-contact-figure-input" type="text" placeholder="可粘贴外链，也可点下方上传" inputmode="url" spellcheck="false" />
+                        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                            <button type="button" class="garden-contact-figure-action is-muted" data-figure-upload="pet">上传摸头图</button>
+                            <span data-figure-upload-status="pet" style="font-size:12px;color:#7c8aa5;">当前使用：未设置</span>
+                        </div>
+                        <input id="garden-contact-figure-pet-file" type="file" accept="image/*" hidden />
+                    </div>
+                    <div class="garden-contact-figure-field">
+                        <div class="garden-contact-figure-field-top">
+                            <label class="garden-contact-figure-label" for="garden-contact-figure-feed">被喂食动图链接</label>
+                            <div class="garden-contact-figure-preview is-empty" id="garden-contact-figure-feed-preview"><span class="garden-contact-figure-preview-label">暂无喂食图</span></div>
+                        </div>
+                        <input id="garden-contact-figure-feed" class="garden-contact-figure-input" type="text" placeholder="可粘贴外链，也可点下方上传" inputmode="url" spellcheck="false" />
+                        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                            <button type="button" class="garden-contact-figure-action is-muted" data-figure-upload="feed">上传喂食图</button>
+                            <span data-figure-upload-status="feed" style="font-size:12px;color:#7c8aa5;">当前使用：未设置</span>
+                        </div>
+                        <input id="garden-contact-figure-feed-file" type="file" accept="image/*" hidden />
+                    </div>
                 </div>
                 <div class="garden-contact-figure-actions">
                     <button class="garden-contact-figure-action is-muted" type="button" data-figure-action="cancel">取消</button>
@@ -5841,9 +5988,13 @@ ${taskCard.action}`;
         contactFigureIdleInputEl = modal.querySelector('#garden-contact-figure-idle');
         contactFigureRunLeftInputEl = modal.querySelector('#garden-contact-figure-run-left');
         contactFigureRunRightInputEl = modal.querySelector('#garden-contact-figure-run-right');
+        contactFigurePetInputEl = modal.querySelector('#garden-contact-figure-pet');
+        contactFigureFeedInputEl = modal.querySelector('#garden-contact-figure-feed');
         contactFigureIdlePreviewEl = modal.querySelector('#garden-contact-figure-idle-preview');
         contactFigureRunLeftPreviewEl = modal.querySelector('#garden-contact-figure-run-left-preview');
         contactFigureRunRightPreviewEl = modal.querySelector('#garden-contact-figure-run-right-preview');
+        contactFigurePetPreviewEl = modal.querySelector('#garden-contact-figure-pet-preview');
+        contactFigureFeedPreviewEl = modal.querySelector('#garden-contact-figure-feed-preview');
 
         const closeButton = modal.querySelector('.garden-contact-figure-close');
         const backdrop = modal.querySelector('.garden-contact-figure-backdrop');
@@ -5853,9 +6004,11 @@ ${taskCard.action}`;
         const idleFileInput = modal.querySelector('#garden-contact-figure-idle-file');
         const runLeftFileInput = modal.querySelector('#garden-contact-figure-run-left-file');
         const runRightFileInput = modal.querySelector('#garden-contact-figure-run-right-file');
+        const petFileInput = modal.querySelector('#garden-contact-figure-pet-file');
+        const feedFileInput = modal.querySelector('#garden-contact-figure-feed-file');
         const uploadButtons = Array.from(modal.querySelectorAll('[data-figure-upload]'));
 
-        [contactFigureIdleInputEl, contactFigureRunLeftInputEl, contactFigureRunRightInputEl].forEach((input) => {
+        [contactFigureIdleInputEl, contactFigureRunLeftInputEl, contactFigureRunRightInputEl, contactFigurePetInputEl, contactFigureFeedInputEl].forEach((input) => {
             if (!input) return;
             input.addEventListener('input', updateContactFigureFormPreviews);
         });
@@ -5866,6 +6019,8 @@ ${taskCard.action}`;
                 if (fieldKey === 'idle' && idleFileInput) idleFileInput.click();
                 if (fieldKey === 'runLeft' && runLeftFileInput) runLeftFileInput.click();
                 if (fieldKey === 'runRight' && runRightFileInput) runRightFileInput.click();
+                if (fieldKey === 'pet' && petFileInput) petFileInput.click();
+                if (fieldKey === 'feed' && feedFileInput) feedFileInput.click();
             });
         });
 
@@ -5885,6 +6040,18 @@ ${taskCard.action}`;
             runRightFileInput.addEventListener('change', async () => {
                 await applyContactFigureUpload('runRight', runRightFileInput.files && runRightFileInput.files[0] ? runRightFileInput.files[0] : null);
                 runRightFileInput.value = '';
+            });
+        }
+        if (petFileInput) {
+            petFileInput.addEventListener('change', async () => {
+                await applyContactFigureUpload('pet', petFileInput.files && petFileInput.files[0] ? petFileInput.files[0] : null);
+                petFileInput.value = '';
+            });
+        }
+        if (feedFileInput) {
+            feedFileInput.addEventListener('change', async () => {
+                await applyContactFigureUpload('feed', feedFileInput.files && feedFileInput.files[0] ? feedFileInput.files[0] : null);
+                feedFileInput.value = '';
             });
         }
 
@@ -5913,6 +6080,7 @@ ${taskCard.action}`;
                 vibrate(15);
             });
         }
+        closeContactFigureModal();
     }
 
     function createEmptyGardenLayoutStore() {
@@ -5938,8 +6106,12 @@ ${taskCard.action}`;
                 idleAssetId: '',
                 runLeftUrl: '',
                 runLeftAssetId: '',
-                runRightUrl: ''
-                ,runRightAssetId: ''
+                runRightUrl: '',
+                runRightAssetId: '',
+                petUrl: '',
+                petAssetId: '',
+                feedUrl: '',
+                feedAssetId: ''
             },
             items: []
         };
@@ -5964,8 +6136,12 @@ ${taskCard.action}`;
             idleAssetId: '',
             runLeftUrl: '',
             runLeftAssetId: '',
-            runRightUrl: ''
-            ,runRightAssetId: ''
+            runRightUrl: '',
+            runRightAssetId: '',
+            petUrl: '',
+            petAssetId: '',
+            feedUrl: '',
+            feedAssetId: ''
         };
     }
 
@@ -5976,8 +6152,12 @@ ${taskCard.action}`;
             idleAssetId: sanitizeResidentCharacterUrl(source.idleAssetId),
             runLeftUrl: sanitizeResidentCharacterUrl(source.runLeftUrl),
             runLeftAssetId: sanitizeResidentCharacterUrl(source.runLeftAssetId),
-            runRightUrl: sanitizeResidentCharacterUrl(source.runRightUrl)
-            ,runRightAssetId: sanitizeResidentCharacterUrl(source.runRightAssetId)
+            runRightUrl: sanitizeResidentCharacterUrl(source.runRightUrl),
+            runRightAssetId: sanitizeResidentCharacterUrl(source.runRightAssetId),
+            petUrl: sanitizeResidentCharacterUrl(source.petUrl),
+            petAssetId: sanitizeResidentCharacterUrl(source.petAssetId),
+            feedUrl: sanitizeResidentCharacterUrl(source.feedUrl),
+            feedAssetId: sanitizeResidentCharacterUrl(source.feedAssetId)
         };
     }
 
@@ -6322,6 +6502,11 @@ ${taskCard.action}`;
     }
 
     function handleShadowClick(event) {
+        if (!event.target.closest('.resident-status-card') && !event.target.closest('.resident-feed-sheet') && !event.target.closest('.resident-dispatch-sheet')) {
+            closeResidentStatusCard();
+            closeResidentFeedSheet();
+            closeResidentDispatchSheet();
+        }
         const tabBtn = event.target.closest('.tab');
         if (tabBtn) {
             switchPanelTab(tabBtn.dataset.tabKey);
@@ -6532,7 +6717,9 @@ ${taskCard.action}`;
 
         const drag = (event) => {
             if (!isDragging || !state.roomEl) return;
-            event.preventDefault();
+            if (event.cancelable) {
+                event.preventDefault();
+            }
 
             const currentX = event.type.includes('mouse') ? event.clientX : event.touches[0].clientX;
             const currentY = event.type.includes('mouse') ? event.clientY : event.touches[0].clientY;
@@ -6618,26 +6805,658 @@ ${taskCard.action}`;
             clearTimeout(state.residentFigureMoveTimer);
             state.residentFigureMoveTimer = null;
         }
+        if (state.residentFigureInteractionTimer) {
+            clearTimeout(state.residentFigureInteractionTimer);
+            state.residentFigureInteractionTimer = null;
+        }
     }
 
     function clearResidentCharacterFigure() {
         clearResidentCharacterTimers();
+        state.residentFigureInteractionLocked = false;
         state.residentFigurePreloadToken += 1;
+        closeResidentStatusCard();
+        closeResidentFeedSheet();
+        closeResidentDispatchSheet();
         if (state.residentFigureEl) {
             state.residentFigureEl.remove();
             state.residentFigureEl = null;
         }
+        if (state.residentFigureTriggerEl) {
+            state.residentFigureTriggerEl.remove();
+            state.residentFigureTriggerEl = null;
+        }
+        closeResidentAssignmentBadge();
+    }
+
+    function getContactStateStore() {
+        if (!state.gardenGame) return {};
+        if (!state.gardenGame.contactStates || typeof state.gardenGame.contactStates !== 'object') {
+            state.gardenGame.contactStates = {};
+        }
+        return state.gardenGame.contactStates;
+    }
+
+    function getGardenContactState(contactId = null) {
+        const resolvedContactId = resolveGardenContactId(contactId || state.currentGardenContactId);
+        const store = getContactStateStore();
+        if (!store[resolvedContactId]) {
+            store[resolvedContactId] = createDefaultGardenContactState();
+            saveGardenGameState();
+        } else {
+            store[resolvedContactId] = sanitizeGardenContactState(store[resolvedContactId]);
+        }
+        return store[resolvedContactId];
+    }
+
+    function patchGardenContactState(contactId, patch) {
+        const resolvedContactId = resolveGardenContactId(contactId || state.currentGardenContactId);
+        const current = sanitizeGardenContactState(getGardenContactState(resolvedContactId));
+        const next = {
+            ...current,
+            ...(patch && typeof patch === 'object' ? patch : {})
+        };
+        next.mood = clampContactStatusValue(next.mood);
+        next.hunger = clampContactStatusValue(next.hunger);
+        next.energy = clampContactStatusValue(next.energy);
+        next.activeAssignment = sanitizeGardenContactAssignment(next.activeAssignment);
+        const store = getContactStateStore();
+        store[resolvedContactId] = next;
+        saveGardenGameState();
+        return next;
+    }
+
+    function settleGardenContactNeeds(contactId = null, now = Date.now()) {
+        const resolvedContactId = resolveGardenContactId(contactId || state.currentGardenContactId);
+        const current = getGardenContactState(resolvedContactId);
+        const elapsed = Math.max(0, now - Math.max(0, Number(current.lastStatusUpdateAt) || 0));
+        const decaySteps = Math.floor(elapsed / CONTACT_HUNGER_DECAY_MS);
+        if (decaySteps <= 0) return current;
+        return patchGardenContactState(resolvedContactId, {
+            hunger: current.hunger - decaySteps * CONTACT_HUNGER_DECAY_AMOUNT,
+            lastStatusUpdateAt: current.lastStatusUpdateAt + decaySteps * CONTACT_HUNGER_DECAY_MS
+        });
+    }
+
+    function closeResidentStatusCard() {
+        if (state.residentStatusCardEl) {
+            state.residentStatusCardEl.remove();
+            state.residentStatusCardEl = null;
+        }
+    }
+
+    function closeResidentFeedSheet() {
+        if (state.residentFeedSheetEl) {
+            state.residentFeedSheetEl.remove();
+            state.residentFeedSheetEl = null;
+        }
+    }
+
+    function closeResidentDispatchSheet() {
+        if (state.residentDispatchSheetEl) {
+            state.residentDispatchSheetEl.remove();
+            state.residentDispatchSheetEl = null;
+        }
+    }
+
+    function closeResidentAssignmentBadge() {
+        if (state.residentAssignmentBadgeEl) {
+            state.residentAssignmentBadgeEl.remove();
+            state.residentAssignmentBadgeEl = null;
+        }
+    }
+
+    function formatResidentAssignmentRemaining(finishAt) {
+        const remainMs = Math.max(0, Number(finishAt || 0) - Date.now());
+        const totalSeconds = Math.ceil(remainMs / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function showResidentAssignmentBadge(contactId = null) {
+        const resolvedContactId = resolveGardenContactId(contactId || state.currentGardenContactId);
+        const contactState = settleGardenContactNeeds(resolvedContactId);
+        const assignment = contactState.activeAssignment;
+        if (!assignment || !state.residentLayerEl || !state.residentFigureEl) return;
+        closeResidentAssignmentBadge();
+        const badge = document.createElement('button');
+        const labels = { farm: '农场浇水', pasture: '牧场喂动物', kitchen: '厨房做菜' };
+        badge.type = 'button';
+        badge.className = 'resident-assignment-badge';
+        badge.style.left = state.residentFigureEl.dataset.left ? `${state.residentFigureEl.dataset.left}%` : (state.residentFigureEl.style.left || '50%');
+        badge.style.top = state.residentFigureEl.dataset.top ? `${Math.max(16, Number(state.residentFigureEl.dataset.top) - 12)}%` : '66%';
+        badge.innerHTML = `<div class="resident-assignment-badge-title">外出中</div><div class="resident-assignment-badge-copy">${labels[assignment.type] || '派遣中'}</div><div class="resident-assignment-badge-time">${formatResidentAssignmentRemaining(assignment.finishAt)}</div>`;
+        badge.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (completeResidentAssignment(resolvedContactId)) {
+                closeResidentAssignmentBadge();
+                return;
+            }
+            showResidentToast(`还需要 ${formatResidentAssignmentRemaining(assignment.finishAt)}`);
+        });
+        state.residentLayerEl.appendChild(badge);
+        state.residentAssignmentBadgeEl = badge;
+    }
+
+    function showResidentToast(message) {
+        if (!state.toastEl) return;
+        state.toastEl.innerHTML = `<i class="fas fa-heart"></i> ${message}`;
+        state.toastEl.classList.add('show');
+        clearTimeout(state.toastTimeout);
+        state.toastTimeout = setTimeout(() => {
+            if (state.toastEl) state.toastEl.classList.remove('show');
+        }, 2200);
+    }
+
+    function renderResidentStatusBars(contactState) {
+        return [
+            { label: '心情', emoji: '💖', value: contactState.mood, color: '#fb7185' },
+            { label: '饱食', emoji: '🍖', value: contactState.hunger, color: '#f59e0b' },
+            { label: '精力', emoji: '⚡', value: contactState.energy, color: '#22c55e' }
+        ].map((item) => `
+            <div class="resident-status-row">
+                <div class="resident-status-meta"><span>${item.emoji} ${item.label}</span><strong>${item.value}</strong></div>
+                <div class="resident-status-track"><div class="resident-status-fill" style="width:${item.value}%;background:${item.color};"></div></div>
+            </div>
+        `).join('');
+    }
+
+    function openResidentStatusCard() {
+        const figureEl = state.residentFigureEl;
+        if (!figureEl || !state.residentLayerEl) return;
+        closeResidentStatusCard();
+        closeResidentFeedSheet();
+        closeResidentDispatchSheet();
+        const contactId = resolveGardenContactId(state.currentGardenContactId);
+        completeResidentAssignment(contactId);
+        const contactState = settleGardenContactNeeds(contactId);
+        const displayName = getGardenContactDisplayName(contactId);
+        const card = document.createElement('div');
+        card.className = 'resident-status-card';
+        card.innerHTML = `
+            <div class="resident-status-card-title">${displayName}${contactState.activeAssignment ? ' · 外出中' : ''}</div>
+            <div class="resident-status-bars">${renderResidentStatusBars(contactState)}</div>
+            <div class="resident-status-actions">
+                <button type="button" data-resident-action="pet">摸头</button>
+                <button type="button" data-resident-action="feed">喂食</button>
+                <button type="button" data-resident-action="dispatch">派遣</button>
+            </div>
+        `;
+        card.style.left = `${parseFloat(figureEl.dataset.left || figureEl.style.left || '50')}%`;
+        card.style.top = `${Math.max(8, parseFloat(figureEl.dataset.top || figureEl.style.top || '84') - 21)}%`;
+        card.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const button = event.target.closest('[data-resident-action]');
+            if (!button) return;
+            if (button.dataset.residentAction === 'pet') handleResidentPetAction();
+            if (button.dataset.residentAction === 'feed') openResidentFeedSheet();
+            if (button.dataset.residentAction === 'dispatch') openResidentDispatchSheet();
+        });
+        state.residentLayerEl.appendChild(card);
+        state.residentStatusCardEl = card;
+    }
+
+    function performResidentTimedPose(pose, duration, onDone) {
+        const figureEl = state.residentFigureEl;
+        if (!figureEl || state.residentFigureInteractionLocked) return;
+        state.residentFigureInteractionLocked = true;
+        clearResidentCharacterTimers();
+        updateResidentCharacterPose(getContactFigureConfig(state.currentGardenContactId), pose);
+        state.residentFigureInteractionTimer = window.setTimeout(() => {
+            state.residentFigureInteractionLocked = false;
+            if (typeof onDone === 'function') onDone();
+            scheduleResidentCharacterLoop(getContactFigureConfig(state.currentGardenContactId));
+            openResidentStatusCard();
+        }, duration);
+    }
+
+    function handleResidentPetAction() {
+        const contactId = resolveGardenContactId(state.currentGardenContactId);
+        const contactState = settleGardenContactNeeds(contactId);
+        if (contactState.activeAssignment && contactState.activeAssignment.finishAt > Date.now()) {
+            showResidentToast('TA正在外出忙碌');
+            return;
+        }
+        patchGardenContactState(contactId, { mood: contactState.mood + 10 });
+        closeResidentFeedSheet();
+        closeResidentDispatchSheet();
+        performResidentTimedPose('pet', 2400, () => showResidentToast('TA看起来更开心了'));
+    }
+
+    function getResidentCookedFeedItems() {
+        return STORAGE_TABS.cooked.itemIds.map((itemId) => ({ ...ITEM_META[itemId], count: getInventoryCount(itemId) })).filter((item) => item && item.count > 0);
+    }
+
+    function positionResidentSheetBelowAnchor(sheetEl, anchorEl) {
+        if (!sheetEl || !anchorEl || !state.residentLayerEl) return;
+        const layerRect = state.residentLayerEl.getBoundingClientRect();
+        const anchorRect = anchorEl.getBoundingClientRect();
+        const leftPx = anchorRect.left - layerRect.left + (anchorRect.width / 2);
+        const topPx = anchorRect.top - layerRect.top + anchorRect.height + 8;
+        sheetEl.style.left = `${leftPx}px`;
+        sheetEl.style.top = `${topPx}px`;
+        sheetEl.style.transform = 'translateX(-50%)';
+    }
+
+    function openResidentFeedSheet() {
+        const anchorEl = state.residentStatusCardEl || state.residentFigureEl;
+        if (!anchorEl || !state.residentLayerEl) return;
+        closeResidentFeedSheet();
+        closeResidentDispatchSheet();
+        const items = getResidentCookedFeedItems();
+        if (!items.length) {
+            showResidentToast('仓库里还没有可喂的熟食');
+            return;
+        }
+        const sheet = document.createElement('div');
+        sheet.className = 'resident-feed-sheet';
+        if (anchorEl === state.residentStatusCardEl) {
+            sheet.classList.add('is-anchored-card');
+            positionResidentSheetBelowAnchor(sheet, anchorEl);
+        } else {
+            sheet.style.left = `${parseFloat(anchorEl.dataset.left || anchorEl.style.left || '50')}%`;
+            sheet.style.top = `${Math.max(24, parseFloat(anchorEl.dataset.top || anchorEl.style.top || '84') + 4)}%`;
+        }
+        sheet.innerHTML = items.map((item) => `<button type="button" data-feed-item="${item.id}">${item.emoji} ${item.name} · ${item.count}</button>`).join('');
+        sheet.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const button = event.target.closest('[data-feed-item]');
+            if (!button) return;
+            handleResidentFeedAction(button.dataset.feedItem);
+        });
+        state.residentLayerEl.appendChild(sheet);
+        state.residentFeedSheetEl = sheet;
+    }
+
+    function handleResidentFeedAction(itemId) {
+        const meta = ITEM_META[itemId];
+        if (!meta || getInventoryCount(itemId) <= 0) return;
+        const contactId = resolveGardenContactId(state.currentGardenContactId);
+        const contactState = settleGardenContactNeeds(contactId);
+        if (contactState.activeAssignment && contactState.activeAssignment.finishAt > Date.now()) {
+            showResidentToast('TA正在外出忙碌');
+            return;
+        }
+        addInventoryItem(itemId, -1);
+        patchGardenContactState(contactId, {
+            hunger: contactState.hunger + 25,
+            mood: contactState.mood + 8,
+            energy: contactState.energy + 12
+        });
+        closeResidentFeedSheet();
+        renderStorageItems(state.gardenGame && state.gardenGame.storage ? state.gardenGame.storage.tab : 'cooked');
+        performResidentTimedPose('feed', 2400, () => showResidentToast(`TA吃掉了 ${meta.name} ${meta.emoji}`));
+    }
+
+    function openResidentDispatchSheet() {
+        const anchorEl = state.residentStatusCardEl || state.residentFigureEl;
+        if (!anchorEl || !state.residentLayerEl) return;
+        closeResidentDispatchSheet();
+        closeResidentFeedSheet();
+        const contactId = resolveGardenContactId(state.currentGardenContactId);
+        const contactState = settleGardenContactNeeds(contactId);
+        if (contactState.activeAssignment && contactState.activeAssignment.finishAt > Date.now()) {
+            showResidentToast('TA已经出门干活啦');
+            return;
+        }
+        if (contactState.hunger < 20) {
+            showResidentToast('TA太饿了，先喂点吃的吧');
+            return;
+        }
+        if (contactState.energy < 20) {
+            showResidentToast('TA精力不够，先喂食吧');
+            return;
+        }
+        const sheet = document.createElement('div');
+        sheet.className = 'resident-dispatch-sheet';
+        if (anchorEl === state.residentStatusCardEl) {
+            sheet.classList.add('is-anchored-card');
+            positionResidentSheetBelowAnchor(sheet, anchorEl);
+        } else {
+            sheet.style.left = `${parseFloat(anchorEl.dataset.left || anchorEl.style.left || '50')}%`;
+            sheet.style.top = `${Math.max(24, parseFloat(anchorEl.dataset.top || anchorEl.style.top || '84') + 4)}%`;
+        }
+        sheet.innerHTML = '<button type="button" data-dispatch-type="farm">🌱 去农场浇水</button><button type="button" data-dispatch-type="pasture">🐄 去牧场喂动物</button><button type="button" data-dispatch-type="kitchen">🍳 去厨房做菜</button>';
+        sheet.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const button = event.target.closest('[data-dispatch-type]');
+            if (!button) return;
+            startResidentAssignment(button.dataset.dispatchType);
+        });
+        state.residentLayerEl.appendChild(sheet);
+        state.residentDispatchSheetEl = sheet;
+    }
+
+    function startResidentAssignment(type) {
+        const contactId = resolveGardenContactId(state.currentGardenContactId);
+        const contactState = settleGardenContactNeeds(contactId);
+        if (!['farm', 'pasture', 'kitchen'].includes(type)) return;
+        if (contactState.hunger < 20) {
+            showResidentToast('TA太饿了，先喂点吃的吧');
+            return;
+        }
+        if (contactState.energy < 20) {
+            showResidentToast('TA精力不够，先喂食吧');
+            return;
+        }
+        if (type === 'farm') {
+            const farmPlots = state.gardenGame && state.gardenGame.farm && Array.isArray(state.gardenGame.farm.plots)
+                ? state.gardenGame.farm.plots
+                : [];
+            const hasWaterablePlot = farmPlots.some((plot) => plot && plot.state === 'planted');
+            if (!hasWaterablePlot) {
+                const now = Date.now();
+                patchGardenContactState(contactId, {
+                    activeAssignment: { type, startedAt: now, finishAt: now + CONTACT_ASSIGNMENT_EMPTY_RETURN_DELAY },
+                    lastStatusUpdateAt: now
+                });
+                closeResidentDispatchSheet();
+                closeResidentStatusCard();
+                if (state.residentFigureEl) state.residentFigureEl.style.display = 'none';
+                if (state.residentFigureTriggerEl) state.residentFigureTriggerEl.style.display = 'none';
+                showResidentAssignmentBadge(contactId);
+                syncAssignmentFigures();
+                showResidentToast('农场暂时没有可浇水的植物，TA稍后会回来');
+                return;
+            }
+        }
+        const now = Date.now();
+        patchGardenContactState(contactId, {
+            energy: contactState.energy - CONTACT_ASSIGNMENT_COST.energy,
+            hunger: contactState.hunger - CONTACT_ASSIGNMENT_COST.hunger,
+            activeAssignment: { type, startedAt: now, finishAt: now + CONTACT_ASSIGNMENT_DURATIONS[type] },
+            lastStatusUpdateAt: now
+        });
+        closeResidentDispatchSheet();
+        closeResidentStatusCard();
+        if (state.residentFigureEl) state.residentFigureEl.style.display = 'none';
+        if (state.residentFigureTriggerEl) state.residentFigureTriggerEl.style.display = 'none';
+        showResidentAssignmentBadge(contactId);
+        syncAssignmentFigures();
+        showResidentToast('TA出门干活啦');
+    }
+
+    function completeResidentAssignment(contactId = null) {
+        const resolvedContactId = resolveGardenContactId(contactId || state.currentGardenContactId);
+        const contactState = settleGardenContactNeeds(resolvedContactId);
+        const assignment = contactState.activeAssignment;
+        if (!assignment || assignment.finishAt > Date.now()) return false;
+        let message = 'TA忙完回来啦';
+        if (assignment.type === 'farm') {
+            const plots = state.gardenGame && state.gardenGame.farm && Array.isArray(state.gardenGame.farm.plots) ? state.gardenGame.farm.plots : [];
+            const hasWaterablePlot = plots.some((plot) => plot && plot.state === 'planted');
+            if (!hasWaterablePlot) {
+                message = '农场里暂时没有可浇水的植物，TA先回来了';
+            }
+            let reduced = 0;
+            plots.forEach((plot) => {
+                if (hasWaterablePlot && plot && plot.state === 'growing' && isFiniteNumber(plot.readyAt) && reduced < 3) {
+                    plot.readyAt = Math.max(Date.now(), plot.readyAt - 60 * 1000);
+                    reduced += 1;
+                }
+            });
+            if (hasWaterablePlot) {
+                message = reduced > 0 ? `TA帮你照料了 ${reduced} 块农田` : 'TA去农场转了一圈，暂时没有可浇水的作物';
+            }
+        } else if (assignment.type === 'pasture') {
+            const animals = state.gardenGame && state.gardenGame.pasture && Array.isArray(state.gardenGame.pasture.animals) ? state.gardenGame.pasture.animals : [];
+            const target = animals.find((animal) => animal && animal.state === 'hungry');
+            if (target) {
+                target.state = target.age === 'baby' ? 'growing' : 'producing';
+                target.stateEndsAt = Date.now() + (target.age === 'baby' ? 2 * 60 * 1000 : 3 * 60 * 1000);
+                message = 'TA帮你喂好了牧场里的动物';
+            } else {
+                message = 'TA去牧场巡视了一圈';
+            }
+        } else if (assignment.type === 'kitchen') {
+            const recipe = Object.values(KITCHEN_RECIPES).find((candidate) => hasInventoryItems(candidate.ingredients || {})) || null;
+            if (recipe) {
+                Object.keys(recipe.ingredients || {}).forEach((itemId) => addInventoryItem(itemId, -(recipe.ingredients[itemId] || 0)));
+                addInventoryItem(recipe.id, 1);
+                message = `TA做了一份 ${recipe.name} ${recipe.emoji}`;
+            } else {
+                message = '厨房没有现成材料可做菜';
+            }
+        }
+        patchGardenContactState(resolvedContactId, {
+            mood: contactState.mood + 5,
+            activeAssignment: null,
+            lastStatusUpdateAt: Date.now()
+        });
+        saveGardenGameState();
+        if (state.residentFigureEl) state.residentFigureEl.style.display = '';
+        if (state.residentFigureTriggerEl) state.residentFigureTriggerEl.style.display = '';
+        closeResidentAssignmentBadge();
+        clearAssignmentFigures();
+        showResidentToast(message);
+        return true;
     }
 
     function resolveResidentCharacterUrl(config, pose) {
         const nextConfig = sanitizeResidentCharacter(config);
+        if (pose === 'pet') {
+            return nextConfig.petUrl || nextConfig.idleUrl || nextConfig.runLeftUrl || nextConfig.runRightUrl || '';
+        }
+        if (pose === 'feed') {
+            return nextConfig.feedUrl || nextConfig.idleUrl || nextConfig.runLeftUrl || nextConfig.runRightUrl || '';
+        }
         if (pose === 'run-left') {
             return nextConfig.runLeftUrl || nextConfig.runRightUrl || nextConfig.idleUrl || '';
         }
         if (pose === 'run-right') {
             return nextConfig.runRightUrl || nextConfig.runLeftUrl || nextConfig.idleUrl || '';
         }
-        return nextConfig.idleUrl || nextConfig.runLeftUrl || nextConfig.runRightUrl || '';
+        return nextConfig.idleUrl || nextConfig.runLeftUrl || nextConfig.runRightUrl || nextConfig.petUrl || nextConfig.feedUrl || '';
+    }
+
+    function updateAssignmentFigurePose(figureEl, config, pose) {
+        if (!figureEl) return;
+        const imageEl = figureEl.querySelector('.garden-assignment-sprite-img') || getResidentCharacterImageEl(figureEl) || figureEl.querySelector('img');
+        const nextUrl = resolveResidentCharacterUrl(config, pose === 'left' ? 'run-left' : pose === 'right' ? 'run-right' : 'idle');
+        if (!imageEl) return;
+        if (nextUrl) {
+            if (imageEl.getAttribute('src') !== nextUrl) {
+                imageEl.setAttribute('src', nextUrl);
+            }
+            imageEl.dataset.pose = pose;
+            imageEl.classList.remove('is-empty');
+        } else {
+            imageEl.removeAttribute('src');
+            imageEl.dataset.pose = '';
+            imageEl.classList.add('is-empty');
+        }
+        figureEl.dataset.pose = pose;
+        figureEl.classList.toggle('is-idle', pose === 'idle');
+        figureEl.classList.toggle('is-running-left', pose === 'left');
+        figureEl.classList.toggle('is-running-right', pose === 'right');
+    }
+
+    function clearAssignmentFigureLoopTimers() {
+        if (farmAssignmentLoopTimer) {
+            clearTimeout(farmAssignmentLoopTimer);
+            farmAssignmentLoopTimer = null;
+        }
+        if (pastureAssignmentLoopTimer) {
+            clearTimeout(pastureAssignmentLoopTimer);
+            pastureAssignmentLoopTimer = null;
+        }
+    }
+
+    function runAssignmentFigureLoop(figureEl, scope) {
+        if (!figureEl) return;
+        const config = getContactFigureConfig(state.currentGardenContactId);
+        updateAssignmentFigurePose(figureEl, config, 'idle');
+        const timerRefSetter = scope === 'farm'
+            ? (id) => { farmAssignmentLoopTimer = id; }
+            : (id) => { pastureAssignmentLoopTimer = id; };
+        const idleDelay = randomInRange(2200, 4200);
+        timerRefSetter(window.setTimeout(() => {
+            const currentLeft = parseFloat(figureEl.dataset.left || figureEl.style.left) || 50;
+            const currentTop = parseFloat(figureEl.dataset.top || figureEl.style.top) || (scope === 'farm' ? 70 : 72);
+            let direction = Math.random() < 0.5 ? 'left' : 'right';
+            const deltaX = randomInRange(5, 12);
+            const minLeft = scope === 'farm' ? 34 : 34;
+            const maxLeft = scope === 'farm' ? 66 : 66;
+            const minTop = scope === 'farm' ? 58 : 62;
+            const maxTop = scope === 'farm' ? 72 : 76;
+            if (direction === 'left' && currentLeft <= minLeft + 4) direction = 'right';
+            if (direction === 'right' && currentLeft >= maxLeft - 4) direction = 'left';
+            const nextLeft = clampResidentFigureValue(currentLeft + (direction === 'left' ? -deltaX : deltaX), minLeft, maxLeft);
+            const nextTop = clampResidentFigureValue(currentTop + randomInRange(-3, 3), minTop, maxTop);
+            const duration = Math.round(randomInRange(2200, 3600));
+            updateAssignmentFigurePose(figureEl, config, direction);
+            figureEl.style.transition = `left ${duration}ms linear, top ${duration}ms linear`;
+            figureEl.style.left = `${nextLeft}%`;
+            figureEl.style.top = `${nextTop}%`;
+            figureEl.dataset.left = String(nextLeft);
+            figureEl.dataset.top = String(nextTop);
+            timerRefSetter(window.setTimeout(() => runAssignmentFigureLoop(figureEl, scope), duration + 80));
+        }, idleDelay));
+    }
+
+    function createAssignmentFigureElement(scope) {
+        const figure = document.createElement('div');
+        const spriteSize = scope === 'farm'
+            ? { figureW: 62, figureH: 74, spriteW: 62, spriteH: 68, imageW: 78, imageH: 78, imageBottom: 0 }
+            : { figureW: 66, figureH: 78, spriteW: 66, spriteH: 72, imageW: 84, imageH: 84, imageBottom: 0 };
+        figure.className = `garden-assignment-figure garden-assignment-figure-${scope}`;
+        const startLeft = scope === 'farm' ? randomInRange(38, 62) : randomInRange(38, 62);
+        const startTop = scope === 'farm' ? randomInRange(60, 70) : randomInRange(64, 74);
+        figure.dataset.left = String(startLeft);
+        figure.dataset.top = String(startTop);
+        figure.style.left = `${startLeft}%`;
+        figure.style.top = `${startTop}%`;
+        figure.style.position = 'absolute';
+        figure.style.transform = 'translate(-50%, -100%)';
+        figure.style.transformOrigin = 'center bottom';
+        figure.style.width = `${spriteSize.figureW}px`;
+        figure.style.height = `${spriteSize.figureH}px`;
+        figure.style.pointerEvents = 'none';
+        figure.style.zIndex = '8';
+        figure.style.overflow = 'visible';
+        figure.innerHTML = `
+            <div class="resident-character-shadow"></div>
+            <div class="garden-assignment-sprite resident-character-sprite">
+                <img class="garden-assignment-sprite-img" alt="assignment contact" draggable="false" loading="eager" />
+            </div>
+        `;
+        const shadowEl = figure.querySelector('.resident-character-shadow');
+        if (shadowEl) {
+            shadowEl.style.position = 'absolute';
+            shadowEl.style.left = '50%';
+            shadowEl.style.bottom = '0';
+            shadowEl.style.width = scope === 'farm' ? '18px' : '20px';
+            shadowEl.style.height = '5px';
+            shadowEl.style.borderRadius = '999px';
+            shadowEl.style.background = 'rgba(15,23,42,.18)';
+            shadowEl.style.transform = 'translateX(-50%)';
+            shadowEl.style.filter = 'blur(1px)';
+        }
+        const spriteEl = figure.querySelector('.garden-assignment-sprite');
+        if (spriteEl) {
+            spriteEl.style.position = 'absolute';
+            spriteEl.style.left = '50%';
+            spriteEl.style.bottom = '2px';
+            spriteEl.style.width = `${spriteSize.spriteW}px`;
+            spriteEl.style.height = `${spriteSize.spriteH}px`;
+            spriteEl.style.transform = 'translateX(-50%)';
+            spriteEl.style.overflow = 'visible';
+            spriteEl.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,.12))';
+        }
+        const imageEl = figure.querySelector('.garden-assignment-sprite-img');
+        if (imageEl) {
+            imageEl.style.position = 'absolute';
+            imageEl.style.left = '50%';
+            imageEl.style.bottom = `${spriteSize.imageBottom}px`;
+            imageEl.style.width = `${spriteSize.imageW}px`;
+            imageEl.style.height = `${spriteSize.imageH}px`;
+            imageEl.style.maxWidth = 'none';
+            imageEl.style.maxHeight = 'none';
+            imageEl.style.display = 'block';
+            imageEl.style.objectFit = 'contain';
+            imageEl.style.objectPosition = 'center bottom';
+            imageEl.style.transform = 'translateX(-50%)';
+            imageEl.style.transformOrigin = 'center bottom';
+            imageEl.style.filter = 'none';
+        }
+        updateAssignmentFigurePose(figure, getContactFigureConfig(state.currentGardenContactId), 'idle');
+        return figure;
+    }
+
+    function ensureFarmAssignmentLayer() {
+        if (!farmGridEl || !farmGridEl.parentElement) return null;
+        if (farmAssignmentLayerEl && farmAssignmentLayerEl.isConnected) return farmAssignmentLayerEl;
+        const host = farmGridEl.parentElement;
+        host.style.position = host.style.position || 'relative';
+        const layer = document.createElement('div');
+        layer.className = 'garden-assignment-layer garden-assignment-layer-farm';
+        host.appendChild(layer);
+        farmAssignmentLayerEl = layer;
+        return layer;
+    }
+
+    function ensurePastureAssignmentLayer() {
+        if (!pastureFieldEl) return null;
+        if (pastureAssignmentLayerEl && pastureAssignmentLayerEl.isConnected) return pastureAssignmentLayerEl;
+        pastureFieldEl.style.position = pastureFieldEl.style.position || 'relative';
+        const layer = document.createElement('div');
+        layer.className = 'garden-assignment-layer garden-assignment-layer-pasture';
+        pastureFieldEl.appendChild(layer);
+        pastureAssignmentLayerEl = layer;
+        return layer;
+    }
+
+    function renderAssignmentFigureInFarm() {
+        const layer = ensureFarmAssignmentLayer();
+        if (!layer) return;
+        if (farmAssignmentFigureEl && farmAssignmentFigureEl.isConnected) return;
+        farmAssignmentFigureEl = createAssignmentFigureElement('farm');
+        layer.appendChild(farmAssignmentFigureEl);
+        runAssignmentFigureLoop(farmAssignmentFigureEl, 'farm');
+    }
+
+    function renderAssignmentFigureInPasture() {
+        const layer = ensurePastureAssignmentLayer();
+        if (!layer) return;
+        if (pastureAssignmentFigureEl && pastureAssignmentFigureEl.isConnected) return;
+        pastureAssignmentFigureEl = createAssignmentFigureElement('pasture');
+        layer.appendChild(pastureAssignmentFigureEl);
+        runAssignmentFigureLoop(pastureAssignmentFigureEl, 'pasture');
+    }
+
+    function clearAssignmentFigures() {
+        clearAssignmentFigureLoopTimers();
+        if (farmAssignmentFigureEl) {
+            farmAssignmentFigureEl.remove();
+            farmAssignmentFigureEl = null;
+        }
+        if (pastureAssignmentFigureEl) {
+            pastureAssignmentFigureEl.remove();
+            pastureAssignmentFigureEl = null;
+        }
+        if (farmAssignmentLayerEl) {
+            farmAssignmentLayerEl.remove();
+            farmAssignmentLayerEl = null;
+        }
+        if (pastureAssignmentLayerEl) {
+            pastureAssignmentLayerEl.remove();
+            pastureAssignmentLayerEl = null;
+        }
+    }
+
+    function syncAssignmentFigures() {
+        clearAssignmentFigures();
+        const contactState = getGardenContactState(state.currentGardenContactId);
+        const assignment = contactState.activeAssignment;
+        if (!assignment || assignment.finishAt <= Date.now()) return;
+        if (assignment.type === 'farm' && state.farmScreenOpen) {
+            renderAssignmentFigureInFarm();
+        }
+        if (assignment.type === 'pasture' && state.pastureScreenOpen) {
+            renderAssignmentFigureInPasture();
+        }
     }
 
     function getResidentCharacterImageEl(figureEl) {
@@ -6772,12 +7591,12 @@ ${taskCard.action}`;
         updateResidentCharacterPose(config, 'idle');
         figureEl.style.transition = 'left 240ms ease-out, top 240ms ease-out';
 
-        const idleDelay = randomInRange(600, 1200);
+        const idleDelay = randomInRange(5000, 9000);
         state.residentFigureLoopTimer = window.setTimeout(() => {
             const currentLeft = parseFloat(figureEl.dataset.left || figureEl.style.left) || 50;
             const currentTop = parseFloat(figureEl.dataset.top || figureEl.style.top) || 84;
             let direction = Math.random() < 0.5 ? 'left' : 'right';
-            const deltaX = randomInRange(12, 28);
+            const deltaX = randomInRange(6, 14);
 
             if (direction === 'left' && currentLeft <= CONTACT_FIGURE_MIN_LEFT + 6) {
                 direction = 'right';
@@ -6791,11 +7610,11 @@ ${taskCard.action}`;
                 CONTACT_FIGURE_MAX_LEFT
             );
             const nextTop = clampResidentFigureValue(
-                currentTop + randomInRange(-4, 4),
+                currentTop + randomInRange(-2, 2),
                 CONTACT_FIGURE_MIN_TOP,
                 CONTACT_FIGURE_MAX_TOP
             );
-            const duration = Math.round(randomInRange(2000, 4000));
+            const duration = Math.round(randomInRange(2800, 4800));
 
             updateResidentCharacterPose(config, direction === 'left' ? 'run-left' : 'run-right');
             figureEl.style.transition = `left ${duration}ms linear, top ${duration}ms linear`;
@@ -6833,12 +7652,13 @@ ${taskCard.action}`;
         clearResidentCharacterFigure();
 
         const activeConfig = sanitizeResidentCharacter(config || getContactFigureConfig(state.currentGardenContactId));
-        const hasAnyFigure = Boolean(activeConfig.idleUrl || activeConfig.runLeftUrl || activeConfig.runRightUrl);
+        const hasAnyFigure = Boolean(activeConfig.idleUrl || activeConfig.runLeftUrl || activeConfig.runRightUrl || activeConfig.petUrl || activeConfig.feedUrl);
         if (!hasAnyFigure || state.currentView !== 'home') {
             return;
         }
 
         const figureEl = document.createElement('div');
+        const triggerEl = document.createElement('button');
         const startLeft = randomInRange(28, 72);
         const startTop = randomInRange(80, 88);
         figureEl.className = 'resident-character is-idle';
@@ -6847,6 +7667,7 @@ ${taskCard.action}`;
         figureEl.style.left = `${startLeft}%`;
         figureEl.style.top = `${startTop}%`;
         figureEl.style.zIndex = String(Math.floor(startTop));
+        figureEl.style.cursor = 'pointer';
         figureEl.innerHTML = `
             <div class="resident-character-shadow"></div>
             <div class="resident-character-sprite">
@@ -6854,8 +7675,38 @@ ${taskCard.action}`;
             </div>
         `;
 
+        triggerEl.type = 'button';
+        triggerEl.className = 'resident-character-trigger';
+        triggerEl.setAttribute('aria-label', '打开联系人互动');
+        triggerEl.style.left = `${startLeft}%`;
+        triggerEl.style.top = `${startTop}%`;
+        triggerEl.style.zIndex = String(Math.floor(startTop) + 1);
+        triggerEl.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openResidentStatusCard();
+        });
+
         layerEl.appendChild(figureEl);
+        layerEl.appendChild(triggerEl);
+        if (!layerEl.querySelector('[data-resident-ui-style="true"]')) {
+            const styleEl = document.createElement('style');
+            styleEl.dataset.residentUiStyle = 'true';
+            styleEl.textContent = `
+                .resident-character-trigger{position:absolute;transform:translate(-50%,-100%);width:88px;height:112px;border:none;background:transparent;pointer-events:auto;cursor:pointer;z-index:141;padding:0;margin:0;appearance:none;-webkit-appearance:none}
+                .resident-status-card,.resident-feed-sheet,.resident-dispatch-sheet{position:absolute;transform:translate(-50%,-100%);z-index:140;padding:10px 12px;border-radius:16px;background:rgba(255,255,255,.96);box-shadow:0 12px 28px rgba(15,23,42,.18);min-width:170px;backdrop-filter:blur(10px);pointer-events:auto}
+                .resident-status-card-title{font-size:13px;font-weight:700;color:#334155;margin-bottom:8px;text-align:center}.resident-status-row+.resident-status-row{margin-top:6px}.resident-status-meta{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:#475569;margin-bottom:4px}.resident-status-track{height:7px;border-radius:999px;background:#e2e8f0;overflow:hidden}.resident-status-fill{height:100%;border-radius:999px}.resident-status-actions,.resident-feed-sheet,.resident-dispatch-sheet{display:flex;flex-direction:column;gap:6px}.resident-status-actions button,.resident-feed-sheet button,.resident-dispatch-sheet button{border:none;border-radius:12px;padding:8px 10px;background:#f8fafc;color:#334155;font-size:12px;font-weight:600;cursor:pointer}.resident-status-actions button:hover,.resident-feed-sheet button:hover,.resident-dispatch-sheet button:hover{background:#eef2ff}.resident-feed-sheet,.resident-dispatch-sheet{transform:translate(-50%,0);min-width:190px}.resident-feed-sheet.is-anchored-card,.resident-dispatch-sheet.is-anchored-card{transform:translateX(-50%)}.resident-assignment-badge{position:absolute;transform:translate(-50%,-100%);min-width:120px;border:none;border-radius:16px;padding:10px 12px;background:rgba(255,255,255,.96);box-shadow:0 12px 28px rgba(15,23,42,.16);pointer-events:auto;cursor:pointer;z-index:142;color:#334155}.resident-assignment-badge-title{font-size:12px;font-weight:700;color:#7c3aed}.resident-assignment-badge-copy{font-size:12px;margin-top:2px}.resident-assignment-badge-time{font-size:14px;font-weight:700;margin-top:4px}.garden-assignment-layer{position:absolute;inset:0;pointer-events:none;z-index:6;overflow:hidden}
+            `;
+            layerEl.appendChild(styleEl);
+        }
         state.residentFigureEl = figureEl;
+        state.residentFigureTriggerEl = triggerEl;
+        completeResidentAssignment(state.currentGardenContactId);
+        const contactState = settleGardenContactNeeds(state.currentGardenContactId);
+        if (contactState.activeAssignment && contactState.activeAssignment.finishAt > Date.now()) {
+            figureEl.style.display = 'none';
+            triggerEl.style.display = 'none';
+        }
         updateResidentCharacterPose(activeConfig, 'idle');
         prepareResidentCharacterLoop(activeConfig, figureEl);
     }
