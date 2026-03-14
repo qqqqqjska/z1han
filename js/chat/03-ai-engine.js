@@ -5292,21 +5292,26 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
     let meetingContext = '';
     if (window.iphoneSimState.meetings && window.iphoneSimState.meetings[contact.id] && window.iphoneSimState.meetings[contact.id].length > 0) {
         const meetings = window.iphoneSimState.meetings[contact.id];
-        const lastMeeting = meetings[meetings.length - 1];
+        const syncedMeetings = meetings.filter(item => item && item.syncWithChat === true);
+        const lastMeeting = syncedMeetings.length > 0 ? syncedMeetings[syncedMeetings.length - 1] : null;
+        if (!lastMeeting) {
+            meetingContext = '';
+        } else {
         
-        let meetingContent = '';
-        if (lastMeeting.content && lastMeeting.content.length > 0) {
-            const recentContent = lastMeeting.content.slice(-5);
-            meetingContent = recentContent.map(c => {
-                const role = c.role === 'user' ? '用户' : contact.name;
-                return `${role}: ${c.text}`;
-            }).join('\n');
-        }
+            let meetingContent = '';
+            if (lastMeeting.content && lastMeeting.content.length > 0) {
+                const recentContent = lastMeeting.content.slice(-5);
+                meetingContent = recentContent.map(c => {
+                    const role = c.role === 'user' ? '用户' : contact.name;
+                    return `${role}: ${c.text}`;
+                }).join('\n');
+            }
 
-        if (meetingContent) {
-            const meetingDate = new Date(lastMeeting.time);
-            const meetingTimeStr = `${meetingDate.getMonth() + 1}月${meetingDate.getDate()}日`;
-            meetingContext = `\n【线下见面记忆】\n你们最近一次见面是在 ${meetingTimeStr} (${lastMeeting.title})。\n当时发生的剧情片段：\n${meetingContent}\n(请知晓你们已经见过面，并根据剧情发展进行聊天)\n`;
+            if (meetingContent) {
+                const meetingDate = new Date(lastMeeting.time);
+                const meetingTimeStr = `${meetingDate.getMonth() + 1}月${meetingDate.getDate()}日`;
+                meetingContext = `\n【线下见面记忆】\n你们最近一次见面是在 ${meetingTimeStr} (${lastMeeting.title})。\n当时发生的剧情片段：\n${meetingContent}\n(请知晓你们已经见过面，并根据剧情发展进行聊天)\n`;
+            }
         }
     }
 

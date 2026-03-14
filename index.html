@@ -2926,14 +2926,22 @@
 
             <div class="meeting-input-area meeting-editorial-input-area" id="meeting-input-area" style="position:absolute;left:28px;right:28px;bottom:28px;z-index:10;">
                 <div class="meeting-editorial-pill" style="display:flex;align-items:center;gap:8px;padding:4px 6px 4px 16px;background:rgba(255,255,255,0.88);border:0.5px solid rgba(0,0,0,0.08);border-radius:26px;box-shadow:0 10px 30px rgba(0,0,0,0.06);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);min-height:42px;">
-                    <textarea id="meeting-input" placeholder="Continue the story..." style="flex:1;height:24px;min-height:24px;max-height:24px;border:none;outline:none;background:transparent;font-size:15px;line-height:24px;resize:none;overflow:hidden;padding:0;margin:0;font-style:italic;color:#333;display:block;"></textarea>
-                    <button id="meeting-detail-magic-btn" class="meeting-editorial-pill-ghost" title="文风/续写" style="width:36px;height:36px;border-radius:18px;background:#fff url('https://i.postimg.cc/FRF6sDr8/%E6%97%A0%E6%A0%87%E9%A2%98118_20260315030347.png') center/cover no-repeat;color:#111;border:0.5px solid #ccc;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;overflow:hidden;">
+                    <textarea id="meeting-input" placeholder="写下剧情片段…" style="flex:1;height:24px;min-height:24px;max-height:24px;border:none;outline:none;background:transparent;font-size:15px;line-height:24px;resize:none;overflow:hidden;padding:0;margin:0;font-style:italic;color:#333;display:block;"></textarea>
+                    <button id="meeting-detail-magic-btn" class="meeting-editorial-pill-ghost" title="剧情建议" style="width:36px;height:36px;border-radius:18px;background:#fff url('https://i.postimg.cc/FRF6sDr8/%E6%97%A0%E6%A0%87%E9%A2%98118_20260315030347.png') center/cover no-repeat;color:#111;border:0.5px solid #ccc;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;overflow:hidden;">
                     </button>
-                    <button id="meeting-ai-continue-btn" class="meeting-icon-btn" title="AI续写 (让剧情继续)" style="width:36px;height:36px;border-radius:18px;background:#111 url('https://i.postimg.cc/HxWNsBYF/%E6%97%A0%E6%A0%87%E9%A2%98119_20260315030439.png') center/cover no-repeat;color:#fff;border:none;display:flex;align-items:center;justify-content:center;box-shadow:none;flex-shrink:0;padding:0;overflow:hidden;">
+                    <button id="meeting-ai-continue-btn" class="meeting-icon-btn" title="续写剧情" style="width:36px;height:36px;border-radius:18px;background:#111 url('https://i.postimg.cc/HxWNsBYF/%E6%97%A0%E6%A0%87%E9%A2%98119_20260315030439.png') center/cover no-repeat;color:#fff;border:none;display:flex;align-items:center;justify-content:center;box-shadow:none;flex-shrink:0;padding:0;overflow:hidden;">
                     </button>
                 </div>
                 
                 <button id="meeting-send-btn" style="display:none;"></button>
+            </div>
+
+            <div id="meeting-action-suggestion-menu" class="forum-gift-menu" style="height:auto;max-height:62vh;z-index:211;">
+                <div class="forum-gift-menu-header">
+                    <h4 style="font-size:18px;font-weight:700;color:#1c1c1e;">剧情建议</h4>
+                    <button id="close-meeting-action-suggestion-menu" style="background:rgba(0,0,0,0.05);border:none;width:30px;height:30px;border-radius:50%;font-size:14px;font-weight:bold;cursor:pointer;color:#1c1c1e;">✕</button>
+                </div>
+                <div id="meeting-action-suggestion-list" style="padding-bottom:10px;"></div>
             </div>
 
             <!-- 见面剧情编辑弹窗 -->
