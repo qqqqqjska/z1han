@@ -1,6 +1,66 @@
-// 见面功能模块
+﻿// 见面功能模块
 
 let currentEditingMeetingMsgIndex = null;
+let isMeetingSelectionMode = false;
+let selectedMeetingIds = new Set();
+
+function toRomanNumeral(number) {
+    const numerals = [
+        ['M', 1000], ['CM', 900], ['D', 500], ['CD', 400],
+        ['C', 100], ['XC', 90], ['L', 50], ['XL', 40],
+        ['X', 10], ['IX', 9], ['V', 5], ['IV', 4], ['I', 1]
+    ];
+
+    let remaining = Math.max(1, Number(number) || 1);
+    let result = '';
+
+    numerals.forEach(([symbol, value]) => {
+        while (remaining >= value) {
+            result += symbol;
+            remaining -= value;
+        }
+    });
+
+    return result;
+}
+
+function getMeetingChapterTitle(meeting, indexFromOldest) {
+    const chapterNumber = indexFromOldest + 1;
+    return `Chapter ${toRomanNumeral(chapterNumber)}`;
+}
+
+function getMeetingDateLabel(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const sameYear = date.getFullYear() === now.getFullYear();
+    const sameMonth = date.getMonth() === now.getMonth();
+    const sameDay = date.getDate() === now.getDate();
+
+    if (sameYear && sameMonth && sameDay) {
+        return 'TODAY';
+    }
+
+    const monthLabels = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    return `${monthLabels[date.getMonth()]} ${date.getDate()}`;
+}
+
+function getMeetingSummaryText(meeting) {
+    if (!meeting.content || meeting.content.length === 0) {
+        return '暂无内容';
+    }
+
+    const text = meeting.content
+        .map(entry => (entry && entry.text ? String(entry.text).trim() : ''))
+        .filter(Boolean)
+        .join(' ')
+        .replace(/\s+/g, ' ');
+
+    if (!text) {
+        return '暂无内容';
+    }
+
+    return text.substring(0, 68) + (text.length > 68 ? '…' : '');
+}
 
 // 1. 打开见面列表页
 function openMeetingsScreen(contactId) {
@@ -32,6 +92,7 @@ function renderMeetingsList(contactId) {
     // 处理空状态
     if (meetings.length === 0) {
         if (emptyState) emptyState.style.display = 'flex';
+        updateMeetingSelectionUI();
         return;
     }
     if (emptyState) emptyState.style.display = 'none';
@@ -40,43 +101,130 @@ function renderMeetingsList(contactId) {
     [...meetings].reverse().forEach(meeting => {
         const item = document.createElement('div');
         item.className = 'meeting-item';
+        item.style.cursor = 'pointer';
+        item.dataset.meetingId = String(meeting.id);
         
-        const date = new Date(meeting.time);
-        const timeStr = `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+        const originalIndex = meetings.findIndex(m => m.id === meeting.id);
+        const chapterTitle = getMeetingChapterTitle(meeting, originalIndex);
+        const timeLabel = getMeetingDateLabel(meeting.time);
         
-        // 获取摘要
-        let summary = '暂无内容';
-        if (meeting.content && meeting.content.length > 0) {
-            const lastContent = meeting.content[meeting.content.length - 1];
-            summary = lastContent.text.substring(0, 20) + (lastContent.text.length > 20 ? '...' : '');
-        }
+        const summary = getMeetingSummaryText(meeting);
 
-        // HTML 结构：包含一个删除图标
+        // HTML 结构：按 demo 的 editorial 列表结构输出
         item.innerHTML = `
-            <div class="meeting-item-content" style="width: 100%;">
-                <div class="meeting-item-header">
-                    <span style="font-weight:600; color:#000;">${meeting.title || '未命名见面'}</span>
-                    <span style="font-size: 12px; color: #999;">${timeStr}</span>
+            <div class="meeting-item-content" style="width:100%;padding-right:${isMeetingSelectionMode ? '38px' : '0'};box-sizing:border-box;position:relative;">
+                <div class="meeting-item-header" style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;width:100%;">
+                    <span class="meeting-item-title" style="font-size:18px;color:#111;font-weight:700;font-family:'Palatino Linotype','Book Antiqua',Palatino,'Times New Roman',serif;line-height:1.3;">${chapterTitle}</span>
+                    <span class="meeting-item-time" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;color:#999;letter-spacing:.5px;white-space:nowrap;flex-shrink:0;">${timeLabel}</span>
                 </div>
-                <div class="meeting-item-summary" style="color: #666; font-size: 13px; margin-top: 4px;">${summary}</div>
+                <div class="meeting-item-summary" style="margin-top:8px;font-size:14px;color:#555;line-height:1.6;text-align:justify;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${summary}</div>
             </div>
-            <div class="meeting-delete-btn" title="删除记录">
-                <i class="fas fa-trash-alt"></i>
-            </div>
+            ${isMeetingSelectionMode ? `<div class="meeting-select-indicator" style="position:absolute;top:24px;right:0;display:flex;align-items:center;justify-content:center;width:22px;height:22px;border:1px solid ${selectedMeetingIds.has(meeting.id) ? '#111' : '#cfcfcf'};border-radius:50%;background:${selectedMeetingIds.has(meeting.id) ? '#111' : '#fff'};color:#fff;z-index:2;transition:all .15s ease;">${selectedMeetingIds.has(meeting.id) ? '<i class="fas fa-check" style="font-size:11px;"></i>' : ''}</div>` : ''}
         `;
         
-        // 绑定点击跳转事件 (点击整个卡片)
-        item.addEventListener('click', () => openMeetingDetail(meeting.id));
+        item.addEventListener('click', () => {
+            if (isMeetingSelectionMode) {
+                if (selectedMeetingIds.has(meeting.id)) {
+                    selectedMeetingIds.delete(meeting.id);
+                } else {
+                    selectedMeetingIds.add(meeting.id);
+                }
+                updateMeetingSelectionIndicator(item, meeting.id);
+                updateMeetingSelectionUI();
+                return;
+            }
 
-        // 绑定删除事件 (只点击垃圾桶)
-        const deleteBtn = item.querySelector('.meeting-delete-btn');
-        deleteBtn.addEventListener('click', (e) => {
-            e.stopPropagation(); // 阻止冒泡，防止触发卡片点击
-            deleteMeeting(contactId, meeting.id);
+            openMeetingDetail(meeting.id);
         });
 
         list.appendChild(item);
     });
+
+    updateMeetingSelectionUI();
+}
+
+function updateMeetingSelectionIndicator(item, meetingId) {
+    if (!item) return;
+
+    let indicator = item.querySelector('.meeting-select-indicator');
+    const isSelected = selectedMeetingIds.has(meetingId);
+
+    if (!isMeetingSelectionMode) {
+        if (indicator) indicator.remove();
+        return;
+    }
+
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.className = 'meeting-select-indicator';
+        indicator.style.position = 'absolute';
+        indicator.style.top = '24px';
+        indicator.style.right = '0';
+        indicator.style.display = 'flex';
+        indicator.style.alignItems = 'center';
+        indicator.style.justifyContent = 'center';
+        indicator.style.width = '22px';
+        indicator.style.height = '22px';
+        indicator.style.borderRadius = '50%';
+        indicator.style.color = '#fff';
+        indicator.style.zIndex = '2';
+        indicator.style.transition = 'all .15s ease';
+        item.appendChild(indicator);
+    }
+
+    indicator.style.border = `1px solid ${isSelected ? '#111' : '#cfcfcf'}`;
+    indicator.style.background = isSelected ? '#111' : '#fff';
+    indicator.innerHTML = isSelected ? '<i class="fas fa-check" style="font-size:11px;"></i>' : '';
+}
+
+function updateMeetingSelectionUI() {
+    const selectBtn = document.getElementById('meeting-select-btn');
+    const footerNewMeetingBtn = document.getElementById('meetings-footer-new-btn');
+    if (selectBtn) {
+        const icon = selectBtn.querySelector('i');
+        selectBtn.setAttribute('aria-label', isMeetingSelectionMode ? '删除已选记录' : '进入多选模式');
+        selectBtn.style.color = isMeetingSelectionMode ? '#111' : '#777';
+        if (icon) {
+            icon.className = isMeetingSelectionMode
+                ? (selectedMeetingIds.size > 0 ? 'ri-delete-bin-line' : 'ri-check-line')
+                : 'ri-menu-line';
+        }
+    }
+
+    if (footerNewMeetingBtn) {
+        footerNewMeetingBtn.style.display = isMeetingSelectionMode ? 'none' : 'inline-flex';
+    }
+}
+
+function toggleMeetingSelectionMode() {
+    if (!window.iphoneSimState.currentChatContactId) return;
+
+    if (isMeetingSelectionMode && selectedMeetingIds.size > 0) {
+        const confirmed = confirm(`确定删除已选中的 ${selectedMeetingIds.size} 条见面记录吗？`);
+        if (!confirmed) return;
+
+        const contactId = window.iphoneSimState.currentChatContactId;
+        const meetings = window.iphoneSimState.meetings[contactId] || [];
+        window.iphoneSimState.meetings[contactId] = meetings.filter(meeting => !selectedMeetingIds.has(meeting.id));
+        selectedMeetingIds.clear();
+        isMeetingSelectionMode = false;
+        saveConfig();
+        renderMeetingsList(contactId);
+        return;
+    }
+
+    isMeetingSelectionMode = !isMeetingSelectionMode;
+    if (!isMeetingSelectionMode) {
+        selectedMeetingIds.clear();
+    }
+
+    const listItems = document.querySelectorAll('#meetings-list .meeting-item');
+    listItems.forEach(item => {
+        const meetingId = Number(item.dataset.meetingId);
+        updateMeetingSelectionIndicator(item, meetingId);
+    });
+
+    updateMeetingSelectionUI();
 }
 
 // 删除单条见面记录
@@ -185,7 +333,7 @@ function renderMeetingCards(meeting) {
 
     meeting.content.forEach((msg, index) => {
         const card = document.createElement('div');
-        card.className = 'meeting-card';
+        card.className = `meeting-card meeting-editorial-block ${msg.role === 'user' ? 'user' : 'ai'}`;
         
         let avatar = '';
         let name = '';
@@ -201,17 +349,24 @@ function renderMeetingCards(meeting) {
             roleClass = 'meeting-card-role-ai';
         }
 
+        const roleLabel = msg.role === 'user' ? 'YOU' : 'CHARACTER';
+
         card.innerHTML = `
-            <div class="meeting-card-header">
-                <img src="${avatar}" class="meeting-card-avatar">
-                <span class="meeting-card-name ${roleClass}">${name}</span>
+            <div class="meeting-editorial-role-tag ${roleClass}" style="font-family:-apple-system,sans-serif;font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:${msg.role === 'user' ? '#222' : '#b0b0b0'};display:flex;align-items:center;gap:10px;justify-content:${msg.role === 'user' ? 'flex-end' : 'flex-start'};">
+                ${msg.role === 'user' ? '' : '<span style="display:block;width:24px;height:1px;background:#ddd;"></span>'}
+                <span>${roleLabel}</span>
+                ${msg.role === 'user' ? '<span style="display:block;width:24px;height:1px;background:#222;"></span>' : ''}
             </div>
-            <div class="meeting-card-content">${msg.text}</div>
-            <div class="meeting-card-actions">
-                <img src="${editIconUrl}" class="meeting-action-icon" onclick="window.editMeetingMsg(${index})" title="编辑">
-                <img src="${deleteIconUrl}" class="meeting-action-icon danger" onclick="window.deleteMeetingMsg(${index})" title="删除">
+            <div class="meeting-card-content" style="font-size:16px;line-height:1.92;letter-spacing:.2px;color:${msg.role === 'user' ? '#666' : '#2c2c2c'};text-align:${msg.role === 'user' ? 'right' : 'justify'};font-style:${msg.role === 'user' ? 'italic' : 'normal'};">${msg.text}</div>
+            <div class="meeting-card-actions" style="position:absolute;top:0;${msg.role === 'user' ? 'left:0;padding-right:12px;' : 'right:0;padding-left:12px;'}display:flex;gap:16px;opacity:0;transition:opacity .25s;background:#fdfdfc;">
+                <img src="${editIconUrl}" class="meeting-action-icon" onclick="window.editMeetingMsg(${index})" title="编辑" style="width:15px;height:15px;object-fit:contain;opacity:.7;">
+                <img src="${deleteIconUrl}" class="meeting-action-icon danger" onclick="window.deleteMeetingMsg(${index})" title="删除" style="width:15px;height:15px;object-fit:contain;opacity:.7;">
             </div>
         `;
+        card.style.display = 'flex';
+        card.style.flexDirection = 'column';
+        card.style.gap = '14px';
+        card.style.position = 'relative';
         container.appendChild(card);
     });
     
@@ -777,7 +932,7 @@ async function handleMeetingAI(type) {
 // 初始化监听器
 function setupMeetingListeners() {
     const closeMeetingsScreenBtn = document.getElementById('close-meetings-screen');
-    const newMeetingBtn = document.getElementById('new-meeting-btn');
+    const meetingSelectBtn = document.getElementById('meeting-select-btn');
     const meetingStyleBtn = document.getElementById('meeting-style-btn');
     const meetingStyleModal = document.getElementById('meeting-style-modal');
     const closeMeetingStyleBtn = document.getElementById('close-meeting-style');
@@ -792,7 +947,9 @@ function setupMeetingListeners() {
         document.getElementById('meetings-screen').classList.add('hidden');
     });
 
-    if (newMeetingBtn) newMeetingBtn.addEventListener('click', createNewMeeting);
+    const footerNewMeetingBtn = document.getElementById('meetings-footer-new-btn');
+    if (footerNewMeetingBtn) footerNewMeetingBtn.addEventListener('click', createNewMeeting);
+    if (meetingSelectBtn) meetingSelectBtn.addEventListener('click', toggleMeetingSelectionMode);
 
     // 加载文风预设
     function loadMeetingStylePresets() {
@@ -945,17 +1102,19 @@ function setupMeetingListeners() {
     const endMeetingBtn = document.getElementById('end-meeting-btn');
     const meetingSendBtn = document.getElementById('meeting-send-btn');
     const meetingAiContinueBtn = document.getElementById('meeting-ai-continue-btn');
+    const meetingDetailStyleBtn = document.getElementById('meeting-detail-style-btn');
+    const meetingDetailMagicBtn = document.getElementById('meeting-detail-magic-btn');
 
     if (endMeetingBtn) endMeetingBtn.addEventListener('click', endMeeting);
     if (meetingSendBtn) meetingSendBtn.addEventListener('click', handleSendMeetingText);
     if (meetingAiContinueBtn) meetingAiContinueBtn.addEventListener('click', () => handleMeetingAI('continue'));
+    if (meetingDetailStyleBtn) meetingDetailStyleBtn.addEventListener('click', () => meetingStyleModal.classList.remove('hidden'));
+    if (meetingDetailMagicBtn) meetingDetailMagicBtn.addEventListener('click', () => meetingStyleModal.classList.remove('hidden'));
 
     const meetingInput = document.getElementById('meeting-input');
     if (meetingInput) {
         meetingInput.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = (this.scrollHeight) + 'px';
-            if(this.value === '') this.style.height = 'auto';
+            this.style.height = '24px';
         });
         
         meetingInput.addEventListener('keydown', function(e) {
@@ -1112,3 +1271,4 @@ function setupMeetingListeners() {
 if (window.appInitFunctions) {
     window.appInitFunctions.push(setupMeetingListeners);
 }
+

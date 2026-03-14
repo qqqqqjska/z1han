@@ -499,6 +499,8 @@
     let farmSeedListEl;
     let farmCoinsEl;
     let farmLevelEl;
+    let farmApEl;
+    let farmApMaxEl;
     let farmBuffSummaryEl;
     let farmBuffSummaryTextEl;
     let farmBuffChipEl;
@@ -593,6 +595,7 @@
     let pastureAssignmentLayerEl;
     let farmAssignmentLoopTimer = null;
     let pastureAssignmentLoopTimer = null;
+    let residentAssignmentAutoTimer = null;
 
     const CONTACT_STATUS_DEFAULTS = Object.freeze({ mood: 70, hunger: 75, energy: 80 });
     const CONTACT_STATUS_MAX = 100;
@@ -704,6 +707,11 @@
     function createDefaultRogueRunStateV2(loadoutId) {
         const loadout = ROGUE_V2_STARTER_LOADOUTS[loadoutId] || ROGUE_V2_STARTER_LOADOUTS.farmer;
         const inventory = createEmptyInventory();
+        const map = createRogueMapStateV2();
+        const firstAct = Array.isArray(map.acts) ? map.acts.find((act) => Number(act.actIndex) === 1) : null;
+        const firstNode = firstAct && Array.isArray(firstAct.routes) && firstAct.routes[0]
+            ? firstAct.routes[0][0] || null
+            : null;
         Object.entries(loadout.startInventory || {}).forEach(([itemId, amount]) => {
             if (!ITEM_META[itemId]) return;
             inventory[itemId] = Math.max(0, Math.floor(Number(amount) || 0));
@@ -711,6 +719,10 @@
         return {
             version: 2,
             starterRoleId: loadout.id,
+            map,
+            actIndex: 1,
+            depthIndex: 0,
+            currentNode: firstNode,
             day: 1,
             cycleIndex: 1,
             cycleDay: 1,
@@ -720,6 +732,8 @@
             cycleDebtTarget: 240,
             cycleDebtPaid: 0,
             inventoryCapacity: 16,
+            moraleCap: 3,
+            morale: 3,
             currentWeather: 'sunny',
             currentMarket: { focus: 'crops', modifiers: { crops: 1, products: 1, cooked: 1 } },
             currentGuestEvent: null,
@@ -773,13 +787,17 @@
                 return result;
             }, {})
             : {};
+        const unlockedLoadouts = Array.isArray(rawState.unlockedLoadouts)
+            ? Array.from(new Set([
+                ...defaults.unlockedLoadouts,
+                ...rawState.unlockedLoadouts.filter((item) => !!ROGUE_V2_STARTER_LOADOUTS[item])
+            ]))
+            : defaults.unlockedLoadouts;
         return {
             workshopCurrency: Math.max(0, Math.floor(Number(rawState.workshopCurrency) || 0)),
             ascensionLevel: Math.max(0, Math.floor(Number(rawState.ascensionLevel) || 0)),
             highestActCleared: Math.max(0, Math.floor(Number(rawState.highestActCleared) || 0)),
-            unlockedLoadouts: Array.isArray(rawState.unlockedLoadouts)
-                ? rawState.unlockedLoadouts.filter((item) => !!ROGUE_V2_STARTER_LOADOUTS[item])
-                : defaults.unlockedLoadouts,
+            unlockedLoadouts,
             workshopLevels,
             seenRelics: Array.isArray(rawState.seenRelics) ? rawState.seenRelics.filter((id) => !!ROGUE_RELIC_POOL_V2[id]) : [],
             seenEvents: Array.isArray(rawState.seenEvents) ? rawState.seenEvents.filter((id) => !!ROGUE_EVENT_POOL_V2[id]) : []
@@ -790,6 +808,19 @@
         if (!rawState || typeof rawState !== 'object' || Number(rawState.version) !== 2) return null;
         const roleId = ROGUE_V2_STARTER_LOADOUTS[rawState.starterRoleId] ? rawState.starterRoleId : 'farmer';
         const defaults = createDefaultRogueRunStateV2(roleId);
+        const map = rawState.map && Array.isArray(rawState.map.acts) ? rawState.map : defaults.map;
+        const actIndex = Math.max(1, Math.min(3, Math.floor(Number(rawState.actIndex) || defaults.actIndex)));
+        const depthIndex = Math.max(0, Math.min(3, Math.floor(Number(rawState.depthIndex) || defaults.depthIndex)));
+        const activeAct = Array.isArray(map.acts)
+            ? map.acts.find((act) => Number(act.actIndex) === Number(actIndex)) || null
+            : null;
+        const fallbackNode = depthIndex >= 3
+            ? (activeAct && activeAct.climaxNode ? activeAct.climaxNode : null)
+            : (activeAct && Array.isArray(activeAct.routes)
+                ? activeAct.routes
+                    .map((route) => Array.isArray(route) ? route[depthIndex] : null)
+                    .find(Boolean) || null
+                : null);
         const inventory = createEmptyInventory();
         Object.keys(inventory).forEach((itemId) => {
             inventory[itemId] = Math.max(0, Math.floor(Number(rawState.runInventory && rawState.runInventory[itemId]) || 0));
@@ -797,6 +828,10 @@
         return {
             ...defaults,
             starterRoleId: roleId,
+            map,
+            actIndex,
+            depthIndex,
+            currentNode: rawState.currentNode && typeof rawState.currentNode === 'object' ? rawState.currentNode : fallbackNode,
             day: Math.max(1, Math.floor(Number(rawState.day) || defaults.day)),
             cycleIndex: Math.max(1, Math.floor(Number(rawState.cycleIndex) || defaults.cycleIndex)),
             cycleDay: Math.max(1, Math.min(7, Math.floor(Number(rawState.cycleDay) || defaults.cycleDay))),
@@ -806,6 +841,11 @@
             cycleDebtTarget: Math.max(0, Math.floor(Number(rawState.cycleDebtTarget) || defaults.cycleDebtTarget)),
             cycleDebtPaid: Math.max(0, Math.floor(Number(rawState.cycleDebtPaid) || defaults.cycleDebtPaid)),
             inventoryCapacity: Math.max(4, Math.floor(Number(rawState.inventoryCapacity) || defaults.inventoryCapacity)),
+            moraleCap: Math.max(1, Math.floor(Number(rawState.moraleCap) || defaults.moraleCap)),
+            morale: Math.max(0, Math.min(
+                Math.max(1, Math.floor(Number(rawState.moraleCap) || defaults.moraleCap)),
+                Math.floor(Number(rawState.morale))
+            || defaults.morale)),
             currentWeather: rawState.currentWeather ? String(rawState.currentWeather) : defaults.currentWeather,
             currentMarket: rawState.currentMarket && typeof rawState.currentMarket === 'object' ? rawState.currentMarket : defaults.currentMarket,
             currentGuestEvent: rawState.currentGuestEvent || null,
@@ -1514,7 +1554,7 @@
             };
         }
         if (run.currentNode && run.currentNode.type === 'kitchen') {
-            const cookableRecipes = KITCHEN_RECIPES.filter((recipe) => hasInventoryItems(recipe.ingredients || {})).length;
+            const cookableRecipes = Object.values(KITCHEN_RECIPES).filter((recipe) => hasInventoryItems(recipe.ingredients || {})).length;
             return {
                 title: '主任务：完成厨房节点',
                 progress: `进度：当前可做配方 ${cookableRecipes} 个`,
@@ -1999,8 +2039,18 @@ ${taskCard.action}`;
     function selectRogueNodeV2(choiceIndex) {
         const run = getRogueRunV2();
         const nodes = getRogueAvailableNodesForCurrentDepthV2();
-        const node = nodes[choiceIndex];
+        const sourceNode = nodes[choiceIndex];
+        const node = sourceNode ? {
+            ...sourceNode,
+            isCleared: false,
+            harvestCount: 0,
+            cookCount: 0,
+            orderProgress: 0
+        } : null;
         if (!run || !node) return;
+        if (sourceNode) {
+            Object.assign(sourceNode, node);
+        }
         run.currentNode = node;
         run.routeIndex = Number.isFinite(Number(node.routeIndex)) ? Number(node.routeIndex) : run.routeIndex;
         run.currentEvent = node.type === 'event' ? { nodeId: node.id } : null;
@@ -2011,6 +2061,9 @@ ${taskCard.action}`;
         }
         run.currentBoss = node.type === 'boss' ? { nodeId: node.id, phase: 1 } : null;
         closeRogueOfferV2();
+        closeFarmScreen({ silent: true });
+        closePastureScreen({ silent: true });
+        closeKitchenScreen({ silent: true });
         saveRogueRunStateV2();
         renderRogueUiV2();
         openCurrentRogueStageScreen();
@@ -2019,7 +2072,6 @@ ${taskCard.action}`;
     function advanceRogueRunV2(nodeCleared) {
         const run = getRogueRunV2();
         if (!run || !nodeCleared) return;
-        let shouldOpenNextNodeChoices = false;
         if (nodeCleared.type !== 'elite' && nodeCleared.type !== 'boss') {
             run.clearedNormalNodes += 1;
         }
@@ -2050,6 +2102,8 @@ ${taskCard.action}`;
                 }
                 saveRogueRunStateV2();
                 renderRogueUiV2();
+                switchView('activities');
+                setRogueProgressPanelOpen(true);
                 return;
             }
             run.actIndex += 1;
@@ -2057,15 +2111,20 @@ ${taskCard.action}`;
             run.routeIndex = null;
             createRogueDraftFromPoolV2('elite');
             saveRogueRunStateV2();
+            switchView('activities');
+            setRogueProgressPanelOpen(true);
+            renderRogueUiV2();
             return;
         }
         if (run.clearedNormalNodes > 0 && run.clearedNormalNodes % 2 === 0) {
             createRogueDraftFromPoolV2('relic');
+            switchView('activities');
+            setRogueProgressPanelOpen(true);
+            renderRogueUiV2();
             return;
         }
         if (run.depthIndex < 2) {
             run.depthIndex += 1;
-            shouldOpenNextNodeChoices = true;
         } else {
             run.depthIndex = 3;
             const act = getRogueActStateV2(run.actIndex);
@@ -2076,9 +2135,8 @@ ${taskCard.action}`;
         }
         saveRogueRunStateV2();
         renderRogueUiV2();
-        if (shouldOpenNextNodeChoices) {
-            openRogueNodeChoicesV2();
-        }
+        switchView('activities');
+        setRogueProgressPanelOpen(true);
     }
 
     function progressRogueFarmHarvestV2() {
@@ -2429,6 +2487,33 @@ ${taskCard.action}`;
             return;
         }
         saveGardenGameState();
+    }
+
+    function openRogueStorageView() {
+        closeFarmScreen({ silent: true });
+        closePastureScreen({ silent: true });
+        closeKitchenScreen({ silent: true });
+        setRogueProgressPanelOpen(false);
+        switchView('gallery');
+        const activeStorageTab = state.rogueRunV2 && state.rogueRunV2.storage
+            ? state.rogueRunV2.storage.tab
+            : 'crops';
+        renderStorageItems(activeStorageTab);
+    }
+
+    function tryConsumeRogueActionPoint(cost, reason) {
+        const run = getRogueRunV2();
+        const amount = Math.max(0, Math.floor(Number(cost) || 0));
+        if (!run || amount <= 0) return true;
+        run.apRemaining = Math.max(0, Math.floor(Number(run.apRemaining) || 0));
+        if (run.apRemaining < amount) {
+            showFarmToast(reason ? `${reason}需要 ${amount} 点行动力` : '行动力不足');
+            return false;
+        }
+        run.apRemaining -= amount;
+        syncFarmStats();
+        saveActiveGardenModeState();
+        return true;
     }
 
     function syncActivitiesFarmCardUi() {
@@ -3195,6 +3280,12 @@ ${taskCard.action}`;
             vibrate(12);
             return;
         }
+        const storageOpenButton = event.target.closest('[data-rogue-action="open-storage"]');
+        if (storageOpenButton) {
+            openRogueStorageView();
+            vibrate(12);
+            return;
+        }
         const workshopCloseButton = event.target.closest('[data-rogue-workshop-close]');
         if (workshopCloseButton) {
             setRogueWorkshopOpen(false);
@@ -3203,6 +3294,7 @@ ${taskCard.action}`;
         }
         const startRunButton = event.target.closest('[data-rogue-action="open-start"]');
         if (startRunButton) {
+            setRogueProgressPanelOpen(false);
             if (state.rogueRunV2) {
                 if (state.rogueRunV2.currentDraft) {
                     renderRogueOfferModal();
@@ -3321,6 +3413,9 @@ ${taskCard.action}`;
             const relicId = relicPickButton.dataset.rogueV2Pick;
             const relic = ROGUE_RELIC_POOL_V2[relicId];
             if (state.rogueRunV2 && relic) {
+                const pickedDraftType = state.rogueRunV2.currentDraft && state.rogueRunV2.currentDraft.type
+                    ? state.rogueRunV2.currentDraft.type
+                    : 'relic';
                 if (relic.rarity === 'blessing') {
                     state.rogueRunV2.blessings.push(relicId);
                 } else {
@@ -3340,7 +3435,9 @@ ${taskCard.action}`;
                 renderRogueUiV2();
                 showRogueToast(`获得 ${relic.title}`);
                 if (!state.rogueRunV2.completed) {
-                    if (state.rogueRunV2.currentNode) {
+                    if (pickedDraftType === 'relic') {
+                        openRogueNodeChoicesV2();
+                    } else if (state.rogueRunV2.currentNode) {
                         openCurrentRogueStageScreen();
                     } else {
                         openRogueNodeChoicesV2();
@@ -3654,6 +3751,8 @@ ${taskCard.action}`;
         farmSeedListEl = document.getElementById('garden-farm-seed-list');
         farmCoinsEl = document.getElementById('garden-farm-coins');
         farmLevelEl = document.getElementById('garden-farm-level');
+        farmApEl = document.getElementById('garden-farm-ap');
+        farmApMaxEl = document.getElementById('garden-farm-ap-max');
         farmBuffSummaryEl = document.getElementById('garden-farm-buff-summary');
         farmBuffSummaryTextEl = document.getElementById('garden-farm-buff-summary-text');
         farmBuffChipEl = document.getElementById('garden-farm-buff-chip');
@@ -4081,8 +4180,12 @@ ${taskCard.action}`;
         const level = isRogue
             ? Math.max(1, Math.floor(Number((state.rogueRunV2.farm && state.rogueRunV2.farm.level) || 1)))
             : (state.gardenGame ? state.gardenGame.farm.level : 1);
+        const apRemaining = isRogue ? Math.max(0, Math.floor(Number(state.rogueRunV2.apRemaining) || 0)) : 0;
+        const dailyAP = isRogue ? Math.max(0, Math.floor(Number(state.rogueRunV2.dailyAP) || 0)) : 0;
         if (farmCoinsEl) farmCoinsEl.textContent = String(coins);
         if (farmLevelEl) farmLevelEl.textContent = String(level);
+        if (farmApEl) farmApEl.textContent = String(apRemaining);
+        if (farmApMaxEl) farmApMaxEl.textContent = String(dailyAP);
     }
 
     function ensureFarmProgressTimer() {
@@ -4184,12 +4287,33 @@ ${taskCard.action}`;
             farmPanelTitleEl.textContent = state.farmGame.currentTool === 'tool' ? '局内道具' : '种子背包';
         }
         if (!farmSeedListEl) return;
+        if (state.farmGame.currentTool !== 'tool') {
+            renderFarmSeedListUi();
+        }
         if (state.farmGame.currentTool === 'tool' && isRogueActivityMode()) {
             renderFarmToolListUi();
             return;
         }
         farmSeedListEl.querySelectorAll('[data-farm-seed]').forEach((item) => {
             item.classList.toggle('active', item.dataset.farmSeed === state.farmGame.currentSeed);
+        });
+    }
+
+    function renderFarmSeedListUi() {
+        if (!farmSeedListEl) return;
+        const rows = Object.values(FARM_SEEDS).map((seed) => {
+            const selected = state.farmGame.currentSeed === seed.id;
+            return `
+                <button class="garden-farm-seed-item ${selected ? 'active' : ''}" data-farm-seed="${seed.id}" type="button">
+                    <div class="garden-farm-seed-emoji">${seed.emoji}</div>
+                    <div class="garden-farm-seed-info">${seed.name}</div>
+                    <div class="garden-farm-seed-time">${formatFarmDuration(seed.time)}</div>
+                </button>
+            `;
+        }).join('');
+        farmSeedListEl.innerHTML = rows;
+        farmSeedListEl.querySelectorAll('[data-farm-seed]').forEach((item) => {
+            item.addEventListener('click', () => setFarmSeed(item.dataset.farmSeed));
         });
     }
 
@@ -4214,7 +4338,7 @@ ${taskCard.action}`;
     }
 
     function setFarmTool(toolKey) {
-        state.farmGame.currentTool = toolKey || 'pointer';
+        state.farmGame.currentTool = toolKey || 'plant';
         syncFarmToolUi();
         vibrate(15);
     }
@@ -4307,10 +4431,19 @@ ${taskCard.action}`;
             }
             const seed = FARM_SEEDS[state.farmGame.currentSeed];
             if (!seed) return;
-            const availableCoins = isRogueActivityMode() && state.rogueRunV2
+            const isRogue = isRogueActivityMode() && !!state.rogueRunV2;
+            if (isRogue && !tryConsumeRogueActionPoint(1, '播种')) {
+                return;
+            }
+            const availableCoins = isRogue
                 ? Math.max(0, Math.floor(Number(state.rogueRunV2.runCoins) || 0))
                 : (state.gardenGame ? state.gardenGame.coins : 0);
             if (availableCoins < seed.cost) {
+                if (isRogue && state.rogueRunV2) {
+                    state.rogueRunV2.apRemaining += 1;
+                    syncFarmStats();
+                    saveActiveGardenModeState();
+                }
                 showFarmToast('金币不足啦');
                 return;
             }
@@ -4642,6 +4775,13 @@ ${taskCard.action}`;
     function openPastureScreen() {
         initPastureScreen();
         if (!pastureScreenEl) return;
+        if (isRogueActivityMode() && state.rogueRunV2 && state.rogueRunV2.currentNode && state.rogueRunV2.currentNode.type === 'pasture') {
+            state.pastureGame.currentTool = 'feed';
+            state.pastureGame.selectedToolItemId = null;
+            state.pastureGame.selectedAnimalToBuy = null;
+            state.pastureGame.visualEatingUntil = {};
+            syncPastureToolUi();
+        }
         closeFarmScreen({ silent: true });
         closeKitchenScreen({ silent: true });
         setHomeEntryMenuOpen(false);
@@ -4677,7 +4817,7 @@ ${taskCard.action}`;
             state.pastureGame.progressTimer = window.setInterval(() => {
                 const changed = advancePastureAnimalsProgress();
                 renderPastureAnimals();
-                if (changed) saveGardenGameState();
+                if (changed) saveActiveGardenModeState();
             }, 1000);
         }
         if (!state.pastureGame.roamTimer) {
@@ -4753,6 +4893,12 @@ ${taskCard.action}`;
         wrapper.dataset.y = String(nextY);
         wrapper.style.left = `calc(${nextX}% - 25px)`;
         wrapper.style.top = `calc(${nextY}% - 30px)`;
+        wrapper.style.zIndex = String(getPastureDepthZ(nextY));
+    }
+
+    function getPastureDepthZ(y) {
+        const nextY = Math.max(15, Math.min(85, Number(y) || 0));
+        return 100 + Math.floor(nextY * 10);
     }
 
     function getPastureAnimalById(animalId) {
@@ -4778,13 +4924,19 @@ ${taskCard.action}`;
     function renderPastureAnimals() {
         if (!pastureFieldEl) return;
         const now = Date.now();
-        pastureFieldEl.innerHTML = '';
+        const existingMap = new Map(
+            Array.from(pastureFieldEl.querySelectorAll('.garden-pasture-animal-wrapper'))
+                .map((node) => [String(node.dataset.pastureId || ''), node])
+        );
+        const nextIds = new Set();
         getPastureAnimals().forEach((animal) => {
             const data = PASTURE_ANIMAL_DATA[animal.type];
             if (!data) return;
+            nextIds.add(String(animal.id));
             const isEating = Number(state.pastureGame.visualEatingUntil[animal.id] || 0) > now;
             const bubbleMeta = getPastureAnimalBubble(animal, data, isEating);
-            const wrapper = document.createElement('div');
+            const existingWrapper = existingMap.get(String(animal.id));
+            const wrapper = existingWrapper || document.createElement('div');
             const classNames = ['garden-pasture-animal-wrapper', animal.age === 'adult' ? 'garden-pasture-age-adult' : 'garden-pasture-age-baby'];
             if (animal.state === 'hungry') classNames.push('garden-pasture-state-hungry');
             if (animal.state === 'ready') classNames.push('garden-pasture-state-ready');
@@ -4799,11 +4951,16 @@ ${taskCard.action}`;
                 <div class="garden-pasture-animal-emoji">${animal.age === 'adult' ? data.adultEmoji : data.babyEmoji}</div>
             `;
             setPastureAnimalPosition(wrapper, animal.x, animal.y);
-            wrapper.addEventListener('click', (clickEvent) => {
-                clickEvent.stopPropagation();
-                interactWithPastureAnimal(wrapper);
-            });
-            pastureFieldEl.appendChild(wrapper);
+            if (!existingWrapper) {
+                wrapper.addEventListener('click', (clickEvent) => {
+                    clickEvent.stopPropagation();
+                    interactWithPastureAnimal(wrapper);
+                });
+                pastureFieldEl.appendChild(wrapper);
+            }
+        });
+        existingMap.forEach((node, id) => {
+            if (!nextIds.has(id)) node.remove();
         });
         const contactState = getGardenContactState(state.currentGardenContactId);
         const assignment = contactState.activeAssignment;
@@ -4868,6 +5025,9 @@ ${taskCard.action}`;
         }
 
         if (state.pastureGame.currentTool === 'feed' && animalState === 'hungry') {
+            if (isRogueActivityMode() && state.rogueRunV2 && !tryConsumeRogueActionPoint(1, '喂食')) {
+                return;
+            }
             animal.state = animalAge === 'baby' ? 'growing' : 'producing';
             let durationMultiplier = 1;
             if (consumeRogueModifier('pasture_fast_feed')) {
@@ -4879,7 +5039,7 @@ ${taskCard.action}`;
             const baseDuration = animalAge === 'baby' ? data.growTime : data.produceTime;
             animal.stateEndsAt = Date.now() + Math.max(1000, Math.round(baseDuration * durationMultiplier));
             state.pastureGame.visualEatingUntil[animal.id] = Date.now() + 1500;
-            saveGardenGameState();
+            saveActiveGardenModeState();
             renderPastureAnimals();
             const refreshedWrapper = pastureFieldEl ? pastureFieldEl.querySelector(`[data-pasture-id="${animal.id}"]`) : null;
             if (refreshedWrapper) {
@@ -4896,6 +5056,9 @@ ${taskCard.action}`;
             }
             if (animalState !== 'ready') {
                 showPastureToast('还没有可以收获的产物');
+                return;
+            }
+            if (isRogueActivityMode() && state.rogueRunV2 && !tryConsumeRogueActionPoint(1, '收获')) {
                 return;
             }
 
@@ -4923,6 +5086,16 @@ ${taskCard.action}`;
             saveActiveGardenModeState();
             refreshGardenEconomyUi();
             showPastureToast(`获得 ${data.produceName} ${data.produceEmoji} x${rewardQty}，已存入仓库`);
+            return;
+        }
+
+        if (state.pastureGame.currentTool === 'feed') {
+            showPastureToast('这只动物现在不用喂，换一只饥饿动物或等待生产完成');
+            return;
+        }
+        if (state.pastureGame.currentTool === 'harvest') {
+            showPastureToast('这只动物现在还不能收获，先等它进入可收获状态');
+            return;
         }
     }
 
@@ -5020,7 +5193,7 @@ ${taskCard.action}`;
         });
         if (!moved) return;
         renderPastureAnimals();
-        saveGardenGameState();
+        saveActiveGardenModeState();
     }
 
     function initKitchenScreen() {
@@ -5335,7 +5508,19 @@ ${taskCard.action}`;
                 const action = actionButton.dataset.storageAction;
                 vibrate(20);
                 if (action === 'exit') {
-                    closeApp();
+                    if (isRogueActivityMode() && state.rogueRunV2) {
+                        switchView('activities');
+                        if (state.rogueRunV2.currentDraft) {
+                            renderRogueOfferModal();
+                        } else if (state.rogueRunV2.currentNode) {
+                            openCurrentRogueStageScreen({ preferActivitiesBase: false });
+                        } else {
+                            setRogueProgressPanelOpen(true);
+                            renderRogueUiV2();
+                        }
+                    } else {
+                        closeApp();
+                    }
                 }
                 return;
             }
@@ -6918,14 +7103,20 @@ ${taskCard.action}`;
         const resolvedContactId = resolveGardenContactId(contactId || state.currentGardenContactId);
         const contactState = settleGardenContactNeeds(resolvedContactId);
         const assignment = contactState.activeAssignment;
-        if (!assignment || !state.residentLayerEl || !state.residentFigureEl) return;
+        if (!assignment || !state.residentLayerEl) return;
         closeResidentAssignmentBadge();
         const badge = document.createElement('button');
         const labels = { farm: '农场浇水', pasture: '牧场喂动物', kitchen: '厨房做菜' };
         badge.type = 'button';
         badge.className = 'resident-assignment-badge';
-        badge.style.left = state.residentFigureEl.dataset.left ? `${state.residentFigureEl.dataset.left}%` : (state.residentFigureEl.style.left || '50%');
-        badge.style.top = state.residentFigureEl.dataset.top ? `${Math.max(16, Number(state.residentFigureEl.dataset.top) - 12)}%` : '66%';
+        const anchorLeft = state.residentFigureEl && state.residentFigureEl.dataset.left
+            ? `${state.residentFigureEl.dataset.left}%`
+            : (state.residentFigureEl && state.residentFigureEl.style.left ? state.residentFigureEl.style.left : '50%');
+        const anchorTop = state.residentFigureEl && state.residentFigureEl.dataset.top
+            ? `${Math.max(16, Number(state.residentFigureEl.dataset.top) - 12)}%`
+            : '66%';
+        badge.style.left = anchorLeft;
+        badge.style.top = anchorTop;
         badge.innerHTML = `<div class="resident-assignment-badge-title">外出中</div><div class="resident-assignment-badge-copy">${labels[assignment.type] || '派遣中'}</div><div class="resident-assignment-badge-time">${formatResidentAssignmentRemaining(assignment.finishAt)}</div>`;
         badge.addEventListener('click', (event) => {
             event.preventDefault();
@@ -7158,6 +7349,7 @@ ${taskCard.action}`;
                 if (state.residentFigureTriggerEl) state.residentFigureTriggerEl.style.display = 'none';
                 showResidentAssignmentBadge(contactId);
                 syncAssignmentFigures();
+                scheduleResidentAssignmentAutoSettlement(contactId);
                 showResidentToast('农场暂时没有可浇水的植物，TA稍后会回来');
                 return;
             }
@@ -7175,6 +7367,7 @@ ${taskCard.action}`;
         if (state.residentFigureTriggerEl) state.residentFigureTriggerEl.style.display = 'none';
         showResidentAssignmentBadge(contactId);
         syncAssignmentFigures();
+        scheduleResidentAssignmentAutoSettlement(contactId);
         showResidentToast('TA出门干活啦');
     }
 
@@ -7282,6 +7475,30 @@ ${taskCard.action}`;
             clearTimeout(pastureAssignmentLoopTimer);
             pastureAssignmentLoopTimer = null;
         }
+        if (residentAssignmentAutoTimer) {
+            clearTimeout(residentAssignmentAutoTimer);
+            residentAssignmentAutoTimer = null;
+        }
+    }
+
+    function scheduleResidentAssignmentAutoSettlement(contactId = null) {
+        if (residentAssignmentAutoTimer) {
+            clearTimeout(residentAssignmentAutoTimer);
+            residentAssignmentAutoTimer = null;
+        }
+        const resolvedContactId = resolveGardenContactId(contactId || state.currentGardenContactId);
+        const contactState = getGardenContactState(resolvedContactId);
+        const assignment = contactState.activeAssignment;
+        if (!assignment || assignment.finishAt <= Date.now()) return;
+        const delay = Math.max(80, Number(assignment.finishAt || 0) - Date.now() + 80);
+        residentAssignmentAutoTimer = window.setTimeout(() => {
+            residentAssignmentAutoTimer = null;
+            if (!completeResidentAssignment(resolvedContactId)) return;
+            if (state.currentView === 'home') {
+                refreshActiveContactFigure();
+            }
+            syncAssignmentFigures();
+        }, delay);
     }
 
     function runAssignmentFigureLoop(figureEl, scope) {
@@ -7291,12 +7508,12 @@ ${taskCard.action}`;
         const timerRefSetter = scope === 'farm'
             ? (id) => { farmAssignmentLoopTimer = id; }
             : (id) => { pastureAssignmentLoopTimer = id; };
-        const idleDelay = randomInRange(2200, 4200);
+        const idleDelay = randomInRange(1200, 2200);
         timerRefSetter(window.setTimeout(() => {
             const currentLeft = parseFloat(figureEl.dataset.left || figureEl.style.left) || 50;
             const currentTop = parseFloat(figureEl.dataset.top || figureEl.style.top) || (scope === 'farm' ? 70 : 72);
             let direction = Math.random() < 0.5 ? 'left' : 'right';
-            const deltaX = randomInRange(5, 12);
+            const deltaX = randomInRange(3, 7);
             const minLeft = scope === 'farm' ? 34 : 34;
             const maxLeft = scope === 'farm' ? 66 : 66;
             const minTop = scope === 'farm' ? 58 : 62;
@@ -7304,12 +7521,13 @@ ${taskCard.action}`;
             if (direction === 'left' && currentLeft <= minLeft + 4) direction = 'right';
             if (direction === 'right' && currentLeft >= maxLeft - 4) direction = 'left';
             const nextLeft = clampResidentFigureValue(currentLeft + (direction === 'left' ? -deltaX : deltaX), minLeft, maxLeft);
-            const nextTop = clampResidentFigureValue(currentTop + randomInRange(-3, 3), minTop, maxTop);
-            const duration = Math.round(randomInRange(2200, 3600));
+            const nextTop = clampResidentFigureValue(currentTop + randomInRange(-2, 2), minTop, maxTop);
+            const duration = Math.round(randomInRange(2600, 4200));
             updateAssignmentFigurePose(figureEl, config, direction);
             figureEl.style.transition = `left ${duration}ms linear, top ${duration}ms linear`;
             figureEl.style.left = `${nextLeft}%`;
             figureEl.style.top = `${nextTop}%`;
+            figureEl.style.zIndex = String(scope === 'pasture' ? getPastureDepthZ(nextTop) : Math.max(2, Math.floor(nextTop)));
             figureEl.dataset.left = String(nextLeft);
             figureEl.dataset.top = String(nextTop);
             timerRefSetter(window.setTimeout(() => runAssignmentFigureLoop(figureEl, scope), duration + 80));
@@ -7334,7 +7552,7 @@ ${taskCard.action}`;
         figure.style.width = `${spriteSize.figureW}px`;
         figure.style.height = `${spriteSize.figureH}px`;
         figure.style.pointerEvents = 'none';
-        figure.style.zIndex = '8';
+        figure.style.zIndex = String(scope === 'pasture' ? getPastureDepthZ(startTop) : Math.max(2, Math.floor(startTop)));
         figure.style.overflow = 'visible';
         figure.innerHTML = `
             <div class="resident-character-shadow"></div>
@@ -7558,9 +7776,10 @@ ${taskCard.action}`;
         const spriteEl = figureEl.querySelector('.resident-character-sprite');
         const imageEl = getResidentCharacterImageEl(figureEl);
         const nextUrl = resolveResidentCharacterUrl(config, pose);
+        const isMovingPose = pose === 'run-left' || pose === 'run-right';
 
         figureEl.dataset.pose = pose;
-        figureEl.classList.toggle('is-running', pose !== 'idle');
+        figureEl.classList.toggle('is-running', isMovingPose);
         figureEl.classList.toggle('is-idle', pose === 'idle');
         figureEl.classList.toggle('is-running-left', pose === 'run-left');
         figureEl.classList.toggle('is-running-right', pose === 'run-right');
@@ -7706,6 +7925,7 @@ ${taskCard.action}`;
         if (contactState.activeAssignment && contactState.activeAssignment.finishAt > Date.now()) {
             figureEl.style.display = 'none';
             triggerEl.style.display = 'none';
+            scheduleResidentAssignmentAutoSettlement(state.currentGardenContactId);
         }
         updateResidentCharacterPose(activeConfig, 'idle');
         prepareResidentCharacterLoop(activeConfig, figureEl);
@@ -7897,6 +8117,7 @@ ${taskCard.action}`;
         closePastureScreen({ silent: true });
         closeKitchenScreen({ silent: true });
         switchView('home');
+        scheduleResidentAssignmentAutoSettlement(state.currentGardenContactId);
         setHomeEntryMenuOpen(false);
         setDrawerOpen(false);
         closeFloraScreen();

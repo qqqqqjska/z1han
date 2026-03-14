@@ -5419,239 +5419,31 @@ html body .chat-message.user .voice-icon-box i { transform: rotate(-90deg); }
 
 /* 见面列表�?*/
 .meeting-item {
-    background-color: #fff;
-    padding: 15px;
-    margin-bottom: 10px;
-    border-radius: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    cursor: pointer;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    transition: background-color 0.2s;
-}
-.meeting-item:active {
-    background-color: #f2f2f2;
-}
-.meeting-item-header {
-    display: flex;
-    justify-content: space-between;
-    font-size: 14px;
-    color: #888;
-}
-.meeting-item-summary {
-    font-size: 16px;
-    color: #333;
-    font-weight: 500;
-    line-height: 1.4;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-/* 见面详情页主�?*/
-.meeting-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-    padding-bottom: 100px; /* 留出底部输入框位�?*/
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-
-/* 使用伪元素撑开顶部空间，避免被透明 Header 遮挡，同时允许内容滚动到 Header 下方 */
-.meeting-body::before {
-    content: "";
-    display: block;
-    min-height: 91px; /* Header 高度 (44px + 47px) */
-    flex-shrink: 0;
-}
-
-/* 剧情卡片 */
-.meeting-card {
-    background-color: #fff;
-    border-radius: 16px;
-    padding: 20px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     position: relative;
-    animation: fadeIn 0.3s ease-out;
-    max-width: 600px;
-    margin: auto;
-    width: 100%;
-}
-
-.meeting-card-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
-    border-bottom: 1px solid #f0f0f0;
-    padding-bottom: 10px;
-}
-
-.meeting-card-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    object-fit: cover;
-}
-
-.meeting-card-name {
-    font-size: 14px;
-    font-weight: bold;
-    color: #333;
-}
-
-.meeting-card-role-user {
-    color: #007AFF;
-}
-.meeting-card-role-ai {
-    color: #000000;
-}
-
-.meeting-card-content {
-    font-size: inherit; /* 继承父容器字体大�?*/
-    line-height: 1.6;
-    color: #333;
-    white-space: pre-wrap;
-    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    text-align: justify;
-}
-
-.meeting-card-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 10px;
-    opacity: 0;
-    transition: opacity 0.2s;
-}
-
-.meeting-card:hover .meeting-card-actions,
-.meeting-card:active .meeting-card-actions {
-    opacity: 1;
-}
-
-.meeting-action-icon {
-    width: 24px;
-    height: 24px;
-    cursor: pointer;
-    padding: 4px;
-    object-fit: contain;
-    opacity: 0.6;
-    transition: opacity 0.2s;
-}
-.meeting-action-icon:hover {
-    opacity: 1;
-}
-/* 图片图标无法通过 CSS 改变颜色，所以移�?color hover 效果，改用透明�?*/
-
-/* 底部输入�?*/
-.meeting-input-area {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background-color: rgba(255,255,255,0.95);
-    backdrop-filter: blur(20px);
-    border-top: 1px solid rgba(0,0,0,0.1);
-    padding: 10px 15px;
-    padding-bottom: max(10px, env(safe-area-inset-bottom));
-    display: flex;
-    flex-direction: row; /* 确保横向排列 */
-    align-items: center; /* 垂直居中 */
-    gap: 10px;           /* 元素间距 */
-    box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
-}
-
-.meeting-input-wrapper {
-    width: 100%;
-}
-
-#meeting-input {
-    flex: 1;             /* 占满剩余空间 */
-    height: 40px;        /* 固定高度，或者你可以设为 auto 并用 JS控制高度 */
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 20px; /* 圆角看起来更像聊天框 */
-    outline: none;
-    resize: none;        /* 禁止手动拖动大小 */
-    font-family: inherit;
-    background-color: #f2f2f7;
-    font-size: 16px;
-}
-#meeting-input:focus {
-    outline: none;
-    background-color: #fff;
-    border-color: #007AFF;
-}
-
-.meeting-actions {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-/* 优化见面功能页面的过渡动�?*/
-#meetings-screen, #meeting-detail-screen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: #f2f2f7;
     display: flex;
     flex-direction: column;
-    
-    /* 动画属性：淡入淡出效果 */
-    transition: opacity 0.3s ease, visibility 0s linear 0s;
-    opacity: 1;
-    visibility: visible;
-}
-
-/* 强制提升见面功能页面的层�?*/
-#meetings-screen {
-    z-index: 200 !important;
-}
-
-#meeting-detail-screen {
-    z-index: 210 !important;
-}
-
-/* 隐藏状态：透明 */
-#meetings-screen.hidden, 
-#meeting-detail-screen.hidden {
-    display: flex !important; /* 保持 flex 布局以便动画生效 */
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    /* 退出动画：visibility 延迟变化，确�?opacity 动画播放�?*/
-    transition: opacity 0.25s ease, visibility 0s linear 0.25s;
-}
-/* 见面列表项布局优化 */
-.meeting-item {
-    position: relative; /* 为了定位删除按钮 */
-    display: flex;
-    flex-direction: column;
-    padding-right: 40px; /* 给删除按钮留空间 */
+    gap: 8px;
+    padding: 24px 0;
+    border-bottom: 0.5px solid #eaeaea;
+    background: transparent;
+    animation: fadeIn 0.25s ease;
 }
 
 /* 删除按钮样式 */
 .meeting-delete-btn {
     position: absolute;
-    right: 30px;
-    top: 70%;
-    transform: translateY(-50%);
-    color: #000000; /* 黑色 */
-    padding: 10px;
+    right: 0;
+    top: 24px;
+    width: 28px;
+    height: 28px;
+    color: #bbb;
+    padding: 0;
     cursor: pointer;
-    z-index: 10; /* 确保在最上层 */
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fdfdfc;
 }
 
 /* 魔法棒按钮样�?*/
@@ -7269,3 +7061,71 @@ html body .chat-message.user .voice-icon-box i { transform: rotate(-90deg); }
 
 
 
+
+.meeting-item-summary {
+    color: #555;
+    font-size: 14px;
+    line-height: 1.75;
+    text-align: justify;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    padding-right: 56px;
+}
+.meeting-delete-btn:active {
+    color: #111;
+}
+
+.meetings-v2-footer {
+    margin-top: 30px;
+    display: flex;
+    justify-content: center;
+    padding-bottom: 20px;
+}
+
+.meetings-v2-new-btn {
+    height: 52px;
+    min-width: 260px;
+    padding: 0 32px;
+    border-radius: 999px;
+    border: 1.2px solid #111;
+    background: transparent;
+    color: #111;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    font-size: 14px;
+    letter-spacing: 2px;
+    font-weight: 500;
+}
+
+.meetings-v2-new-btn i {
+    font-size: 16px;
+}
+
+.meetings-v2-new-btn span {
+    transform: translateY(1px);
+}
+
+#meeting-detail-screen {
+    background: #fdfdfc !important;
+}
+
+#meeting-detail-screen .meeting-editorial-block:hover .meeting-card-actions {
+    opacity: 1 !important;
+}
+
+#meeting-detail-screen .meeting-editorial-body {
+    scrollbar-width: none;
+}
+
+#meeting-detail-screen .meeting-editorial-body::-webkit-scrollbar {
+    display: none;
+}
+
+#meeting-detail-screen .meeting-editorial-input-area textarea::placeholder {
+    color: #b7b7b7;
+    font-style: italic;
+}
