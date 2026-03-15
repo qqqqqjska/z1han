@@ -428,7 +428,7 @@
             if (!remote) return;
             const nextEnabled = !!(remote.activeReplyEnabled !== undefined ? remote.activeReplyEnabled : remote.active_reply_enabled);
             const nextIntervalSec = Number(remote.activeReplyIntervalSec !== undefined ? remote.activeReplyIntervalSec : remote.active_reply_interval_sec || 60);
-            const nextInterval = Math.max(1, nextIntervalSec) / 60;
+            const nextInterval = Math.max(1, nextIntervalSec);
             const nextStartTime = Number(remote.activeReplyStartTime !== undefined ? remote.activeReplyStartTime : remote.active_reply_start_time || 0);
             const nextTriggeredMsgId = remote.lastTriggeredMsgId !== undefined ? remote.lastTriggeredMsgId : remote.last_triggered_msg_id;
             if (contact.activeReplyEnabled !== nextEnabled) {
@@ -461,6 +461,7 @@
                     userId: state.userId,
                     contactId: contact.id,
                     name: contact.remark || contact.nickname || contact.name || '',
+                    avatarUrl: contact.avatar || '',
                     personaPrompt: contact.persona || '',
                     contextLimit: Number(contact.contextLimit || 0),
                     activeReplyEnabled: !!contact.activeReplyEnabled,

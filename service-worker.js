@@ -11,23 +11,30 @@ self.addEventListener('push', (event) => {
     try {
         data = event.data ? event.data.json() : {};
     } catch (err) {
-        data = { title: '新消息', body: event.data ? event.data.text() : '你收到了一条新消息' };
+        data = {
+            title: '新消息',
+            body: event.data ? event.data.text() : '你收到了一条新消息'
+        };
     }
 
-    const title = data.title || '新消息';
+    const payload = data.data || data || {};
+    const title = data.contactName || payload.contactName || data.title || '新消息';
+    const icon = data.icon || payload.icon || 'https://placehold.co/192x192/png?text=Chat';
+    const badge = data.badge || payload.badge || icon || 'https://placehold.co/72x72/png?text=Chat';
     const options = {
         body: data.body || '你收到了一条联系人主动消息',
-        icon: data.icon || 'https://placehold.co/192x192/png?text=Chat',
-        badge: data.badge || data.icon || 'https://placehold.co/72x72/png?text=Chat',
-        tag: data.tag || `contact-${data.contactId || 'general'}`,
+        icon,
+        badge,
+        tag: data.tag || `contact-${data.contactId || payload.contactId || 'general'}`,
         renotify: true,
-        data: data.data || data
+        data: payload
     };
+
     event.waitUntil((async () => {
         const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const client of allClients) {
             try {
-                client.postMessage({ type: 'offline-push-sync', payload: data.data || data });
+                client.postMessage({ type: 'offline-push-sync', payload });
             } catch (err) {}
         }
         await self.registration.showNotification(title, options);
