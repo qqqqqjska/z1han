@@ -1412,7 +1412,7 @@ function updateMultiSelectUI() {
     applyChatMultiSelectClass();
 }
 
-function deleteSelectedMessages() {
+async function deleteSelectedMessages() {
     if (!window.iphoneSimState.isMultiSelectMode) return;
     if (window.iphoneSimState.selectedMessages.size === 0) {
         alert('未选择任何消息');
@@ -1422,8 +1422,20 @@ function deleteSelectedMessages() {
     const ids = Array.from(window.iphoneSimState.selectedMessages);
     if (!window.iphoneSimState.currentChatContactId) return;
     const history = window.iphoneSimState.chatHistory[window.iphoneSimState.currentChatContactId] || [];
+    const remoteMessageIds = history
+        .filter(m => ids.includes(String(m && m.id)) || ids.includes(m && m.id))
+        .filter(m => m && (m.pushedByBackend || m.source === 'offline-backend' || m.remoteId))
+        .map(m => String(m.remoteId || m.id || '').trim())
+        .filter(Boolean);
     window.iphoneSimState.chatHistory[window.iphoneSimState.currentChatContactId] = history.filter(m => !ids.includes(String(m.id)) && !ids.includes(m.id));
     saveConfig();
+    if (remoteMessageIds.length > 0 && window.offlinePushSync && typeof window.offlinePushSync.deleteMessages === 'function') {
+        try {
+            await window.offlinePushSync.deleteMessages(remoteMessageIds);
+        } catch (err) {
+            console.error('[offline-push-sync] delete remote messages failed', err);
+        }
+    }
     exitMultiSelectMode();
     renderChatHistory(window.iphoneSimState.currentChatContactId);
 }

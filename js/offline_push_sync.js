@@ -6,6 +6,7 @@
         userId: 'default-user',
         deviceId: '',
         lastSyncAt: 0,
+        deletedRemoteMessageIds: [],
         disableLocalActiveReplyScheduler: false,
         pushPermission: 'default'
     };
@@ -92,8 +93,24 @@
 
     function hasRemoteMessage(contactId, remoteId) {
         if (!remoteId) return false;
+        const state = getState();
+        if (Array.isArray(state.deletedRemoteMessageIds) && state.deletedRemoteMessageIds.includes(String(remoteId))) {
+            return true;
+        }
         const history = (window.iphoneSimState && window.iphoneSimState.chatHistory && window.iphoneSimState.chatHistory[contactId]) || [];
         return history.some(item => item && (item.remoteId === remoteId || item.id === remoteId));
+    }
+
+    function rememberDeletedRemoteMessageIds(messageIds) {
+        const ids = Array.isArray(messageIds)
+            ? messageIds.map((item) => String(item || '').trim()).filter(Boolean)
+            : [];
+        if (!ids.length) return;
+        const state = getState();
+        const existing = Array.isArray(state.deletedRemoteMessageIds) ? state.deletedRemoteMessageIds.map((item) => String(item || '')) : [];
+        const merged = Array.from(new Set(existing.concat(ids)));
+        state.deletedRemoteMessageIds = merged.slice(-5000);
+        saveState();
     }
 
     function injectRemoteMessages(messages) {
@@ -219,6 +236,26 @@
         } finally {
             syncInFlightPromise = null;
         }
+    }
+
+    async function deleteMessages(messageIds) {
+        const ids = Array.isArray(messageIds)
+            ? messageIds.map((item) => String(item || '').trim()).filter(Boolean)
+            : [];
+        if (!ids.length) return { ok: true, deleted: 0, skipped: true };
+        rememberDeletedRemoteMessageIds(ids);
+        const state = getState();
+        if (!state.enabled || !state.apiBaseUrl) {
+            return { ok: true, deleted: ids.length, skipped: true };
+        }
+        const payload = await apiFetch('/api/messages/delete', {
+            method: 'POST',
+            body: JSON.stringify({
+                userId: state.userId,
+                messageIds: ids
+            })
+        });
+        return payload || { ok: true, deleted: ids.length };
     }
 
     function startAutoSyncLoop() {
@@ -616,6 +653,7 @@
         enableWithConfig,
         subscribePush,
         syncMessages,
+        deleteMessages,
         syncActiveReplyConfig,
         uploadContactConfig,
         uploadChatSnapshot
