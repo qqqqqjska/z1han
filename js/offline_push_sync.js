@@ -9,6 +9,8 @@
         disableLocalActiveReplyScheduler: false,
         pushPermission: 'default'
     };
+    const AUTO_SYNC_INTERVAL_MS = 12000;
+    let syncInFlightPromise = null;
 
     function getState() {
         if (!window.iphoneSimState) window.iphoneSimState = {};
@@ -138,7 +140,23 @@
 
     async function registerServiceWorker() {
         if (!('serviceWorker' in navigator)) return null;
-        const registration = await navigator.serviceWorker.register('js/service-worker.js');
+        const registration = await navigator.serviceWorker.register('service-worker.js', { scope: './' });
+        try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map(async (item) => {
+                const scriptUrl = String(
+                    (item.active && item.active.scriptURL)
+                    || (item.waiting && item.waiting.scriptURL)
+                    || (item.installing && item.installing.scriptURL)
+                    || ''
+                );
+                if (scriptUrl.includes('/js/service-worker.js')) {
+                    await item.unregister();
+                }
+            }));
+        } catch (err) {
+            console.error('[offline-push-sync] cleanup legacy service worker failed', err);
+        }
         return registration;
     }
 
@@ -176,21 +194,41 @@
     }
 
     async function syncMessages() {
+        if (syncInFlightPromise) {
+            return syncInFlightPromise;
+        }
         const state = getState();
         if (!state.enabled || !state.apiBaseUrl) return { added: 0, skipped: true };
-        const payload = await apiFetch('/api/messages/sync', {
-            method: 'POST',
-            body: JSON.stringify({
-                userId: state.userId,
-                deviceId: state.deviceId,
-                since: state.lastSyncAt || 0
-            })
-        });
-        const messages = (payload && payload.messages) || [];
-        const added = injectRemoteMessages(messages);
-        state.lastSyncAt = Number((payload && payload.serverTime) || Date.now()) || Date.now();
-        saveState();
-        return { added, skipped: false };
+        syncInFlightPromise = (async () => {
+            const payload = await apiFetch('/api/messages/sync', {
+                method: 'POST',
+                body: JSON.stringify({
+                    userId: state.userId,
+                    deviceId: state.deviceId,
+                    since: state.lastSyncAt || 0
+                })
+            });
+            const messages = (payload && payload.messages) || [];
+            const added = injectRemoteMessages(messages);
+            state.lastSyncAt = Number((payload && payload.serverTime) || Date.now()) || Date.now();
+            saveState();
+            return { added, skipped: false };
+        })();
+        try {
+            return await syncInFlightPromise;
+        } finally {
+            syncInFlightPromise = null;
+        }
+    }
+
+    function startAutoSyncLoop() {
+        if (window.__offlinePushAutoSyncTimer) return;
+        window.__offlinePushAutoSyncTimer = window.setInterval(() => {
+            const state = getState();
+            if (!state.enabled || !state.apiBaseUrl) return;
+            if (document.hidden) return;
+            syncMessages().catch(err => console.error('[offline-push-sync] auto sync failed', err));
+        }, AUTO_SYNC_INTERVAL_MS);
     }
 
     async function syncActiveReplyConfig() {
@@ -478,6 +516,8 @@
     }
 
     function setupVisibilitySync() {
+        if (window.__offlinePushVisibilitySyncSetup) return;
+        window.__offlinePushVisibilitySyncSetup = true;
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
                 syncMessages().catch(err => console.error(err));
@@ -489,8 +529,17 @@
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.addEventListener('message', async (event) => {
                 const data = event && event.data;
-                if (!data || data.type !== 'offline-push-open-chat') return;
+                if (!data) return;
                 const payload = data.payload || {};
+                if (data.type === 'offline-push-sync') {
+                    try {
+                        await syncMessages();
+                    } catch (err) {
+                        console.error(err);
+                    }
+                    return;
+                }
+                if (data.type !== 'offline-push-open-chat') return;
                 try {
                     await syncMessages();
                 } catch (err) {
@@ -526,6 +575,13 @@
             console.error('[offline-push-sync] registerServiceWorker failed', err);
         }
         try {
+            if (state.vapidPublicKey && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                await subscribePush();
+            }
+        } catch (err) {
+            console.error('[offline-push-sync] restore push subscription failed', err);
+        }
+        try {
             await uploadAiProfile();
         } catch (err) {
             console.error('[offline-push-sync] initial uploadAiProfile failed', err);
@@ -540,6 +596,7 @@
         } catch (err) {
             console.error('[offline-push-sync] initial sync failed', err);
         }
+        startAutoSyncLoop();
     }
 
     async function enableWithConfig(config) {
