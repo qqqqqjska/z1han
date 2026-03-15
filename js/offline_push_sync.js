@@ -57,14 +57,119 @@
         return contentType.includes('application/json') ? response.json() : response.text();
     }
 
+    function getContactById(contactId) {
+        const contacts = Array.isArray(window.iphoneSimState && window.iphoneSimState.contacts)
+            ? window.iphoneSimState.contacts
+            : [];
+        return contacts.find(item => String(item && item.id) === String(contactId)) || null;
+    }
+
+    function isLikelyImageUrl(value) {
+        const text = String(value || '').trim();
+        if (!text || !/^https?:\/\//i.test(text)) return false;
+        if (/\.(?:png|jpe?g|gif|webp|bmp|svg|avif)(?:[?#].*)?$/i.test(text)) return true;
+        return /(postimg\.cc|placehold\.co|imgur\.com|image\.bdstatic\.com|qpic\.cn|alicdn\.com)/i.test(text);
+    }
+
+    function sanitizeRemoteDescription(value) {
+        const text = String(value || '').trim();
+        if (!text) return null;
+        if (text.length > 600) return null;
+        if (/【输出协议】|你必须且只能返回|活人感|常驻能力|最高优先级|如果你只想发一句普通消息/i.test(text)) {
+            return null;
+        }
+        return text;
+    }
+
+    function normalizeRemoteMessage(remote) {
+        const contactId = getRemoteContactId(remote);
+        const contact = getContactById(contactId);
+        const rawType = String(remote && remote.type || 'text').trim().toLowerCase();
+        const rawContent = String(remote && remote.content || '').trim();
+        const safeDescription = sanitizeRemoteDescription(remote && remote.description);
+        const stickerResolver = typeof window.resolveStickerAssetForContact === 'function'
+            ? window.resolveStickerAssetForContact
+            : null;
+        const fallbackImageUrl = (window.iphoneSimState && window.iphoneSimState.defaultVirtualImageUrl)
+            || 'https://placehold.co/600x400/png?text=Photo';
+
+        const resolveStickerMessage = (query) => {
+            const stickerQuery = String(query || '').replace(/^\[表情包\]\s*/i, '').trim();
+            if (!stickerQuery) return null;
+            const stickerAsset = stickerResolver ? stickerResolver(contact, stickerQuery) : null;
+            if (stickerAsset && stickerAsset.url) {
+                return {
+                    type: 'sticker',
+                    content: stickerAsset.url,
+                    description: stickerAsset.desc || stickerQuery
+                };
+            }
+            return null;
+        };
+
+        if (rawType === 'sticker' || rawType === 'sticker_message') {
+            if (/^https?:\/\//i.test(rawContent)) {
+                return {
+                    type: 'sticker',
+                    content: rawContent,
+                    description: safeDescription
+                };
+            }
+            const normalizedSticker = resolveStickerMessage(safeDescription || rawContent);
+            if (normalizedSticker) return normalizedSticker;
+            return {
+                type: 'text',
+                content: rawContent.startsWith('[表情包]') ? rawContent : `[表情包] ${rawContent}`,
+                description: null
+            };
+        }
+
+        if (rawType === 'image' || rawType === 'virtual_image') {
+            if (isLikelyImageUrl(rawContent)) {
+                return {
+                    type: rawType === 'virtual_image' ? 'virtual_image' : 'image',
+                    content: rawContent,
+                    description: safeDescription
+                };
+            }
+            return {
+                type: 'virtual_image',
+                content: fallbackImageUrl,
+                description: safeDescription || rawContent || null
+            };
+        }
+
+        if (rawType === 'text') {
+            const stickerMatch = rawContent.match(/^\[表情包\]\s*(.+)$/i);
+            if (stickerMatch) {
+                const normalizedSticker = resolveStickerMessage(stickerMatch[1]);
+                if (normalizedSticker) return normalizedSticker;
+            }
+            if (isLikelyImageUrl(rawContent)) {
+                return {
+                    type: 'image',
+                    content: rawContent,
+                    description: null
+                };
+            }
+        }
+
+        return {
+            type: rawType || 'text',
+            content: rawContent,
+            description: safeDescription
+        };
+    }
+
     function buildLocalMessageFromRemote(remote) {
+        const normalized = normalizeRemoteMessage(remote);
         return {
             id: remote.id || (`remote-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
             time: remote.time || Date.now(),
             role: remote.role || 'assistant',
-            content: remote.content || '',
-            type: remote.type || 'text',
-            description: remote.description || null,
+            content: normalized.content || '',
+            type: normalized.type || 'text',
+            description: normalized.description || null,
             source: 'offline-backend',
             remoteId: remote.id || null,
             pushedByBackend: true,
@@ -111,6 +216,45 @@
         const merged = Array.from(new Set(existing.concat(ids)));
         state.deletedRemoteMessageIds = merged.slice(-5000);
         saveState();
+    }
+
+    function repairExistingOfflineMessages() {
+        if (!window.iphoneSimState || !window.iphoneSimState.chatHistory || typeof window.iphoneSimState.chatHistory !== 'object') {
+            return 0;
+        }
+        let changed = 0;
+        Object.keys(window.iphoneSimState.chatHistory).forEach((contactId) => {
+            const history = window.iphoneSimState.chatHistory[contactId];
+            if (!Array.isArray(history)) return;
+            history.forEach((message) => {
+                if (!message || typeof message !== 'object') return;
+                const isOfflineMessage = message.source === 'offline-backend' || message.pushedByBackend || message.remoteId;
+                if (!isOfflineMessage) return;
+                const normalized = normalizeRemoteMessage({
+                    id: message.remoteId || message.id,
+                    contactId,
+                    role: message.role,
+                    content: message.content,
+                    type: message.type,
+                    description: message.description,
+                    read: message.read
+                });
+                const nextDescription = normalized.description || null;
+                if (message.content !== normalized.content || message.type !== normalized.type || (message.description || null) !== nextDescription) {
+                    message.content = normalized.content;
+                    message.type = normalized.type;
+                    message.description = nextDescription;
+                    changed += 1;
+                }
+            });
+        });
+        if (changed > 0) {
+            saveState();
+            if (window.iphoneSimState.currentChatContactId && typeof window.renderChatHistory === 'function') {
+                try { window.renderChatHistory(window.iphoneSimState.currentChatContactId, true); } catch (err) { console.error(err); }
+            }
+        }
+        return changed;
     }
 
     function injectRemoteMessages(messages) {
@@ -593,6 +737,7 @@
         const state = getState();
         patchSaveConfig();
         setupVisibilitySync();
+        repairExistingOfflineMessages();
         try {
             const url = new URL(window.location.href);
             const contactId = url.searchParams.get('contactId');
