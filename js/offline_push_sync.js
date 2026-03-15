@@ -69,6 +69,25 @@
         };
     }
 
+    function getRemoteContactId(remote) {
+        if (!remote || typeof remote !== 'object') return '';
+        const rawContactId = remote.contactId !== undefined && remote.contactId !== null && remote.contactId !== ''
+            ? remote.contactId
+            : remote.contact_id;
+        return rawContactId === undefined || rawContactId === null || rawContactId === ''
+            ? ''
+            : String(rawContactId);
+    }
+
+    function resolveLocalContactId(contactId) {
+        if (contactId === undefined || contactId === null || contactId === '') return contactId;
+        const contacts = Array.isArray(window.iphoneSimState && window.iphoneSimState.contacts)
+            ? window.iphoneSimState.contacts
+            : [];
+        const matched = contacts.find(item => String(item && item.id) === String(contactId));
+        return matched ? matched.id : contactId;
+    }
+
     function hasRemoteMessage(contactId, remoteId) {
         if (!remoteId) return false;
         const history = (window.iphoneSimState && window.iphoneSimState.chatHistory && window.iphoneSimState.chatHistory[contactId]) || [];
@@ -78,9 +97,10 @@
     function injectRemoteMessages(messages) {
         if (!Array.isArray(messages) || !window.iphoneSimState) return 0;
         let added = 0;
+        const touchedContactIds = new Set();
         window.iphoneSimState.chatHistory = window.iphoneSimState.chatHistory || {};
         messages.forEach((remote) => {
-            const contactId = remote.contactId;
+            const contactId = getRemoteContactId(remote);
             if (!contactId) return;
             if (!window.iphoneSimState.chatHistory[contactId]) {
                 window.iphoneSimState.chatHistory[contactId] = [];
@@ -88,10 +108,20 @@
             if (hasRemoteMessage(contactId, remote.id)) return;
             const localMessage = buildLocalMessageFromRemote(remote);
             window.iphoneSimState.chatHistory[contactId].push(localMessage);
+            touchedContactIds.add(contactId);
             added += 1;
         });
         if (added > 0) {
             try {
+                touchedContactIds.forEach((contactId) => {
+                    const history = window.iphoneSimState.chatHistory[contactId];
+                    if (!Array.isArray(history)) return;
+                    history.sort((left, right) => {
+                        const timeDiff = Number(left && left.time || 0) - Number(right && right.time || 0);
+                        if (timeDiff !== 0) return timeDiff;
+                        return String(left && left.id || '').localeCompare(String(right && right.id || ''));
+                    });
+                });
                 if (typeof window.renderContactList === 'function') {
                     window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
                 }
@@ -170,13 +200,18 @@
             method: 'GET'
         });
         const contacts = Array.isArray(payload && payload.contacts) ? payload.contacts : [];
-        const byId = new Map(contacts.map(item => [String(item.contactId), item]));
+        const byId = new Map(contacts
+            .map(item => [getRemoteContactId(item), item])
+            .filter(([contactId]) => !!contactId));
         let changed = false;
         (window.iphoneSimState.contacts || []).forEach((contact) => {
             const remote = byId.get(String(contact.id));
             if (!remote) return;
-            const nextEnabled = !!remote.active_reply_enabled;
-            const nextInterval = Math.max(1, Number(remote.active_reply_interval_sec || 60)) / 60;
+            const nextEnabled = !!(remote.activeReplyEnabled !== undefined ? remote.activeReplyEnabled : remote.active_reply_enabled);
+            const nextIntervalSec = Number(remote.activeReplyIntervalSec !== undefined ? remote.activeReplyIntervalSec : remote.active_reply_interval_sec || 60);
+            const nextInterval = Math.max(1, nextIntervalSec) / 60;
+            const nextStartTime = Number(remote.activeReplyStartTime !== undefined ? remote.activeReplyStartTime : remote.active_reply_start_time || 0);
+            const nextTriggeredMsgId = remote.lastTriggeredMsgId !== undefined ? remote.lastTriggeredMsgId : remote.last_triggered_msg_id;
             if (contact.activeReplyEnabled !== nextEnabled) {
                 contact.activeReplyEnabled = nextEnabled;
                 changed = true;
@@ -185,12 +220,12 @@
                 contact.activeReplyInterval = nextInterval;
                 changed = true;
             }
-            if (remote.active_reply_start_time && contact.activeReplyStartTime !== remote.active_reply_start_time) {
-                contact.activeReplyStartTime = remote.active_reply_start_time;
+            if (nextStartTime && contact.activeReplyStartTime !== nextStartTime) {
+                contact.activeReplyStartTime = nextStartTime;
                 changed = true;
             }
-            if (remote.last_triggered_msg_id && contact.lastActiveReplyTriggeredMsgId !== remote.last_triggered_msg_id) {
-                contact.lastActiveReplyTriggeredMsgId = remote.last_triggered_msg_id;
+            if (nextTriggeredMsgId && contact.lastActiveReplyTriggeredMsgId !== nextTriggeredMsgId) {
+                contact.lastActiveReplyTriggeredMsgId = nextTriggeredMsgId;
                 changed = true;
             }
         });
@@ -452,13 +487,17 @@
             syncMessages().catch(err => console.error(err));
         });
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.addEventListener('message', (event) => {
+            navigator.serviceWorker.addEventListener('message', async (event) => {
                 const data = event && event.data;
                 if (!data || data.type !== 'offline-push-open-chat') return;
                 const payload = data.payload || {};
-                syncMessages().catch(err => console.error(err));
+                try {
+                    await syncMessages();
+                } catch (err) {
+                    console.error(err);
+                }
                 if (payload.contactId && typeof window.openChat === 'function') {
-                    try { window.openChat(payload.contactId); } catch (err) { console.error(err); }
+                    try { window.openChat(resolveLocalContactId(payload.contactId)); } catch (err) { console.error(err); }
                 }
             });
         }
@@ -474,7 +513,7 @@
             const shouldOpenChat = url.searchParams.get('openChat') === '1';
             if (contactId && shouldOpenChat && typeof window.openChat === 'function') {
                 setTimeout(() => {
-                    try { window.openChat(contactId); } catch (err) { console.error(err); }
+                    try { window.openChat(resolveLocalContactId(contactId)); } catch (err) { console.error(err); }
                 }, 300);
             }
         } catch (err) {
