@@ -208,6 +208,7 @@
                     contactId: contact.id,
                     name: contact.remark || contact.nickname || contact.name || '',
                     personaPrompt: contact.persona || '',
+                    contextLimit: Number(contact.contextLimit || 0),
                     activeReplyEnabled: !!contact.activeReplyEnabled,
                     activeReplyInterval: Number(contact.activeReplyInterval || 1),
                     activeReplyStartTime: Number(contact.activeReplyStartTime || 0),
@@ -216,6 +217,58 @@
             });
         } catch (err) {
             console.error('[offline-push-sync] uploadContactConfig failed', err);
+        }
+    }
+
+    async function uploadAiProfile() {
+        const state = getState();
+        if (!state.enabled || !state.apiBaseUrl || !window.iphoneSimState) return;
+        const primary = window.iphoneSimState.aiSettings || {};
+        const secondary = window.iphoneSimState.aiSettings2 || {};
+        const settings = primary.url ? primary : secondary;
+        if (!settings || !settings.url || !settings.key || !settings.model) return;
+        try {
+            await apiFetch('/api/ai-profile', {
+                method: 'POST',
+                body: JSON.stringify({
+                    userId: state.userId,
+                    apiUrl: settings.url || '',
+                    apiKey: settings.key || '',
+                    model: settings.model || '',
+                    temperature: Number(settings.temperature || 0.7)
+                })
+            });
+        } catch (err) {
+            console.error('[offline-push-sync] uploadAiProfile failed', err);
+        }
+    }
+
+    async function uploadChatContext(contactId) {
+        const state = getState();
+        if (!state.enabled || !state.apiBaseUrl || !contactId) return;
+        const contact = Array.isArray(window.iphoneSimState && window.iphoneSimState.contacts)
+            ? window.iphoneSimState.contacts.find(item => String(item.id) === String(contactId))
+            : null;
+        const contextLimit = contact && Number(contact.contextLimit) > 0 ? Number(contact.contextLimit) : 50;
+        const history = ((((window.iphoneSimState || {}).chatHistory || {})[contactId]) || []).slice(-contextLimit);
+        try {
+            await apiFetch('/api/chat-context', {
+                method: 'POST',
+                body: JSON.stringify({
+                    userId: state.userId,
+                    contactId,
+                    contextLimit,
+                    messages: history.map((message) => ({
+                        id: message && message.id ? message.id : null,
+                        role: message && (message.role || (message.isUser ? 'user' : 'assistant')) || 'assistant',
+                        content: message && message.content ? message.content : '',
+                        type: message && message.type ? message.type : 'text',
+                        time: Number(message && message.time ? message.time : Date.now())
+                    }))
+                })
+            });
+        } catch (err) {
+            console.error('[offline-push-sync] uploadChatContext failed', err);
         }
     }
 
@@ -240,6 +293,7 @@
                     }
                 })
             });
+            await uploadChatContext(contactId);
         } catch (err) {
             console.error('[offline-push-sync] uploadChatSnapshot failed', err);
         }
@@ -253,6 +307,7 @@
             try {
                 const state = getState();
                 if (state.enabled && Array.isArray(window.iphoneSimState && window.iphoneSimState.contacts)) {
+                    uploadAiProfile();
                     (window.iphoneSimState.contacts || []).forEach((contact) => {
                         uploadContactConfig(contact);
                     });
@@ -310,6 +365,11 @@
             await registerServiceWorker();
         } catch (err) {
             console.error('[offline-push-sync] registerServiceWorker failed', err);
+        }
+        try {
+            await uploadAiProfile();
+        } catch (err) {
+            console.error('[offline-push-sync] initial uploadAiProfile failed', err);
         }
         try {
             await syncActiveReplyConfig();
