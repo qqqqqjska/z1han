@@ -108,7 +108,7 @@
 
     async function registerServiceWorker() {
         if (!('serviceWorker' in navigator)) return null;
-        const registration = await navigator.serviceWorker.register('service-worker.js');
+        const registration = await navigator.serviceWorker.register('js/service-worker.js');
         return registration;
     }
 
