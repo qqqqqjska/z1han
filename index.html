@@ -590,6 +590,44 @@
 
                 <div class="option-card">
                     <div class="option-header">
+                        <span class="option-label">离线消息</span>
+                    </div>
+                    <div class="option-header">
+                        <span class="option-label" style="font-size: 14px; font-weight: 400;">启用离线消息同步</span>
+                        <label>
+                            <input type="checkbox" id="offline-push-enabled-toggle" class="toggle-input">
+                            <div class="toggle-switch"></div>
+                        </label>
+                    </div>
+                    <div class="input-wrapper">
+                        <input type="text" id="offline-push-api-base-url" placeholder="后端地址，例如 Cloudflare Worker 或其他后端网址">
+                    </div>
+                    <div class="input-wrapper">
+                        <input type="text" id="offline-push-user-id" placeholder="用户 ID，例如 user-001">
+                    </div>
+                    <div class="input-wrapper">
+                        <input type="text" id="offline-push-vapid-public-key" placeholder="VAPID 公钥（当前可先留空）">
+                    </div>
+                    <div class="option-header">
+                        <span class="option-label" style="font-size: 14px; font-weight: 400;">停用本地轮询避免重复</span>
+                        <label>
+                            <input type="checkbox" id="offline-push-disable-local-toggle" class="toggle-input">
+                            <div class="toggle-switch"></div>
+                        </label>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+                        <button class="btn-secondary" id="offline-push-save-btn">保存配置</button>
+                        <button class="btn-secondary" id="offline-push-enable-btn">启用并授权</button>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+                        <button class="btn-secondary" id="offline-push-sync-btn">立即同步</button>
+                        <button class="btn-secondary" id="offline-push-health-btn">测试后端</button>
+                    </div>
+                    <div id="offline-push-status" style="margin-top:12px; font-size:12px; color:#666; line-height:1.5; word-break:break-word;">未配置离线消息</div>
+                </div>
+
+                <div class="option-card">
+                    <div class="option-header">
                         <span class="option-label">数据管理</span>
                     </div>
                     <div class="option-header">
@@ -7538,6 +7576,7 @@
     <script src="js/chat/03-ai-engine.js"></script>
     <script src="js/chat/04-media-init.js"></script>
     <script src="js/chat/05-addressbook-friends.js"></script>
+    <script src="js/offline_push_sync.js"></script>
     <script src="js/shopping.js"></script>
     <script src="js/forum.js"></script>
     <script src="js/games.js"></script>
@@ -7545,6 +7584,7 @@
     <script src="js/lookus.js"></script>
     <script src="js/novelai.js"></script>
     <script src="js/settings_v3.js"></script>
+    <script src="js/offline_push_settings_ui.js"></script>
     <script src="js/album.js"></script>
     <script src="js/screen_share.js"></script>
     <script src="js/changelog.js"></script>

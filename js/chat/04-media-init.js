@@ -4493,6 +4493,9 @@ function setupChatListeners() {
                 if (Notification.permission === "granted") {
                     window.iphoneSimState.enableSystemNotifications = true;
                     saveConfig();
+                    if (window.offlinePushSync && typeof window.offlinePushSync.subscribePush === 'function') {
+                        window.offlinePushSync.subscribePush().catch(err => console.error('[offline-push-sync]', err));
+                    }
                     new Notification("通知已开启", { body: "你现在可以接收后台消息通知了" });
                 } else if (Notification.permission !== "denied") {
                     const permission = await Notification.requestPermission();
@@ -4958,6 +4961,12 @@ function getLastAiBlockJson(contactId) {
 }
 
 function checkActiveReplies() {
+    if (window.offlinePushSync && window.offlinePushSync.getState) {
+        const syncState = window.offlinePushSync.getState();
+        if (syncState && syncState.enabled && syncState.disableLocalActiveReplyScheduler) {
+            return;
+        }
+    }
     if (!window.iphoneSimState || !window.iphoneSimState.contacts) return;
     
     const now = Date.now();
