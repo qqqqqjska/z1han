@@ -272,6 +272,125 @@
         }
     }
 
+    async function uploadPromptContext(contactId) {
+        const state = getState();
+        if (!state.enabled || !state.apiBaseUrl || !contactId || !window.iphoneSimState) return;
+        const contact = Array.isArray(window.iphoneSimState.contacts)
+            ? window.iphoneSimState.contacts.find(item => String(item.id) === String(contactId))
+            : null;
+        if (!contact) return;
+
+        const history = ((((window.iphoneSimState || {}).chatHistory || {})[contactId]) || []);
+
+        let worldbookContext = '';
+        if (window.iphoneSimState.worldbook && window.iphoneSimState.worldbook.length > 0 && contact.linkedWbCategories) {
+            const activeEntries = window.iphoneSimState.worldbook.filter(entry => entry.enabled && contact.linkedWbCategories.includes(entry.categoryId));
+            if (activeEntries.length > 0) {
+                worldbookContext = activeEntries.map(entry => entry.content).join('\n');
+            }
+        }
+
+        let memoryContext = '';
+        try {
+            if (typeof window.buildMemoryContextByPolicy === 'function') {
+                memoryContext = window.buildMemoryContextByPolicy(contact, history, 'chat-text') || '';
+            }
+        } catch (err) {
+            console.error('[offline-push-sync] buildMemoryContextByPolicy failed', err);
+        }
+
+        let timeContext = '';
+        try {
+            if (typeof window.buildRealtimeTimeContext === 'function') {
+                timeContext = window.buildRealtimeTimeContext(contact.id) || '';
+            }
+        } catch (err) {
+            console.error('[offline-push-sync] buildRealtimeTimeContext failed', err);
+        }
+
+        let calendarContext = '';
+        try {
+            if (contact.calendarAwareEnabled !== false && typeof window.buildCalendarPromptContext === 'function') {
+                calendarContext = window.buildCalendarPromptContext() || '';
+            }
+        } catch (err) {
+            console.error('[offline-push-sync] buildCalendarPromptContext failed', err);
+        }
+
+        let itineraryContext = '';
+        try {
+            if (typeof window.getCurrentItineraryInfo === 'function') {
+                itineraryContext = await window.getCurrentItineraryInfo(contact.id) || '';
+            }
+        } catch (err) {
+            console.error('[offline-push-sync] getCurrentItineraryInfo failed', err);
+        }
+
+        let lookusContext = '';
+        try {
+            if (contact.lookusData) {
+                const data = contact.lookusData;
+                const lastUpdate = data.lastUpdateTime ? new Date(data.lastUpdateTime).toLocaleTimeString() : '未知';
+                let appUsage = '';
+                if (Array.isArray(data.appList) && data.appList.length > 0) {
+                    appUsage = '\n- 最近使用的APP: ' + data.appList.map(app => `${app.name}(${app.time})`).join(', ');
+                }
+                lookusContext = `【LookUs 状态 (用户可见)】\n用户可以通过 "LookUs" 应用实时查看你的以下状态 (更新于 ${lastUpdate}):\n- 距离: ${data.distance || '未知'} km\n- 电量: ${data.battery || '未知'}\n- 网络: ${data.network || '未知'}\n- 手机型号: ${data.device || '未知'}\n- 屏幕使用时间: ${data.screenTimeH || 0}小时${data.screenTimeM || 0}分\n- 解锁次数: ${data.unlockCount || 0}\n- 最近解锁: ${data.lastUnlock || '未知'}\n- 停留地点数: ${data.stops || 0}${appUsage}\n⚠️ 你知道用户能看到这些信息。如果用户问起你的位置、电量或你在干什么，请结合这些信息回答。`;
+                if (Array.isArray(data.reportLog) && data.reportLog.length > 0) {
+                    const userEvents = data.reportLog.filter(item => item.isUserEvent).slice(0, 5);
+                    if (userEvents.length > 0) {
+                        lookusContext += `\n\n【用户的手机状态通知】\n你同样可以通过 LookUs 看到用户(对方)的手机状态变化：\n`;
+                        userEvents.forEach(event => {
+                            lookusContext += `- ${event.time}: ${String(event.text || '').replace('📱 ', '')}\n`;
+                        });
+                        lookusContext += `\n⚠️ 你可以自然地在聊天中提及或关心这些状态，但不要每次都提，要自然。`;
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('[offline-push-sync] build LookUs context failed', err);
+        }
+
+        let meetingContext = '';
+        try {
+            const meetings = window.iphoneSimState.meetings && window.iphoneSimState.meetings[contact.id];
+            if (Array.isArray(meetings) && meetings.length > 0) {
+                const syncedMeetings = meetings.filter(item => item && item.syncWithChat === true);
+                const lastMeeting = syncedMeetings.length > 0 ? syncedMeetings[syncedMeetings.length - 1] : null;
+                if (lastMeeting && Array.isArray(lastMeeting.content) && lastMeeting.content.length > 0) {
+                    const meetingTime = new Date(lastMeeting.time || Date.now());
+                    const meetingTimeStr = `${meetingTime.getMonth() + 1}月${meetingTime.getDate()}日`;
+                    const recentContent = lastMeeting.content.slice(-5).map(item => `${item.role === 'user' ? '用户' : (contact.name || '联系人')}: ${item.text || ''}`).join('\n');
+                    meetingContext = `【线下见面记忆】\n你们最近一次见面是在 ${meetingTimeStr} (${lastMeeting.title || '线下见面'})。\n当时发生的剧情片段：\n${recentContent}\n(请知晓你们已经见过面，并根据剧情发展进行聊天)`;
+                }
+            }
+        } catch (err) {
+            console.error('[offline-push-sync] build meeting context failed', err);
+        }
+
+        const importantStateContext = '';
+
+        try {
+            await apiFetch('/api/prompt-context', {
+                method: 'POST',
+                body: JSON.stringify({
+                    userId: state.userId,
+                    contactId,
+                    worldbookContext,
+                    memoryContext,
+                    importantStateContext,
+                    lookusContext,
+                    meetingContext,
+                    timeContext,
+                    calendarContext,
+                    itineraryContext
+                })
+            });
+        } catch (err) {
+            console.error('[offline-push-sync] uploadPromptContext failed', err);
+        }
+    }
+
     async function uploadChatSnapshot(contactId) {
         const state = getState();
         if (!state.enabled || !state.apiBaseUrl || !contactId) return;
@@ -294,6 +413,7 @@
                 })
             });
             await uploadChatContext(contactId);
+            await uploadPromptContext(contactId);
         } catch (err) {
             console.error('[offline-push-sync] uploadChatSnapshot failed', err);
         }
