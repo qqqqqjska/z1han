@@ -4127,15 +4127,6 @@ ${taskCard.action}`;
         openKitchenScreen();
     }
 
-    function openFarmRogueChallengeFromActivities() {
-        openActivitiesView();
-        enterRogueActivityMode();
-        if (rogueOfferModalEl && rogueOfferModalEl.classList.contains('is-open')) {
-            return;
-        }
-        openRogueEntryChoiceV2();
-    }
-
     function initFarmScreen() {
         if (!farmGridEl || !farmSeedListEl) return;
         if (!state.farmGame.initialized) {
@@ -5472,10 +5463,6 @@ ${taskCard.action}`;
                     openWhisperChallengeFromActivities();
                     return;
                 }
-                if (playCard && playCard.dataset.activitiesCard === 'farm') {
-                    openFarmRogueChallengeFromActivities();
-                    return;
-                }
                 triggerActivitiesPlayFeedback(playButton);
                 return;
             }
@@ -5485,10 +5472,6 @@ ${taskCard.action}`;
                 vibrate(20);
                 if (card.dataset.activitiesCard === 'whisper') {
                     openWhisperChallengeFromActivities();
-                    return;
-                }
-                if (card.dataset.activitiesCard === 'farm') {
-                    openFarmRogueChallengeFromActivities();
                     return;
                 }
                 triggerActivitiesPlayFeedback(card.querySelector('.garden-activities-play-btn'));
