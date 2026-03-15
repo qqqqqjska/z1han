@@ -1,4 +1,6 @@
 (function() {
+    const STORAGE_KEY = 'offlinePushSyncSettings';
+
     function getDom() {
         return {
             enabledToggle: document.getElementById('offline-push-enabled-toggle'),
@@ -14,6 +16,11 @@
         };
     }
 
+    function safeText(value, fallback) {
+        const text = typeof value === 'string' ? value.trim() : '';
+        return text || (fallback || '');
+    }
+
     function setStatus(text, type) {
         const dom = getDom();
         if (!dom.status) return;
@@ -21,129 +28,184 @@
         dom.status.style.color = type === 'error' ? '#d93025' : (type === 'success' ? '#0f9d58' : '#666');
     }
 
+    function readLocalBackup() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch (err) {
+            console.error('[offline-push-ui] readLocalBackup failed', err);
+            return null;
+        }
+    }
+
+    function writeLocalBackup(data) {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data || {}));
+        } catch (err) {
+            console.error('[offline-push-ui] writeLocalBackup failed', err);
+        }
+    }
+
+    function getStateObject() {
+        if (window.offlinePushSync && typeof window.offlinePushSync.getState === 'function') {
+            return window.offlinePushSync.getState();
+        }
+        window.iphoneSimState = window.iphoneSimState || {};
+        window.iphoneSimState.offlinePushSync = window.iphoneSimState.offlinePushSync || {};
+        return window.iphoneSimState.offlinePushSync;
+    }
+
     function readForm() {
         const dom = getDom();
         return {
             enabled: !!(dom.enabledToggle && dom.enabledToggle.checked),
-            apiBaseUrl: dom.apiBaseUrlInput ? String(dom.apiBaseUrlInput.value || '').trim() : '',
-            userId: dom.userIdInput ? String(dom.userIdInput.value || '').trim() : '',
-            vapidPublicKey: dom.vapidInput ? String(dom.vapidInput.value || '').trim() : '',
+            apiBaseUrl: safeText(dom.apiBaseUrlInput && dom.apiBaseUrlInput.value),
+            userId: safeText(dom.userIdInput && dom.userIdInput.value, 'default-user'),
+            vapidPublicKey: safeText(dom.vapidInput && dom.vapidInput.value),
             disableLocalActiveReplyScheduler: !!(dom.disableLocalToggle && dom.disableLocalToggle.checked)
         };
     }
 
-    function writeForm() {
-        const dom = getDom();
-        const state = window.offlinePushSync && window.offlinePushSync.getState ? window.offlinePushSync.getState() : ((window.iphoneSimState || {}).offlinePushSync || {});
-        if (dom.enabledToggle) dom.enabledToggle.checked = !!state.enabled;
-        if (dom.apiBaseUrlInput) dom.apiBaseUrlInput.value = state.apiBaseUrl || '';
-        if (dom.userIdInput) dom.userIdInput.value = state.userId || 'default-user';
-        if (dom.vapidInput) dom.vapidInput.value = state.vapidPublicKey || '';
-        if (dom.disableLocalToggle) dom.disableLocalToggle.checked = !!state.disableLocalActiveReplyScheduler;
-        const permission = state.pushPermission || (window.Notification ? Notification.permission : 'unsupported');
-        const apiLabel = state.apiBaseUrl ? `后端：${state.apiBaseUrl}` : '后端未填写';
-        setStatus(`状态：${state.enabled ? '已启用' : '未启用'}；通知权限：${permission}；${apiLabel}`);
+    function mergeState() {
+        const state = getStateObject() || {};
+        const backup = readLocalBackup() || {};
+
+        return {
+            enabled: typeof state.enabled === 'boolean' ? state.enabled : !!backup.enabled,
+            apiBaseUrl: safeText(state.apiBaseUrl || backup.apiBaseUrl),
+            userId: safeText(state.userId || backup.userId, 'default-user'),
+            vapidPublicKey: safeText(state.vapidPublicKey || backup.vapidPublicKey),
+            disableLocalActiveReplyScheduler: typeof state.disableLocalActiveReplyScheduler === 'boolean'
+                ? state.disableLocalActiveReplyScheduler
+                : !!backup.disableLocalActiveReplyScheduler,
+            pushPermission: safeText(state.pushPermission || backup.pushPermission, window.Notification ? Notification.permission : 'unsupported')
+        };
     }
 
-    function persistForm() {
-        const state = window.offlinePushSync && window.offlinePushSync.getState ? window.offlinePushSync.getState() : null;
-        if (!state) return null;
+    function syncMergedStateBack() {
+        const state = getStateObject();
+        const merged = mergeState();
+        Object.assign(state, merged);
+        writeLocalBackup(state);
+        return state;
+    }
+
+    function writeFormFromState() {
+        const dom = getDom();
+        const merged = syncMergedStateBack();
+
+        if (dom.enabledToggle) dom.enabledToggle.checked = !!merged.enabled;
+        if (dom.apiBaseUrlInput) dom.apiBaseUrlInput.value = merged.apiBaseUrl || '';
+        if (dom.userIdInput) dom.userIdInput.value = merged.userId || 'default-user';
+        if (dom.vapidInput) dom.vapidInput.value = merged.vapidPublicKey || '';
+        if (dom.disableLocalToggle) dom.disableLocalToggle.checked = !!merged.disableLocalActiveReplyScheduler;
+
+        const backendText = merged.apiBaseUrl ? `Backend: ${merged.apiBaseUrl}` : 'Backend: not configured';
+        setStatus(`Status: ${merged.enabled ? 'enabled' : 'disabled'}; Notification: ${merged.pushPermission}; ${backendText}`);
+    }
+
+    async function persistForm() {
+        const state = getStateObject();
         const form = readForm();
         Object.assign(state, form);
-        if (!state.userId) state.userId = 'default-user';
-        if (typeof window.saveConfig === 'function') {
-            window.saveConfig();
+        writeLocalBackup(state);
+
+        try {
+            if (typeof window.saveConfig === 'function') {
+                await window.saveConfig();
+            }
+        } catch (err) {
+            console.error('[offline-push-ui] saveConfig failed', err);
         }
-        writeForm();
+
+        writeLocalBackup(state);
+        writeFormFromState();
         return state;
     }
 
     async function handleEnable() {
         try {
-            const form = readForm();
+            const form = await persistForm();
             if (!form.apiBaseUrl) {
-                setStatus('请先填写 Railway 后端网址', 'error');
+                setStatus('Please fill in the backend URL first', 'error');
                 return;
             }
             if (!form.userId) {
-                setStatus('请先填写用户 ID', 'error');
+                setStatus('Please fill in the user ID first', 'error');
                 return;
             }
-            setStatus('正在启用离线消息并请求通知权限...');
+            setStatus('Enabling offline sync and requesting notification permission...');
             await window.offlinePushSync.enableWithConfig(form);
-            writeForm();
-            setStatus('离线消息已启用，当前设备已尝试完成绑定', 'success');
+            writeLocalBackup(getStateObject());
+            writeFormFromState();
+            setStatus('Offline sync is enabled on this device', 'success');
         } catch (err) {
             console.error(err);
-            setStatus(`启用失败：${err.message || err}`, 'error');
+            setStatus(`Enable failed: ${err.message || err}`, 'error');
         }
     }
 
     async function handleSync() {
         try {
-            persistForm();
-            setStatus('正在同步离线消息...');
+            await persistForm();
+            setStatus('Syncing offline messages...');
             const result = await window.offlinePushSync.syncMessages();
-            setStatus(`同步完成：新增 ${result && typeof result.added === 'number' ? result.added : 0} 条消息`, 'success');
+            const added = result && typeof result.added === 'number' ? result.added : 0;
+            setStatus(`Sync complete: added ${added} messages`, 'success');
         } catch (err) {
             console.error(err);
-            setStatus(`同步失败：${err.message || err}`, 'error');
+            setStatus(`Sync failed: ${err.message || err}`, 'error');
         }
     }
 
     async function handleHealthCheck() {
         try {
-            const form = readForm();
+            const form = await persistForm();
             if (!form.apiBaseUrl) {
-                setStatus('请先填写 Railway 后端网址', 'error');
+                setStatus('Please fill in the backend URL first', 'error');
                 return;
             }
-            setStatus('正在测试后端...');
+            setStatus('Checking backend health...');
             const response = await fetch(`${form.apiBaseUrl.replace(/\/$/, '')}/health`);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             const data = await response.json();
-            setStatus(`后端可用：${data.ok ? '正常' : '异常'}，时间戳 ${data.now || '-'}`, 'success');
+            setStatus(`Backend OK: ${data.ok ? 'healthy' : 'unexpected'}; time ${data.now || '-'}`, 'success');
         } catch (err) {
             console.error(err);
-            setStatus(`后端测试失败：${err.message || err}`, 'error');
+            setStatus(`Health check failed: ${err.message || err}`, 'error');
         }
     }
 
     function bindEvents() {
         const dom = getDom();
         if (dom.saveBtn) {
-            dom.saveBtn.addEventListener('click', () => {
-                persistForm();
-                setStatus('离线消息配置已保存', 'success');
+            dom.saveBtn.addEventListener('click', async () => {
+                await persistForm();
+                setStatus('Offline sync settings saved', 'success');
             });
         }
-        if (dom.enableBtn) {
-            dom.enableBtn.addEventListener('click', handleEnable);
-        }
-        if (dom.syncBtn) {
-            dom.syncBtn.addEventListener('click', handleSync);
-        }
-        if (dom.healthBtn) {
-            dom.healthBtn.addEventListener('click', handleHealthCheck);
-        }
-        ['enabledToggle', 'apiBaseUrlInput', 'userIdInput', 'vapidInput', 'disableLocalToggle'].forEach((key) => {
-            const el = dom[key];
-            if (!el) return;
-            el.addEventListener('change', persistForm);
-            el.addEventListener('input', () => {
-                if (key === 'apiBaseUrlInput' || key === 'userIdInput' || key === 'vapidInput') {
-                    persistForm();
-                }
-            });
+        if (dom.enableBtn) dom.enableBtn.addEventListener('click', handleEnable);
+        if (dom.syncBtn) dom.syncBtn.addEventListener('click', handleSync);
+        if (dom.healthBtn) dom.healthBtn.addEventListener('click', handleHealthCheck);
+    }
+
+    function installLateRehydrateHooks() {
+        window.addEventListener('load', writeFormFromState);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) writeFormFromState();
         });
     }
 
     function initOfflinePushSettingsUi() {
-        if (!window.offlinePushSync || typeof window.offlinePushSync.getState !== 'function') return;
-        writeForm();
+        writeFormFromState();
         bindEvents();
+        installLateRehydrateHooks();
+
+        setTimeout(writeFormFromState, 200);
+        setTimeout(writeFormFromState, 800);
+        setTimeout(writeFormFromState, 1600);
     }
 
     if (window.appInitFunctions) {
