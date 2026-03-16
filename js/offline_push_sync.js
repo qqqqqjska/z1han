@@ -81,11 +81,28 @@
         return text;
     }
 
+    function normalizeRemoteType(value) {
+        const rawType = String(value || 'text').trim().toLowerCase();
+        if (!rawType) return 'text';
+        if (rawType === 'text_message' || rawType === 'quote_reply' || rawType === 'html') return 'text';
+        if (rawType === 'image_message' || rawType === 'photo') return 'image';
+        if (rawType === 'virtual_image_message') return 'virtual_image';
+        if (rawType === 'sticker_message') return 'sticker';
+        return rawType;
+    }
+
+    function sanitizeRemoteContent(value) {
+        return String(value || '')
+            .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
+            .replace(/<think>[\s\S]*?<\/think>/g, '')
+            .trim();
+    }
+
     function normalizeRemoteMessage(remote) {
         const contactId = getRemoteContactId(remote);
         const contact = getContactById(contactId);
-        const rawType = String(remote && remote.type || 'text').trim().toLowerCase();
-        const rawContent = String(remote && remote.content || '').trim();
+        const rawType = normalizeRemoteType(remote && remote.type);
+        const rawContent = sanitizeRemoteContent(remote && remote.content);
         const safeDescription = sanitizeRemoteDescription(remote && remote.description);
         const stickerResolver = typeof window.resolveStickerAssetForContact === 'function'
             ? window.resolveStickerAssetForContact
@@ -297,6 +314,38 @@
             }
         }
         return added;
+    }
+
+    function extractRemoteMessagesFromPushPayload(payload) {
+        const items = [];
+        const pushMessage = (messageLike) => {
+            if (!messageLike || typeof messageLike !== 'object') return;
+            const contactId = getRemoteContactId(messageLike) || getRemoteContactId(payload);
+            if (!contactId) return;
+            const messageId = messageLike.id || messageLike.messageId || payload.messageId || '';
+            items.push(Object.assign({}, messageLike, {
+                id: messageId,
+                contactId,
+                contact_id: contactId,
+                source: messageLike.source || 'offline-backend'
+            }));
+        };
+
+        if (Array.isArray(payload && payload.messages)) {
+            payload.messages.forEach(pushMessage);
+        }
+        if (payload && payload.message) {
+            pushMessage(payload.message);
+        }
+        return items;
+    }
+
+    function schedulePushTriggeredSync() {
+        [0, 800, 2200].forEach((delay) => {
+            window.setTimeout(() => {
+                syncMessages().catch(err => console.error('[offline-push-sync] push follow-up sync failed', err));
+            }, delay);
+        });
     }
 
     async function registerServiceWorker() {
@@ -735,13 +784,25 @@
                 const payload = data.payload || {};
                 if (data.type === 'offline-push-sync') {
                     try {
-                        await syncMessages();
+                        const pushedMessages = extractRemoteMessagesFromPushPayload(payload);
+                        if (pushedMessages.length) {
+                            injectRemoteMessages(pushedMessages);
+                        }
                     } catch (err) {
-                        console.error(err);
+                        console.error('[offline-push-sync] inject push payload failed', err);
                     }
+                    schedulePushTriggeredSync();
                     return;
                 }
                 if (data.type !== 'offline-push-open-chat') return;
+                try {
+                    const pushedMessages = extractRemoteMessagesFromPushPayload(payload);
+                    if (pushedMessages.length) {
+                        injectRemoteMessages(pushedMessages);
+                    }
+                } catch (err) {
+                    console.error('[offline-push-sync] inject push payload before open failed', err);
+                }
                 try {
                     await syncMessages();
                 } catch (err) {

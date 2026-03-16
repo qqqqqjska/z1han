@@ -348,7 +348,7 @@ window.showChatNotification = function(contactId, content, options) {
     // 处理不同类型的消息预览
     let previewText = content;
     if (content.startsWith('[图片]') || content.startsWith('<img')) previewText = '[图片]';
-    else if (content.startsWith('[表情包]') || content.startsWith('<img') && content.includes('sticker')) previewText = '[表情包]';
+    else if (content.startsWith('[表情包]') || content.startsWith('<img') && content.includes('sticker')) previewText = '[动画表情]';
     else if (content.startsWith('[语音]')) previewText = '[语音]';
     else if (content.startsWith('[转账]')) previewText = '[转账]';
     else if (content.startsWith('[亲属卡]')) previewText = '[亲属卡]';
@@ -358,6 +358,13 @@ window.showChatNotification = function(contactId, content, options) {
     else if (content.includes('savings_withdraw_request')) previewText = '[共同存钱转出申请]';
     else if (content.includes('savings_progress')) previewText = '[共同存钱进度]';
     else if (content.includes('delivery_share')) previewText = '[外卖]';
+
+    const trimmedContent = String(content || '').trim();
+    if (/^https?:\/\/\S+$/i.test(trimmedContent)) {
+        previewText = /\.(?:gif)(?:[?#].*)?$/i.test(trimmedContent) || /(?:[?&](?:format|type)=gif\b)/i.test(trimmedContent)
+            ? '[动画表情]'
+            : '[图片]';
+    }
     
     // 如果内容包含HTML标签（如图片），尝试提取文本或显示类型
     if (previewText.includes('<') && previewText.includes('>')) {
@@ -2627,4 +2634,3 @@ async function refreshTokenCountForContact(contactId) {
 }
 
 // --- 聊天界面功能 ---
-

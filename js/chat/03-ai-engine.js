@@ -266,6 +266,59 @@ window.openMusicListenInviteDetail = function (payload) {
     modal.style.display = 'flex';
 };
 
+function escapeChatMessageHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function isLikelyChatImageUrl(value) {
+    const text = String(value || '').trim();
+    if (!text || !/^https?:\/\/\S+$/i.test(text)) return false;
+    if (/\.(?:png|jpe?g|gif|webp|bmp|svg|avif)(?:[?#].*)?$/i.test(text)) return true;
+    return /(postimg\.cc|postimg\.org|placehold\.co|imgur\.com|image\.bdstatic\.com|qpic\.cn|alicdn\.com)/i.test(text);
+}
+
+function formatPlainTextMessageContent(text) {
+    const source = String(text || '')
+        .replace(/<hidden_img>\s*([\s\S]*?)\s*<\/hidden_img>/gi, '\n$1\n')
+        .replace(/\r\n?/g, '\n');
+    if (!source.trim()) return '';
+
+    const htmlParts = [];
+    let textBuffer = [];
+
+    const flushText = () => {
+        if (!textBuffer.length) return;
+        const joined = textBuffer.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+        textBuffer = [];
+        if (!joined) return;
+        htmlParts.push(`<div class="text-message-block">${escapeChatMessageHtml(joined).replace(/\n/g, '<br>')}</div>`);
+    };
+
+    source.split('\n').forEach((line) => {
+        const trimmed = String(line || '').trim();
+        if (!trimmed) {
+            if (textBuffer.length && textBuffer[textBuffer.length - 1] !== '') {
+                textBuffer.push('');
+            }
+            return;
+        }
+        if (isLikelyChatImageUrl(trimmed)) {
+            flushText();
+            const safeUrl = escapeChatMessageHtml(trimmed);
+            htmlParts.push(`<div class="text-message-inline-image"><img src="${safeUrl}" onclick="showImagePreview(this.src)" style="max-width: 200px; border-radius: 8px; display: block;"></div>`);
+            return;
+        }
+        textBuffer.push(line);
+    });
+
+    flushText();
+    return htmlParts.join('') || escapeChatMessageHtml(source).replace(/\n/g, '<br>');
+}
 function appendMessageToUI(text, isUser, type = 'text', description = null, replyTo = null, msgId = null, timestamp = null, isHistory = false) {
     if (type === 'text' && text && typeof text === 'string') {
         // Strip hidden image data from display
@@ -491,7 +544,9 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
     } else if (type === 'description') {
         contentHtml = text;
     } else {
-        contentHtml = text;
+        contentHtml = (type === 'text' && !isHtmlPayloadForParser(text))
+            ? formatPlainTextMessageContent(text)
+            : text;
     }
 
     let extraClass = '';
@@ -5815,3 +5870,6 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
 
     return messages;
 };
+
+
+
