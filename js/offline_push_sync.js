@@ -700,11 +700,31 @@
     function setupVisibilitySync() {
         if (window.__offlinePushVisibilitySyncSetup) return;
         window.__offlinePushVisibilitySyncSetup = true;
+        const flushStateToBackend = () => {
+            try {
+                const state = getState();
+                if (!state.enabled || !state.apiBaseUrl || !window.iphoneSimState) return;
+                if (Array.isArray(window.iphoneSimState.contacts)) {
+                    (window.iphoneSimState.contacts || []).forEach((contact) => {
+                        uploadContactConfig(contact);
+                    });
+                }
+                const currentId = window.iphoneSimState.currentChatContactId;
+                if (currentId) {
+                    uploadChatSnapshot(currentId);
+                }
+            } catch (err) {
+                console.error('[offline-push-sync] flushStateToBackend failed', err);
+            }
+        };
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
+            if (document.hidden) {
+                flushStateToBackend();
+            } else {
                 syncMessages().catch(err => console.error(err));
             }
         });
+        window.addEventListener('pagehide', flushStateToBackend);
         window.addEventListener('focus', () => {
             syncMessages().catch(err => console.error(err));
         });
