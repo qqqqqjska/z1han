@@ -4934,7 +4934,15 @@ function getLastAiBlockJson(contactId) {
         } else if (msg.type === 'sticker') {
             jsonOutput.push({ type: "sticker", content: msg.description || msg.content });
         } else if (msg.type === 'image' || msg.type === 'virtual_image') {
-            const item = { type: "image", content: msg.description || "未知图片" };
+            const rawImageContent = String(msg.content || '').trim();
+            const fallbackVirtualImageUrl = String((window.iphoneSimState && window.iphoneSimState.defaultVirtualImageUrl) || '').trim();
+            const useRawImageUrl = msg.type === 'image'
+                && /^https?:\/\//i.test(rawImageContent)
+                && (!fallbackVirtualImageUrl || rawImageContent !== fallbackVirtualImageUrl);
+            const normalizedImageContent = useRawImageUrl
+                ? rawImageContent
+                : (msg.description || rawImageContent || '[图片]');
+            const item = { type: "image", content: normalizedImageContent };
             if (msg.novelaiPrompt) item.novelaiPrompt = msg.novelaiPrompt;
             if (msg.novelaiNegativePrompt) item.novelaiNegativePrompt = msg.novelaiNegativePrompt;
             jsonOutput.push(item);

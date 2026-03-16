@@ -4484,10 +4484,19 @@ async function generateAiReply(instruction = null, targetContactId = null) {
                     sendMessage(JSON.stringify(voiceData), false, 'voice', null, contactId);
                 } else if (msg.type === '图片' || msg.type === 'image' || msg.type === 'virtual_image') {
                     let sent = false;
+                    const rawImageContent = typeof msg.content === 'string' ? msg.content.trim() : '';
+                    const imageFallbackText = rawImageContent && !/^(?:未知图片|\[图片\]|图片)$/i.test(rawImageContent)
+                        ? `[图片] ${rawImageContent}`
+                        : '[图片]';
                     const novelaiSettings = window.iphoneSimState.novelaiSettings;
                     const globalEnabled = novelaiSettings && novelaiSettings.enabled !== false;
+
+                    if (isLikelyChatImageUrl(rawImageContent)) {
+                        sendMessage(rawImageContent, false, 'image', msg.description || null, contactId);
+                        sent = true;
+                    }
                     
-                    if (globalEnabled && window.generateNovelAiImageApi && contact.novelaiPreset) {
+                    if (!sent && globalEnabled && window.generateNovelAiImageApi && contact.novelaiPreset) {
                         let finalPrompt = "";
                         let presetName = contact.novelaiPreset;
                         let preset = null;
@@ -4578,8 +4587,7 @@ async function generateAiReply(instruction = null, targetContactId = null) {
                             appendMessageToUI(`[系统诊断]: 无法生成图片 - ${failReason.join('; ')}`, false, 'text', null, null, null, null, false);
                         }
 
-                        const defaultImageUrl = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Photo';
-                        sendMessage(defaultImageUrl, false, 'virtual_image', msg.content, contactId);
+                        sendMessage(imageFallbackText, false, 'text', null, contactId);
                     }
                 } else if (msg.type === '旁白' || msg.type === 'description') {
                     await typewriterEffect(msg.content, contact.avatar, null, null, 'description', contactId);
@@ -4618,9 +4626,17 @@ async function generateAiReply(instruction = null, targetContactId = null) {
                     };
                     contentToSave = JSON.stringify(voiceData);
                     typeToSave = 'voice';
-                } else if (msg.type === '图片' || msg.type === 'image') {
-                    contentToSave = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Photo';
-                    typeToSave = 'virtual_image';
+                } else if (msg.type === '图片' || msg.type === 'image' || msg.type === 'virtual_image') {
+                    const rawImageContent = typeof msg.content === 'string' ? msg.content.trim() : '';
+                    if (isLikelyChatImageUrl(rawImageContent)) {
+                        contentToSave = rawImageContent;
+                        typeToSave = 'image';
+                    } else {
+                        contentToSave = rawImageContent && !/^(?:未知图片|\[图片\]|图片)$/i.test(rawImageContent)
+                            ? `[图片] ${rawImageContent}`
+                            : '[图片]';
+                        typeToSave = 'text';
+                    }
                 } else if (msg.type === '旁白' || msg.type === 'description') {
                     typeToSave = 'description';
                 }

@@ -98,12 +98,29 @@
             .trim();
     }
 
+    function isGenericUnknownImageText(value) {
+        const text = String(value || '').trim().toLowerCase();
+        if (!text) return true;
+        return text === '未知图片'
+            || text === '图片'
+            || text === '[图片]'
+            || text === 'unknown image'
+            || text === 'image';
+    }
+
+    function buildRemoteImageFallbackText(value) {
+        const text = String(value || '').trim();
+        if (!text || isGenericUnknownImageText(text)) return '[图片]';
+        return `[图片] ${text}`;
+    }
+
     function normalizeRemoteMessage(remote) {
         const contactId = getRemoteContactId(remote);
         const contact = getContactById(contactId);
         const rawType = normalizeRemoteType(remote && remote.type);
         const rawContent = sanitizeRemoteContent(remote && remote.content);
         const safeDescription = sanitizeRemoteDescription(remote && remote.description);
+        const source = String(remote && remote.source || '').trim().toLowerCase();
         const stickerResolver = typeof window.resolveStickerAssetForContact === 'function'
             ? window.resolveStickerAssetForContact
             : null;
@@ -142,7 +159,17 @@
         }
 
         if (rawType === 'image' || rawType === 'virtual_image') {
+            const matchedFallbackPlaceholder = rawContent
+                && rawContent === fallbackImageUrl
+                && isGenericUnknownImageText(safeDescription || rawContent);
             if (isLikelyImageUrl(rawContent)) {
+                if (matchedFallbackPlaceholder) {
+                    return {
+                        type: 'text',
+                        content: buildRemoteImageFallbackText(safeDescription || rawContent),
+                        description: null
+                    };
+                }
                 return {
                     type: rawType === 'virtual_image' ? 'virtual_image' : 'image',
                     content: rawContent,
@@ -150,9 +177,9 @@
                 };
             }
             return {
-                type: 'virtual_image',
-                content: fallbackImageUrl,
-                description: safeDescription || rawContent || null
+                type: 'text',
+                content: buildRemoteImageFallbackText(safeDescription || rawContent),
+                description: null
             };
         }
 
@@ -246,7 +273,13 @@
             history.forEach((message) => {
                 if (!message || typeof message !== 'object') return;
                 const isOfflineMessage = message.source === 'offline-backend' || message.pushedByBackend || message.remoteId;
-                if (!isOfflineMessage) return;
+                const fallbackImageUrl = String((window.iphoneSimState && window.iphoneSimState.defaultVirtualImageUrl) || '').trim();
+                const currentContent = String(message.content || '').trim();
+                const isSuspiciousFallbackImage = (message.type === 'image' || message.type === 'virtual_image')
+                    && !!fallbackImageUrl
+                    && currentContent === fallbackImageUrl
+                    && isGenericUnknownImageText(message.description || currentContent);
+                if (!isOfflineMessage && !isSuspiciousFallbackImage) return;
                 const normalized = normalizeRemoteMessage({
                     id: message.remoteId || message.id,
                     contactId,
@@ -254,6 +287,7 @@
                     content: message.content,
                     type: message.type,
                     description: message.description,
+                    source: message.source,
                     read: message.read
                 });
                 const nextDescription = normalized.description || null;
@@ -766,17 +800,26 @@
                 console.error('[offline-push-sync] flushStateToBackend failed', err);
             }
         };
+        const scheduleForegroundCatchUpSync = () => {
+            [0, 600, 1800, 3600].forEach((delay) => {
+                window.setTimeout(() => {
+                    syncMessages().catch(err => console.error('[offline-push-sync] foreground sync failed', err));
+                }, delay);
+            });
+        };
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 flushStateToBackend();
             } else {
-                syncMessages().catch(err => console.error(err));
+                scheduleForegroundCatchUpSync();
             }
         });
         window.addEventListener('pagehide', flushStateToBackend);
         window.addEventListener('focus', () => {
-            syncMessages().catch(err => console.error(err));
+            scheduleForegroundCatchUpSync();
         });
+        window.addEventListener('pageshow', scheduleForegroundCatchUpSync);
+        window.addEventListener('online', scheduleForegroundCatchUpSync);
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.addEventListener('message', async (event) => {
                 const data = event && event.data;
