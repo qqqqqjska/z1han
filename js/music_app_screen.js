@@ -905,13 +905,13 @@
     };
 
     const MUSIC_V2_DEFAULT_COVER = 'https://placehold.co/300x300/e5e7eb/111827?text=Music';
-    const MUSIC_V2_SEARCH_PRIMARY = 'https://163api.qijieya.cn/cloudsearch';
-    const MUSIC_V2_SEARCH_FALLBACK = 'https://163api.qijieya.cn/search';
-    const MUSIC_V2_METING_API = 'https://api.qijieya.cn/meting/';
-    const MUSIC_V2_BUGPK_API = 'https://api.bugpk.com/api/163_music';
-    const MUSIC_V2_LYRIC_API = 'https://163api.qijieya.cn/lyric';
-    const MUSIC_V2_PLAYLIST_DETAIL_API = 'https://163api.qijieya.cn/playlist/detail';
-    const MUSIC_V2_PLAYLIST_TRACK_ALL_API = 'https://163api.qijieya.cn/playlist/track/all';
+    const MUSIC_V2_API_BASE = 'https://zm.armoe.cn';
+    const MUSIC_V2_SEARCH_PRIMARY = MUSIC_V2_API_BASE + '/cloudsearch';
+    const MUSIC_V2_SEARCH_FALLBACK = MUSIC_V2_API_BASE + '/search';
+    const MUSIC_V2_SONG_URL_API = MUSIC_V2_API_BASE + '/song/url/v1';
+    const MUSIC_V2_LYRIC_API = MUSIC_V2_API_BASE + '/lyric';
+    const MUSIC_V2_PLAYLIST_DETAIL_API = MUSIC_V2_API_BASE + '/playlist/detail';
+    const MUSIC_V2_PLAYLIST_TRACK_ALL_API = MUSIC_V2_API_BASE + '/playlist/track/all';
     const MUSIC_V2_IMPORT_PAGE_LIMIT = 100;
     const MUSIC_V2_IMPORT_MAX_PAGES = 60;
     const MUSIC_V2_PLAY_COMPLETE_RATIO_THRESHOLD = 0.9;
@@ -3021,33 +3021,18 @@
         };
     }
 
-    function musicV2ParseMeting(data) {
-        const target = Array.isArray(data) ? data[0] : data;
-        if (!target || typeof target !== 'object') return null;
-        const src = target.url || target.src || '';
-        if (!src) return null;
-        return {
-            src: src,
-            cover: target.pic || target.cover || '',
-            provider: 'meting'
-        };
-    }
-
-    function musicV2ParseBugpk(data) {
+    function musicV2ParseSongUrl(data) {
         if (!data || typeof data !== 'object') return null;
-        let target = null;
-        if (Array.isArray(data.data) && data.data.length > 0) target = data.data[0];
-        else if (data.data && typeof data.data === 'object') target = data.data;
-        else if (Array.isArray(data.result) && data.result.length > 0) target = data.result[0];
-        else if (data.result && typeof data.result === 'object') target = data.result;
-        else target = data;
+        const target = Array.isArray(data.data) && data.data.length > 0
+            ? data.data[0]
+            : (Array.isArray(data.urls) && data.urls.length > 0 ? data.urls[0] : null);
         if (!target || typeof target !== 'object') return null;
-        const src = target.url || target.src || '';
+        const src = String(target.url || target.src || '').trim();
         if (!src) return null;
         return {
             src: src,
-            cover: target.pic || target.cover || '',
-            provider: 'bugpk'
+            cover: '',
+            provider: 'zm-armoe'
         };
     }
 
@@ -3068,15 +3053,13 @@
 
         let resolved = null;
         try {
-            const metingUrl = MUSIC_V2_METING_API + '?server=netease&type=song&id=' + encodeURIComponent(sid) + '&_t=' + Date.now();
-            resolved = musicV2ParseMeting(await musicV2FetchJson(metingUrl));
+            const songUrl = MUSIC_V2_SONG_URL_API
+                + '?id=' + encodeURIComponent(sid)
+                + '&level=standard'
+                + '&_t=' + Date.now();
+            resolved = musicV2ParseSongUrl(await musicV2FetchJson(songUrl));
         } catch (error) {
             resolved = null;
-        }
-
-        if (!resolved) {
-            const bugpkUrl = MUSIC_V2_BUGPK_API + '?ids=' + encodeURIComponent(sid) + '&level=standard&type=json&_t=' + Date.now();
-            resolved = musicV2ParseBugpk(await musicV2FetchJson(bugpkUrl));
         }
 
         if (!resolved || !resolved.src) throw new Error('resolve_failed');
