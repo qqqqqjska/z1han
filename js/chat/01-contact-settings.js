@@ -49,6 +49,162 @@ function countTokensForPrompts(prompts) {
     return total;
 }
 
+const CONTACT_REST_WAKE_PROBABILITY = 0.2;
+const CONTACT_REST_OFFLINE_REGEX = /(晚安|先睡了|睡了|去睡|去睡觉|睡觉了|先休息|休息了|我先下了|先下了|下线|离线|回头聊)/;
+
+function ensureContactRestWindowFields(contact) {
+    if (!contact || typeof contact !== 'object') return contact;
+    if (typeof contact.restWindowEnabled !== 'boolean') contact.restWindowEnabled = false;
+    if (typeof contact.restWindowStart !== 'string') contact.restWindowStart = '';
+    if (typeof contact.restWindowEnd !== 'string') contact.restWindowEnd = '';
+    if (contact.restWindowAwakenedAt === undefined) contact.restWindowAwakenedAt = null;
+    return contact;
+}
+
+function parseContactRestWindowTime(value) {
+    const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return null;
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null;
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+    return hours * 60 + minutes;
+}
+
+function buildDateWithMinutes(baseDate, totalMinutes) {
+    const next = new Date(baseDate.getTime());
+    next.setHours(Math.floor(totalMinutes / 60), totalMinutes % 60, 0, 0);
+    return next;
+}
+
+function getContactRestWindowStatus(contact, now = Date.now()) {
+    ensureContactRestWindowFields(contact);
+    const startMinutes = parseContactRestWindowTime(contact && contact.restWindowStart);
+    const endMinutes = parseContactRestWindowTime(contact && contact.restWindowEnd);
+    const enabled = !!(contact && contact.restWindowEnabled && startMinutes !== null && endMinutes !== null && startMinutes !== endMinutes);
+    const result = {
+        enabled,
+        inRestWindow: false,
+        awakened: false,
+        startTimeMs: null,
+        endTimeMs: null
+    };
+    if (!enabled) return result;
+
+    const nowDate = new Date(now);
+    const nowMinutes = nowDate.getHours() * 60 + nowDate.getMinutes();
+    let windowStart = null;
+    let windowEnd = null;
+
+    if (startMinutes < endMinutes) {
+        if (nowMinutes >= startMinutes && nowMinutes < endMinutes) {
+            windowStart = buildDateWithMinutes(nowDate, startMinutes);
+            windowEnd = buildDateWithMinutes(nowDate, endMinutes);
+        }
+    } else {
+        if (nowMinutes >= startMinutes) {
+            windowStart = buildDateWithMinutes(nowDate, startMinutes);
+            windowEnd = buildDateWithMinutes(new Date(nowDate.getTime() + 86400000), endMinutes);
+        } else if (nowMinutes < endMinutes) {
+            windowStart = buildDateWithMinutes(new Date(nowDate.getTime() - 86400000), startMinutes);
+            windowEnd = buildDateWithMinutes(nowDate, endMinutes);
+        }
+    }
+
+    if (!windowStart || !windowEnd) return result;
+
+    result.inRestWindow = true;
+    result.startTimeMs = windowStart.getTime();
+    result.endTimeMs = windowEnd.getTime();
+    const awakenedAt = Number(contact && contact.restWindowAwakenedAt);
+    result.awakened = Number.isFinite(awakenedAt) && awakenedAt >= result.startTimeMs && awakenedAt < result.endTimeMs;
+    return result;
+}
+
+function isContactRestOfflineText(text) {
+    const raw = String(text || '').trim();
+    if (!raw) return false;
+    return CONTACT_REST_OFFLINE_REGEX.test(raw);
+}
+
+function shouldTrackAssistantRestState(text, type = 'text') {
+    if (type !== 'text') return true;
+    const raw = String(text || '').trim();
+    if (!raw) return false;
+    if (/^\[(系统|System)/i.test(raw)) return false;
+    if (/^(系统消息|系统提示)[:：]/.test(raw)) return false;
+    return true;
+}
+
+function updateContactRestStateOnAssistantMessage(contactId, text, type = 'text', now = Date.now()) {
+    if (!window.iphoneSimState || !Array.isArray(window.iphoneSimState.contacts)) return false;
+    const contact = window.iphoneSimState.contacts.find(item => item.id === contactId);
+    if (!contact) return false;
+    ensureContactRestWindowFields(contact);
+    if (!shouldTrackAssistantRestState(text, type)) return false;
+
+    const status = getContactRestWindowStatus(contact, now);
+    if (!status.enabled || !status.inRestWindow) return false;
+
+    if (type === 'text' && isContactRestOfflineText(text)) {
+        if (contact.restWindowAwakenedAt !== null) {
+            contact.restWindowAwakenedAt = null;
+            return true;
+        }
+        return false;
+    }
+
+    if (!status.awakened) {
+        contact.restWindowAwakenedAt = now;
+        return true;
+    }
+    return false;
+}
+
+function getContactRestTriggerDecision(contact, triggerSource = 'system', now = Date.now()) {
+    ensureContactRestWindowFields(contact);
+    const normalizedSource = String(triggerSource || 'system').trim() || 'system';
+    const status = getContactRestWindowStatus(contact, now);
+    const decision = {
+        allow: true,
+        status,
+        shouldToast: false,
+        reason: ''
+    };
+    if (!status.enabled || !status.inRestWindow) return decision;
+    if (status.awakened) return decision;
+
+    if (normalizedSource === 'manual') {
+        const shouldWake = Math.random() <= CONTACT_REST_WAKE_PROBABILITY;
+        decision.allow = shouldWake;
+        decision.shouldToast = !shouldWake;
+        decision.reason = shouldWake ? 'wake-up' : 'resting';
+        return decision;
+    }
+
+    if (normalizedSource === 'active' || normalizedSource === 'offline-active') {
+        decision.allow = false;
+        decision.reason = 'resting-active-blocked';
+        return decision;
+    }
+
+    return decision;
+}
+
+function syncRestWindowSettingsVisibility() {
+    const enabledInput = document.getElementById('chat-setting-rest-window-enabled');
+    const panel = document.getElementById('chat-setting-rest-window-time-panel');
+    if (!enabledInput || !panel) return;
+    panel.style.display = enabledInput.checked ? '' : 'none';
+}
+
+window.ensureContactRestWindowFields = ensureContactRestWindowFields;
+window.getContactRestWindowStatus = getContactRestWindowStatus;
+window.isContactRestOfflineText = isContactRestOfflineText;
+window.updateContactRestStateOnAssistantMessage = updateContactRestStateOnAssistantMessage;
+window.getContactRestTriggerDecision = getContactRestTriggerDecision;
+window.syncRestWindowSettingsVisibility = syncRestWindowSettingsVisibility;
+
 // ====== AI 位置选择器数据 ======
 const LOCATION_DATA = {
     "中国": {
@@ -564,6 +720,10 @@ function handleSaveContact() {
         avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + name,
         activeReplyEnabled: false,
         activeReplyInterval: 60,
+        restWindowEnabled: false,
+        restWindowStart: '',
+        restWindowEnd: '',
+        restWindowAwakenedAt: null,
         calendarAwareEnabled: true,
         autoItineraryEnabled: false,
         autoItineraryInterval: 10,
@@ -1562,6 +1722,7 @@ function setRelation(relation) {
 function openChatSettings() {
     const contact = getActiveAiProfileContact();
     if (!contact) return;
+    ensureContactRestWindowFields(contact);
 
     document.getElementById('chat-setting-name').value = contact.name || '';
     document.getElementById('chat-setting-avatar-preview').src = contact.avatar || '';
@@ -1643,6 +1804,10 @@ function openChatSettings() {
     // 主动发消息设置
     document.getElementById('chat-setting-active-reply').checked = contact.activeReplyEnabled || false;
     document.getElementById('chat-setting-active-interval').value = contact.activeReplyInterval || '';
+    document.getElementById('chat-setting-rest-window-enabled').checked = !!contact.restWindowEnabled;
+    document.getElementById('chat-setting-rest-window-start').value = contact.restWindowStart || '';
+    document.getElementById('chat-setting-rest-window-end').value = contact.restWindowEnd || '';
+    syncRestWindowSettingsVisibility();
 
     // 字体大小设置
     const fontSizeSlider = document.getElementById('chat-font-size-slider');
@@ -2196,6 +2361,8 @@ function handleSaveChatSettings() {
     if (!window.iphoneSimState.currentChatContactId) return;
     const contact = window.iphoneSimState.contacts.find(c => c.id === window.iphoneSimState.currentChatContactId);
     if (!contact) return;
+    ensureContactRestWindowFields(contact);
+    const previousRestWindowSnapshot = `${contact.restWindowEnabled ? '1' : '0'}|${contact.restWindowStart || ''}|${contact.restWindowEnd || ''}`;
 
     const name = document.getElementById('chat-setting-name').value;
     const remark = document.getElementById('chat-setting-remark').value;
@@ -2234,6 +2401,9 @@ function handleSaveChatSettings() {
     const intervalMax = document.getElementById('chat-setting-interval-max').value;
     const activeReplyEnabled = document.getElementById('chat-setting-active-reply').checked;
     const activeReplyInterval = document.getElementById('chat-setting-active-interval').value;
+    const restWindowEnabled = document.getElementById('chat-setting-rest-window-enabled').checked;
+    const restWindowStart = document.getElementById('chat-setting-rest-window-start').value;
+    const restWindowEnd = document.getElementById('chat-setting-rest-window-end').value;
     const novelaiPreset = document.getElementById('chat-setting-novelai-preset') ? document.getElementById('chat-setting-novelai-preset').value : '';
 
     const selectedWbCategories = [];
@@ -2282,6 +2452,13 @@ function handleSaveChatSettings() {
     contact.replyIntervalMax = intervalMax ? parseInt(intervalMax) : null;
     contact.activeReplyEnabled = activeReplyEnabled;
     contact.activeReplyInterval = activeReplyInterval ? parseInt(activeReplyInterval) : 60;
+    contact.restWindowEnabled = !!(restWindowEnabled && parseContactRestWindowTime(restWindowStart) !== null && parseContactRestWindowTime(restWindowEnd) !== null && restWindowStart !== restWindowEnd);
+    contact.restWindowStart = contact.restWindowEnabled ? restWindowStart : '';
+    contact.restWindowEnd = contact.restWindowEnabled ? restWindowEnd : '';
+    const nextRestWindowSnapshot = `${contact.restWindowEnabled ? '1' : '0'}|${contact.restWindowStart || ''}|${contact.restWindowEnd || ''}`;
+    if (!contact.restWindowEnabled || previousRestWindowSnapshot !== nextRestWindowSnapshot) {
+        contact.restWindowAwakenedAt = null;
+    }
     contact.novelaiPreset = novelaiPreset;
     
     if (activeReplyEnabled) {

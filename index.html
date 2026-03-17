@@ -909,6 +909,25 @@
                             </div>
                             <div class="list-item">
                                 <div class="list-content">
+                                    <label>休息时间段</label>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="chat-setting-rest-window-enabled">
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="list-item" id="chat-setting-rest-window-time-panel" style="display: none;">
+                                <div class="list-content column">
+                                    <label>休息时间（跨天也生效）</label>
+                                    <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
+                                        <input type="time" id="chat-setting-rest-window-start" style="flex: 1; min-width: 0;">
+                                        <span style="color: #8e8e93; flex-shrink: 0;">到</span>
+                                        <input type="time" id="chat-setting-rest-window-end" style="flex: 1; min-width: 0;">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-content">
                                     <label>显示AI心声</label>
                                     <label class="toggle-switch">
                                         <input type="checkbox" id="chat-setting-show-thought">

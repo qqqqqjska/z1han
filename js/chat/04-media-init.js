@@ -45,6 +45,9 @@ function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type 
             } else {
                 contact.messagesSinceLastItinerary = 0;
             }
+            if (typeof window.updateContactRestStateOnAssistantMessage === 'function') {
+                window.updateContactRestStateOnAssistantMessage(contactId, text, type, msgData.time);
+            }
         }
 
         saveConfig();
@@ -3861,6 +3864,7 @@ function setupChatListeners() {
     const thoughtPetPreview = document.getElementById('chat-setting-thought-pet-preview');
     const thoughtPetSizeSlider = document.getElementById('chat-setting-thought-pet-size');
     const thoughtPetSizeValue = document.getElementById('chat-setting-thought-pet-size-value');
+    const restWindowEnabledInput = document.getElementById('chat-setting-rest-window-enabled');
 
     const syncThoughtPetPreviewSize = () => {
         const rawSize = thoughtPetSizeSlider ? parseInt(thoughtPetSizeSlider.value, 10) : 88;
@@ -3904,6 +3908,12 @@ function setupChatListeners() {
                 if (thoughtPetPreview) thoughtPetPreview.src = event.target.result;
             };
             reader.readAsDataURL(file);
+        });
+    }
+
+    if (restWindowEnabledInput && typeof window.syncRestWindowSettingsVisibility === 'function') {
+        restWindowEnabledInput.addEventListener('change', () => {
+            window.syncRestWindowSettingsVisibility();
         });
     }
 
@@ -4087,7 +4097,7 @@ function setupChatListeners() {
     }
 
     if (triggerAiReplyBtn) {
-        triggerAiReplyBtn.addEventListener('click', () => generateAiReply());
+        triggerAiReplyBtn.addEventListener('click', () => generateAiReply(null, null, { triggerSource: 'manual' }));
     }
 
     const chatMoreBtn = document.getElementById('chat-more-btn');
@@ -4148,7 +4158,7 @@ function setupChatListeners() {
                 if (item.id === 'chat-more-continue-btn') {
                     e.stopPropagation();
                     closeAllPanels();
-                    generateAiReply("用户没有回复。请继续当前的对话，或者开启一个新的话题。你可以假设已经过了一段时间。");
+                    generateAiReply("用户没有回复。请继续当前的对话，或者开启一个新的话题。你可以假设已经过了一段时间。", null, { triggerSource: 'manual' });
                     return;
                 }
 
@@ -4981,9 +4991,17 @@ function checkActiveReplies() {
     
     window.iphoneSimState.contacts.forEach(contact => {
         if (!contact.activeReplyEnabled) return;
+        if (typeof window.ensureContactRestWindowFields === 'function') {
+            window.ensureContactRestWindowFields(contact);
+        }
         
         const history = window.iphoneSimState.chatHistory[contact.id];
         if (!history || history.length === 0) return;
+
+        if (typeof window.getContactRestTriggerDecision === 'function') {
+            const restDecision = window.getContactRestTriggerDecision(contact, 'active', now);
+            if (!restDecision.allow) return;
+        }
         
         const lastMsg = history[history.length - 1];
         const intervalMs = (contact.activeReplyInterval || 60) * 1000;
@@ -5013,7 +5031,7 @@ function checkActiveReplies() {
                 activeInstruction = `（系统提示：主动发消息模式触发。距离你上一条消息已过去 ${minutesPassed} 分钟，用户一直没有回复。请像真人间隔一阵后自然续聊：可以补一句、换个轻话题，或分享当下状态/见闻；不要写成系统通知或任务播报。）`;
             }
 
-            generateAiReply(activeInstruction, contact.id);
+            generateAiReply(activeInstruction, contact.id, { triggerSource: 'active' });
         }
     });
 }

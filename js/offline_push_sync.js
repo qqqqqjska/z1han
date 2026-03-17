@@ -507,6 +507,9 @@
             .filter(([contactId]) => !!contactId));
         let changed = false;
         (window.iphoneSimState.contacts || []).forEach((contact) => {
+            if (typeof window.ensureContactRestWindowFields === 'function') {
+                window.ensureContactRestWindowFields(contact);
+            }
             const remote = byId.get(String(contact.id));
             if (!remote) return;
             const nextEnabled = !!(remote.activeReplyEnabled !== undefined ? remote.activeReplyEnabled : remote.active_reply_enabled);
@@ -514,6 +517,17 @@
             const nextInterval = Math.max(1, nextIntervalSec);
             const nextStartTime = Number(remote.activeReplyStartTime !== undefined ? remote.activeReplyStartTime : remote.active_reply_start_time || 0);
             const nextTriggeredMsgId = remote.lastTriggeredMsgId !== undefined ? remote.lastTriggeredMsgId : remote.last_triggered_msg_id;
+            const hasRestWindowEnabled = remote.restWindowEnabled !== undefined || remote.rest_window_enabled !== undefined;
+            const hasRestWindowStart = remote.restWindowStart !== undefined || remote.rest_window_start !== undefined;
+            const hasRestWindowEnd = remote.restWindowEnd !== undefined || remote.rest_window_end !== undefined;
+            const hasRestWindowAwakenedAt = remote.restWindowAwakenedAt !== undefined || remote.rest_window_awakened_at !== undefined;
+            const nextRestWindowEnabled = !!(remote.restWindowEnabled !== undefined ? remote.restWindowEnabled : remote.rest_window_enabled);
+            const nextRestWindowStart = remote.restWindowStart !== undefined ? String(remote.restWindowStart || '') : String(remote.rest_window_start || '');
+            const nextRestWindowEnd = remote.restWindowEnd !== undefined ? String(remote.restWindowEnd || '') : String(remote.rest_window_end || '');
+            const nextRestWindowAwakenedAtRaw = remote.restWindowAwakenedAt !== undefined ? remote.restWindowAwakenedAt : remote.rest_window_awakened_at;
+            const nextRestWindowAwakenedAt = nextRestWindowAwakenedAtRaw === null || nextRestWindowAwakenedAtRaw === undefined || nextRestWindowAwakenedAtRaw === ''
+                ? null
+                : Number(nextRestWindowAwakenedAtRaw);
             if (contact.activeReplyEnabled !== nextEnabled) {
                 contact.activeReplyEnabled = nextEnabled;
                 changed = true;
@@ -530,6 +544,22 @@
                 contact.lastActiveReplyTriggeredMsgId = nextTriggeredMsgId;
                 changed = true;
             }
+            if (hasRestWindowEnabled && contact.restWindowEnabled !== nextRestWindowEnabled) {
+                contact.restWindowEnabled = nextRestWindowEnabled;
+                changed = true;
+            }
+            if (hasRestWindowStart && (contact.restWindowStart || '') !== nextRestWindowStart) {
+                contact.restWindowStart = nextRestWindowStart;
+                changed = true;
+            }
+            if (hasRestWindowEnd && (contact.restWindowEnd || '') !== nextRestWindowEnd) {
+                contact.restWindowEnd = nextRestWindowEnd;
+                changed = true;
+            }
+            if (hasRestWindowAwakenedAt && (contact.restWindowAwakenedAt ?? null) !== (Number.isFinite(nextRestWindowAwakenedAt) ? nextRestWindowAwakenedAt : null)) {
+                contact.restWindowAwakenedAt = Number.isFinite(nextRestWindowAwakenedAt) ? nextRestWindowAwakenedAt : null;
+                changed = true;
+            }
         });
         if (changed) saveState();
     }
@@ -537,6 +567,9 @@
     async function uploadContactConfig(contact) {
         const state = getState();
         if (!state.enabled || !state.apiBaseUrl || !contact) return;
+        if (typeof window.ensureContactRestWindowFields === 'function') {
+            window.ensureContactRestWindowFields(contact);
+        }
         try {
             await apiFetch('/api/contacts', {
                 method: 'POST',
@@ -550,7 +583,11 @@
                     activeReplyEnabled: !!contact.activeReplyEnabled,
                     activeReplyInterval: Number(contact.activeReplyInterval || 1),
                     activeReplyStartTime: Number(contact.activeReplyStartTime || 0),
-                    lastActiveReplyTriggeredMsgId: contact.lastActiveReplyTriggeredMsgId || null
+                    lastActiveReplyTriggeredMsgId: contact.lastActiveReplyTriggeredMsgId || null,
+                    restWindowEnabled: !!contact.restWindowEnabled,
+                    restWindowStart: contact.restWindowStart || '',
+                    restWindowEnd: contact.restWindowEnd || '',
+                    restWindowAwakenedAt: Number(contact.restWindowAwakenedAt || 0) || null
                 })
             });
         } catch (err) {

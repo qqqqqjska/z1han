@@ -699,6 +699,9 @@ function sendMessage(text, isUser, type = 'text', description = null, targetCont
     
     const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
     if (contact) {
+        if (typeof window.ensureContactRestWindowFields === 'function') {
+            window.ensureContactRestWindowFields(contact);
+        }
         if (contact.autoItineraryEnabled) {
             if (typeof contact.messagesSinceLastItinerary !== 'number') {
                 contact.messagesSinceLastItinerary = 0;
@@ -713,6 +716,9 @@ function sendMessage(text, isUser, type = 'text', description = null, targetCont
             }
         } else {
             contact.messagesSinceLastItinerary = 0;
+        }
+        if (!isUser && typeof window.updateContactRestStateOnAssistantMessage === 'function') {
+            window.updateContactRestStateOnAssistantMessage(contactId, text, type, msg.time);
         }
     }
 

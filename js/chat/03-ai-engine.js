@@ -3224,12 +3224,28 @@ function buildWechatConditionalCapabilityPrompt(runtimeCtx) {
     ]);
 }
 
-async function generateAiReply(instruction = null, targetContactId = null) {
+async function generateAiReply(instruction = null, targetContactId = null, options = {}) {
     const contactId = targetContactId || window.iphoneSimState.currentChatContactId;
     if (!contactId) return;
     
     const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
     if (!contact) return;
+    if (typeof window.ensureContactRestWindowFields === 'function') {
+        window.ensureContactRestWindowFields(contact);
+    }
+
+    const triggerSource = options && typeof options === 'object' && options.triggerSource
+        ? String(options.triggerSource)
+        : 'system';
+    if (typeof window.getContactRestTriggerDecision === 'function') {
+        const restDecision = window.getContactRestTriggerDecision(contact, triggerSource);
+        if (!restDecision.allow) {
+            if (restDecision.shouldToast && typeof window.showChatToast === 'function') {
+                window.showChatToast('TA 在休息中，暂时没有回复', 2200);
+            }
+            return false;
+        }
+    }
 
     const settings = window.iphoneSimState.aiSettings.url ? window.iphoneSimState.aiSettings : window.iphoneSimState.aiSettings2;
     if (!settings.url || !settings.key) {
@@ -4664,6 +4680,9 @@ async function generateAiReply(instruction = null, targetContactId = null) {
                 }
 
                 window.iphoneSimState.chatHistory[contact.id].push(msgData);
+                if (typeof window.updateContactRestStateOnAssistantMessage === 'function') {
+                    window.updateContactRestStateOnAssistantMessage(contact.id, contentToSave, typeToSave, msgData.time);
+                }
                 saveConfig();
 
                 if (typeToSave === 'text' && window.WhisperChallenge && typeof window.WhisperChallenge.checkAiMessage === 'function') {
