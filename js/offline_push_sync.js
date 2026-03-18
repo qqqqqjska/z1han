@@ -580,6 +580,7 @@
                     name: contact.remark || contact.nickname || contact.name || '',
                     avatarUrl: contact.avatar || '',
                     personaPrompt: contact.persona || '',
+                    timezoneOffsetMinutes: -new Date().getTimezoneOffset(),
                     contextLimit: Number(contact.contextLimit || 0),
                     activeReplyEnabled: !!contact.activeReplyEnabled,
                     activeReplyInterval: Number(contact.activeReplyInterval || 1),
