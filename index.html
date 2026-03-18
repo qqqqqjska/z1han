@@ -1650,15 +1650,28 @@
                     <div class="garden-app-title-text">萌宠相伴的家</div>
                 </div>
                 <div class="garden-app-header-actions">
-                    <button id="garden-toggle-panel-btn" class="garden-app-header-btn" type="button">
-                        <i class="fas fa-couch"></i>
-                        <span>家具</span>
+                    <button id="garden-toggle-panel-btn" class="garden-app-header-btn" type="button" aria-label="打开家园编辑面板">
+                        <i class="fas fa-paw"></i>
                     </button>
                     <button id="garden-save-btn" class="garden-app-header-btn garden-app-save-btn" type="button">
                         <i class="fas fa-check"></i>
                         <span>保存</span>
                     </button>
                 </div>
+            </div>
+
+            <div id="garden-pet-adoption-overlay" class="hidden" aria-hidden="true">
+                <button id="garden-pet-adoption-close" type="button" aria-label="关闭领养页面">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div id="garden-pet-adoption-root"></div>
+            </div>
+
+            <div id="garden-pet-care-overlay" class="hidden" aria-hidden="true">
+                <button id="garden-pet-care-close" type="button" aria-label="关闭养宠页面">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div id="garden-pet-care-root"></div>
             </div>
 
             <div id="garden-rogue-strip" class="garden-rogue-strip">
@@ -7584,7 +7597,7 @@
     <script src="js/meeting.js"></script>
     <script src="js/apps.js"></script>
     <script src="js/icity.js"></script>
-    <script src="js/garden_app.js?v=9"></script>
+    <script src="js/garden_app.js?v=10"></script>
     <script src="js/mood_flora.js"></script>
     <script src="js/home.js"></script>
     <script src="js/calendar_app.js"></script>

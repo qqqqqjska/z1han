@@ -1,4 +1,4 @@
-#garden-app {
+﻿#garden-app {
     color: #4a5568;
     background: linear-gradient(180deg, #fffbea 0%, #fef7ec 100%);
 }
@@ -8,6 +8,8 @@
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 12px;
+    height: calc(44px + max(47px, env(safe-area-inset-top, 0px)) + 12px);
+    padding-top: calc(max(47px, env(safe-area-inset-top, 0px)) + 12px);
     padding-left: 16px;
     padding-right: 16px;
     background: rgba(255, 255, 255, 0.72);
@@ -121,6 +123,78 @@
 #garden-app .garden-app-header-btn:disabled {
     opacity: 0.4;
     box-shadow: none;
+}
+
+#garden-pet-adoption-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 260;
+    background: #fff7df;
+}
+
+#garden-pet-care-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 261;
+    background: #fff7df;
+}
+
+#garden-pet-adoption-overlay.hidden {
+    display: none;
+}
+
+#garden-pet-care-overlay.hidden {
+    display: none;
+}
+
+#garden-pet-adoption-root {
+    width: 100%;
+    height: 100%;
+    display: block;
+    background: #fff7df;
+}
+
+#garden-pet-care-root {
+    width: 100%;
+    height: 100%;
+    display: block;
+    background: #fff7df;
+}
+
+#garden-pet-adoption-close {
+    position: absolute;
+    top: 30px;
+    left: 14px;
+    z-index: 2;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.92);
+    color: #8b5a2b;
+    box-shadow: 0 6px 18px rgba(184, 152, 77, 0.18);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+#garden-pet-care-close {
+    position: absolute;
+    top: 30px;
+    left: 14px;
+    z-index: 2;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.92);
+    color: #8b5a2b;
+    box-shadow: 0 6px 18px rgba(184, 152, 77, 0.18);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
 }
 
 #garden-app .garden-contact-sheet {
@@ -3955,3 +4029,5 @@
     line-height: 1.6;
     color: #92400e;
 }
+
+
