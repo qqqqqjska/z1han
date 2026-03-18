@@ -201,12 +201,7 @@
             label: '宠物',
             icon: 'fas fa-paw',
             items: [
-                { kind: 'spawn', itemType: 'pet_dog', placement: 'floor', icon: 'fas fa-dog', color: '#d97706', name: '活泼柴犬' },
-                { kind: 'spawn', itemType: 'pet_dog_samoyed', placement: 'floor', icon: 'fas fa-dog', color: '#cbd5e0', name: '萨摩耶' },
-                { kind: 'spawn', itemType: 'pet_dog_golden', placement: 'floor', icon: 'fas fa-dog', color: '#f59e0b', name: '大金毛' },
-                { kind: 'spawn', itemType: 'pet_cat', placement: 'floor', icon: 'fas fa-cat', color: '#f97316', name: '溜达橘猫' },
-                { kind: 'spawn', itemType: 'pet_cat_silver', placement: 'floor', icon: 'fas fa-cat', color: '#d1d5db', name: '银渐层' },
-                { kind: 'spawn', itemType: 'pet_cat_calico', placement: 'floor', icon: 'fas fa-cat', color: '#374151', name: '三花猫' }
+                { kind: 'adoption', icon: 'fas fa-plus', color: '#f59e0b', name: '领养宠物' }
             ]
         },
         {
@@ -279,6 +274,7 @@
         pet_cat: `<div class="shape-pet pet-cat is-sitting"><div class="floor-shadow"></div><div class="pet-flipper"><div class="pet-sprite"><div class="pet-tail"></div><div class="pet-leg l1"></div><div class="pet-leg l2"></div><div class="pet-leg l3"></div><div class="pet-leg l4"></div><div class="pet-body"></div><div class="pet-head"><div class="pet-ear e-l"></div><div class="pet-ear e-r"></div><div class="pet-eye eye-l"></div><div class="pet-eye eye-r"></div><div class="pet-snout"></div><div class="pet-nose"></div></div></div></div></div>`,
         pet_cat_silver: `<div class="shape-pet pet-cat-silver is-sitting"><div class="floor-shadow"></div><div class="pet-flipper"><div class="pet-sprite"><div class="pet-tail"></div><div class="pet-leg l1"></div><div class="pet-leg l2"></div><div class="pet-leg l3"></div><div class="pet-leg l4"></div><div class="pet-body"></div><div class="pet-head"><div class="pet-ear e-l"></div><div class="pet-ear e-r"></div><div class="pet-eye eye-l"></div><div class="pet-eye eye-r"></div><div class="pet-snout"></div><div class="pet-nose"></div></div></div></div></div>`,
         pet_cat_calico: `<div class="shape-pet pet-cat-calico is-sitting"><div class="floor-shadow"></div><div class="pet-flipper"><div class="pet-sprite"><div class="pet-tail"></div><div class="pet-leg l1"></div><div class="pet-leg l2"></div><div class="pet-leg l3"></div><div class="pet-leg l4"></div><div class="pet-body"></div><div class="pet-head"><div class="pet-ear e-l"></div><div class="pet-ear e-r"></div><div class="pet-eye eye-l"></div><div class="pet-eye eye-r"></div><div class="pet-snout"></div><div class="pet-nose"></div></div></div></div></div>`,
+        pet_adopted_photo: `<div class="shape-adopted-pet"><div class="floor-shadow"></div><div class="adopted-pet-photo-wrap"><img class="adopted-pet-photo" alt="宠物照片" draggable="false" /></div><div class="adopted-pet-badge"></div></div>`,
         bed: `<div class="shape-bed"><div class="floor-shadow"></div><div class="bed-frame"></div><div class="bed-head"></div><div class="bed-mat"></div><div class="bed-blanket"></div><div class="bed-pillow"></div></div>`,
         sofa: `<div class="shape-sofa"><div class="floor-shadow"></div><div class="sofa-back1"></div><div class="sofa-back2"></div><div class="sofa-base"></div></div>`,
         bookshelf: `<div class="shape-bookshelf"><div class="floor-shadow"></div><div class="shelf-board b1"></div><div class="shelf-board b2"></div><div class="book bk1"></div><div class="book bk2"></div><div class="book bk3"></div></div>`,
@@ -589,6 +585,9 @@
     let contactFigureRunRightPreviewEl;
     let contactFigurePetPreviewEl;
     let contactFigureFeedPreviewEl;
+    let petAdoptionOverlayEl;
+    let petAdoptionCloseBtnEl;
+    let petAdoptionRootEl;
     let farmAssignmentFigureEl;
     let pastureAssignmentFigureEl;
     let farmAssignmentLayerEl;
@@ -604,6 +603,51 @@
     const CONTACT_ASSIGNMENT_COST = Object.freeze({ energy: 20, hunger: 15 });
     const CONTACT_ASSIGNMENT_DURATIONS = Object.freeze({ farm: 2 * 60 * 1000, pasture: 3 * 60 * 1000, kitchen: 4 * 60 * 1000 });
     const CONTACT_ASSIGNMENT_EMPTY_RETURN_DELAY = 5000;
+    const ADOPTION_PRESET_PETS = Object.freeze([
+        {
+            id: 'shiba',
+            icon: '🐶',
+            name: '柴犬',
+            tag: '✨ 忠诚 / Loyal',
+            desc: '机灵又带点小傲娇，像一团会自己发光的小太阳，陪你把日常过得热热闹闹。',
+            imageSrc: 'https://i.postimg.cc/mDRL08rQ/%E6%97%A0%E6%A0%87%E9%A2%98120_20260317175551.png'
+        },
+        {
+            id: 'samoyed',
+            icon: '🐶',
+            name: '萨摩耶',
+            tag: '☁️ 治愈 / Gentle',
+            desc: '笑起来像会下雪的云团，温柔亲人，总能用软乎乎的陪伴把你的心情治愈好。',
+            imageSrc: 'https://i.postimg.cc/wvHqS0BQ/%E6%97%A0%E6%A0%87%E9%A2%98120_20260317175610.png'
+        },
+        {
+            id: 'silver-cat',
+            icon: '🐱',
+            name: '银渐层',
+            tag: '🌙 安静 / Soft',
+            desc: '毛色像月光一样柔和，安静又亲人，会用软绵绵的陪伴把日子过得很温柔。',
+            imageSrc: 'https://i.postimg.cc/Zn4BZ6Ts/wu-biao-ti120-20260317202610.png'
+        },
+        {
+            id: 'calico-cat',
+            icon: '🐱',
+            name: '三花猫',
+            tag: '🎀 灵动 / Playful',
+            desc: '古灵精怪又很会撒娇，像一颗跳跳糖，总能用灵动的小表情把你逗笑。',
+            imageSrc: 'https://i.postimg.cc/5ygHtj0R/wu-biao-ti120-20260317202630.png'
+        }
+    ]);
+    const ADOPTION_PET_POSITIONS = Object.freeze([
+        { left: '22%', top: '84%' },
+        { left: '40%', top: '87%' },
+        { left: '58%', top: '84%' },
+        { left: '76%', top: '87%' }
+    ]);
+    const petAdoptionState = {
+        currentPet: null,
+        customPetImageData: '',
+        guardianName: ''
+    };
 
     function createEmptyInventory() {
         return INVENTORY_ITEM_IDS.reduce((result, itemId) => {
@@ -622,6 +666,416 @@
             seenRelics: [],
             seenEvents: []
         };
+    }
+
+    function createEmptyAdoptionPet() {
+        return {
+            icon: '🐾',
+            name: '',
+            desc: '',
+            imageSrc: '',
+            breed: '',
+            gender: '',
+            personality: '',
+            hunger: 50,
+            mood: 60
+        };
+    }
+
+    petAdoptionState.currentPet = createEmptyAdoptionPet();
+
+    function normalizeAdoptionText(value) {
+        return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+    }
+
+    function getPresetPetById(petId) {
+        return ADOPTION_PRESET_PETS.find((pet) => pet.id === petId) || null;
+    }
+
+    function getPetAdoptionEl(selector) {
+        return petAdoptionRootEl ? petAdoptionRootEl.querySelector(selector) : null;
+    }
+
+    function buildPetAdoptionMarkup() {
+        const cardsMarkup = ADOPTION_PRESET_PETS.map((pet) => `
+            <button type="button" class="pet-card" data-adoption-pet="${pet.id}">
+                <div class="pet-avatar pet-avatar-image"><img src="${pet.imageSrc}" alt="${pet.name}"></div>
+                <div class="pet-info"><h3>${pet.name}</h3><span>${pet.tag}</span></div>
+            </button>
+        `).join('');
+
+        return `
+            <style>
+                @font-face{font-family:'AdoptionContractFont';src:url('https://nos.netease.com/ysf/b3fe611c56fa2e40c155ceddff5a6002.ttf') format('truetype');font-display:swap}
+                #garden-pet-adoption-root{--primary:#f4cd7a;--secondary:#f7dd9b;--gold-dark:#d8b56c;--text-main:#6b5635;--text-light:#9b8359;--glass-bg:rgba(255,250,236,.78);--shadow:0 12px 40px rgba(214,174,92,.22);--stamp-red:#c96c56;--contract-font:'AdoptionContractFont','STKaiti','KaiTi',serif;position:relative;width:100%;height:100%;overflow:hidden;font-family:'PingFang SC','Helvetica Neue',Helvetica,Arial,sans-serif;color:var(--text-main)}
+                #garden-pet-adoption-root *{box-sizing:border-box}#garden-pet-adoption-root .adoption-shell{position:relative;width:100%;height:100%;display:flex;justify-content:center;align-items:center;background:#fff9eb}#garden-pet-adoption-root .bg-shapes,#garden-pet-adoption-root .particles{position:absolute;inset:0;overflow:hidden;pointer-events:none}#garden-pet-adoption-root .bg-shapes{background:radial-gradient(circle at 50% 40%,#fffef9 0%,#fff4d9 100%)}
+                #garden-pet-adoption-root .shape{position:absolute;border-radius:50%;filter:blur(80px);opacity:.46;animation:gardenPetFloat 12s infinite alternate ease-in-out}#garden-pet-adoption-root .shape-1{width:42vh;height:42vh;background:#ffe39b;top:-12%;left:-10%}#garden-pet-adoption-root .shape-2{width:52vh;height:52vh;background:#ffd6a6;right:-16%;bottom:-18%;animation-delay:-6s}
+                #garden-pet-adoption-root .glass-panel{position:relative;width:min(92vw,430px);height:min(86vh,820px);background:var(--glass-bg);border:1px solid rgba(255,255,255,.82);border-radius:28px;box-shadow:var(--shadow);backdrop-filter:blur(18px);overflow:hidden}#garden-pet-adoption-root .page{position:absolute;inset:0;padding:34px 24px 24px;display:flex;flex-direction:column;opacity:0;pointer-events:none;transform:translateY(18px);transition:opacity .35s ease,transform .35s ease}#garden-pet-adoption-root .page.active{opacity:1;pointer-events:auto;transform:translateY(0)}
+                #garden-pet-adoption-root .header{text-align:center;margin-bottom:26px}#garden-pet-adoption-root .header h1{font-size:25px;font-weight:700;letter-spacing:2px}#garden-pet-adoption-root .header p{margin-top:6px;font-size:11px;color:var(--text-light);letter-spacing:3px;text-transform:uppercase}
+                #garden-pet-adoption-root .pet-grid{display:grid;gap:14px;flex:1;overflow-y:auto;padding:4px 2px 28px}#garden-pet-adoption-root .pet-card{border:none;background:rgba(255,255,255,.78);border-radius:22px;padding:16px;display:flex;align-items:center;gap:16px;text-align:left;box-shadow:0 12px 24px rgba(214,174,92,.12);cursor:pointer;transition:transform .2s ease;text-decoration:none;color:inherit}#garden-pet-adoption-root .pet-card:active{transform:translateY(2px) scale(.98)}
+                #garden-pet-adoption-root .pet-avatar{width:70px;height:70px;border-radius:22px;display:flex;justify-content:center;align-items:center;background:transparent;flex-shrink:0}#garden-pet-adoption-root .pet-avatar img,#garden-pet-adoption-root .pet-visual-image,#garden-pet-adoption-root .profile-preview img{width:100%;height:100%;object-fit:contain;display:block}#garden-pet-adoption-root .pet-info h3{font-size:18px;margin:0 0 6px}#garden-pet-adoption-root .pet-info span{font-size:12px;color:var(--text-light);background:rgba(244,205,122,.18);padding:5px 10px;border-radius:999px}
+                #garden-pet-adoption-root .pet-card-create{justify-content:center;border:2px dashed rgba(216,181,108,.62);background:rgba(255,250,236,.9);min-height:112px}#garden-pet-adoption-root .pet-card-create .pet-info{text-align:center}#garden-pet-adoption-root .detail-avatar{width:150px;height:150px;margin:12px auto 28px;display:flex;align-items:center;justify-content:center;font-size:90px;animation:gardenPetBounce 3s infinite ease-in-out}
+                #garden-pet-adoption-root .detail-box,#garden-pet-adoption-root .profile-box{background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.9);border-radius:24px;padding:22px;margin-bottom:auto;box-shadow:0 10px 24px rgba(214,174,92,.1)}#garden-pet-adoption-root .detail-box h2{text-align:center;margin:0 0 12px}#garden-pet-adoption-root .detail-box p{color:var(--text-light);line-height:1.85;text-align:center;margin:0}
+                #garden-pet-adoption-root .certificate{font-family:var(--contract-font);background:#fdfbf7;border:4px double var(--gold-dark);border-radius:6px;padding:28px 20px;position:relative;display:flex;flex-direction:column;flex:1;margin-bottom:16px;box-shadow:inset 0 0 50px rgba(216,181,108,.08)}#garden-pet-adoption-root .cert-title{font-family:var(--contract-font);text-align:center;font-size:26px;font-weight:700;letter-spacing:4px;padding-bottom:14px;margin-bottom:18px;border-bottom:1px solid var(--gold-dark)}#garden-pet-adoption-root .cert-content{font-family:var(--contract-font);font-size:16px;line-height:2.2;color:#5a4b3c;text-align:justify;padding:0 8px}#garden-pet-adoption-root .cert-pet-highlight{font-size:20px;font-weight:700;border-bottom:1px solid var(--text-main);padding:0 4px;border-radius:4px;cursor:text;outline:none}
+                #garden-pet-adoption-root .signature-area{margin-top:auto;text-align:right;padding-right:10px;display:flex;justify-content:flex-end;align-items:flex-end}#garden-pet-adoption-root .signature-label{font-family:var(--contract-font);font-size:12px;color:#9d8c73;margin-right:10px;margin-bottom:4px}#garden-pet-adoption-root .signature-line{border-bottom:1px dashed var(--gold-dark);width:120px;height:30px;position:relative}#garden-pet-adoption-root .signature-text{font-family:var(--contract-font);font-size:28px;color:#1a1a1a;position:absolute;bottom:-2px;left:10px;white-space:nowrap;overflow:hidden;width:0}
+                #garden-pet-adoption-root .contract-form{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}#garden-pet-adoption-root .contract-input-label{font-family:var(--contract-font);font-size:14px;color:#5a4b3c;padding-left:4px}#garden-pet-adoption-root .contract-name-input,#garden-pet-adoption-root .profile-input,#garden-pet-adoption-root .profile-select{width:100%;border:1px solid rgba(216,181,108,.88);border-radius:14px;padding:12px 14px;background:rgba(255,252,244,.94);color:#4a3f35;outline:none;font-size:15px}#garden-pet-adoption-root .profile-grid{display:grid;gap:12px}#garden-pet-adoption-root .profile-field label{display:block;font-size:13px;color:var(--text-light);margin-bottom:7px}
+                #garden-pet-adoption-root .profile-preview{width:140px;height:140px;margin:0 auto 18px;border-radius:28px;background:rgba(255,255,255,.74);border:2px dashed rgba(216,181,108,.5);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--text-light);cursor:pointer;overflow:hidden}#garden-pet-adoption-root .profile-preview.has-image .profile-preview-text,#garden-pet-adoption-root .profile-preview.has-image .profile-preview-icon{display:none}#garden-pet-adoption-root .profile-upload-input{display:none}#garden-pet-adoption-root .form-upload-tip{margin-top:10px;font-size:12px;color:var(--text-light);text-align:center;line-height:1.7}
+                #garden-pet-adoption-root .btn-primary,#garden-pet-adoption-root .btn-secondary{width:100%;border:none;border-radius:18px;cursor:pointer;transition:transform .2s ease,box-shadow .2s ease}#garden-pet-adoption-root .btn-primary{padding:17px 18px;background:linear-gradient(135deg,#7f6442,#b48a53);color:#fff;font-size:16px;font-weight:700;letter-spacing:2px;box-shadow:0 10px 24px rgba(127,100,66,.24);display:flex;justify-content:center;align-items:center;gap:8px}#garden-pet-adoption-root .btn-gold{background:linear-gradient(135deg,#f0c96b,#ddac42);box-shadow:0 10px 24px rgba(221,172,66,.28)}#garden-pet-adoption-root .btn-secondary{background:transparent;color:var(--text-light);padding:12px;margin-top:8px;font-size:14px}
+                #garden-pet-adoption-root .stamp{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%) scale(4);opacity:0;width:150px;height:150px;border:6px solid var(--stamp-red);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--stamp-red);font-weight:700;background:rgba(253,251,247,.92);box-shadow:0 0 20px rgba(201,108,86,.16)}#garden-pet-adoption-root .stamp::before{content:'';position:absolute;inset:7px;border:2px solid var(--stamp-red);border-radius:50%}#garden-pet-adoption-root .stamp .ch{font-family:'KaiTi',serif;font-size:30px;letter-spacing:4px}#garden-pet-adoption-root .stamp .en{font-size:11px;letter-spacing:2px;margin-top:4px}#garden-pet-adoption-root .stamp.smash{animation:gardenPetStamp .5s cubic-bezier(.5,0,.3,1.5) forwards}
+                #garden-pet-adoption-root .particle{position:absolute;width:6px;height:6px;background:#ffd36d;border-radius:50%;opacity:0;box-shadow:0 0 10px #ffd36d}#garden-pet-adoption-root .writing{animation:gardenPetWrite 1.2s steps(30) forwards}#garden-pet-adoption-root .shake-screen{animation:gardenPetShake .4s cubic-bezier(.36,.07,.19,.97) both}#garden-pet-adoption-root .curtain{position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:rgba(255,252,244,.98);color:var(--text-main);letter-spacing:4px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .5s ease}#garden-pet-adoption-root .curtain.show{opacity:1}
+                @keyframes gardenPetFloat{from{transform:translate(0,0) scale(1)}to{transform:translate(36px,52px) scale(1.1)}}@keyframes gardenPetBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}@keyframes gardenPetWrite{to{width:100%}}@keyframes gardenPetShake{10%,90%{transform:translate3d(-2px,2px,0)}20%,80%{transform:translate3d(2px,-2px,0)}30%,50%,70%{transform:translate3d(-4px,4px,0)}40%,60%{transform:translate3d(4px,-4px,0)}}@keyframes gardenPetStamp{0%{opacity:0;transform:translate(-50%,-50%) scale(4) rotate(10deg)}60%{opacity:1;transform:translate(-50%,-50%) scale(.92) rotate(-12deg)}100%{opacity:.95;transform:translate(-50%,-50%) scale(1) rotate(-12deg)}}
+            </style>
+            <div class="adoption-shell">
+                <div class="bg-shapes"><div class="shape shape-1"></div><div class="shape shape-2"></div></div>
+                <div class="particles" id="garden-adoption-particles"></div>
+                <div class="glass-panel" id="garden-adoption-panel">
+                    <div class="page active" id="garden-adoption-page-list">
+                        <div class="header"><h1>✨ 寻觅羁绊</h1><p>Find Your Companion</p></div>
+                        <div class="pet-grid">${cardsMarkup}<button type="button" class="pet-card pet-card-create" data-adoption-action="open-custom"><div class="pet-info"><h3>➕ 创建我的宠物档案</h3><span>上传照片，自己定义新的小伙伴</span></div></button></div>
+                    </div>
+                    <div class="page" id="garden-adoption-page-custom">
+                        <div class="header"><h1>宠物档案</h1><p>Pet Profile</p></div>
+                        <div class="profile-box"><label class="profile-preview" for="garden-adoption-custom-image"><div class="profile-preview-icon">📸</div><div class="profile-preview-text">点击上传照片</div><img id="garden-adoption-custom-preview-image" alt="宠物预览"></label><div class="profile-grid"><div class="profile-field"><label for="garden-adoption-custom-breed">宠物品种</label><input id="garden-adoption-custom-breed" class="profile-input" type="text" maxlength="20" placeholder="例如：布偶猫 / 柯基"></div><div class="profile-field"><label for="garden-adoption-custom-gender">宠物性别</label><select id="garden-adoption-custom-gender" class="profile-select"><option value="">请选择</option><option value="男孩子">男孩子</option><option value="女孩子">女孩子</option></select></div><div class="profile-field"><label for="garden-adoption-custom-name">宠物名字</label><input id="garden-adoption-custom-name" class="profile-input" type="text" maxlength="20" placeholder="给它起个名字"></div><div class="profile-field"><label for="garden-adoption-custom-personality">宠物性格</label><input id="garden-adoption-custom-personality" class="profile-input" type="text" maxlength="30" placeholder="例如：粘人、元气、温柔"></div></div><input id="garden-adoption-custom-image" class="profile-upload-input" type="file" accept="image/*"><div class="form-upload-tip">点击上方区域上传宠物照片，创建后会沿用你宠物页里的领养风格。</div></div>
+                        <button type="button" class="btn-primary" data-adoption-action="create-custom"><i class="fas fa-sparkles"></i> 创建档案</button><button type="button" class="btn-secondary" data-adoption-action="back-list">返回列表</button>
+                    </div>
+                    <div class="page" id="garden-adoption-page-detail">
+                        <div class="header"><h1>📖 灵魂共鸣</h1><p>Soul Resonance</p></div><div class="detail-avatar" id="garden-adoption-detail-visual">🐾</div>
+                        <div class="detail-box"><h2 id="garden-adoption-detail-name">未命名</h2><p id="garden-adoption-detail-desc">它正等待与你相遇。</p></div>
+                        <button type="button" class="btn-primary" data-adoption-action="to-cert"><i class="fas fa-feather-pointed"></i> 缔结契约</button><button type="button" class="btn-secondary" data-adoption-action="back-list">重新寻觅</button>
+                    </div>
+                    <div class="page" id="garden-adoption-page-cert">
+                        <div class="header"><h1>📜 庄严誓约</h1><p>Solemn Vow</p></div>
+                        <div class="certificate"><div class="cert-title">领 养 契 约</div><div class="cert-content">星光为证，岁月为鉴。<br>我在此郑重立誓，自愿成为<br><span class="cert-pet-highlight" id="garden-adoption-cert-name" contenteditable="true" spellcheck="false">未命名</span> 的唯一守护者。<br>承诺无论疾病或健康，都将不离不弃；<br>提供温暖的居所与充足的食物；<br>相伴一生，直至星辰黯淡。</div><div class="signature-area"><span class="signature-label">守护人签名:</span><div class="signature-line"><span class="signature-text" id="garden-adoption-signature"></span></div></div><div class="stamp" id="garden-adoption-stamp"><span class="ch">契约达成</span><span class="en">BOND SEALED</span></div></div>
+                        <div class="contract-form"><label class="contract-input-label" for="garden-adoption-guardian">守护人姓名</label><input id="garden-adoption-guardian" class="contract-name-input" type="text" maxlength="20" placeholder="请输入你的名字后再签署"></div>
+                        <button type="button" class="btn-primary" id="garden-adoption-submit" data-adoption-action="sign"><i class="fas fa-pen-nib"></i> 郑重签署</button><button type="button" class="btn-secondary" data-adoption-action="back-detail">返回详情</button>
+                    </div>
+                    <div class="curtain" id="garden-adoption-curtain">✨ 欢迎回家 ✨</div>
+                </div>
+            </div>
+        `;
+    }
+
+    function switchPetAdoptionPage(pageId) {
+        if (!petAdoptionRootEl) return;
+        petAdoptionRootEl.querySelectorAll('.page').forEach((page) => {
+            page.classList.toggle('active', page.id === pageId);
+        });
+    }
+
+    function renderPetAdoptionVisual(targetEl) {
+        if (!targetEl) return;
+        targetEl.innerHTML = '';
+        if (petAdoptionState.currentPet && petAdoptionState.currentPet.imageSrc) {
+            const img = document.createElement('img');
+            img.className = 'pet-visual-image';
+            img.src = petAdoptionState.currentPet.imageSrc;
+            img.alt = petAdoptionState.currentPet.name || '宠物';
+            targetEl.appendChild(img);
+            return;
+        }
+        targetEl.textContent = petAdoptionState.currentPet && petAdoptionState.currentPet.icon ? petAdoptionState.currentPet.icon : '🐾';
+    }
+
+    function renderPetAdoptionDetails() {
+        renderPetAdoptionVisual(getPetAdoptionEl('#garden-adoption-detail-visual'));
+        const detailNameEl = getPetAdoptionEl('#garden-adoption-detail-name');
+        const detailDescEl = getPetAdoptionEl('#garden-adoption-detail-desc');
+        if (detailNameEl) detailNameEl.textContent = petAdoptionState.currentPet.name || '未命名';
+        if (detailDescEl) detailDescEl.textContent = petAdoptionState.currentPet.desc || '它正等待与你相遇。';
+    }
+
+    function resetPetAdoptionCustomForm() {
+        const breedInput = getPetAdoptionEl('#garden-adoption-custom-breed');
+        const genderInput = getPetAdoptionEl('#garden-adoption-custom-gender');
+        const nameInput = getPetAdoptionEl('#garden-adoption-custom-name');
+        const personalityInput = getPetAdoptionEl('#garden-adoption-custom-personality');
+        const imageInput = getPetAdoptionEl('#garden-adoption-custom-image');
+        const previewBox = getPetAdoptionEl('.profile-preview');
+        const previewImage = getPetAdoptionEl('#garden-adoption-custom-preview-image');
+        if (breedInput) breedInput.value = '';
+        if (genderInput) genderInput.value = '';
+        if (nameInput) nameInput.value = '';
+        if (personalityInput) personalityInput.value = '';
+        if (imageInput) imageInput.value = '';
+        if (previewImage) previewImage.removeAttribute('src');
+        if (previewBox) previewBox.classList.remove('has-image');
+        petAdoptionState.customPetImageData = '';
+    }
+
+    function openCustomPetAdoptionPage() {
+        resetPetAdoptionCustomForm();
+        switchPetAdoptionPage('garden-adoption-page-custom');
+    }
+
+    function selectPetForAdoption(pet) {
+        petAdoptionState.currentPet = {
+            icon: pet.icon,
+            name: pet.name,
+            desc: pet.desc,
+            imageSrc: pet.imageSrc,
+            breed: '',
+            gender: '',
+            personality: '',
+            hunger: 50,
+            mood: 60
+        };
+        renderPetAdoptionDetails();
+        switchPetAdoptionPage('garden-adoption-page-detail');
+    }
+
+    function createCustomPetForAdoption() {
+        const breedInput = getPetAdoptionEl('#garden-adoption-custom-breed');
+        const genderInput = getPetAdoptionEl('#garden-adoption-custom-gender');
+        const nameInput = getPetAdoptionEl('#garden-adoption-custom-name');
+        const personalityInput = getPetAdoptionEl('#garden-adoption-custom-personality');
+        const breed = normalizeAdoptionText(breedInput ? breedInput.value : '');
+        const gender = genderInput ? genderInput.value : '';
+        const name = normalizeAdoptionText(nameInput ? nameInput.value : '');
+        const personality = normalizeAdoptionText(personalityInput ? personalityInput.value : '');
+
+        if (!breed || !gender || !name || !personality || !petAdoptionState.customPetImageData) {
+            window.alert('请完整填写宠物品种、性别、名字、性格，并上传一张宠物图片。');
+            return;
+        }
+
+        petAdoptionState.currentPet = {
+            icon: '🐾',
+            name,
+            desc: `${name}是一只${gender}的${breed}，性格${personality}。从现在开始，它会把全部的小情绪和小快乐都交给你。`,
+            imageSrc: petAdoptionState.customPetImageData,
+            breed,
+            gender,
+            personality,
+            hunger: 50,
+            mood: 60
+        };
+        renderPetAdoptionDetails();
+        switchPetAdoptionPage('garden-adoption-page-detail');
+    }
+
+    function syncPetAdoptionNameFromContract() {
+        const petNameEl = getPetAdoptionEl('#garden-adoption-cert-name');
+        if (!petNameEl) return '';
+        const nextName = normalizeAdoptionText(petNameEl.innerText) || petAdoptionState.currentPet.name || '未命名';
+        petNameEl.innerText = nextName;
+        petAdoptionState.currentPet.name = nextName;
+        renderPetAdoptionDetails();
+        return nextName;
+    }
+
+    function moveCaretToEnd(element) {
+        if (!element) return;
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+
+    function goToPetAdoptionCert() {
+        if (!petAdoptionState.currentPet || !petAdoptionState.currentPet.name) return;
+        const nameEl = getPetAdoptionEl('#garden-adoption-cert-name');
+        const signatureEl = getPetAdoptionEl('#garden-adoption-signature');
+        const stampEl = getPetAdoptionEl('#garden-adoption-stamp');
+        const buttonEl = getPetAdoptionEl('#garden-adoption-submit');
+        const guardianInput = getPetAdoptionEl('#garden-adoption-guardian');
+        if (nameEl) nameEl.innerText = petAdoptionState.currentPet.name;
+        if (signatureEl) {
+            signatureEl.textContent = '';
+            signatureEl.classList.remove('writing');
+        }
+        if (stampEl) stampEl.classList.remove('smash');
+        if (guardianInput) guardianInput.value = '';
+        petAdoptionState.guardianName = '';
+        if (buttonEl) {
+            buttonEl.className = 'btn-primary';
+            buttonEl.dataset.adoptionAction = 'sign';
+            buttonEl.innerHTML = '<i class="fas fa-pen-nib"></i> 郑重签署';
+            buttonEl.style.pointerEvents = 'auto';
+        }
+        switchPetAdoptionPage('garden-adoption-page-cert');
+    }
+
+    function createPetAdoptionSparkles() {
+        const container = getPetAdoptionEl('#garden-adoption-particles');
+        const panel = getPetAdoptionEl('#garden-adoption-panel');
+        if (!container || !panel) return;
+        const rect = panel.getBoundingClientRect();
+        const centerX = rect.left + (rect.width * 0.5);
+        const centerY = rect.top + (rect.height * 0.4);
+
+        for (let i = 0; i < 28; i += 1) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = `${centerX}px`;
+            particle.style.top = `${centerY}px`;
+            container.appendChild(particle);
+            const angle = Math.random() * Math.PI * 2;
+            const velocity = 40 + Math.random() * 90;
+            const tx = Math.cos(angle) * velocity;
+            const ty = Math.sin(angle) * velocity;
+            particle.animate([
+                { transform: 'translate(0,0) scale(1)', opacity: 1 },
+                { transform: `translate(${tx}px, ${ty - 40}px) scale(1.4)`, opacity: 1, offset: 0.4 },
+                { transform: `translate(${tx * 1.45}px, ${ty + 90}px) scale(0)`, opacity: 0 }
+            ], {
+                duration: 820 + Math.random() * 320,
+                easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
+                fill: 'forwards'
+            });
+            window.setTimeout(() => particle.remove(), 1200);
+        }
+    }
+
+    function resetPetAdoptionFlow() {
+        petAdoptionState.currentPet = createEmptyAdoptionPet();
+        petAdoptionState.guardianName = '';
+        petAdoptionState.customPetImageData = '';
+        resetPetAdoptionCustomForm();
+        const curtain = getPetAdoptionEl('#garden-adoption-curtain');
+        const panel = getPetAdoptionEl('#garden-adoption-panel');
+        if (curtain) curtain.classList.remove('show');
+        if (panel) panel.classList.remove('shake-screen');
+        switchPetAdoptionPage('garden-adoption-page-list');
+    }
+
+    function completePetAdoptionToGarden() {
+        const curtain = getPetAdoptionEl('#garden-adoption-curtain');
+        if (curtain) curtain.classList.add('show');
+        window.setTimeout(() => {
+            addAdoptedPetToGarden(petAdoptionState.currentPet);
+            closePetAdoptionOverlay();
+            if (window.showChatToast) window.showChatToast('新伙伴已经到家啦 ✨', 2200);
+        }, 620);
+    }
+
+    function startPetAdoptionRitual() {
+        syncPetAdoptionNameFromContract();
+        const guardianInput = getPetAdoptionEl('#garden-adoption-guardian');
+        const buttonEl = getPetAdoptionEl('#garden-adoption-submit');
+        const signatureEl = getPetAdoptionEl('#garden-adoption-signature');
+        const stampEl = getPetAdoptionEl('#garden-adoption-stamp');
+        const panel = getPetAdoptionEl('#garden-adoption-panel');
+        const guardianName = normalizeAdoptionText(guardianInput ? guardianInput.value : '');
+        if (!guardianName) {
+            if (guardianInput) {
+                guardianInput.focus();
+                guardianInput.placeholder = '请先输入你的名字';
+            }
+            return;
+        }
+
+        petAdoptionState.guardianName = guardianName;
+        if (buttonEl) {
+            buttonEl.style.pointerEvents = 'none';
+            buttonEl.innerHTML = '正在签署...';
+        }
+        if (signatureEl) {
+            signatureEl.classList.remove('writing');
+            signatureEl.textContent = guardianName;
+            void signatureEl.offsetWidth;
+            signatureEl.classList.add('writing');
+        }
+
+        window.setTimeout(() => {
+            if (buttonEl) buttonEl.innerHTML = '盖章确认中...';
+            if (stampEl) stampEl.classList.add('smash');
+            window.setTimeout(() => {
+                if (panel) panel.classList.add('shake-screen');
+                vibrate(50);
+                createPetAdoptionSparkles();
+            }, 300);
+            window.setTimeout(() => {
+                if (panel) panel.classList.remove('shake-screen');
+                if (buttonEl) {
+                    buttonEl.innerHTML = '<i class="fas fa-house"></i> 仪式完成 · 带它回家';
+                    buttonEl.classList.add('btn-gold');
+                    buttonEl.dataset.adoptionAction = 'complete';
+                    buttonEl.style.pointerEvents = 'auto';
+                }
+            }, 1000);
+        }, 1400);
+    }
+
+    function ensurePetAdoptionUi() {
+        if (!petAdoptionRootEl || petAdoptionRootEl.dataset.ready === 'true') return;
+        petAdoptionRootEl.innerHTML = buildPetAdoptionMarkup();
+        petAdoptionRootEl.dataset.ready = 'true';
+
+        petAdoptionRootEl.addEventListener('click', (event) => {
+            const petCard = event.target.closest('[data-adoption-pet]');
+            if (petCard) {
+                const pet = getPresetPetById(petCard.dataset.adoptionPet);
+                if (pet) selectPetForAdoption(pet);
+                return;
+            }
+
+            const actionBtn = event.target.closest('[data-adoption-action]');
+            if (!actionBtn) return;
+            const action = actionBtn.dataset.adoptionAction;
+            if (action === 'open-custom') openCustomPetAdoptionPage();
+            if (action === 'back-list') switchPetAdoptionPage('garden-adoption-page-list');
+            if (action === 'back-detail') switchPetAdoptionPage('garden-adoption-page-detail');
+            if (action === 'create-custom') createCustomPetForAdoption();
+            if (action === 'to-cert') goToPetAdoptionCert();
+            if (action === 'sign') startPetAdoptionRitual();
+            if (action === 'complete') completePetAdoptionToGarden();
+        });
+
+        const certNameEl = getPetAdoptionEl('#garden-adoption-cert-name');
+        if (certNameEl) {
+            certNameEl.addEventListener('focus', () => moveCaretToEnd(certNameEl));
+            certNameEl.addEventListener('blur', syncPetAdoptionNameFromContract);
+            certNameEl.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    certNameEl.blur();
+                }
+            });
+        }
+
+        const imageInput = getPetAdoptionEl('#garden-adoption-custom-image');
+        if (imageInput) {
+            imageInput.addEventListener('change', (event) => {
+                const file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
+                const previewBox = getPetAdoptionEl('.profile-preview');
+                const previewImage = getPetAdoptionEl('#garden-adoption-custom-preview-image');
+                if (!file) {
+                    petAdoptionState.customPetImageData = '';
+                    if (previewImage) previewImage.removeAttribute('src');
+                    if (previewBox) previewBox.classList.remove('has-image');
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = () => {
+                    petAdoptionState.customPetImageData = typeof reader.result === 'string' ? reader.result : '';
+                    if (previewImage) previewImage.src = petAdoptionState.customPetImageData;
+                    if (previewBox) previewBox.classList.add('has-image');
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+    }
+
+    function openPetAdoptionOverlay() {
+        ensurePetAdoptionUi();
+        resetPetAdoptionFlow();
+        if (petAdoptionOverlayEl) {
+            petAdoptionOverlayEl.classList.remove('hidden');
+            petAdoptionOverlayEl.setAttribute('aria-hidden', 'false');
+        }
+        setDrawerOpen(false);
+        vibrate(20);
+    }
+
+    function closePetAdoptionOverlay() {
+        if (petAdoptionOverlayEl) {
+            petAdoptionOverlayEl.classList.add('hidden');
+            petAdoptionOverlayEl.setAttribute('aria-hidden', 'true');
+        }
+        resetPetAdoptionFlow();
     }
 
     function createDefaultRogueNodeState(nodeType, actIndex, depthIndex, options) {
@@ -3725,6 +4179,9 @@ ${taskCard.action}`;
         closeBtn = document.getElementById('close-garden-app');
         togglePanelBtn = document.getElementById('garden-toggle-panel-btn');
         saveBtn = document.getElementById('garden-save-btn');
+        petAdoptionOverlayEl = document.getElementById('garden-pet-adoption-overlay');
+        petAdoptionCloseBtnEl = document.getElementById('garden-pet-adoption-close');
+        petAdoptionRootEl = document.getElementById('garden-pet-adoption-root');
         editorHost = document.getElementById('garden-editor-host');
         titleTextEl = document.querySelector('#garden-app .garden-app-title-text');
         viewEls = Array.from(document.querySelectorAll('#garden-app .garden-app-view'));
@@ -3842,6 +4299,9 @@ ${taskCard.action}`;
         syncHomeTutorialVisibility();
 
         closeBtn.addEventListener('click', closeApp);
+        if (petAdoptionCloseBtnEl) {
+            petAdoptionCloseBtnEl.addEventListener('click', closePetAdoptionOverlay);
+        }
         bindGardenTitleEditing();
         syncGardenTitle();
         syncActivitiesNavButton();
@@ -6346,6 +6806,11 @@ ${taskCard.action}`;
             item.portal = 'flora';
         }
 
+        if (rawItem.type === 'pet_adopted_photo') {
+            item.petImageSrc = sanitizeResidentCharacterUrl(rawItem.petImageSrc);
+            item.petName = sanitizeResidentCharacterUrl(rawItem.petName);
+        }
+
         return item;
     }
 
@@ -6486,6 +6951,11 @@ ${taskCard.action}`;
             top: itemEl.style.top || (itemEl.dataset.placement === 'wall' ? '30%' : '80%')
         };
 
+        if (itemEl.dataset.itemType === 'pet_adopted_photo') {
+            snapshot.petImageSrc = itemEl.dataset.petImageSrc || '';
+            snapshot.petName = itemEl.dataset.petName || '';
+        }
+
         if (isPortalFlora) {
             snapshot.fixed = true;
             snapshot.portal = 'flora';
@@ -6523,6 +6993,13 @@ ${taskCard.action}`;
             left: itemSnapshot.left,
             top: itemSnapshot.top
         };
+
+        if (itemSnapshot.type === 'pet_adopted_photo') {
+            options.petData = {
+                imageSrc: itemSnapshot.petImageSrc || '',
+                name: itemSnapshot.petName || ''
+            };
+        }
 
         if (itemSnapshot.portal === 'flora' || itemSnapshot.type === 'flora_portal_plant') {
             options.fixed = true;
@@ -6594,7 +7071,7 @@ ${taskCard.action}`;
             <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/fill/style.css">
             <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/bold/style.css">
             <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/duotone/style.css">
-            <link rel="stylesheet" href="css/garden_app_shadow.css?v=4">
+            <link rel="stylesheet" href="css/garden_app_shadow.css?v=7">
 
             <div class="garden-editor-root">
                 <div class="bg-blob blob-1"></div>
@@ -6661,6 +7138,15 @@ ${taskCard.action}`;
             `;
         }
 
+        if (item.kind === 'adoption') {
+            return `
+                <button type="button" class="item-card item-card-adoption" data-tab-key="${tabKey}" data-item-index="${index}">
+                    <div class="adoption-plus-box"><i class="${item.icon} card-icon" style="color: ${item.color};"></i></div>
+                    <span class="item-name">${item.name}</span>
+                </button>
+            `;
+        }
+
         return `
             <button type="button" class="item-card" data-tab-key="${tabKey}" data-item-index="${index}">
                 <i class="${item.icon} card-icon" style="color: ${item.color};"></i>
@@ -6687,6 +7173,11 @@ ${taskCard.action}`;
         const tab = PANEL_TABS.find((item) => item.key === card.dataset.tabKey);
         const action = tab && tab.items[Number(card.dataset.itemIndex)];
         if (!action) return;
+
+        if (action.kind === 'adoption') {
+            openPetAdoptionOverlay();
+            return;
+        }
 
         if (action.kind === 'spawn') {
             spawnItem(action.itemType, action.placement);
@@ -6740,6 +7231,21 @@ ${taskCard.action}`;
         item.dataset.placement = placement;
         item.style.left = options.left || '50%';
         item.style.top = options.top || (placement === 'wall' ? '30%' : '80%');
+
+        if (type === 'pet_adopted_photo') {
+            const petData = options.petData || {};
+            const photoEl = item.querySelector('.adopted-pet-photo');
+            const badgeEl = item.querySelector('.adopted-pet-badge');
+            item.dataset.petImageSrc = typeof petData.imageSrc === 'string' ? petData.imageSrc : '';
+            item.dataset.petName = typeof petData.name === 'string' ? petData.name : '';
+            if (photoEl) {
+                photoEl.src = item.dataset.petImageSrc;
+                photoEl.alt = item.dataset.petName || '宠物';
+            }
+            if (badgeEl) {
+                badgeEl.textContent = item.dataset.petName || '新伙伴';
+            }
+        }
 
         if (type.startsWith('pet_')) {
             item.dataset.isPet = 'true';
@@ -6811,6 +7317,31 @@ ${taskCard.action}`;
             className: 'is-fixed-portal',
             onClick: openFloraScreen
         });
+    }
+
+    function getNextAdoptedPetPosition() {
+        const adoptedPets = state.roomEl
+            ? Array.from(state.roomEl.querySelectorAll('.item-container[data-item-type="pet_adopted_photo"]'))
+            : [];
+        const preset = ADOPTION_PET_POSITIONS[adoptedPets.length % ADOPTION_PET_POSITIONS.length];
+        return preset || { left: '50%', top: '86%' };
+    }
+
+    function addAdoptedPetToGarden(petData) {
+        if (!petData || !petData.imageSrc) return;
+        const nextPosition = getNextAdoptedPetPosition();
+        const item = createRoomItem('pet_adopted_photo', 'floor', {
+            left: nextPosition.left,
+            top: nextPosition.top,
+            petData: {
+                imageSrc: petData.imageSrc,
+                name: petData.name || '新伙伴'
+            }
+        });
+        if (!item) return;
+        persistGardenLayoutForContact();
+        showToast();
+        vibrate(30);
     }
 
     function spawnItem(type, placement) {
@@ -7994,6 +8525,7 @@ ${taskCard.action}`;
         if (saveBtn) saveBtn.disabled = !isHome;
         if (!isHome) {
             setDrawerOpen(false);
+            closePetAdoptionOverlay();
             closeFloraScreen();
             clearResidentCharacterFigure();
             return;
@@ -8118,6 +8650,7 @@ ${taskCard.action}`;
         setRogueProgressPanelOpen(false);
         setHomeEntryMenuOpen(false);
         setDrawerOpen(false);
+        closePetAdoptionOverlay();
         closeFloraScreen();
         closeContactFigureModal();
         clearResidentCharacterFigure();

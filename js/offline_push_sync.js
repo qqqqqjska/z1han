@@ -564,7 +564,7 @@
         if (changed) saveState();
     }
 
-    async function uploadContactConfig(contact) {
+    async function uploadContactConfig(contact, options = {}) {
         const state = getState();
         if (!state.enabled || !state.apiBaseUrl || !contact) return;
         if (typeof window.ensureContactRestWindowFields === 'function') {
@@ -573,6 +573,7 @@
         try {
             await apiFetch('/api/contacts', {
                 method: 'POST',
+                keepalive: !!options.keepalive,
                 body: JSON.stringify({
                     userId: state.userId,
                     contactId: contact.id,
@@ -645,6 +646,12 @@
         } catch (err) {
             console.error('[offline-push-sync] uploadChatContext failed', err);
         }
+    }
+
+    function trimOfflineContextText(value, maxLength = 120000) {
+        const text = String(value || '');
+        if (text.length <= maxLength) return text;
+        return text.slice(-maxLength);
     }
 
     async function uploadPromptContext(contactId) {
@@ -751,14 +758,14 @@
                 body: JSON.stringify({
                     userId: state.userId,
                     contactId,
-                    worldbookContext,
-                    memoryContext,
-                    importantStateContext,
-                    lookusContext,
-                    meetingContext,
-                    timeContext,
-                    calendarContext,
-                    itineraryContext
+                    worldbookContext: trimOfflineContextText(worldbookContext, 160000),
+                    memoryContext: trimOfflineContextText(memoryContext, 160000),
+                    importantStateContext: trimOfflineContextText(importantStateContext, 40000),
+                    lookusContext: trimOfflineContextText(lookusContext, 80000),
+                    meetingContext: trimOfflineContextText(meetingContext, 120000),
+                    timeContext: trimOfflineContextText(timeContext, 20000),
+                    calendarContext: trimOfflineContextText(calendarContext, 40000),
+                    itineraryContext: trimOfflineContextText(itineraryContext, 40000)
                 })
             });
         } catch (err) {
@@ -766,7 +773,7 @@
         }
     }
 
-    async function uploadChatSnapshot(contactId) {
+    async function uploadChatSnapshot(contactId, options = {}) {
         const state = getState();
         if (!state.enabled || !state.apiBaseUrl || !contactId) return;
         const history = (((window.iphoneSimState || {}).chatHistory || {})[contactId]) || [];
@@ -775,6 +782,7 @@
         try {
             await apiFetch('/api/messages/snapshot', {
                 method: 'POST',
+                keepalive: !!options.keepalive,
                 body: JSON.stringify({
                     userId: state.userId,
                     contactId,
@@ -787,6 +795,7 @@
                     }
                 })
             });
+            if (options.skipContext) return;
             await uploadChatContext(contactId);
             await uploadPromptContext(contactId);
         } catch (err) {
@@ -824,14 +833,20 @@
             try {
                 const state = getState();
                 if (!state.enabled || !state.apiBaseUrl || !window.iphoneSimState) return;
-                if (Array.isArray(window.iphoneSimState.contacts)) {
-                    (window.iphoneSimState.contacts || []).forEach((contact) => {
-                        uploadContactConfig(contact);
-                    });
-                }
                 const currentId = window.iphoneSimState.currentChatContactId;
                 if (currentId) {
-                    uploadChatSnapshot(currentId);
+                    const currentContact = typeof getContactById === 'function' ? getContactById(currentId) : null;
+                    if (currentContact) {
+                        uploadContactConfig(currentContact, { keepalive: true });
+                    }
+                    uploadChatSnapshot(currentId, { keepalive: true, skipContext: true });
+                    return;
+                }
+                if (Array.isArray(window.iphoneSimState.contacts)) {
+                    const activeContact = (window.iphoneSimState.contacts || []).find(contact => contact && contact.activeReplyEnabled);
+                    if (activeContact) {
+                        uploadContactConfig(activeContact, { keepalive: true });
+                    }
                 }
             } catch (err) {
                 console.error('[offline-push-sync] flushStateToBackend failed', err);
