@@ -946,6 +946,30 @@
             console.error('[offline-push-sync] initial uploadAiProfile failed', err);
         }
         try {
+            const contacts = Array.isArray(window.iphoneSimState && window.iphoneSimState.contacts)
+                ? (window.iphoneSimState.contacts || [])
+                : [];
+            if (contacts.length) {
+                for (const contact of contacts) {
+                    if (!contact) continue;
+                    await uploadContactConfig(contact);
+                }
+            }
+            const currentId = window.iphoneSimState && window.iphoneSimState.currentChatContactId;
+            if (currentId) {
+                await uploadChatSnapshot(currentId, { skipContext: true });
+            } else if (contacts.length) {
+                for (const contact of contacts) {
+                    if (!contact || !contact.activeReplyEnabled) continue;
+                    const history = (((window.iphoneSimState || {}).chatHistory || {})[contact.id]) || [];
+                    if (!history.length) continue;
+                    await uploadChatSnapshot(contact.id, { skipContext: true });
+                }
+            }
+        } catch (err) {
+            console.error('[offline-push-sync] initial upload state failed', err);
+        }
+        try {
             await syncActiveReplyConfig();
         } catch (err) {
             console.error('[offline-push-sync] syncActiveReplyConfig failed', err);
