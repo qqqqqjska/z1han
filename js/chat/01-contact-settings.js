@@ -398,7 +398,12 @@ function getLocationFromSelectors() {
     const province = document.getElementById('chat-setting-location-province')?.value || '';
     const city = document.getElementById('chat-setting-location-city')?.value || '';
     if (!country && !province && !city) return null;
-    return { country, province, city };
+    return {
+        country,
+        province,
+        city,
+        query: [country, province, city].filter(Boolean).join(' ')
+    };
 }
 
 // 语音相关全局变量
@@ -1389,6 +1394,10 @@ function openChat(contactId) {
     chatScreen.classList.remove('hidden');
     
     renderChatHistory(contactId);
+
+    if (typeof window.prefetchAmapChatContext === 'function') {
+        window.prefetchAmapChatContext(contactId);
+    }
 }
 
 // --- 资料卡功能 ---
@@ -2426,7 +2435,24 @@ function handleSaveChatSettings() {
     contact.remark = remark;
     contact.group = window.iphoneSimState.tempSelectedGroup;
     contact.persona = persona;
-    contact.location = getLocationFromSelectors();
+    {
+        const nextLocation = getLocationFromSelectors();
+        const prevQuery = contact.location && contact.location.query ? String(contact.location.query) : '';
+        const nextQuery = nextLocation && nextLocation.query ? String(nextLocation.query) : '';
+        contact.location = nextLocation;
+        if (prevQuery !== nextQuery) {
+            contact.locationResolved = null;
+            if (window.iphoneSimState && window.iphoneSimState.amapRuntime && window.iphoneSimState.amapRuntime.lastResolvedContacts) {
+                delete window.iphoneSimState.amapRuntime.lastResolvedContacts[contact.id];
+            }
+            if (window.iphoneSimState && window.iphoneSimState.amapRuntime && window.iphoneSimState.amapRuntime.lastWeather) {
+                delete window.iphoneSimState.amapRuntime.lastWeather[contact.id];
+            }
+            if (window.iphoneSimState && window.iphoneSimState.amapRuntime && window.iphoneSimState.amapRuntime.lastRoutes) {
+                delete window.iphoneSimState.amapRuntime.lastRoutes[contact.id];
+            }
+        }
+    }
     contact.contextLimit = contextLimit ? parseInt(contextLimit) : 0;
     contact.summaryLimit = summaryLimit ? parseInt(summaryLimit) : 0;
     contact.showThought = showThought;

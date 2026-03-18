@@ -3167,7 +3167,7 @@ function buildWechatBaseCapabilityPrompt() {
         '【常驻能力】',
         '- 你拥有“微信朋友圈”“微信转账”“亲属卡”等能力。',
         '- 常用 action：',
-        '  {"type":"action","command":"POST_MOMENT","payload":"内容"}',
+        '  {"type":"action","command":"POST_MOMENT","payload":"正文 [图片描述: 画面1] [图片描述: 画面2]"}',
         '  {"type":"action","command":"POST_ICITY_DIARY","payload":"内容"}',
         '  {"type":"action","command":"EDIT_ICITY_BOOK","payload":"内容"}',
         '  {"type":"action","command":"LIKE_MOMENT","payload":""}',
@@ -3186,7 +3186,7 @@ function buildWechatBaseCapabilityPrompt() {
         '  {"type":"action","command":"UPDATE_NAME","payload":"新网名"} / UPDATE_WXID / UPDATE_SIGNATURE / UPDATE_AVATAR',
         '  {"type":"action","command":"PDD_CASH_HELP","payload":""}、{"type":"action","command":"PDD_BARGAIN_HELP","payload":"商品ID"}（仅在用户发送对应链接时使用）',
         '- 表情包请优先直接输出 sticker_message，不要改用旧式 SEND_STICKER。',
-        '- 一次回复最多只发起一笔转账；发送图片时请给出具体画面描述；不想执行操作就不要输出 action。',
+        '- 一次回复最多只发起一笔转账；发送图片时请给出具体画面描述；发朋友圈时可用 [图片描述: ...] 追加配图，纯图片朋友圈也可以只写图片描述标签；不想执行操作就不要输出 action。',
         '【状态动作】',
         '- {"type":"action","command":"RECORD_USER_STATE","payload":"reasonType | 标准化状态内容"}',
         '- {"type":"action","command":"RESOLVE_USER_STATE","payload":"reasonType | 状态结束描述"}',
@@ -4033,9 +4033,12 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
 
             let momentMatch;
             while ((momentMatch = processedSegment.match(momentRegex)) !== null) {
-                const momentContent = momentMatch[1].trim();
-                if (momentContent) {
-                    if (window.addMoment) window.addMoment(contact.id, momentContent);
+                const momentPayload = (momentMatch[1] || '').trim();
+                if (momentPayload) {
+                    const parsedMoment = typeof window.parseMomentPayload === 'function'
+                        ? window.parseMomentPayload(momentPayload)
+                        : { content: momentPayload, images: [] };
+                    if (window.addMoment) window.addMoment(contact.id, parsedMoment.content, parsedMoment.images);
                 }
                 processedSegment = processedSegment.replace(momentMatch[0], '');
             }
@@ -5247,6 +5250,312 @@ window.buildAiPromptTokenPreview = async function(contactId, options = {}) {
     }
 };
 
+const CHAT_AMAP_CACHE_TTL = {
+    myLocationMs: 30 * 60 * 1000,
+    weatherMs: 30 * 60 * 1000,
+    geocodeMs: 12 * 60 * 60 * 1000,
+    routeMs: 10 * 60 * 1000
+};
+
+function ensureChatAmapRuntime() {
+    if (!window.iphoneSimState) return null;
+    if (!window.iphoneSimState.amapRuntime || typeof window.iphoneSimState.amapRuntime !== 'object') {
+        window.iphoneSimState.amapRuntime = {
+            myLocation: null,
+            lastWeather: {},
+            lastResolvedContacts: {},
+            lastRoutes: {}
+        };
+    }
+    if (!window.iphoneSimState.amapRuntime.lastWeather || typeof window.iphoneSimState.amapRuntime.lastWeather !== 'object') {
+        window.iphoneSimState.amapRuntime.lastWeather = {};
+    }
+    if (!window.iphoneSimState.amapRuntime.lastResolvedContacts || typeof window.iphoneSimState.amapRuntime.lastResolvedContacts !== 'object') {
+        window.iphoneSimState.amapRuntime.lastResolvedContacts = {};
+    }
+    if (!window.iphoneSimState.amapRuntime.lastRoutes || typeof window.iphoneSimState.amapRuntime.lastRoutes !== 'object') {
+        window.iphoneSimState.amapRuntime.lastRoutes = {};
+    }
+    return window.iphoneSimState.amapRuntime;
+}
+
+function persistChatAmapRuntimeSoon() {
+    if (typeof saveConfig === 'function') {
+        saveConfig().catch(() => {});
+    }
+}
+
+function isChatAmapCacheFresh(entry, ttlMs) {
+    const time = Number(entry && entry.updateTime);
+    return Number.isFinite(time) && (Date.now() - time) < ttlMs;
+}
+
+function normalizeChatAmapCity(value) {
+    if (Array.isArray(value)) return String(value[0] || '').trim();
+    return String(value || '').trim();
+}
+
+function joinChatAmapText(parts) {
+    return parts
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .filter((part, index, arr) => arr.indexOf(part) === index)
+        .join(' ');
+}
+
+function buildChatAmapLocationQuery(location) {
+    if (!location) return '';
+    if (typeof location === 'string') return String(location).trim();
+    return joinChatAmapText([
+        location.country,
+        location.province,
+        location.city,
+        location.district,
+        location.detail,
+        location.query
+    ]);
+}
+
+function buildChatAmapShortLabel(meta) {
+    if (!meta) return '';
+    return joinChatAmapText([
+        meta.businessArea,
+        meta.poi,
+        meta.district,
+        meta.city
+    ]) || String(meta.formattedAddress || '').trim();
+}
+
+async function fetchChatAmapJson(path, params = {}) {
+    const settings = window.iphoneSimState && window.iphoneSimState.amapSettings;
+    if (!settings || !String(settings.key || '').trim()) {
+        throw new Error('AMap Key 未配置');
+    }
+    const url = new URL(`https://restapi.amap.com${path}`);
+    url.searchParams.set('key', String(settings.key || '').trim());
+    url.searchParams.set('output', 'json');
+    Object.keys(params).forEach(key => {
+        const value = params[key];
+        if (value !== undefined && value !== null && value !== '') {
+            url.searchParams.set(key, String(value));
+        }
+    });
+    const response = await fetch(url.toString(), { method: 'GET' });
+    if (!response.ok) {
+        throw new Error(`AMap HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    if (String(data.status || '') !== '1') {
+        throw new Error(String(data.info || 'AMap 调用失败'));
+    }
+    return data;
+}
+
+async function getChatAmapMyLocation(force = false) {
+    const settings = window.iphoneSimState && window.iphoneSimState.amapSettings;
+    if (!settings || !String(settings.key || '').trim()) return null;
+    const runtime = ensureChatAmapRuntime();
+    if (!force && runtime.myLocation && isChatAmapCacheFresh(runtime.myLocation, CHAT_AMAP_CACHE_TTL.myLocationMs)) {
+        return runtime.myLocation;
+    }
+    if (!navigator.geolocation) return runtime.myLocation || null;
+    const coords = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+            position => resolve({ lat: position.coords.latitude, lng: position.coords.longitude }),
+            error => reject(error),
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+        );
+    }).catch(() => null);
+    if (!coords) return runtime.myLocation || null;
+
+    const data = await fetchChatAmapJson('/v3/geocode/regeo', {
+        location: `${coords.lng},${coords.lat}`,
+        extensions: 'all',
+        radius: 1000,
+        roadlevel: 0
+    }).catch(() => null);
+    const regeocode = data && data.regeocode ? data.regeocode : null;
+    const component = regeocode && regeocode.addressComponent ? regeocode.addressComponent : {};
+    const pois = regeocode && Array.isArray(regeocode.pois) ? regeocode.pois : [];
+    const businessAreas = component && Array.isArray(component.businessAreas) ? component.businessAreas : [];
+    if (!regeocode) return runtime.myLocation || null;
+
+    const myLocation = {
+        lat: coords.lat,
+        lng: coords.lng,
+        formattedAddress: String(regeocode.formatted_address || '').trim(),
+        city: normalizeChatAmapCity(component.city) || String(component.province || '').trim(),
+        district: String(component.district || '').trim(),
+        adcode: String(component.adcode || '').trim(),
+        poi: String((pois[0] && pois[0].name) || '').trim(),
+        businessArea: String((businessAreas[0] && businessAreas[0].name) || '').trim(),
+        updateTime: Date.now()
+    };
+    myLocation.shortLabel = buildChatAmapShortLabel(myLocation);
+    runtime.myLocation = myLocation;
+    persistChatAmapRuntimeSoon();
+    return myLocation;
+}
+
+async function getChatAmapContactLocation(contactId, force = false) {
+    const settings = window.iphoneSimState && window.iphoneSimState.amapSettings;
+    if (!settings || !String(settings.key || '').trim()) return null;
+    const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
+    if (!contact) return null;
+    const runtime = ensureChatAmapRuntime();
+    const query = buildChatAmapLocationQuery(contact.location);
+    const cached = contact.locationResolved || runtime.lastResolvedContacts[contactId];
+    if (!force && cached && cached.query === query && isChatAmapCacheFresh(cached, CHAT_AMAP_CACHE_TTL.geocodeMs)) {
+        contact.locationResolved = cached;
+        return cached;
+    }
+    if (!query) return null;
+
+    const data = await fetchChatAmapJson('/v3/geocode/geo', {
+        address: query,
+        city: contact.location && contact.location.city ? contact.location.city : ''
+    }).catch(() => null);
+    const geocode = data && Array.isArray(data.geocodes) ? data.geocodes[0] : null;
+    if (!geocode || !geocode.location) return cached || null;
+
+    const [lngStr, latStr] = String(geocode.location).split(',');
+    const locationResolved = {
+        lat: Number(latStr),
+        lng: Number(lngStr),
+        formattedAddress: String(geocode.formatted_address || query).trim(),
+        city: normalizeChatAmapCity(geocode.city) || String(geocode.province || '').trim(),
+        district: String(geocode.district || '').trim(),
+        adcode: String(geocode.adcode || '').trim(),
+        province: String(geocode.province || '').trim(),
+        query,
+        source: 'amap-geocode',
+        updateTime: Date.now()
+    };
+    locationResolved.shortLabel = buildChatAmapShortLabel(locationResolved);
+    runtime.lastResolvedContacts[contactId] = locationResolved;
+    contact.locationResolved = locationResolved;
+    persistChatAmapRuntimeSoon();
+    return locationResolved;
+}
+
+async function getChatAmapWeatherForContact(contactId) {
+    const contactLocation = await getChatAmapContactLocation(contactId).catch(() => null);
+    if (!contactLocation) return null;
+    const cityKey = contactLocation.adcode || contactLocation.city || contactLocation.province;
+    if (!cityKey) return null;
+    const runtime = ensureChatAmapRuntime();
+    const cached = runtime.lastWeather[contactId];
+    if (cached && cached.target === cityKey && isChatAmapCacheFresh(cached, CHAT_AMAP_CACHE_TTL.weatherMs)) {
+        return cached;
+    }
+    const data = await fetchChatAmapJson('/v3/weather/weatherInfo', {
+        city: cityKey,
+        extensions: 'base'
+    }).catch(() => null);
+    const live = data && Array.isArray(data.lives) ? data.lives[0] : null;
+    if (!live) return cached || null;
+    const weather = {
+        target: cityKey,
+        province: String(live.province || '').trim(),
+        city: String(live.city || '').trim(),
+        adcode: String(live.adcode || '').trim(),
+        weather: String(live.weather || '').trim(),
+        temperature: String(live.temperature || '').trim(),
+        winddirection: String(live.winddirection || '').trim(),
+        windpower: String(live.windpower || '').trim(),
+        humidity: String(live.humidity || '').trim(),
+        reporttime: String(live.reporttime || '').trim(),
+        updateTime: Date.now()
+    };
+    runtime.lastWeather[contactId] = weather;
+    persistChatAmapRuntimeSoon();
+    return weather;
+}
+
+async function getChatAmapEtaToContact(contactId, mode = 'driving') {
+    const myLocation = await getChatAmapMyLocation(false).catch(() => null);
+    const contactLocation = await getChatAmapContactLocation(contactId).catch(() => null);
+    if (!myLocation || !contactLocation) return null;
+
+    const runtime = ensureChatAmapRuntime();
+    const cacheKey = `${mode}:${myLocation.lng},${myLocation.lat}->${contactLocation.lng},${contactLocation.lat}`;
+    const cached = runtime.lastRoutes[contactId];
+    if (cached && cached.cacheKey === cacheKey && isChatAmapCacheFresh(cached, CHAT_AMAP_CACHE_TTL.routeMs)) {
+        return cached;
+    }
+
+    const data = await fetchChatAmapJson('/v3/direction/driving', {
+        origin: `${myLocation.lng},${myLocation.lat}`,
+        destination: `${contactLocation.lng},${contactLocation.lat}`,
+        strategy: 0,
+        extensions: 'base'
+    }).catch(() => null);
+    const path = data && data.route && Array.isArray(data.route.paths) ? data.route.paths[0] : null;
+    if (!path) return cached || null;
+
+    const route = {
+        cacheKey,
+        distanceKm: Number(path.distance || 0) > 0 ? Number((Number(path.distance) / 1000).toFixed(1)) : null,
+        etaMin: Number(path.duration || 0) > 0 ? Math.max(1, Math.round(Number(path.duration) / 60)) : null,
+        mode,
+        originLabel: myLocation.shortLabel || myLocation.formattedAddress || myLocation.city || '我这边',
+        destinationLabel: contactLocation.shortLabel || contactLocation.formattedAddress || contactLocation.city || '对方那边',
+        updateTime: Date.now()
+    };
+    runtime.lastRoutes[contactId] = route;
+    persistChatAmapRuntimeSoon();
+    return route;
+}
+
+window.getAmapMyLocation = getChatAmapMyLocation;
+window.getAmapContactLocation = getChatAmapContactLocation;
+window.getAmapWeatherForContact = getChatAmapWeatherForContact;
+window.getAmapEtaToContact = getChatAmapEtaToContact;
+
+window.buildAmapPromptContext = async function(contactId) {
+    const settings = window.iphoneSimState && window.iphoneSimState.amapSettings;
+    if (!settings || !String(settings.key || '').trim()) return '';
+    const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
+    if (!contact) return '';
+
+    const [myLocation, contactLocation, weather, route] = await Promise.all([
+        getChatAmapMyLocation(false).catch(() => null),
+        getChatAmapContactLocation(contactId).catch(() => null),
+        getChatAmapWeatherForContact(contactId).catch(() => null),
+        getChatAmapEtaToContact(contactId).catch(() => null)
+    ]);
+
+    const lines = [];
+    if (myLocation) {
+        lines.push(`- 我当前所在：${myLocation.shortLabel || myLocation.formattedAddress || myLocation.city || '未知位置'}`);
+    }
+    if (contactLocation) {
+        lines.push(`- 对方设定位置：${contactLocation.shortLabel || contactLocation.formattedAddress || contactLocation.city || '未知位置'}`);
+    } else if (contact.location && buildChatAmapLocationQuery(contact.location)) {
+        lines.push(`- 对方设定位置文本：${buildChatAmapLocationQuery(contact.location)}`);
+    }
+    if (weather) {
+        lines.push(`- 对方那边天气：${joinChatAmapText([weather.city, weather.weather, weather.temperature ? `${weather.temperature}°C` : ''])}`);
+    }
+    if (route && (route.distanceKm !== null || route.etaMin !== null)) {
+        const parts = [];
+        if (route.distanceKm !== null) parts.push(`相距约 ${route.distanceKm} km`);
+        if (route.etaMin !== null) parts.push(`驾车约 ${route.etaMin} 分钟`);
+        lines.push(`- 路线估算：${parts.join('，')}`);
+    }
+
+    if (lines.length === 0) return '';
+    return `【高德时空信息】\n${lines.join('\n')}\n⚠️ 这些信息只可自然融入聊天，例如提到天气、距离、多久到、商圈或附近；不要每次都主动复述，不要编造精确门牌号。`;
+};
+
+window.prefetchAmapChatContext = async function(contactId) {
+    try {
+        await window.buildAmapPromptContext(contactId);
+    } catch (error) {
+        console.warn('[AMap] prefetch failed', error);
+    }
+};
+
 window.buildAiPromptMessages = async function(contactId, instruction = null, options = {}) {
     const baseContact = window.iphoneSimState.contacts.find(c => c.id === contactId);
     if (!baseContact) return [];
@@ -5276,7 +5585,10 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
     const contactMoments = window.iphoneSimState.moments.filter(m => m.contactId === contact.id);
     if (contactMoments.length > 0) {
         const lastMoment = contactMoments.sort((a, b) => b.time - a.time)[0];
-        momentContext += `\n【朋友圈状态】\n你最新的一条朋友圈是：“${lastMoment.content}”\n`;
+        const lastMomentSummary = typeof window.formatMomentSummary === 'function'
+            ? window.formatMomentSummary(lastMoment)
+            : String(lastMoment.content || '').trim();
+        momentContext += `\n【朋友圈状态】\n你最新的一条朋友圈是：“${lastMomentSummary}”\n`;
         
         if (lastMoment.comments && lastMoment.comments.length > 0) {
             const userName = currentPersona ? currentPersona.name : window.iphoneSimState.userProfile.name;
@@ -5355,6 +5667,13 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
     }
 
     const calendarContext = contact.calendarAwareEnabled === false ? '' : buildCalendarPromptContext();
+
+    let amapContext = '';
+    try {
+        amapContext = await window.buildAmapPromptContext(contact.id);
+    } catch (error) {
+        amapContext = '';
+    }
 
     let lookusContext = '';
     if (contact.lookusData) {
@@ -5562,6 +5881,7 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
     appendAiPromptPart(systemPromptParts, 'systemBase', 'iCity书籍', icityBookContext);
     appendAiPromptPart(systemPromptParts, 'systemBase', '时间', timeContext);
     appendAiPromptPart(systemPromptParts, 'systemBase', '日历', calendarContext);
+    appendAiPromptPart(systemPromptParts, 'systemBase', '高德', amapContext);
     appendAiPromptPart(systemPromptParts, 'systemBase', '行程', itineraryContext);
     appendAiPromptPart(systemPromptParts, 'systemBase', '条件能力', conditionalCapabilityPrompt);
     appendAiPromptPart(systemPromptParts, 'systemBase', '回复指令', '请回复对方的消息。');

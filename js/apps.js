@@ -10,6 +10,44 @@ let memoryRefinePanelVisible = false;
 
 // --- 朋友圈功能 ---
 
+function buildMomentImagesHtml(moment) {
+    if (!moment || !Array.isArray(moment.images) || moment.images.length === 0) return '';
+
+    const gridClass = moment.images.length === 1 ? 'single' : 'grid';
+    return `<div class="moment-images ${gridClass}">
+        ${moment.images.map(img => {
+            const isVirtual = (typeof img === 'object' && img && img.isVirtual);
+
+            if (isVirtual) {
+                const cleanDesc = typeof window.cleanMomentImageDescription === 'function'
+                    ? window.cleanMomentImageDescription(img.desc || img.description || '')
+                    : String(img.desc || img.description || '').replace(/^\[图片描述\][:：]?\s*/, '').trim();
+                let displaySrc = window.iphoneSimState.defaultMomentVirtualImageUrl;
+                if (!displaySrc) {
+                    displaySrc = img.src || window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Photo';
+                }
+
+                return `
+                <div class="virtual-image-container" style="position: relative; cursor: pointer; display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; overflow: hidden; background-color: #f2f2f7;">
+                    <img src="${displaySrc}" style="width: 100%; height: 100%; object-fit: cover; display: block;">
+                    <div class="virtual-image-overlay" style="position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); padding: 20px 10px 5px; box-sizing: border-box; pointer-events: none;">
+                        <div style="font-size: 12px; color: #fff; line-height: 1.4; word-wrap: break-word; white-space: pre-wrap; text-align: left;">${cleanDesc}</div>
+                    </div>
+                </div>
+                `;
+            }
+
+            const src = typeof img === 'string' ? img : (img && (img.src || img.url)) || '';
+            return `<img src="${src}" class="moment-img">`;
+        }).join('')}
+    </div>`;
+}
+
+function buildMomentTextHtml(content) {
+    const text = String(content || '').trim();
+    return text ? `<div class="moment-text">${text}</div>` : '';
+}
+
 function renderMoments() {
     const container = document.getElementById('moments-container');
     if (!container) return;
@@ -89,39 +127,8 @@ function renderMomentsList() {
         const item = document.createElement('div');
         item.className = 'moment-item';
         
-        let imagesHtml = '';
-        if (moment.images && moment.images.length > 0) {
-            const gridClass = moment.images.length === 1 ? 'single' : 'grid';
-            imagesHtml = `<div class="moment-images ${gridClass}">
-                ${moment.images.map((img, imgIndex) => {
-                    const isVirtual = (typeof img === 'object' && img.isVirtual);
-                    
-                    if (isVirtual) {
-                        const uniqueId = `moment-virtual-${moment.id}-${imgIndex}`;
-                        const overlayId = `overlay-${uniqueId}`;
-                        const cleanDesc = (img.desc || '').replace(/^\[图片描述\][:：]?\s*/, '');
-                        
-                        let displaySrc = window.iphoneSimState.defaultMomentVirtualImageUrl;
-                        if (!displaySrc) {
-                             // Fallback to stored src (placeholder) or default chat virtual image url or hardcoded
-                             displaySrc = img.src || window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Photo';
-                        }
-                        
-                        return `
-                        <div class="virtual-image-container" style="position: relative; cursor: pointer; display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; overflow: hidden; background-color: #f2f2f7;">
-                            <img src="${displaySrc}" style="width: 100%; height: 100%; object-fit: cover; display: block;">
-                            <div class="virtual-image-overlay" style="position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); padding: 20px 10px 5px; box-sizing: border-box; pointer-events: none;">
-                                <div style="font-size: 12px; color: #fff; line-height: 1.4; word-wrap: break-word; white-space: pre-wrap; text-align: left;">${cleanDesc}</div>
-                            </div>
-                        </div>
-                        `;
-                    } else {
-                        const src = typeof img === 'string' ? img : img.src;
-                        return `<img src="${src}" class="moment-img">`;
-                    }
-                }).join('')}
-            </div>`;
-        }
+        const imagesHtml = buildMomentImagesHtml(moment);
+        const momentTextHtml = buildMomentTextHtml(moment.content);
 
         let likesHtml = '';
         if (moment.likes && moment.likes.length > 0) {
@@ -166,7 +173,7 @@ function renderMomentsList() {
             <img src="${avatar}" class="moment-avatar">
             <div class="moment-content">
                 <div class="moment-name">${name}</div>
-                <div class="moment-text">${moment.content}</div>
+                ${momentTextHtml}
                 ${imagesHtml}
                 <div class="moment-info">
                     <div style="display: flex; align-items: center;">
@@ -192,8 +199,16 @@ function renderMomentsList() {
 function addMoment(contactId, content, images = [], options = {}) {
     if (!window.iphoneSimState.moments) window.iphoneSimState.moments = [];
 
-    const normalizedContent = typeof content === 'string' ? content.trim() : '';
-    const normalizedImages = Array.isArray(images) ? images : [];
+    const parsedPayload = typeof window.parseMomentPayload === 'function'
+        ? window.parseMomentPayload({ content, images })
+        : {
+            content: typeof content === 'string' ? content.trim() : '',
+            images: Array.isArray(images) ? images : []
+        };
+    const normalizedContent = parsedPayload.content;
+    const normalizedImages = parsedPayload.images;
+
+    if (!normalizedContent && normalizedImages.length === 0) return null;
     
     const newMoment = {
         id: Date.now(),
@@ -315,18 +330,13 @@ function handleVirtualImage() {
     }
     const desc = prompt('请输入图片描述');
     if (desc) {
-        const bg = 'eee';
-        const fg = '333';
-        // Use part of desc as placeholder text
-        const text = encodeURIComponent(desc.substring(0, 6)); 
-        const src = `https://placehold.co/600x600/${bg}/${fg}?text=${text}`;
-        
-        postMomentImages.push({
-            src: src,
-            desc: desc,
-            isVirtual: true
-        });
-        renderPostMomentImages();
+        const virtualImage = typeof window.createVirtualMomentImage === 'function'
+            ? window.createVirtualMomentImage(desc)
+            : null;
+        if (virtualImage) {
+            postMomentImages.push(virtualImage);
+            renderPostMomentImages();
+        }
     }
 }
 
@@ -347,10 +357,13 @@ function handleEditImageDesc(index) {
         } else {
             imgObj.desc = newDesc;
             if (imgObj.isVirtual) {
-                 const bg = 'eee';
-                 const fg = '333';
-                 const text = encodeURIComponent(newDesc.substring(0, 6));
-                 imgObj.src = `https://placehold.co/600x600/${bg}/${fg}?text=${text}`;
+                 const virtualImage = typeof window.createVirtualMomentImage === 'function'
+                    ? window.createVirtualMomentImage(newDesc)
+                    : null;
+                 if (virtualImage) {
+                    imgObj.src = virtualImage.src;
+                    imgObj.desc = virtualImage.desc;
+                 }
             }
         }
         renderPostMomentImages();
@@ -685,7 +698,12 @@ async function generateAiMoment(isSilent = false) {
         const recentMoments = (window.iphoneSimState.moments || [])
             .filter(moment => moment.contactId === contact.id)
             .slice(0, 5)
-            .map((moment, index) => `${index + 1}. ${String(moment.content || '').trim()}`)
+            .map((moment, index) => {
+                const summary = typeof window.formatMomentSummary === 'function'
+                    ? window.formatMomentSummary(moment)
+                    : String(moment.content || '').trim();
+                return summary ? `${index + 1}. ${summary}` : '';
+            })
             .filter(Boolean)
             .join('\n');
 
@@ -697,9 +715,17 @@ ${recentMoments || '无'}
 内容要求：
 1. 符合你的人设。
 2. 像真实的朋友圈，可以是心情、生活分享、吐槽等。
-3. 不要太长，通常在100字以内。
-4. 不要与上面已经发过的朋友圈重复，也不要做轻微改写后重复。
-5. 直接返回内容文本，不要包含任何解释、引号或前缀后缀。`;
+3. 你可以返回纯文字，也可以返回“正文 + 图片描述”，还可以返回纯图片动态。
+4. 如果要带图，请直接在正文后面追加一个或多个标签，格式必须是：[图片描述: 具体画面描述]
+5. 图片描述要具体，像真实照片内容，不要写“图片”“配图”“一张照片”。
+6. 不要太长，通常在100字以内；如带图，通常 1 到 3 张即可。
+7. 不要与上面已经发过的朋友圈重复，也不要做轻微改写后重复。
+8. 直接返回最终内容，不要包含任何解释、引号、代码块或前缀后缀。
+
+输出示例：
+今天风有点舒服，适合慢慢走回家 [图片描述: 傍晚街道边被路灯照亮的人行道]
+[图片描述: 窗边的一杯冰美式和摊开的书]
+和朋友吃到一家还不错的小店，心情也跟着变好了 [图片描述: 木桌上的两份家常菜和一杯梅子酒]`;
 
         let fetchUrl = settings.url;
         if (!fetchUrl.endsWith('/chat/completions')) {
@@ -733,7 +759,10 @@ ${recentMoments || '无'}
             content = content.slice(1, -1);
         }
 
-        const createdMoment = addMoment(contact.id, content);
+        const parsedMoment = typeof window.parseMomentPayload === 'function'
+            ? window.parseMomentPayload(content)
+            : { content, images: [] };
+        const createdMoment = addMoment(contact.id, parsedMoment.content, parsedMoment.images);
         if (!createdMoment) {
             if (!isSilent) {
                 const duplicateMsg = '生成内容和该联系人已有动态重复，已跳过发布';
@@ -841,38 +870,8 @@ function renderPersonalMoments(contactId) {
         const item = document.createElement('div');
         item.className = 'moment-item';
         
-        let imagesHtml = '';
-        if (moment.images && moment.images.length > 0) {
-            const gridClass = moment.images.length === 1 ? 'single' : 'grid';
-            imagesHtml = `<div class="moment-images ${gridClass}">
-                ${moment.images.map((img, imgIndex) => {
-                    const isVirtual = (typeof img === 'object' && img.isVirtual);
-                    
-                    if (isVirtual) {
-                        const uniqueId = `moment-virtual-${moment.id}-${imgIndex}`;
-                        const overlayId = `overlay-${uniqueId}`;
-                        const cleanDesc = (img.desc || '').replace(/^\[图片描述\][:：]?\s*/, '');
-                        
-                        let displaySrc = window.iphoneSimState.defaultMomentVirtualImageUrl;
-                        if (!displaySrc) {
-                             displaySrc = img.src || window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Photo';
-                        }
-                        
-                        return `
-                        <div class="virtual-image-container" style="position: relative; cursor: pointer; display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; overflow: hidden; background-color: #f2f2f7;">
-                            <img src="${displaySrc}" style="width: 100%; height: 100%; object-fit: cover; display: block;">
-                            <div class="virtual-image-overlay" style="position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); padding: 20px 10px 5px; box-sizing: border-box; pointer-events: none;">
-                                <div style="font-size: 12px; color: #fff; line-height: 1.4; word-wrap: break-word; white-space: pre-wrap; text-align: left;">${cleanDesc}</div>
-                            </div>
-                        </div>
-                        `;
-                    } else {
-                        const src = typeof img === 'string' ? img : img.src;
-                        return `<img src="${src}" class="moment-img">`;
-                    }
-                }).join('')}
-            </div>`;
-        }
+        const imagesHtml = buildMomentImagesHtml(moment);
+        const momentTextHtml = buildMomentTextHtml(moment.content);
 
         let likesHtml = '';
         if (moment.likes && moment.likes.length > 0) {
@@ -919,7 +918,7 @@ function renderPersonalMoments(contactId) {
                 <div style="font-size: 12px;">${date.getMonth() + 1}月</div>
             </div>
             <div class="moment-content">
-                <div class="moment-text">${moment.content}</div>
+                ${momentTextHtml}
                 ${imagesHtml}
                 <div class="moment-info">
                     <div style="display: flex; align-items: center;">

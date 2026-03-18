@@ -753,6 +753,19 @@
 
         const importantStateContext = '';
 
+        let frontendSystemPrompt = "";
+        try {
+            if (typeof window.buildAiPromptMessages === "function") {
+                const promptMessages = await window.buildAiPromptMessages(contactId, null);
+                const systemMessage = Array.isArray(promptMessages)
+                    ? promptMessages.find(message => message && message.role === "system" && typeof message.content === "string" && message.content.trim())
+                    : null;
+                frontendSystemPrompt = systemMessage ? String(systemMessage.content || "") : "";
+            }
+        } catch (err) {
+            console.error('[offline-push-sync] build frontend system prompt failed', err);
+        }
+
         try {
             await apiFetch('/api/prompt-context', {
                 method: 'POST',
@@ -766,7 +779,8 @@
                     meetingContext: trimOfflineContextText(meetingContext, 120000),
                     timeContext: trimOfflineContextText(timeContext, 20000),
                     calendarContext: trimOfflineContextText(calendarContext, 40000),
-                    itineraryContext: trimOfflineContextText(itineraryContext, 40000)
+                    itineraryContext: trimOfflineContextText(itineraryContext, 40000),
+                    frontendSystemPrompt: trimOfflineContextText(frontendSystemPrompt, 180000)
                 })
             });
         } catch (err) {

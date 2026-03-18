@@ -274,7 +274,7 @@
         pet_cat: `<div class="shape-pet pet-cat is-sitting"><div class="floor-shadow"></div><div class="pet-flipper"><div class="pet-sprite"><div class="pet-tail"></div><div class="pet-leg l1"></div><div class="pet-leg l2"></div><div class="pet-leg l3"></div><div class="pet-leg l4"></div><div class="pet-body"></div><div class="pet-head"><div class="pet-ear e-l"></div><div class="pet-ear e-r"></div><div class="pet-eye eye-l"></div><div class="pet-eye eye-r"></div><div class="pet-snout"></div><div class="pet-nose"></div></div></div></div></div>`,
         pet_cat_silver: `<div class="shape-pet pet-cat-silver is-sitting"><div class="floor-shadow"></div><div class="pet-flipper"><div class="pet-sprite"><div class="pet-tail"></div><div class="pet-leg l1"></div><div class="pet-leg l2"></div><div class="pet-leg l3"></div><div class="pet-leg l4"></div><div class="pet-body"></div><div class="pet-head"><div class="pet-ear e-l"></div><div class="pet-ear e-r"></div><div class="pet-eye eye-l"></div><div class="pet-eye eye-r"></div><div class="pet-snout"></div><div class="pet-nose"></div></div></div></div></div>`,
         pet_cat_calico: `<div class="shape-pet pet-cat-calico is-sitting"><div class="floor-shadow"></div><div class="pet-flipper"><div class="pet-sprite"><div class="pet-tail"></div><div class="pet-leg l1"></div><div class="pet-leg l2"></div><div class="pet-leg l3"></div><div class="pet-leg l4"></div><div class="pet-body"></div><div class="pet-head"><div class="pet-ear e-l"></div><div class="pet-ear e-r"></div><div class="pet-eye eye-l"></div><div class="pet-eye eye-r"></div><div class="pet-snout"></div><div class="pet-nose"></div></div></div></div></div>`,
-        pet_adopted_photo: `<div class="shape-adopted-pet"><div class="floor-shadow"></div><div class="adopted-pet-photo-wrap"><img class="adopted-pet-photo" alt="宠物照片" draggable="false" /></div><div class="adopted-pet-badge"></div></div>`,
+        pet_adopted_photo: `<div class="shape-adopted-pet"><div class="floor-shadow"></div><div class="adopted-pet-photo-wrap"><div class="adopted-pet-flipper"><img class="adopted-pet-photo" alt="宠物照片" draggable="false" /></div></div><div class="adopted-pet-badge"></div></div>`,
         bed: `<div class="shape-bed"><div class="floor-shadow"></div><div class="bed-frame"></div><div class="bed-head"></div><div class="bed-mat"></div><div class="bed-blanket"></div><div class="bed-pillow"></div></div>`,
         sofa: `<div class="shape-sofa"><div class="floor-shadow"></div><div class="sofa-back1"></div><div class="sofa-back2"></div><div class="sofa-base"></div></div>`,
         bookshelf: `<div class="shape-bookshelf"><div class="floor-shadow"></div><div class="shelf-board b1"></div><div class="shelf-board b2"></div><div class="book bk1"></div><div class="book bk2"></div><div class="book bk3"></div></div>`,
@@ -640,6 +640,14 @@
             imageSrc: 'https://i.postimg.cc/5ygHtj0R/wu-biao-ti120-20260317202630.png'
         }
     ]);
+    const ADOPTED_PET_ANIMATION_PRESETS = Object.freeze({
+        samoyed: Object.freeze({
+            idleUrl: 'https://i.postimg.cc/W3Y3MyNq/IMG_7493.gif',
+            runLeftUrl: 'https://i.postimg.cc/76t6gRHb/IMG_7488.gif',
+            runRightUrl: 'https://i.postimg.cc/76t6gRHb/IMG_7488.gif',
+            flipRight: true
+        })
+    });
     const ADOPTION_PET_POSITIONS = Object.freeze([
         { left: '22%', top: '84%' },
         { left: '40%', top: '87%' },
@@ -7032,6 +7040,60 @@ ${taskCard.action}`;
         };
     }
 
+    function getAdoptedPetAnimationConfig(petData = {}) {
+        const petId = typeof petData.id === 'string' ? petData.id.trim().toLowerCase() : '';
+        const petName = typeof petData.name === 'string' ? petData.name.trim() : '';
+        if (petId && ADOPTED_PET_ANIMATION_PRESETS[petId]) {
+            return ADOPTED_PET_ANIMATION_PRESETS[petId];
+        }
+        if (petName === '萨摩耶') {
+            return ADOPTED_PET_ANIMATION_PRESETS.samoyed;
+        }
+        return null;
+    }
+
+    function resolveAdoptedPetPoseUrl(animationConfig, pose, fallbackUrl = '') {
+        if (!animationConfig) return fallbackUrl || '';
+        if (pose === 'run-left') {
+            return animationConfig.runLeftUrl || animationConfig.runRightUrl || animationConfig.idleUrl || fallbackUrl || '';
+        }
+        if (pose === 'run-right') {
+            return animationConfig.runRightUrl || animationConfig.runLeftUrl || animationConfig.idleUrl || fallbackUrl || '';
+        }
+        return animationConfig.idleUrl || animationConfig.runLeftUrl || animationConfig.runRightUrl || fallbackUrl || '';
+    }
+
+    function updateAdoptedPetPose(item, pose = 'idle') {
+        if (!item) return;
+        const imageEl = item.querySelector('.adopted-pet-photo');
+        const flipperEl = item.querySelector('.adopted-pet-flipper');
+        if (!imageEl || !flipperEl) return;
+
+        const animationConfig = getAdoptedPetAnimationConfig({
+            id: item.dataset.petId || '',
+            name: item.dataset.petName || '',
+            imageSrc: item.dataset.petImageSrc || ''
+        });
+        const fallbackUrl = item.dataset.petImageSrc || '';
+        const nextPose = pose === 'run-left' || pose === 'run-right' ? pose : 'idle';
+        const nextUrl = resolveAdoptedPetPoseUrl(animationConfig, nextPose, fallbackUrl);
+        const shouldFlip = Boolean(animationConfig && animationConfig.flipRight && nextPose === 'run-right');
+
+        if (nextUrl && imageEl.getAttribute('src') !== nextUrl) {
+            imageEl.setAttribute('src', nextUrl);
+        }
+        if (!nextUrl) {
+            imageEl.removeAttribute('src');
+        }
+
+        imageEl.dataset.pose = nextPose;
+        flipperEl.style.transform = shouldFlip ? 'scaleX(-1)' : 'scaleX(1)';
+        item.dataset.petPose = nextPose;
+        item.classList.toggle('is-idle', nextPose === 'idle');
+        item.classList.toggle('is-running-left', nextPose === 'run-left');
+        item.classList.toggle('is-running-right', nextPose === 'run-right');
+    }
+
     function sanitizeGardenItem(rawItem) {
         if (!rawItem || typeof rawItem !== 'object') return null;
         if (typeof rawItem.type !== 'string' || !SHAPE_GENERATORS[rawItem.type]) return null;
@@ -7052,6 +7114,7 @@ ${taskCard.action}`;
         if (rawItem.type === 'pet_adopted_photo') {
             item.petImageSrc = sanitizeResidentCharacterUrl(rawItem.petImageSrc);
             item.petName = sanitizeResidentCharacterUrl(rawItem.petName);
+            item.petId = sanitizeResidentCharacterUrl(rawItem.petId);
         }
 
         return item;
@@ -7200,6 +7263,7 @@ ${taskCard.action}`;
         if (itemEl.dataset.itemType === 'pet_adopted_photo') {
             snapshot.petImageSrc = itemEl.dataset.petImageSrc || '';
             snapshot.petName = itemEl.dataset.petName || '';
+            snapshot.petId = itemEl.dataset.petId || '';
         }
 
         if (isPortalFlora) {
@@ -7229,6 +7293,7 @@ ${taskCard.action}`;
         const adoptedPetsFromItems = layout.items
             .filter((item) => item.type === 'pet_adopted_photo' && item.petImageSrc)
             .map((item) => sanitizeAdoptedPet({
+                id: item.petId || '',
                 name: item.petName || '新伙伴',
                 imageSrc: item.petImageSrc
             }))
@@ -7260,6 +7325,7 @@ ${taskCard.action}`;
 
         if (itemSnapshot.type === 'pet_adopted_photo') {
             options.petData = {
+                id: itemSnapshot.petId || '',
                 imageSrc: itemSnapshot.petImageSrc || '',
                 name: itemSnapshot.petName || ''
             };
@@ -7515,10 +7581,12 @@ ${taskCard.action}`;
             const petData = options.petData || {};
             const photoEl = item.querySelector('.adopted-pet-photo');
             const badgeEl = item.querySelector('.adopted-pet-badge');
+            const animationConfig = getAdoptedPetAnimationConfig(petData);
             item.dataset.petImageSrc = typeof petData.imageSrc === 'string' ? petData.imageSrc : '';
             item.dataset.petName = typeof petData.name === 'string' ? petData.name : '';
+            item.dataset.petId = typeof petData.id === 'string' ? petData.id : '';
             if (photoEl) {
-                photoEl.src = item.dataset.petImageSrc;
+                photoEl.src = resolveAdoptedPetPoseUrl(animationConfig, 'idle', item.dataset.petImageSrc);
                 photoEl.alt = item.dataset.petName || '宠物';
             }
             if (badgeEl) {
@@ -7623,6 +7691,7 @@ ${taskCard.action}`;
             left: nextPosition.left,
             top: nextPosition.top,
             petData: {
+                id: ownedPet.id || '',
                 imageSrc: ownedPet.imageSrc,
                 name: ownedPet.name || '新伙伴'
             }
@@ -7647,36 +7716,82 @@ ${taskCard.action}`;
 
         const petShape = item.querySelector('.shape-pet');
         const flipper = item.querySelector('.pet-flipper');
-        if (!petShape || !flipper) return;
+        const adoptedPetAnimation = getAdoptedPetAnimationConfig({
+            id: item.dataset.petId || '',
+            name: item.dataset.petName || '',
+            imageSrc: item.dataset.petImageSrc || ''
+        });
+        const hasShapePet = Boolean(petShape && flipper);
+        const hasAnimatedAdoptedPet = Boolean(item.querySelector('.adopted-pet-photo') && adoptedPetAnimation);
+        if (!hasShapePet && !hasAnimatedAdoptedPet) return;
 
-        item.petInterval = setInterval(() => {
-            if (item.classList.contains('dragging')) return;
-
-            const rand = Math.random();
-            if (rand < 0.4) {
+        const setPetIdlePose = () => {
+            if (hasShapePet) {
                 petShape.classList.remove('is-walking');
                 petShape.classList.add('is-sitting');
                 flipper.style.transform = 'scaleX(1)';
-                item.style.transition = 'left 0.5s ease-out, top 0.5s ease-out';
-            } else {
+            }
+            if (hasAnimatedAdoptedPet) {
+                updateAdoptedPetPose(item, 'idle');
+            }
+        };
+
+        const setPetRunPose = (direction) => {
+            if (hasShapePet) {
                 petShape.classList.remove('is-sitting');
                 petShape.classList.add('is-walking');
+                flipper.style.transform = direction === 'right' ? 'scaleX(1)' : 'scaleX(-1)';
+            }
+            if (hasAnimatedAdoptedPet) {
+                updateAdoptedPetPose(item, direction === 'right' ? 'run-right' : 'run-left');
+            }
+        };
+
+        const scheduleNextAction = (delay = Math.round(randomInRange(1600, 3000))) => {
+            clearTimeout(item.petInterval);
+            item.petInterval = window.setTimeout(() => {
+                if (!item.isConnected) return;
+                if (item.classList.contains('dragging')) {
+                    scheduleNextAction(900);
+                    return;
+                }
 
                 const currentLeft = parseFloat(item.style.left) || 50;
                 const currentTop = parseFloat(item.style.top) || 80;
+                const rand = Math.random();
+
+                if (rand < 0.4) {
+                    setPetIdlePose();
+                    item.style.transition = 'left 0.5s ease-out, top 0.5s ease-out';
+                    scheduleNextAction(Math.round(randomInRange(1800, 3200)));
+                    return;
+                }
+
                 const dirX = (Math.random() - 0.5) * 30;
                 const dirY = (Math.random() - 0.5) * 10;
                 const newLeft = Math.max(10, Math.min(90, currentLeft + dirX));
                 const newTop = Math.max(65, Math.min(95, currentTop + dirY));
+                const direction = newLeft > currentLeft ? 'right' : 'left';
+                const moveDuration = 2000;
+                const totalRunDuration = Math.round(randomInRange(3200, 5000));
 
-                flipper.style.transform = newLeft > currentLeft ? 'scaleX(1)' : 'scaleX(-1)';
-
-                item.style.transition = 'left 3s linear, top 3s linear';
+                setPetRunPose(direction);
+                item.style.transition = `left ${moveDuration}ms linear, top ${moveDuration}ms linear`;
                 item.style.left = `${newLeft}%`;
                 item.style.top = `${newTop}%`;
                 updateZIndex(item, newTop);
-            }
-        }, 3000);
+
+                item.petInterval = window.setTimeout(() => {
+                    if (!item.isConnected) return;
+                    setPetIdlePose();
+                    item.style.transition = 'left 0.5s ease-out, top 0.5s ease-out';
+                    scheduleNextAction(Math.round(randomInRange(1400, 2600)));
+                }, totalRunDuration);
+            }, delay);
+        };
+
+        setPetIdlePose();
+        scheduleNextAction(Math.round(randomInRange(1200, 2200)));
     }
 
     function makeDraggable(el) {
@@ -7755,6 +7870,7 @@ ${taskCard.action}`;
                 const flipper = el.querySelector('.pet-flipper');
                 if (petShape) petShape.classList.add('is-sitting');
                 if (flipper) flipper.style.transform = 'scaleX(1)';
+                if (el.querySelector('.adopted-pet-photo')) updateAdoptedPetPose(el, 'idle');
             }
         };
 
