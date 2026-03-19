@@ -114,6 +114,61 @@
         return `[图片] ${text}`;
     }
 
+    function isInlineDataImage(value) {
+        return /^data:image\//i.test(String(value || '').trim());
+    }
+
+    function sanitizeOfflineContextText(value, maxLength = 12000) {
+        const text = sanitizeRemoteContent(value);
+        if (!text || isInlineDataImage(text)) return '';
+        return trimOfflineContextText(text, maxLength);
+    }
+
+    function sanitizeOfflineContextDescriptor(value, maxLength = 1200) {
+        return sanitizeOfflineContextText(value, maxLength).replace(/\s+/g, ' ').trim();
+    }
+
+    function buildOfflineContextImageText(message) {
+        const description = sanitizeOfflineContextDescriptor(message && message.description, 1200);
+        if (description && !isGenericUnknownImageText(description)) {
+            return buildRemoteImageFallbackText(description);
+        }
+
+        const novelaiPrompt = sanitizeOfflineContextDescriptor(message && message.novelaiPrompt, 1200);
+        if (novelaiPrompt && !isGenericUnknownImageText(novelaiPrompt)) {
+            return buildRemoteImageFallbackText(novelaiPrompt);
+        }
+
+        return buildRemoteImageFallbackText('');
+    }
+
+    function serializeMessageForOfflineContext(message) {
+        const rawType = String(message && message.type ? message.type : 'text').trim().toLowerCase();
+        const rawContent = message && message.content ? message.content : '';
+        const description = sanitizeOfflineContextDescriptor(message && message.description, 1200);
+        const novelaiPrompt = sanitizeOfflineContextDescriptor(message && message.novelaiPrompt, 1200);
+        const hasInlineImage = isInlineDataImage(rawContent);
+        const isImageLike = rawType === 'image' || rawType === 'virtual_image' || hasInlineImage;
+
+        const serialized = {
+            id: message && message.id ? message.id : null,
+            role: message && (message.role || (message.isUser ? 'user' : 'assistant')) || 'assistant',
+            type: isImageLike ? (rawType === 'virtual_image' ? 'virtual_image' : 'image') : (rawType || 'text'),
+            time: Number(message && message.time ? message.time : Date.now())
+        };
+
+        if (description) serialized.description = description;
+        if (novelaiPrompt) serialized.novelaiPrompt = novelaiPrompt;
+
+        if (isImageLike) {
+            serialized.content = buildOfflineContextImageText(message);
+            return serialized;
+        }
+
+        serialized.content = sanitizeOfflineContextText(rawContent, 12000);
+        return serialized;
+    }
+
     function normalizeRemoteMessage(remote) {
         const contactId = getRemoteContactId(remote);
         const contact = getContactById(contactId);
@@ -628,6 +683,7 @@
             : null;
         const contextLimit = contact && Number(contact.contextLimit) > 0 ? Number(contact.contextLimit) : 50;
         const history = ((((window.iphoneSimState || {}).chatHistory || {})[contactId]) || []).slice(-contextLimit);
+        const serializedHistory = history.map(serializeMessageForOfflineContext);
         try {
             await apiFetch('/api/chat-context', {
                 method: 'POST',
@@ -635,13 +691,7 @@
                     userId: state.userId,
                     contactId,
                     contextLimit,
-                    messages: history.map((message) => ({
-                        id: message && message.id ? message.id : null,
-                        role: message && (message.role || (message.isUser ? 'user' : 'assistant')) || 'assistant',
-                        content: message && message.content ? message.content : '',
-                        type: message && message.type ? message.type : 'text',
-                        time: Number(message && message.time ? message.time : Date.now())
-                    }))
+                    messages: serializedHistory
                 })
             });
         } catch (err) {
@@ -664,6 +714,7 @@
         if (!contact) return;
 
         const history = ((((window.iphoneSimState || {}).chatHistory || {})[contactId]) || []);
+        const lightweightHistory = history.map(serializeMessageForOfflineContext);
 
         let worldbookContext = '';
         if (window.iphoneSimState.worldbook && window.iphoneSimState.worldbook.length > 0 && contact.linkedWbCategories) {
@@ -676,7 +727,7 @@
         let memoryContext = '';
         try {
             if (typeof window.buildMemoryContextByPolicy === 'function') {
-                memoryContext = window.buildMemoryContextByPolicy(contact, history, 'chat-text') || '';
+                memoryContext = window.buildMemoryContextByPolicy(contact, lightweightHistory, 'chat-text') || '';
             }
         } catch (err) {
             console.error('[offline-push-sync] buildMemoryContextByPolicy failed', err);
@@ -794,6 +845,7 @@
         const history = (((window.iphoneSimState || {}).chatHistory || {})[contactId]) || [];
         const lastMessage = history.length ? history[history.length - 1] : null;
         if (!lastMessage) return;
+        const serializedLastMessage = serializeMessageForOfflineContext(lastMessage);
         try {
             await apiFetch('/api/messages/snapshot', {
                 method: 'POST',
@@ -801,13 +853,7 @@
                 body: JSON.stringify({
                     userId: state.userId,
                     contactId,
-                    lastMessage: {
-                        id: lastMessage.id || null,
-                        time: Number(lastMessage.time || Date.now()),
-                        role: lastMessage.role || (lastMessage.isUser ? 'user' : 'assistant'),
-                        content: lastMessage.content || '',
-                        type: lastMessage.type || 'text'
-                    }
+                    lastMessage: serializedLastMessage
                 })
             });
             if (options.skipContext) return;
