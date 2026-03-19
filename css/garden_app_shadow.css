@@ -174,7 +174,9 @@ main {
     width: 100%;
     height: 100%;
     transform: scaleX(1);
-    transform-origin: center center;
+    transform-origin: center bottom;
+    transition: transform 220ms cubic-bezier(.22,.61,.36,1), filter 220ms ease;
+    will-change: transform, filter;
 }
 
 .adopted-pet-photo {
@@ -183,6 +185,21 @@ main {
     object-fit: contain;
     display: block;
     pointer-events: none;
+    transition: opacity 180ms ease, filter 220ms ease;
+}
+
+.item-container[data-item-type="pet_adopted_photo"].is-idle .adopted-pet-flipper {
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.05));
+}
+
+.item-container[data-item-type="pet_adopted_photo"].is-running-left .adopted-pet-flipper,
+.item-container[data-item-type="pet_adopted_photo"].is-running-right .adopted-pet-flipper {
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.09));
+}
+
+.item-container[data-item-type="pet_adopted_photo"].is-pose-transitioning .adopted-pet-photo {
+    opacity: 0.92;
+    filter: saturate(1.03);
 }
 
 .adopted-pet-badge {

@@ -641,6 +641,18 @@
         }
     ]);
     const ADOPTED_PET_ANIMATION_PRESETS = Object.freeze({
+        shiba: Object.freeze({
+            idleUrl: 'https://i.postimg.cc/155qwjLH/1773911645.gif',
+            runLeftUrl: 'https://i.postimg.cc/DfcGWTYQ/3723B353_B73E_4074_8ACE_02836D256E97.gif',
+            runRightUrl: 'https://i.postimg.cc/DfcGWTYQ/3723B353_B73E_4074_8ACE_02836D256E97.gif',
+            flipRight: true,
+            displayScale: 1.12,
+            runOffsetY: -2,
+            moveAfterRunLeadMs: 1500,
+            moveStopAtRunMs: 2500,
+            maxIdleDelayMs: 2500,
+            maxRunDurationMs: 4000
+        }),
         samoyed: Object.freeze({
             idleUrl: 'https://i.postimg.cc/W3Y3MyNq/IMG_7493.gif',
             runLeftUrl: 'https://i.postimg.cc/76t6gRHb/IMG_7488.gif',
@@ -7046,6 +7058,9 @@ ${taskCard.action}`;
         if (petId && ADOPTED_PET_ANIMATION_PRESETS[petId]) {
             return ADOPTED_PET_ANIMATION_PRESETS[petId];
         }
+        if (petName === '柴犬') {
+            return ADOPTED_PET_ANIMATION_PRESETS.shiba;
+        }
         if (petName === '萨摩耶') {
             return ADOPTED_PET_ANIMATION_PRESETS.samoyed;
         }
@@ -7078,16 +7093,33 @@ ${taskCard.action}`;
         const nextPose = pose === 'run-left' || pose === 'run-right' ? pose : 'idle';
         const nextUrl = resolveAdoptedPetPoseUrl(animationConfig, nextPose, fallbackUrl);
         const shouldFlip = Boolean(animationConfig && animationConfig.flipRight && nextPose === 'run-right');
+        const displayScale = animationConfig ? Math.max(0.8, Number(animationConfig.displayScale) || 1) : 1;
+        const activeScale = nextPose === 'idle' ? 1 : displayScale;
+        const runOffsetY = animationConfig ? Number(animationConfig.runOffsetY) || 0 : 0;
+        const activeOffsetY = nextPose === 'idle' ? 0 : runOffsetY;
 
-        if (nextUrl && imageEl.getAttribute('src') !== nextUrl) {
+        const didSourceChange = Boolean(nextUrl) && imageEl.getAttribute('src') !== nextUrl;
+
+        if (didSourceChange) {
             imageEl.setAttribute('src', nextUrl);
         }
         if (!nextUrl) {
             imageEl.removeAttribute('src');
         }
 
+        if (didSourceChange) {
+            item.classList.add('is-pose-transitioning');
+            if (item.petPoseTransitionTimer) {
+                clearTimeout(item.petPoseTransitionTimer);
+            }
+            item.petPoseTransitionTimer = window.setTimeout(() => {
+                item.classList.remove('is-pose-transitioning');
+                item.petPoseTransitionTimer = null;
+            }, 180);
+        }
+
         imageEl.dataset.pose = nextPose;
-        flipperEl.style.transform = shouldFlip ? 'scaleX(-1)' : 'scaleX(1)';
+        flipperEl.style.transform = `translateY(${activeOffsetY}px) ${shouldFlip ? 'scaleX(-1)' : 'scaleX(1)'} scale(${activeScale})`;
         item.dataset.petPose = nextPose;
         item.classList.toggle('is-idle', nextPose === 'idle');
         item.classList.toggle('is-running-left', nextPose === 'run-left');
@@ -7313,6 +7345,8 @@ ${taskCard.action}`;
         if (!state.roomEl) return;
         Array.from(state.roomEl.querySelectorAll('.item-container')).forEach((itemEl) => {
             if (itemEl.petInterval) clearInterval(itemEl.petInterval);
+            if (itemEl.petMoveTimer) clearTimeout(itemEl.petMoveTimer);
+            if (itemEl.petPoseTransitionTimer) clearTimeout(itemEl.petPoseTransitionTimer);
             itemEl.remove();
         });
     }
@@ -7724,6 +7758,24 @@ ${taskCard.action}`;
         const hasShapePet = Boolean(petShape && flipper);
         const hasAnimatedAdoptedPet = Boolean(item.querySelector('.adopted-pet-photo') && adoptedPetAnimation);
         if (!hasShapePet && !hasAnimatedAdoptedPet) return;
+        const adoptedPetMaxIdleDelayMs = hasAnimatedAdoptedPet
+            ? Math.max(0, Number(adoptedPetAnimation.maxIdleDelayMs) || 0)
+            : 0;
+        const adoptedPetMaxRunDurationMs = hasAnimatedAdoptedPet
+            ? Math.max(0, Number(adoptedPetAnimation.maxRunDurationMs) || 0)
+            : 0;
+
+        const getIdleDelay = (min, max) => {
+            const cappedMax = adoptedPetMaxIdleDelayMs > 0 ? Math.min(max, adoptedPetMaxIdleDelayMs) : max;
+            const cappedMin = Math.min(min, cappedMax);
+            return Math.round(randomInRange(cappedMin, cappedMax));
+        };
+
+        const getRunDuration = (min, max) => {
+            const cappedMax = adoptedPetMaxRunDurationMs > 0 ? Math.min(max, adoptedPetMaxRunDurationMs) : max;
+            const cappedMin = Math.min(min, cappedMax);
+            return Math.round(randomInRange(cappedMin, cappedMax));
+        };
 
         const setPetIdlePose = () => {
             if (hasShapePet) {
@@ -7747,8 +7799,12 @@ ${taskCard.action}`;
             }
         };
 
-        const scheduleNextAction = (delay = Math.round(randomInRange(1600, 3000))) => {
+        const scheduleNextAction = (delay = getIdleDelay(1600, 3000)) => {
             clearTimeout(item.petInterval);
+            if (item.petMoveTimer) {
+                clearTimeout(item.petMoveTimer);
+                item.petMoveTimer = null;
+            }
             item.petInterval = window.setTimeout(() => {
                 if (!item.isConnected) return;
                 if (item.classList.contains('dragging')) {
@@ -7763,7 +7819,7 @@ ${taskCard.action}`;
                 if (rand < 0.4) {
                     setPetIdlePose();
                     item.style.transition = 'left 0.5s ease-out, top 0.5s ease-out';
-                    scheduleNextAction(Math.round(randomInRange(1800, 3200)));
+                    scheduleNextAction(getIdleDelay(1800, 3200));
                     return;
                 }
 
@@ -7773,25 +7829,51 @@ ${taskCard.action}`;
                 const newTop = Math.max(65, Math.min(95, currentTop + dirY));
                 const direction = newLeft > currentLeft ? 'right' : 'left';
                 const moveDuration = 2000;
-                const totalRunDuration = Math.round(randomInRange(3200, 5000));
+                const totalRunDuration = getRunDuration(3200, 5000);
+                const moveAfterRunLeadMs = hasAnimatedAdoptedPet
+                    ? Math.max(0, Number(adoptedPetAnimation.moveAfterRunLeadMs) || 0)
+                    : 0;
+                const moveStopAtRunMs = hasAnimatedAdoptedPet
+                    ? Math.max(moveAfterRunLeadMs, Number(adoptedPetAnimation.moveStopAtRunMs) || 0)
+                    : 0;
 
                 setPetRunPose(direction);
-                item.style.transition = `left ${moveDuration}ms linear, top ${moveDuration}ms linear`;
-                item.style.left = `${newLeft}%`;
-                item.style.top = `${newTop}%`;
-                updateZIndex(item, newTop);
+
+                if (moveAfterRunLeadMs > 0) {
+                    item.style.transition = 'left 0ms linear, top 0ms linear';
+                    item.petMoveTimer = window.setTimeout(() => {
+                        if (!item.isConnected) return;
+                        const moveEndAtMs = moveStopAtRunMs > 0
+                            ? Math.min(totalRunDuration, moveStopAtRunMs)
+                            : totalRunDuration;
+                        const remainingMoveDuration = Math.max(600, moveEndAtMs - moveAfterRunLeadMs);
+                        item.style.transition = `left ${remainingMoveDuration}ms linear, top ${remainingMoveDuration}ms linear`;
+                        item.style.left = `${newLeft}%`;
+                        item.style.top = `${newTop}%`;
+                        updateZIndex(item, newTop);
+                    }, moveAfterRunLeadMs);
+                } else {
+                    item.style.transition = `left ${moveDuration}ms linear, top ${moveDuration}ms linear`;
+                    item.style.left = `${newLeft}%`;
+                    item.style.top = `${newTop}%`;
+                    updateZIndex(item, newTop);
+                }
 
                 item.petInterval = window.setTimeout(() => {
                     if (!item.isConnected) return;
+                    if (item.petMoveTimer) {
+                        clearTimeout(item.petMoveTimer);
+                        item.petMoveTimer = null;
+                    }
                     setPetIdlePose();
                     item.style.transition = 'left 0.5s ease-out, top 0.5s ease-out';
-                    scheduleNextAction(Math.round(randomInRange(1400, 2600)));
+                    scheduleNextAction(getIdleDelay(1400, 2600));
                 }, totalRunDuration);
             }, delay);
         };
 
         setPetIdlePose();
-        scheduleNextAction(Math.round(randomInRange(1200, 2200)));
+        scheduleNextAction(getIdleDelay(1200, 2200));
     }
 
     function makeDraggable(el) {
@@ -7806,6 +7888,10 @@ ${taskCard.action}`;
             isDragging = true;
             hasMoved = false;
             el.classList.add('dragging');
+            if (el.petMoveTimer) {
+                clearTimeout(el.petMoveTimer);
+                el.petMoveTimer = null;
+            }
 
             if (el.dataset.isPet) {
                 const petShape = el.querySelector('.shape-pet');
