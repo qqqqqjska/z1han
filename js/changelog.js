@@ -17,7 +17,7 @@ const CHANGELOG_CONTENT = `
             <li style="margin-bottom: 0; word-break: break-word;">激活码改成用设备码一机一码，qq带设备码找我</li>
             <li style="margin-bottom: 0; word-break: break-word;">新增家园系统，底栏第一个按钮可以去别的地方，顶栏头像可以选择联系人和设置动图，点击联系人形象可以摸头喂食和派遣</li>
             <li style="margin-bottom: 0; word-break: break-word;">新增查看token数，在聊天设置页面</li>
-            <li style="margin-bottom: 0; word-break: break-word;">新增离线时触发主动发消息功能，但是我没测试多个联系人使用时会不会有bug</li>
+            <li style="margin-bottom: 0; word-break: break-word;">新增离线时触发主动发消息功能，但是我没测试多个联系人使用时会不会有bug，需要用render部署一下，有需要的qq找我我来教</li>
             <li style="margin-bottom: 0; word-break: break-word;">修改了一下见面的ui和之前的bug，之前的自定义css可能会用不了了</li>
             <li style="margin-bottom: 0; word-break: break-word;">音乐的退出按钮图片可以点那个铃铛按钮自定义了，然后之前的音乐接口失效了换了一下</li>
         </ul>
