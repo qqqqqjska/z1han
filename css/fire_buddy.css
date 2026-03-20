@@ -1,0 +1,464 @@
+.fire-buddy-entry {
+    position: relative;
+    margin-left: auto;
+    margin-right: 6px;
+}
+
+.fire-buddy-entry.hidden {
+    display: none !important;
+}
+
+.fire-buddy-entry-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #ffb15c, #ff6b35);
+    color: #fff;
+    font-size: 15px;
+    box-shadow: 0 6px 12px rgba(255, 107, 53, 0.2);
+}
+
+.fire-buddy-entry.is-gray .fire-buddy-entry-icon {
+    filter: grayscale(1);
+    opacity: 0.72;
+}
+
+.fire-buddy-contact-badge {
+    position: static;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 8px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    line-height: 1;
+    color: #fff;
+    background: linear-gradient(135deg, #ffb15c, #ff6b35);
+    box-shadow: 0 4px 8px rgba(255, 107, 53, 0.22);
+}
+
+.fire-buddy-contact-badge.is-gray {
+    background: linear-gradient(135deg, #b7b7bd, #8e8e93);
+}
+
+.fire-buddy-settings-summary {
+    font-size: 13px;
+    line-height: 1.55;
+    color: #6d6d72;
+}
+
+.fire-buddy-settings-hint {
+    font-size: 12px;
+    line-height: 1.5;
+    color: #8e8e93;
+}
+
+.fire-buddy-pet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 92px;
+    height: 92px;
+    z-index: 24;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    cursor: pointer;
+    touch-action: none;
+    user-select: none;
+}
+
+.fire-buddy-pet.hidden {
+    display: none !important;
+}
+
+.fire-buddy-pet:active,
+.fire-buddy-pet.dragging {
+    transform: scale(0.97);
+}
+
+.fire-buddy-pet img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    -webkit-user-drag: none;
+    filter: none;
+}
+
+.fire-buddy-pet.is-gray img {
+    filter: grayscale(1);
+    opacity: 0.88;
+}
+
+.fire-buddy-pet-badge {
+    display: none;
+}
+
+.fire-buddy-pet.is-gray .fire-buddy-pet-badge {
+    background: linear-gradient(135deg, #b7b7bd, #8e8e93);
+}
+
+.fire-buddy-unlock-card {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    top: 74px;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid rgba(255, 173, 92, 0.32);
+    border-radius: 20px;
+    background: rgba(255, 248, 242, 0.97);
+    box-shadow: 0 12px 30px rgba(255, 122, 69, 0.12);
+    color: #1c1c1e;
+    text-align: left;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.fire-buddy-unlock-card.hidden {
+    display: none !important;
+}
+
+.fire-buddy-unlock-card-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 22px;
+    background: linear-gradient(135deg, #ffd2a4, #ffb566);
+}
+
+.fire-buddy-unlock-card-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+}
+
+.fire-buddy-unlock-card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1c1c1e;
+}
+
+.fire-buddy-unlock-card-text {
+    font-size: 12px;
+    line-height: 1.5;
+    color: #8a5a2b;
+}
+
+.fire-buddy-unlock-card-arrow {
+    color: #c07a3d;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.fire-buddy-compose-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    margin: 0 10px 8px;
+    border-radius: 18px;
+    background: rgba(255, 247, 239, 0.96);
+    border: 1px solid rgba(255, 173, 92, 0.24);
+    box-shadow: 0 10px 24px rgba(255, 122, 69, 0.1);
+}
+
+.fire-buddy-compose-bar.hidden {
+    display: none !important;
+}
+
+.fire-buddy-compose-avatar {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    object-fit: cover;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ffd5ab, #ff9c58);
+    box-shadow: 0 6px 14px rgba(255, 122, 69, 0.16);
+}
+
+.fire-buddy-compose-main {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.fire-buddy-compose-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #9b4b00;
+}
+
+.fire-buddy-compose-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fire-buddy-compose-row input {
+    min-width: 0;
+    flex: 1;
+    height: 34px;
+    padding: 0 12px;
+    border: 1px solid rgba(255, 173, 92, 0.2);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.88);
+    font-size: 13px;
+    color: #1c1c1e;
+    outline: none;
+}
+
+.fire-buddy-compose-row input:focus {
+    border-color: rgba(255, 122, 69, 0.45);
+}
+
+.fire-buddy-compose-row button {
+    height: 34px;
+    padding: 0 14px;
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ffb15c, #ff6b35);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.fire-buddy-compose-close {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    border: none;
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.06);
+    color: #8e8e93;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fire-buddy-mention-menu {
+    display: flex;
+    padding: 0 10px 8px;
+}
+
+.fire-buddy-mention-menu.hidden {
+    display: none !important;
+}
+
+.fire-buddy-mention-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 173, 92, 0.22);
+    border-radius: 18px;
+    background: rgba(255, 247, 239, 0.96);
+    box-shadow: 0 8px 20px rgba(255, 122, 69, 0.08);
+    color: #1c1c1e;
+    text-align: left;
+}
+
+.fire-buddy-mention-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #ffd5ab, #ff9c58);
+}
+
+.fire-buddy-mention-copy {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.fire-buddy-mention-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #8d4900;
+}
+
+.fire-buddy-mention-desc {
+    font-size: 12px;
+    line-height: 1.4;
+    color: #a5662f;
+}
+
+.chat-message.fire-buddy-message .message-content.fire-buddy-msg,
+.chat-message.other.fire-buddy-message .message-content.fire-buddy-msg {
+    background: linear-gradient(180deg, #fff3e4 0%, #ffe6ca 100%);
+    color: #6f3b05;
+}
+
+.fire-buddy-chat-avatar {
+    background: linear-gradient(135deg, #ffd5ab, #ff9c58);
+    box-shadow: 0 6px 14px rgba(255, 122, 69, 0.16);
+}
+
+.fire-buddy-speaker-label {
+    margin: 0 0 4px 4px;
+    font-size: 11px;
+    line-height: 1.2;
+    font-weight: 700;
+    color: #c06a1f;
+}
+
+#fire-buddy-panel .fire-buddy-panel-header {
+    background: rgba(255, 247, 239, 0.9) !important;
+}
+
+.fire-buddy-panel-body {
+    padding: 88px 14px 28px;
+    background:
+        radial-gradient(circle at top left, rgba(255, 176, 92, 0.32), transparent 32%),
+        linear-gradient(180deg, #fffaf5 0%, #fff3e9 100%);
+}
+
+.fire-buddy-hero-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 18px;
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.82);
+    box-shadow: 0 16px 32px rgba(255, 122, 69, 0.12);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+}
+
+.fire-buddy-stage-avatar {
+    width: 68px;
+    height: 68px;
+    border-radius: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    color: #fff;
+    background: linear-gradient(135deg, #ffb15c, #ff6b35);
+    box-shadow: 0 12px 24px rgba(255, 107, 53, 0.22);
+}
+
+.fire-buddy-stage-avatar.is-gray {
+    background: linear-gradient(135deg, #c5c5cb, #8e8e93);
+}
+
+.fire-buddy-hero-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.fire-buddy-stage-label {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1c1c1e;
+}
+
+.fire-buddy-status-text,
+.fire-buddy-progress-tip {
+    font-size: 13px;
+    line-height: 1.6;
+    color: #6d6d72;
+}
+
+.fire-buddy-status-detail {
+    font-size: 12px;
+    line-height: 1.5;
+    color: #a05a18;
+}
+
+.fire-buddy-panel-group {
+    margin-top: 16px;
+    overflow: hidden;
+}
+
+.fire-buddy-profile-block {
+    gap: 10px;
+}
+
+.fire-buddy-profile-input,
+.fire-buddy-profile-textarea {
+    width: 100%;
+    border: 1px solid rgba(255, 173, 92, 0.2);
+    background: rgba(255, 255, 255, 0.92);
+    color: #1c1c1e;
+    border-radius: 16px;
+    outline: none;
+    font-size: 14px;
+    line-height: 1.5;
+    box-sizing: border-box;
+}
+
+.fire-buddy-profile-input {
+    height: 42px;
+    padding: 0 14px;
+}
+
+.fire-buddy-profile-textarea {
+    min-height: 96px;
+    padding: 12px 14px;
+    resize: vertical;
+}
+
+.fire-buddy-profile-input:focus,
+.fire-buddy-profile-textarea:focus {
+    border-color: rgba(255, 122, 69, 0.45);
+    box-shadow: 0 0 0 3px rgba(255, 177, 92, 0.14);
+}
+
+.fire-buddy-profile-save-btn {
+    margin-top: 2px;
+}
+
+.fire-buddy-phase-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.fire-buddy-phase-list span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: rgba(255, 176, 92, 0.14);
+    color: #9b4b00;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.fire-buddy-panel-action {
+    font-size: 15px !important;
+    font-weight: 600;
+    color: #ff6b35 !important;
+    width: auto !important;
+    padding: 0 10px !important;
+}

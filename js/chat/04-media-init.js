@@ -2,7 +2,7 @@ function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type 
     return new Promise(resolve => {
         const contactId = targetContactId || window.iphoneSimState.currentChatContactId;
         if (!contactId) {
-            resolve();
+            resolve(null);
             return;
         }
 
@@ -81,7 +81,7 @@ function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type 
         
         if (window.checkAndSummarize) window.checkAndSummarize(contactId);
 
-        resolve();
+        resolve(msgData);
     });
 }
 
@@ -4185,7 +4185,7 @@ function setupChatListeners() {
                     return;
                 }
 
-                if (item.id === 'chat-more-photo-btn' || item.id === 'chat-more-camera-btn' || item.id === 'chat-more-transfer-btn' || item.id === 'chat-more-memory-btn' || item.id === 'chat-more-location-btn' || item.id === 'chat-more-regenerate-btn' || item.id === 'chat-more-voice-btn' || item.id === 'chat-more-video-call-btn' || item.id === 'chat-more-screen-share-btn') return;
+                if (item.id === 'chat-more-photo-btn' || item.id === 'chat-more-camera-btn' || item.id === 'chat-more-transfer-btn' || item.id === 'chat-more-memory-btn' || item.id === 'chat-more-location-btn' || item.id === 'chat-more-regenerate-btn' || item.id === 'chat-more-voice-btn' || item.id === 'chat-more-video-call-btn' || item.id === 'chat-more-screen-share-btn' || item.id === 'chat-more-fire-buddy-btn') return;
                 
                 e.stopPropagation();
                 const label = item.querySelector('.more-label').textContent;

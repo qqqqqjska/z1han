@@ -46,6 +46,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css">
     <link rel="stylesheet" href="css/album.css">
     <link rel="stylesheet" href="css/chat_ui_v1_overrides.css">
+    <link rel="stylesheet" href="css/fire_buddy.css">
     <link rel="stylesheet" href="css/screen_share.css">
     <link rel="stylesheet" href="css/calendar_app.css">
     <link rel="stylesheet" href="css/garden_app.css?v=20">
@@ -989,6 +990,74 @@
                             </div>
                         </div>
 
+                        <div class="section-title">小火人（阶段 2）</div>
+                        <div class="ios-list-group">
+                            <div class="list-item">
+                                <div class="list-content">
+                                    <label>启用小火人</label>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="chat-setting-fire-buddy-enabled" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-content">
+                                    <label>手动调试开启</label>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="chat-setting-fire-buddy-manual-enabled">
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-content">
+                                    <label>调试状态</label>
+                                    <select id="chat-setting-fire-buddy-mode">
+                                        <option value="locked">未解锁</option>
+                                        <option value="warming">升温中</option>
+                                        <option value="invitable">可邀请</option>
+                                        <option value="invited">已邀请</option>
+                                        <option value="bound">已绑定</option>
+                                        <option value="gray">已变灰</option>
+                                        <option value="wake-ready">可唤醒</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-content">
+                                    <label>显示方式</label>
+                                    <select id="chat-setting-fire-buddy-display-mode">
+                                        <option value="topbar">顶栏入口</option>
+                                        <option value="desktop-pet">桌宠悬浮</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="list-item" id="chat-setting-fire-buddy-pet-panel" style="display: none;">
+                                <div class="list-content column">
+                                    <label>桌宠设置</label>
+                                    <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+                                        <img id="chat-setting-fire-buddy-pet-preview" src="" alt="小火人桌宠预览" style="width: 56px; height: 56px; object-fit: contain; border-radius: 10px; background: #f2f2f7; border: 1px solid #e5e5ea; padding: 4px; flex-shrink: 0;">
+                                        <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                                            <input type="file" id="chat-setting-fire-buddy-pet-image" accept="image/*" class="file-input-hidden">
+                                            <label for="chat-setting-fire-buddy-pet-image" class="ios-btn">上传桌宠图片</label>
+                                            <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                                <label style="font-size: 14px; color: #6d6d72; white-space: nowrap;">大小 <span id="chat-setting-fire-buddy-pet-size-value">92px</span></label>
+                                                <input type="range" id="chat-setting-fire-buddy-pet-size" min="56" max="150" step="1" value="92" style="width: 100%;">
+                                            </div>
+                                            <div class="fire-buddy-settings-hint">此桌宠形象与心声桌宠独立保存。</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="list-item">
+                                <div class="list-content column">
+                                    <label>当前进度</label>
+                                    <div id="chat-setting-fire-buddy-summary" class="fire-buddy-settings-summary">继续聊天点亮火花</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="section-title">语音合成 (TTS)</div>
                         <div class="ios-list-group">
                             <div class="list-item">
@@ -1448,6 +1517,9 @@
                     <button id="back-to-contacts" class="back-btn"><i class="fas fa-chevron-left"></i></button>
                     <button id="multi-select-cancel" class="multi-select-cancel hidden">退出</button>
                     <span id="chat-title" style="cursor: pointer;">用户名</span>
+                    <button id="fire-buddy-entry" class="wechat-icon-btn fire-buddy-entry hidden" aria-label="打开小火人面板">
+                        <span class="fire-buddy-entry-icon">🔥</span>
+                    </button>
                     <button id="chat-settings-btn" class="wechat-icon-btn"><i class="fas fa-ellipsis-h"></i></button>
                 </div>
                 <!-- 多选删除控制项：右下删除（退出按钮已移入 header） -->
@@ -1462,6 +1534,18 @@
                         <div class="thought-pet-content" id="thought-pet-content-text"></div>
                     </div>
                 </div>
+                <div id="fire-buddy-pet" class="fire-buddy-pet hidden">
+                    <img id="fire-buddy-pet-image" src="" alt="小火人桌宠">
+                    <span id="fire-buddy-pet-badge" class="fire-buddy-pet-badge">🔥</span>
+                </div>
+                <button id="fire-buddy-unlock-card" class="fire-buddy-unlock-card hidden" type="button" aria-label="小火人已可解锁，点击打开">
+                    <div class="fire-buddy-unlock-card-icon">🔥</div>
+                    <div class="fire-buddy-unlock-card-copy">
+                        <div id="fire-buddy-unlock-card-title" class="fire-buddy-unlock-card-title">可以解锁小火人了</div>
+                        <div id="fire-buddy-unlock-card-text" class="fire-buddy-unlock-card-text">连续互发 3 天消息，点击进入小火人页面</div>
+                    </div>
+                    <div class="fire-buddy-unlock-card-arrow"><i class="fas fa-chevron-right"></i></div>
+                </button>
                 <div class="chat-bottom-stack">
                     <!-- 引用回复条 -->
                     <div id="reply-bar" class="reply-bar hidden">
@@ -1470,9 +1554,31 @@
                         </div>
                         <div class="reply-close" id="close-reply-bar"><i class="fas fa-times-circle"></i></div>
                     </div>
+                    <div id="fire-buddy-compose-bar" class="fire-buddy-compose-bar hidden">
+                        <img id="fire-buddy-compose-avatar" class="fire-buddy-compose-avatar" src="" alt="小火人头像">
+                        <div class="fire-buddy-compose-main">
+                            <div class="fire-buddy-compose-title">以小火人身份发言</div>
+                            <div class="fire-buddy-compose-row">
+                                <input type="text" id="fire-buddy-compose-input" placeholder="输入小火人想说的话...">
+                                <button id="fire-buddy-compose-send" type="button">发送</button>
+                            </div>
+                        </div>
+                        <button id="fire-buddy-compose-close" class="fire-buddy-compose-close" type="button" aria-label="关闭小火人发言">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                     <!-- 临时提示组件 -->
                     <div id="chat-toast" class="chat-toast hidden">
                         <span id="chat-toast-text"></span>
+                    </div>
+                    <div id="fire-buddy-mention-menu" class="fire-buddy-mention-menu hidden">
+                        <button id="fire-buddy-mention-option" class="fire-buddy-mention-option" type="button">
+                            <img id="fire-buddy-mention-avatar" class="fire-buddy-mention-avatar" src="" alt="小火人头像">
+                            <div class="fire-buddy-mention-copy">
+                                <div id="fire-buddy-mention-name" class="fire-buddy-mention-name">小火人</div>
+                                <div class="fire-buddy-mention-desc">@TA 后可触发小火人连发回复</div>
+                            </div>
+                        </button>
                     </div>
                     <div class="chat-input-area">
                         <button id="chat-more-btn" class="chat-icon-btn" aria-label="更多功能">
@@ -1562,6 +1668,10 @@
                                 <div class="more-icon"><i class="fas fa-comment-dots"></i></div>
                                 <div class="more-label">让TA发消息</div>
                             </div>
+                            <div class="more-item" id="chat-more-fire-buddy-btn">
+                                <div class="more-icon"><i class="fas fa-fire"></i></div>
+                                <div class="more-label">小火人代发</div>
+                            </div>
                             <div class="more-item" id="chat-more-games-btn">
                                 <div class="more-icon"><i class="fas fa-gamepad"></i></div>
                                 <div class="more-label">小游戏</div>
@@ -1583,6 +1693,108 @@
                     </div>
                     
                     <input type="file" id="chat-photo-input" accept="image/*" class="file-input-hidden">
+                </div>
+            </div>
+
+            <div id="fire-buddy-panel" class="sub-screen hidden" style="z-index: 165; background: #fff7ef;">
+                <div class="chat-header fire-buddy-panel-header">
+                    <button id="close-fire-buddy-panel" class="back-btn"><i class="fas fa-chevron-left"></i> 返回</button>
+                    <span id="fire-buddy-panel-title">小火人</span>
+                    <button id="fire-buddy-panel-action" class="wechat-icon-btn fire-buddy-panel-action hidden">绑定</button>
+                </div>
+                <div class="app-body fire-buddy-panel-body">
+                    <div class="fire-buddy-hero-card">
+                        <div id="fire-buddy-stage-avatar" class="fire-buddy-stage-avatar">🔥</div>
+                        <div class="fire-buddy-hero-copy">
+                            <div id="fire-buddy-stage-label" class="fire-buddy-stage-label">未解锁</div>
+                            <div id="fire-buddy-status-text" class="fire-buddy-status-text">继续聊天点亮火花</div>
+                            <div id="fire-buddy-status-detail" class="fire-buddy-status-detail">连续 3 个有效互动日后可邀请绑定</div>
+                        </div>
+                    </div>
+
+                    <div class="ios-list-group fire-buddy-panel-group">
+                        <div class="list-item">
+                            <div class="list-content">
+                                <label>有效互动天数</label>
+                                <span id="fire-buddy-effective-days" class="value-right">0 天</span>
+                            </div>
+                        </div>
+                        <div class="list-item">
+                            <div class="list-content">
+                                <label>当前连续天数</label>
+                                <span id="fire-buddy-current-streak" class="value-right">0 天</span>
+                            </div>
+                        </div>
+                        <div class="list-item">
+                            <div class="list-content">
+                                <label>历史最长连续</label>
+                                <span id="fire-buddy-longest-streak" class="value-right">0 天</span>
+                            </div>
+                        </div>
+                        <div class="list-item">
+                            <div class="list-content">
+                                <label>总消息数</label>
+                                <span id="fire-buddy-message-count" class="value-right">0 条</span>
+                            </div>
+                        </div>
+                        <div class="list-item">
+                            <div class="list-content">
+                                <label>流程状态</label>
+                                <span id="fire-buddy-flow-status" class="value-right">养成中</span>
+                            </div>
+                        </div>
+                        <div class="list-item">
+                            <div class="list-content">
+                                <label>最近有效互动</label>
+                                <span id="fire-buddy-last-active-day" class="value-right">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ios-list-group fire-buddy-panel-group">
+                        <div class="list-item">
+                            <div class="list-content column fire-buddy-profile-block">
+                                <label for="fire-buddy-name-input">小火人名字</label>
+                                <input id="fire-buddy-name-input" class="fire-buddy-profile-input" type="text" maxlength="24" placeholder="例如：阿焰">
+                            </div>
+                        </div>
+                        <div class="list-item">
+                            <div class="list-content column fire-buddy-profile-block">
+                                <label for="fire-buddy-persona-input">小火人人设</label>
+                                <textarea id="fire-buddy-persona-input" class="fire-buddy-profile-textarea" placeholder="例如：嘴硬但很会暖场，会在气氛冷掉时轻轻插话。"></textarea>
+                            </div>
+                        </div>
+                        <div class="list-item">
+                            <div class="list-content column fire-buddy-profile-block">
+                                <button id="fire-buddy-profile-save" class="ios-btn-block fire-buddy-profile-save-btn" type="button">保存名字和人设</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ios-list-group fire-buddy-panel-group">
+                        <div class="list-item">
+                            <div class="list-content column">
+                                <label>阶段说明</label>
+                                <div id="fire-buddy-progress-tip" class="fire-buddy-progress-tip">连续 3 个有效互动日后可发起邀请。</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ios-list-group fire-buddy-panel-group">
+                        <div class="list-item">
+                            <div class="list-content column">
+                                <label>本阶段已接入</label>
+                                <div class="fire-buddy-phase-list">
+                                    <span>连续互动识别</span>
+                                    <span>邀请绑定流程</span>
+                                    <span>灰掉/唤醒</span>
+                                    <span>聊天页入口</span>
+                                    <span>列表徽章</span>
+                                    <span>手动调试</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -7608,6 +7820,7 @@
     <script src="js/chat/03-ai-engine.js"></script>
     <script src="js/chat/04-media-init.js"></script>
     <script src="js/chat/05-addressbook-friends.js"></script>
+    <script src="js/fire_buddy.js"></script>
     <script src="js/offline_push_sync.js"></script>
     <script src="js/shopping.js"></script>
     <script src="js/forum.js"></script>
