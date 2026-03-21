@@ -1033,6 +1033,15 @@
                                     </select>
                                 </div>
                             </div>
+                            <div class="list-item" id="chat-setting-fire-buddy-topbar-icon-row">
+                                <div class="list-content">
+                                    <label>显示顶栏图标</label>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="chat-setting-fire-buddy-topbar-icon-visible" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                            </div>
                             <div class="list-item" id="chat-setting-fire-buddy-pet-panel" style="display: none;">
                                 <div class="list-content column">
                                     <label>桌宠设置</label>
@@ -1696,104 +1705,66 @@
                 </div>
             </div>
 
-            <div id="fire-buddy-panel" class="sub-screen hidden" style="z-index: 165; background: #fff7ef;">
-                <div class="chat-header fire-buddy-panel-header">
-                    <button id="close-fire-buddy-panel" class="back-btn"><i class="fas fa-chevron-left"></i> 返回</button>
-                    <span id="fire-buddy-panel-title">小火人</span>
-                    <button id="fire-buddy-panel-action" class="wechat-icon-btn fire-buddy-panel-action hidden">绑定</button>
+            <div id="fire-buddy-panel" class="sub-screen hidden fire-buddy-v2-panel" style="z-index: 165;">
+                <div class="fire-buddy-v2-blur-spot"></div>
+                <div class="fire-buddy-v2-abstract-circle"></div>
+                <div class="fire-buddy-v2-abstract-circle-2"></div>
+
+                <div class="fire-buddy-v2-header">
+                    <div>
+                        <div id="fire-buddy-panel-subtitle" class="fire-buddy-v2-header-sub">STATUS / BOUND</div>
+                        <div class="fire-buddy-v2-header-title">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path>
+                            </svg>
+                            <span id="fire-buddy-panel-title">Spark.</span>
+                        </div>
+                    </div>
+                    <button id="close-fire-buddy-panel" class="fire-buddy-v2-close-btn" type="button" aria-label="关闭小火人面板">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                    </button>
                 </div>
-                <div class="app-body fire-buddy-panel-body">
-                    <div class="fire-buddy-hero-card">
-                        <div id="fire-buddy-stage-avatar" class="fire-buddy-stage-avatar">🔥</div>
-                        <div class="fire-buddy-hero-copy">
-                            <div id="fire-buddy-stage-label" class="fire-buddy-stage-label">未解锁</div>
-                            <div id="fire-buddy-status-text" class="fire-buddy-status-text">继续聊天点亮火花</div>
-                            <div id="fire-buddy-status-detail" class="fire-buddy-status-detail">连续 3 个有效互动日后可邀请绑定</div>
+
+                <div class="fire-buddy-v2-content">
+                    <div class="fire-buddy-v2-status-section">
+                        <div id="fire-buddy-stage-label" class="fire-buddy-v2-status-tag">
+                            <span id="fire-buddy-stage-avatar" class="fire-buddy-v2-status-tag-icon">✦</span>
+                            <span id="fire-buddy-stage-label-text">活跃羁绊</span>
+                        </div>
+                        <p id="fire-buddy-status-text" class="fire-buddy-v2-status-text">
+                            羁绊已建立。当前互动处于 <strong>活跃</strong> 状态。继续保持日常沟通，以免星火熄灭进入休眠。
+                        </p>
+                    </div>
+
+                    <div class="fire-buddy-v2-grid-stats">
+                        <div class="fire-buddy-v2-stat-card">
+                            <div id="fire-buddy-current-streak" class="fire-buddy-v2-stat-num">0<span>d</span></div>
+                            <div class="fire-buddy-v2-stat-name">Streak</div>
+                            <div class="fire-buddy-v2-decor-symbol">❖</div>
+                        </div>
+                        <div class="fire-buddy-v2-stat-card">
+                            <div id="fire-buddy-longest-streak" class="fire-buddy-v2-stat-num">0<span>d</span></div>
+                            <div class="fire-buddy-v2-stat-name">Longest</div>
+                            <div class="fire-buddy-v2-decor-symbol">✧</div>
                         </div>
                     </div>
 
-                    <div class="ios-list-group fire-buddy-panel-group">
-                        <div class="list-item">
-                            <div class="list-content">
-                                <label>有效互动天数</label>
-                                <span id="fire-buddy-effective-days" class="value-right">0 天</span>
-                            </div>
+                    <div class="fire-buddy-v2-form-section">
+                        <div class="fire-buddy-v2-form-header">
+                            <div class="fire-buddy-v2-form-title">IDENTITY 设定</div>
                         </div>
-                        <div class="list-item">
-                            <div class="list-content">
-                                <label>当前连续天数</label>
-                                <span id="fire-buddy-current-streak" class="value-right">0 天</span>
-                            </div>
-                        </div>
-                        <div class="list-item">
-                            <div class="list-content">
-                                <label>历史最长连续</label>
-                                <span id="fire-buddy-longest-streak" class="value-right">0 天</span>
-                            </div>
-                        </div>
-                        <div class="list-item">
-                            <div class="list-content">
-                                <label>总消息数</label>
-                                <span id="fire-buddy-message-count" class="value-right">0 条</span>
-                            </div>
-                        </div>
-                        <div class="list-item">
-                            <div class="list-content">
-                                <label>流程状态</label>
-                                <span id="fire-buddy-flow-status" class="value-right">养成中</span>
-                            </div>
-                        </div>
-                        <div class="list-item">
-                            <div class="list-content">
-                                <label>最近有效互动</label>
-                                <span id="fire-buddy-last-active-day" class="value-right">--</span>
-                            </div>
-                        </div>
-                    </div>
 
-                    <div class="ios-list-group fire-buddy-panel-group">
-                        <div class="list-item">
-                            <div class="list-content column fire-buddy-profile-block">
-                                <label for="fire-buddy-name-input">小火人名字</label>
-                                <input id="fire-buddy-name-input" class="fire-buddy-profile-input" type="text" maxlength="24" placeholder="例如：阿焰">
-                            </div>
+                        <div class="fire-buddy-v2-input-block">
+                            <input id="fire-buddy-name-input" type="text" class="fire-buddy-v2-clean-input" maxlength="24" placeholder="赋予它一个称呼">
                         </div>
-                        <div class="list-item">
-                            <div class="list-content column fire-buddy-profile-block">
-                                <label for="fire-buddy-persona-input">小火人人设</label>
-                                <textarea id="fire-buddy-persona-input" class="fire-buddy-profile-textarea" placeholder="例如：嘴硬但很会暖场，会在气氛冷掉时轻轻插话。"></textarea>
-                            </div>
-                        </div>
-                        <div class="list-item">
-                            <div class="list-content column fire-buddy-profile-block">
-                                <button id="fire-buddy-profile-save" class="ios-btn-block fire-buddy-profile-save-btn" type="button">保存名字和人设</button>
-                            </div>
-                        </div>
-                    </div>
 
-                    <div class="ios-list-group fire-buddy-panel-group">
-                        <div class="list-item">
-                            <div class="list-content column">
-                                <label>阶段说明</label>
-                                <div id="fire-buddy-progress-tip" class="fire-buddy-progress-tip">连续 3 个有效互动日后可发起邀请。</div>
-                            </div>
+                        <div class="fire-buddy-v2-input-block">
+                            <textarea id="fire-buddy-persona-input" class="fire-buddy-v2-clean-textarea" placeholder="描述它的性格与说话方式..."></textarea>
                         </div>
-                    </div>
 
-                    <div class="ios-list-group fire-buddy-panel-group">
-                        <div class="list-item">
-                            <div class="list-content column">
-                                <label>本阶段已接入</label>
-                                <div class="fire-buddy-phase-list">
-                                    <span>连续互动识别</span>
-                                    <span>邀请绑定流程</span>
-                                    <span>灰掉/唤醒</span>
-                                    <span>聊天页入口</span>
-                                    <span>列表徽章</span>
-                                    <span>手动调试</span>
-                                </div>
-                            </div>
-                        </div>
+                        <button id="fire-buddy-profile-save" class="fire-buddy-v2-btn-outline" type="button">
+                            <span>Apply Changes</span>
+                        </button>
                     </div>
                 </div>
             </div>

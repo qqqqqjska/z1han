@@ -1541,49 +1541,63 @@
         pet.classList.remove('hidden');
     }
 
+    function getFireBuddyV2StageMeta(status) {
+        const stageMap = {
+            locked: { icon: '—', label: '等待点亮' },
+            warming: { icon: '✧', label: '升温中' },
+            invitable: { icon: '✧', label: '可邀请' },
+            invited: { icon: '✧', label: '等待绑定' },
+            bound: { icon: '✦', label: '活跃羁绊' },
+            gray: { icon: '∙', label: '休眠中' },
+            'wake-ready': { icon: '✦', label: '等待唤醒' }
+        };
+        return stageMap[status] || stageMap.locked;
+    }
+
+    function getFireBuddyV2StatusMarkup(status) {
+        const statusMap = {
+            locked: '羁绊尚未建立。当前仍在 <strong>积蓄火花</strong>。继续保持稳定互动，等它真正被点亮。',
+            warming: '羁绊正在 <strong>升温</strong>。再多一些连续有效互动，就能靠近邀请阶段。',
+            invitable: '火花已经足够明亮。当前已进入 <strong>可邀请</strong> 状态，可以决定是否发起绑定。',
+            invited: '邀请已经发出。当前处于 <strong>等待绑定</strong> 状态，只差最后一步就能建立羁绊。',
+            bound: '羁绊已建立。当前互动处于 <strong>活跃</strong> 状态。继续保持日常沟通，以免星火熄灭进入休眠。',
+            gray: '羁绊暂时进入 <strong>休眠</strong>。恢复新的有效互动后，才能再次把星火点亮。',
+            'wake-ready': '新的互动已经恢复。当前处于 <strong>可唤醒</strong> 状态，再推进一步就能让它重新苏醒。'
+        };
+        return statusMap[status] || statusMap.locked;
+    }
+
+    function formatFireBuddyV2DayStat(value) {
+        return `${Math.max(0, Number(value) || 0)}<span>d</span>`;
+    }
+
     function renderFireBuddyPanel(contact, metrics, status) {
         const avatarEl = document.getElementById('fire-buddy-stage-avatar');
-        const stageLabelEl = document.getElementById('fire-buddy-stage-label');
+        const stageLabelTextEl = document.getElementById('fire-buddy-stage-label-text');
+        const panelSubtitleEl = document.getElementById('fire-buddy-panel-subtitle');
         const panelTitleEl = document.getElementById('fire-buddy-panel-title');
         const statusTextEl = document.getElementById('fire-buddy-status-text');
-        const statusDetailEl = document.getElementById('fire-buddy-status-detail');
-        const effectiveDaysEl = document.getElementById('fire-buddy-effective-days');
         const currentStreakEl = document.getElementById('fire-buddy-current-streak');
         const longestStreakEl = document.getElementById('fire-buddy-longest-streak');
-        const messageCountEl = document.getElementById('fire-buddy-message-count');
-        const flowStatusEl = document.getElementById('fire-buddy-flow-status');
-        const lastActiveDayEl = document.getElementById('fire-buddy-last-active-day');
-        const progressTipEl = document.getElementById('fire-buddy-progress-tip');
-        const actionBtn = document.getElementById('fire-buddy-panel-action');
         const nameInputEl = document.getElementById('fire-buddy-name-input');
         const personaInputEl = document.getElementById('fire-buddy-persona-input');
 
-        if (!contact || !avatarEl || !stageLabelEl || !statusTextEl || !effectiveDaysEl || !currentStreakEl || !longestStreakEl || !messageCountEl || !progressTipEl || !actionBtn) {
+        if (!contact || !avatarEl || !stageLabelTextEl || !statusTextEl || !currentStreakEl || !longestStreakEl || !nameInputEl || !personaInputEl) {
             return;
         }
 
         const fireBuddy = ensureFireBuddy(contact);
-        const actionConfig = getFireBuddyActionConfig(status);
-        avatarEl.classList.toggle('is-gray', status === 'gray' || status === 'wake-ready');
-        avatarEl.textContent = getFireBuddyHeaderIcon(status);
-        if (panelTitleEl) panelTitleEl.textContent = getFireBuddyDisplayName(contact);
-        stageLabelEl.textContent = getFireBuddyStageLabel(status);
-        statusTextEl.textContent = buildStatusHeadline(contact, status);
-        if (statusDetailEl) statusDetailEl.textContent = buildStatusDetail(contact, metrics, status);
-        if (nameInputEl) nameInputEl.value = fireBuddy.profile.name || '';
-        if (personaInputEl) personaInputEl.value = fireBuddy.profile.persona || '';
+        const stageMeta = getFireBuddyV2StageMeta(status);
 
-        effectiveDaysEl.textContent = `${metrics.effectiveDays || 0} \u5929`;
-        currentStreakEl.textContent = `${metrics.currentStreak || 0} \u5929`;
-        longestStreakEl.textContent = `${metrics.longestStreak || 0} \u5929`;
-        messageCountEl.textContent = `${metrics.messageCount || 0} \u6761`;
-        if (flowStatusEl) flowStatusEl.textContent = getFireBuddyStageLabel(status);
-        if (lastActiveDayEl) lastActiveDayEl.textContent = getFireBuddyLastActiveDayLabel(metrics);
-        progressTipEl.textContent = buildProgressTip(status, metrics);
-
-        actionBtn.classList.toggle('hidden', !!actionConfig.hidden);
-        actionBtn.textContent = actionConfig.label;
-        actionBtn.disabled = !!actionConfig.disabled;
+        if (panelSubtitleEl) panelSubtitleEl.textContent = 'Status / Bound';
+        if (panelTitleEl) panelTitleEl.textContent = 'Spark.';
+        avatarEl.textContent = stageMeta.icon;
+        stageLabelTextEl.textContent = stageMeta.label;
+        statusTextEl.innerHTML = getFireBuddyV2StatusMarkup(status);
+        currentStreakEl.innerHTML = formatFireBuddyV2DayStat(metrics.currentStreak);
+        longestStreakEl.innerHTML = formatFireBuddyV2DayStat(metrics.longestStreak);
+        nameInputEl.value = fireBuddy.profile.name || '';
+        personaInputEl.value = fireBuddy.profile.persona || '';
     }
 
     function decorateContactList(filterGroup) {
@@ -1653,6 +1667,7 @@
         const nameInput = document.getElementById('fire-buddy-name-input');
         const personaInput = document.getElementById('fire-buddy-persona-input');
         const saveBtn = document.getElementById('fire-buddy-profile-save');
+        const saveBtnLabel = saveBtn ? (saveBtn.querySelector('span') || saveBtn) : null;
         const contactId = panel ? (panel.dataset.contactId || getState().currentChatContactId) : getState().currentChatContactId;
         const contact = getContactById(contactId);
         if (!contact || !nameInput || !personaInput) return;
@@ -1674,13 +1689,13 @@
         }
         syncFireBuddyComposer(contact.id);
 
-        if (saveBtn) {
-            const originalText = saveBtn.dataset.defaultLabel || saveBtn.textContent;
+        if (saveBtn && saveBtnLabel) {
+            const originalText = saveBtn.dataset.defaultLabel || saveBtnLabel.textContent || 'Apply Changes';
             saveBtn.dataset.defaultLabel = originalText;
-            saveBtn.textContent = '已保存';
+            saveBtnLabel.textContent = 'Saved ✓';
             window.setTimeout(() => {
-                saveBtn.textContent = saveBtn.dataset.defaultLabel || '保存名字和人设';
-            }, 1200);
+                saveBtnLabel.textContent = saveBtn.dataset.defaultLabel || 'Apply Changes';
+            }, 1500);
         }
 
         return result;
@@ -2137,7 +2152,6 @@
     function bindPanelEvents() {
         const entryBtn = document.getElementById('fire-buddy-entry');
         const closeBtn = document.getElementById('close-fire-buddy-panel');
-        const actionBtn = document.getElementById('fire-buddy-panel-action');
         const unlockCard = document.getElementById('fire-buddy-unlock-card');
         const profileSaveBtn = document.getElementById('fire-buddy-profile-save');
         const moreBtn = document.getElementById('chat-more-fire-buddy-btn');
@@ -2149,9 +2163,6 @@
         }
         if (closeBtn) {
             closeBtn.addEventListener('click', closeFireBuddyPanel);
-        }
-        if (actionBtn) {
-            actionBtn.addEventListener('click', bindFireBuddyCurrentContact);
         }
         if (unlockCard) {
             unlockCard.addEventListener('click', () => openFireBuddyPanel(unlockCard.dataset.contactId || getState().currentChatContactId));
@@ -2240,6 +2251,7 @@
             closeFireBuddyComposer();
             syncFireBuddyComposeTrigger(null);
         }
+        
     }
 
     window.openFireBuddyPanel = openFireBuddyPanel;
