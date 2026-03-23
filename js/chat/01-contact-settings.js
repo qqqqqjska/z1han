@@ -2174,10 +2174,65 @@ function mountChatSettingsEditorialNav() {
 
 window.mountChatSettingsEditorialNav = mountChatSettingsEditorialNav;
 
+function syncChatSettingsNavIndicator(activeItem = null) {
+    const screen = document.getElementById('chat-settings-screen');
+    const nav = screen ? screen.querySelector('.chat-settings-nav') : null;
+    const indicator = nav ? nav.querySelector('.nav-indicator') : null;
+    const target = activeItem || (nav ? nav.querySelector('.nav-item.active') : null);
+    if (!nav || !indicator || !target) return;
+
+    requestAnimationFrame(() => {
+        const width = Math.round(target.offsetWidth || target.getBoundingClientRect().width || 0);
+        const offset = Math.round(target.offsetLeft || 0);
+        indicator.style.width = `${width}px`;
+        indicator.style.transform = `translate3d(${offset}px, 0, 0)`;
+        indicator.style.opacity = width > 0 ? '1' : '0';
+    });
+}
+
+window.syncChatSettingsNavIndicator = syncChatSettingsNavIndicator;
+
+function bindChatSettingsHeaderInteractions() {
+    const screen = document.getElementById('chat-settings-screen');
+    const avatarGroup = screen ? screen.querySelector('.chat-settings-editorial-avatars') : null;
+    const avatars = avatarGroup ? Array.from(avatarGroup.querySelectorAll('.chat-settings-editorial-avatar')) : [];
+    const nav = screen ? screen.querySelector('.chat-settings-nav') : null;
+    if (!screen) return;
+
+    if (nav && !nav.dataset.indicatorBound) {
+        nav.dataset.indicatorBound = '1';
+        nav.addEventListener('scroll', () => syncChatSettingsNavIndicator());
+    }
+
+    if (!avatarGroup || avatarGroup.dataset.tapBound === '1') return;
+    avatarGroup.dataset.tapBound = '1';
+
+    const triggerTap = () => {
+        avatarGroup.classList.remove('is-tapped');
+        avatars.forEach(avatar => avatar.classList.remove('is-tapped'));
+        void avatarGroup.offsetWidth;
+        avatarGroup.classList.add('is-tapped');
+        avatars.forEach(avatar => avatar.classList.add('is-tapped'));
+        clearTimeout(window.__chatSettingsHeaderAvatarTapTimer);
+        window.__chatSettingsHeaderAvatarTapTimer = setTimeout(() => {
+            avatarGroup.classList.remove('is-tapped');
+            avatars.forEach(avatar => avatar.classList.remove('is-tapped'));
+        }, 320);
+    };
+
+    avatars.forEach(avatar => {
+        avatar.style.cursor = 'pointer';
+        avatar.addEventListener('click', triggerTap);
+    });
+}
+
+window.bindChatSettingsHeaderInteractions = bindChatSettingsHeaderInteractions;
+
 if (!window.__chatSettingsStickyChromeResizeBound) {
     window.__chatSettingsStickyChromeResizeBound = true;
     window.addEventListener('resize', () => {
         syncChatSettingsStickyChrome();
+        syncChatSettingsNavIndicator();
     });
 }
 
@@ -2185,6 +2240,7 @@ function openChatSettings() {
     const contact = getActiveAiProfileContact();
     if (!contact) return;
     mountChatSettingsEditorialNav();
+    bindChatSettingsHeaderInteractions();
     ensureContactRestWindowFields(contact);
     setChatSettingsFloatingSaveVisible(true);
     setChatSettingsFloatingSaveState(false);
@@ -2427,8 +2483,15 @@ function openChatSettings() {
     if (chatSettingsScreen) chatSettingsScreen.scrollTop = 0;
     if (chatSettingsBody) chatSettingsBody.scrollTop = 0;
     syncChatSettingsStickyChrome();
-    requestAnimationFrame(() => syncChatSettingsStickyChrome());
-    setTimeout(() => syncChatSettingsStickyChrome(), 120);
+    syncChatSettingsNavIndicator();
+    requestAnimationFrame(() => {
+        syncChatSettingsStickyChrome();
+        syncChatSettingsNavIndicator();
+    });
+    setTimeout(() => {
+        syncChatSettingsStickyChrome();
+        syncChatSettingsNavIndicator();
+    }, 120);
     if (contact.id) {
         refreshTokenCountForContact(contact.id);
     }

@@ -3963,8 +3963,8 @@ function setupChatListeners() {
             chatSettingTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             
-            if (chatSettingIndicator) {
-                chatSettingIndicator.style.transform = `translate3d(${index * 100}%, 0, 0)`;
+            if (chatSettingIndicator && typeof window.syncChatSettingsNavIndicator === 'function') {
+                window.syncChatSettingsNavIndicator(tab);
             }
 
             if (currentContent) {

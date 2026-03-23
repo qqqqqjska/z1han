@@ -3197,13 +3197,64 @@
 
 #chat-settings-screen #chat-bg-gallery .gallery-item.selected {
     border-color: rgba(0, 0, 0, 0.88) !important;
-    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1), 0 10px 18px rgba(0, 0, 0, 0.12);
-    transform: translateY(-2px);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
 }
 
 #chat-settings-screen #chat-bg-gallery .gallery-item.selected::after {
     content: none;
     display: none;
+}
+
+#chat-settings-screen .editorial-background-library-card,
+#chat-settings-screen .editorial-background-library-card .mag-field {
+    min-width: 0;
+}
+
+#chat-settings-screen #chat-bg-gallery {
+    display: flex;
+    flex-wrap: nowrap;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 4px 0 8px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+#chat-settings-screen #chat-bg-gallery::-webkit-scrollbar {
+    display: none;
+}
+
+#chat-settings-screen #chat-bg-gallery > *,
+#chat-settings-screen #chat-bg-gallery .gallery-item {
+    flex: 0 0 auto;
+    width: 78px;
+    min-width: 78px;
+    max-width: 78px;
+}
+
+#chat-settings-screen .chat-settings-editorial-title,
+#chat-settings-screen .mag-title {
+    font-size: clamp(40px, 7.8vw, 60px);
+}
+
+#chat-settings-screen .chat-settings-nav > .nav-item .separator,
+#chat-settings-screen .mag-nav-item .separator {
+    margin: 0 2px !important;
+}
+
+#chat-settings-screen .chat-settings-nav > .nav-item .mag-nav-zh,
+#chat-settings-screen .mag-nav-item .mag-nav-zh {
+    letter-spacing: 0;
 }
 
 #chat-settings-screen .editorial-custom-css-card .editorial-code-textarea {
@@ -3318,5 +3369,73 @@
 
 #chat-settings-editorial-save.hidden {
     display: none !important;
+}
+
+/* Restored showcase header micro-interactions */
+#chat-settings-screen .chat-settings-editorial-spark {
+    display: inline-block;
+    font-size: 0.9em;
+    margin-right: 6px;
+    letter-spacing: 0;
+    transform-origin: 50% 50%;
+    animation: magSpin 10s linear infinite;
+}
+
+#chat-settings-screen .chat-settings-editorial-avatars,
+#chat-settings-screen .mag-header-avatars {
+    cursor: pointer;
+    user-select: none;
+}
+
+#chat-settings-screen .chat-settings-editorial-avatar,
+#chat-settings-screen .mag-header-avatar {
+    transition: transform 0.3s ease, box-shadow 0.3s ease, filter 0.3s ease;
+    will-change: transform;
+}
+
+#chat-settings-screen .chat-settings-editorial-avatars:hover .chat-settings-editorial-avatar:nth-child(2),
+#chat-settings-screen .mag-header-avatars:hover .mag-header-avatar:nth-child(2) {
+    transform: translateX(4px);
+}
+
+#chat-settings-screen .chat-settings-editorial-avatars.is-tapped .chat-settings-editorial-avatar:nth-child(1),
+#chat-settings-screen .mag-header-avatars.is-tapped .mag-header-avatar:nth-child(1) {
+    transform: translateX(-2px) scale(0.98);
+}
+
+#chat-settings-screen .chat-settings-editorial-avatars.is-tapped .chat-settings-editorial-avatar:nth-child(2),
+#chat-settings-screen .mag-header-avatars.is-tapped .mag-header-avatar:nth-child(2) {
+    transform: translateX(6px) scale(1.04);
+}
+
+#chat-settings-screen .chat-settings-editorial-avatars.is-tapped .chat-settings-editorial-avatar,
+#chat-settings-screen .mag-header-avatars.is-tapped .mag-header-avatar {
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+}
+
+/* Restored nav indicator motion */
+#chat-settings-screen .chat-settings-nav > .nav-indicator,
+#chat-settings-screen .mag-nav > .nav-indicator {
+    display: block !important;
+    position: absolute;
+    top: auto !important;
+    right: auto !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    width: 0;
+    height: 1px;
+    margin: 0;
+    border-radius: 0 !important;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 10;
+    transition: transform 0.42s cubic-bezier(0.16, 1, 0.3, 1), width 0.42s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+    will-change: transform, width;
+}
+
+#chat-settings-screen .chat-settings-nav > .nav-item::after,
+#chat-settings-screen .mag-nav-item::after {
+    opacity: 0;
 }
 
