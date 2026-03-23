@@ -969,33 +969,35 @@
                             </div>
                         </div>
 
-                        <div class="editorial-card-shell mag-card">
+                        <div class="editorial-card-shell mag-card editorial-thought-card">
                             <div class="chat-settings-card-kicker mag-card-decor"><span class="mag-pulse-symbol">&#10022;</span> MOD-03</div>
                             <div class="chat-settings-card-title mag-card-title"><i class="ri-bubble-chart-line"></i><span>Thought System</span></div>
+                            <div class="editorial-thought-title-divider"></div>
 
                             <div class="mag-toggle">
                                 <span class="mag-toggle-text">Show Thoughts <span class="separator">/</span> <span class="mag-zh">显示心声</span></span>
                                 <label><input type="checkbox" id="chat-setting-show-thought" class="mag-toggle-input"><div class="mag-toggle-switch"></div></label>
                             </div>
 
-                            <div class="mag-field" style="margin-top: 10px;">
+                            <div class="mag-field editorial-thought-style-field" style="margin-top: 10px;">
                                 <label class="mag-label">Thought Style <span class="separator">/</span> <span class="mag-zh">心声显示样式</span></label>
-                                <select id="chat-setting-thought-style" class="mag-select">
+                                <select id="chat-setting-thought-style" class="mag-select editorial-thought-style-select">
                                     <option value="title">Title Tap / 点击备注名</option>
                                     <option value="desktop-pet">Desktop Pet / 桌宠悬浮</option>
                                 </select>
                             </div>
 
-                            <div id="chat-setting-thought-pet-panel" class="mag-field" style="display: none; margin-top: 10px;">
-                                <label class="mag-label">Thought Pet <span class="separator">/</span> <span class="mag-zh">心声桌宠</span></label>
-                                <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
-                                    <img id="chat-setting-thought-pet-preview" src="" alt="Thought Pet Preview" style="width: 56px; height: 56px; object-fit: contain; border-radius: 10px; background: rgba(255,255,255,0.45); border: 1px solid var(--mag-line); padding: 4px; flex-shrink: 0;">
-                                    <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                            <div id="chat-setting-thought-pet-panel" class="mag-field editorial-thought-pet-field" style="display: none; margin-top: 10px;">
+                                <div class="editorial-thought-pet-shell">
+                                    <div class="editorial-thought-pet-upload-row">
                                         <input type="file" id="chat-setting-thought-pet-image" accept="image/*" class="file-input-hidden">
-                                        <label for="chat-setting-thought-pet-image" class="ios-btn">Upload Pet Image</label>
-                                        <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
-                                            <label style="font-size: 13px; color: var(--mag-sec-text); white-space: nowrap; margin: 0;">Size <span id="chat-setting-thought-pet-size-value">88px</span></label>
-                                            <input type="range" id="chat-setting-thought-pet-size" min="52" max="140" step="1" value="88" style="width: 100%;">
+                                        <label for="chat-setting-thought-pet-image" class="editorial-thought-pet-preview-frame">
+                                            <img id="chat-setting-thought-pet-preview" class="editorial-thought-pet-preview" src="" alt="Thought Pet Preview">
+                                        </label>
+                                        <div class="editorial-thought-pet-upload-main">
+                                            <div class="mag-label editorial-thought-pet-inline-label">THOUGHT PET <span class="separator">/</span> <span class="mag-zh">心声桌宠</span></div>
+                                            <input type="range" id="chat-setting-thought-pet-size" class="editorial-thought-size-slider" min="52" max="140" step="1" value="88">
+                                            <div class="editorial-thought-size-note">Current size / 当前大小：<strong><span id="chat-setting-thought-pet-size-value">88px</span></strong></div>
                                         </div>
                                     </div>
                                 </div>
@@ -1016,66 +1018,64 @@
                                 <label><input type="checkbox" id="chat-setting-calendar-aware" class="mag-toggle-input"><div class="mag-toggle-switch"></div></label>
                             </div>
                         </div>
-                        <div class="editorial-card-shell mag-card">
-                            <div class="chat-settings-card-kicker mag-card-decor">FIRE-01 ?</div>
+                        <div class="editorial-card-shell mag-card editorial-fire-buddy-card">
+                            <div class="chat-settings-card-kicker mag-card-decor"><span class="mag-pulse-symbol">&#10022;</span> FBR-04</div>
                             <div class="chat-settings-card-title mag-card-title"><i class="ri-fire-line"></i><span>Fire Buddy</span></div>
-                            <div class="ios-list-group editorial-card-group">
-                            <div class="list-item">
-                                <div class="list-content">
-                                    <label>Debug Status</label>
-                                    <select id="chat-setting-fire-buddy-mode">
-                                        <option value="locked">Locked / ???</option>
-                                        <option value="warming">Warming / ???</option>
-                                        <option value="invitable">Invitable / ???</option>
-                                        <option value="invited">Invited / ???</option>
-                                        <option value="bound">Bound / ???</option>
-                                        <option value="gray">Gray / ???</option>
-                                        <option value="wake-ready">Wake Ready / ???</option>
-                                    </select>
-                                </div>
+
+                            <div class="mag-toggle">
+                                <span class="mag-toggle-text">Enable Fire Buddy <span class="separator">/</span> <span class="mag-zh">启用小火人</span></span>
+                                <label><input type="checkbox" class="mag-toggle-input" checked><div class="mag-toggle-switch"></div></label>
                             </div>
-                            <div class="list-item">
-                                <div class="list-content">
-                                    <label>Display Mode</label>
-                                    <select id="chat-setting-fire-buddy-display-mode">
-                                        <option value="topbar">Topbar Entry / ????</option>
-                                        <option value="desktop-pet">Desktop Pet / ????</option>
-                                    </select>
-                                </div>
+
+                            <div class="mag-toggle">
+                                <span class="mag-toggle-text">Manual Debug <span class="separator">/</span> <span class="mag-zh">手动调试开启</span></span>
+                                <label><input type="checkbox" class="mag-toggle-input"><div class="mag-toggle-switch"></div></label>
                             </div>
-                            <div class="list-item" id="chat-setting-fire-buddy-topbar-icon-row">
-                                <div class="list-content">
-                                    <label>Show Topbar Icon</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="chat-setting-fire-buddy-topbar-icon-visible" checked>
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
+
+                            <div class="mag-field" style="margin-top: 10px;">
+                                <label class="mag-label">Debug Status <span class="separator">/</span> <span class="mag-zh">调试状态</span></label>
+                                <select id="chat-setting-fire-buddy-mode" class="mag-select">
+                                    <option value="locked">Locked / 未解锁</option>
+                                    <option value="warming" selected>Warming / 升温中</option>
+                                    <option value="invitable">Invitable / 可邀请</option>
+                                    <option value="invited">Invited / 已邀请</option>
+                                    <option value="bound">Bound / 已绑定</option>
+                                    <option value="gray">Gray / 已变灰</option>
+                                    <option value="wake-ready">Wake Ready / 可唤醒</option>
+                                </select>
                             </div>
-                            <div class="list-item" id="chat-setting-fire-buddy-pet-panel" style="display: none;">
-                                <div class="list-content column">
-                                    <label>Desktop Pet Setup</label>
-                                    <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
-                                        <img id="chat-setting-fire-buddy-pet-preview" src="" alt="Fire Buddy Pet Preview" style="width: 56px; height: 56px; object-fit: contain; border-radius: 10px; background: #f2f2f7; border: 1px solid #e5e5ea; padding: 4px; flex-shrink: 0;">
-                                        <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-                                            <input type="file" id="chat-setting-fire-buddy-pet-image" accept="image/*" class="file-input-hidden">
-                                            <label for="chat-setting-fire-buddy-pet-image" class="ios-btn">Upload Pet Image</label>
-                                            <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
-                                                <label style="font-size: 14px; color: #6d6d72; white-space: nowrap;">Size <span id="chat-setting-fire-buddy-pet-size-value">92px</span></label>
-                                                <input type="range" id="chat-setting-fire-buddy-pet-size" min="56" max="150" step="1" value="92" style="width: 100%;">
-                                            </div>
-                                            <div class="fire-buddy-settings-hint">Saved independently from the Thought pet.</div>
+
+                            <div class="mag-field">
+                                <label class="mag-label">Display Mode <span class="separator">/</span> <span class="mag-zh">显示方式</span></label>
+                                <select id="chat-setting-fire-buddy-display-mode" class="mag-select">
+                                    <option value="topbar" selected>Topbar Entry / 顶栏入口</option>
+                                    <option value="desktop-pet">Desktop Pet / 桌宠悬浮</option>
+                                </select>
+                            </div>
+
+                            <div id="chat-setting-fire-buddy-topbar-icon-row" class="mag-toggle">
+                                <span class="mag-toggle-text">Show Topbar Icon <span class="separator">/</span> <span class="mag-zh">显示顶栏图标</span></span>
+                                <label><input type="checkbox" id="chat-setting-fire-buddy-topbar-icon-visible" class="mag-toggle-input" checked><div class="mag-toggle-switch"></div></label>
+                            </div>
+
+                            <div id="chat-setting-fire-buddy-pet-panel" class="editorial-fire-buddy-panel">
+                                <div class="mag-upload-card">
+                                    <div class="mag-upload-row">
+                                        <input type="file" id="chat-setting-fire-buddy-pet-image" accept="image/*" class="file-input-hidden">
+                                        <label for="chat-setting-fire-buddy-pet-image" class="mag-upload-preview is-clickable editorial-fire-buddy-upload-preview" style="background: linear-gradient(135deg, rgba(0,0,0,0.06), rgba(0,0,0,0.16)); color: var(--mag-accent);">
+                                            <img id="chat-setting-fire-buddy-pet-preview" class="editorial-fire-buddy-preview-image" src="" alt="Fire Buddy Pet Preview">
+                                            <span class="editorial-fire-buddy-preview-icon"><i class="ri-fire-fill"></i></span>
+                                        </label>
+                                        <div class="editorial-fire-buddy-upload-main">
+                                            <div class="mag-label">Desktop Pet Setup <span class="separator">/</span> <span class="mag-zh">桌宠形象</span></div>
+                                            <input type="range" id="chat-setting-fire-buddy-pet-size" class="mag-slider" min="56" max="150" step="1" value="92">
+                                            <div class="mag-note"><strong><span id="chat-setting-fire-buddy-pet-size-value">92px</span></strong></div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="list-item">
-                                <div class="list-content column">
-                                    <label>Current Progress</label>
-                                    <div id="chat-setting-fire-buddy-summary" class="fire-buddy-settings-summary">????????</div>
-                                </div>
-                            </div>
-                            </div>
+
+                            <div id="chat-setting-fire-buddy-summary" class="mag-muted-box">Current progress / 当前进度：继续聊天点亮火花，达到邀请阈值后将出现在聊天顶栏。</div>
                         </div>
                         <div class="editorial-card-shell mag-card" style="grid-column: 1 / -1;">
                             <div class="chat-settings-card-kicker mag-card-decor"><span class="mag-pulse-symbol">&#10022;</span> ASSET-05</div>
@@ -1113,66 +1113,66 @@
                             </div>
                         </div>
                     </div>
-
                     <!-- User Tab -->
                     <div id="chat-setting-tab-user" class="chat-setting-tab-content mag-section">
-                        <!-- 用户设置卡片 -->
                         <div class="ai-setting-card editorial-primary-card editorial-user-card mag-card">
-                            <div class="chat-settings-card-kicker mag-card-decor">USER-01 ○</div>
+                            <div class="chat-settings-card-kicker mag-card-decor"><span class="mag-pulse-symbol">&#10022;</span> USER-01</div>
                             <div class="chat-settings-card-title mag-card-title"><i class="ri-user-smile-line"></i><span>User Profile</span></div>
-                            <div class="editorial-identity-inline editorial-user-inline mag-avatar-upload">
-                                <div class="ai-setting-avatar-container">
+                            <div class="mag-identity-profile mag-user-profile-inline editorial-user-inline">
+                                <div class="ai-setting-avatar-container mag-identity-avatar-badge">
                                     <input type="file" id="chat-setting-my-avatar" accept="image/*" class="file-input-hidden">
                                     <label for="chat-setting-my-avatar" class="ai-setting-avatar-wrapper mag-avatar-preview is-clickable">
                                         <img id="chat-setting-my-avatar-preview" src="" alt="Avatar">
                                     </label>
                                 </div>
-                                <div class="editorial-identity-meta">
-                                    <div class="ai-setting-name-container mag-field is-compact">
-                                        <select id="chat-setting-user-persona" class="ai-setting-name-input mag-select">
-                                            <option value="">-- 选择身份 --</option>
-                                        </select>
-                                    </div>
-                                    <div class="editorial-user-gender-wrap mag-field is-compact">
-                                        <div id="user-gender-display">性别：女</div>
+                                <div class="mag-identity-meta editorial-identity-meta">
+                                    <div class="mag-force-inline mag-user-meta-inline">
+                                        <div class="ai-setting-name-container mag-field is-compact editorial-user-select-field editorial-user-persona-field">
+                                            <select id="chat-setting-user-persona" class="ai-setting-name-input mag-select">
+                                                <option value="">Default Self / 默认身份</option>
+                                            </select>
+                                        </div>
+                                        <div class="editorial-user-gender-wrap mag-field is-compact editorial-user-select-field editorial-user-gender-field">
+                                            <div id="user-gender-display" role="button" tabindex="0">Female / 女</div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                             <div class="mag-field editorial-user-prompt-field">
-                                <label class="mag-label">User Prompt</label>
+                                <label class="mag-label">User Prompt <span class="separator">/</span> <span class="mag-zh">我的身份设定</span></label>
                                 <div id="chat-setting-user-prompt-preview" class="mag-prompt-preview mag-prompt-preview-clamp chat-settings-prompt-trigger" data-input-id="chat-setting-user-prompt" data-default-text="点击填写我的身份设定..." data-modal-en="User Prompt" data-modal-zh="身份设定" data-modal-placeholder="告诉 AI 你是谁、希望如何被理解..." role="button" tabindex="0">点击填写我的身份设定...</div>
                                 <textarea id="chat-setting-user-prompt" class="mag-textarea chat-settings-prompt-source" rows="3" placeholder="在此输入人设..." hidden></textarea>
                             </div>
                         </div>
                         <div class="editorial-card-shell editorial-user-perception-card mag-card">
-                            <div class="chat-settings-card-kicker mag-card-decor">USER-02 ○</div>
+                            <div class="chat-settings-card-kicker mag-card-decor"><span class="mag-pulse-symbol">&#10022;</span> USER-02</div>
                             <div class="chat-settings-card-title mag-card-title"><i class="ri-eye-line"></i><span>User Perception</span></div>
-                            <div class="editorial-user-perception-panel">
+                            <div class="editorial-user-perception-panel mag-perception-panel">
                                 <div id="user-perception-display">
                                     <div class="mag-field">
-                                        <label class="mag-label">Perception List</label>
-                                        <div id="user-perception-list">
-                                            <!-- 列表项将通过JS生成 -->
-                                        </div>
+                                        <label class="mag-label">Perception List <span class="separator">/</span> <span class="mag-zh">认知列表</span></label>
+                                        <div id="user-perception-list"></div>
                                     </div>
                                     <div class="mag-action-row">
-                                        <button id="edit-user-perception-btn" class="ios-btn-block secondary mag-btn">编辑</button>
+                                        <button id="edit-user-perception-btn" class="ios-btn-block secondary mag-btn">Edit</button>
                                     </div>
                                 </div>
 
                                 <div id="user-perception-edit" class="hidden">
                                     <div class="mag-field">
-                                        <label class="mag-label">Edit Buffer</label>
+                                        <label class="mag-label">Edit Buffer <span class="separator">/</span> <span class="mag-zh">编辑区（每行一条）</span></label>
                                         <textarea id="user-perception-input" class="mag-textarea editorial-perception-textarea" placeholder="每行一条认知信息"></textarea>
                                     </div>
                                     <div class="mag-action-row">
-                                        <button id="save-user-perception-btn" class="ios-btn-block mag-btn">保存</button>
-                                        <button id="cancel-user-perception-btn" class="ios-btn-block secondary mag-btn">取消</button>
+                                        <button id="save-user-perception-btn" class="ios-btn-block mag-btn">Save</button>
+                                        <button id="cancel-user-perception-btn" class="ios-btn-block secondary mag-btn editorial-ghost-btn">Cancel</button>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+
+
 
                     <!-- Appearance Tab -->
                     <div id="chat-setting-tab-appearance" class="chat-setting-tab-content mag-section">

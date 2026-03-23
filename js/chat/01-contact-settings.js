@@ -2288,7 +2288,7 @@ function openChatSettings() {
     }
 
     const userPersonaSelect = document.getElementById('chat-setting-user-persona');
-    userPersonaSelect.innerHTML = '<option value="">-- 选择身份 --</option>';
+    userPersonaSelect.innerHTML = '<option value="">Default Self / 默认身份</option>';
     window.iphoneSimState.userPersonas.forEach(p => {
         const option = document.createElement('option');
         option.value = p.id;
@@ -2296,9 +2296,10 @@ function openChatSettings() {
         userPersonaSelect.appendChild(option);
     });
     
-    if (contact.userPersonaId) {
-        userPersonaSelect.value = contact.userPersonaId;
-    }
+    const fallbackUserPersonaId = contact.userPersonaId || window.iphoneSimState.currentUserPersonaId || (window.iphoneSimState.userPersonas[0] ? window.iphoneSimState.userPersonas[0].id : '');
+        if (fallbackUserPersonaId) {
+            userPersonaSelect.value = fallbackUserPersonaId;
+        }
     // 动态补一个用户人设编辑框（优先使用 HTML 中已存在的 showcase 容器）
     let userPromptTextarea = document.getElementById('chat-setting-user-prompt');
     if (!userPromptTextarea) {
@@ -2424,8 +2425,8 @@ function renderUserPerception(contact) {
     const genderDisplay = document.getElementById('user-gender-display');
     if (genderDisplay) {
         const currentGender = window.iphoneSimState.userProfile?.gender || 'female';
-        const genderText = currentGender === 'male' ? '男' : '女';
-        genderDisplay.textContent = `性别：${genderText}`;
+        const genderText = currentGender === 'male' ? 'Male / 男' : 'Female / 女';
+        genderDisplay.textContent = genderText;
         
         genderDisplay.onclick = () => {
             const newGender = currentGender === 'male' ? 'female' : 'male';
