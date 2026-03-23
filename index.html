@@ -1176,78 +1176,60 @@
 
                     <!-- Appearance Tab -->
                     <div id="chat-setting-tab-appearance" class="chat-setting-tab-content mag-section">
-                        <div class="editorial-card-shell mag-card">
-                            <div class="chat-settings-card-kicker mag-card-decor">VIS-01 ○</div>
+                        <div class="editorial-card-shell mag-card editorial-visuals-display-card">
+                            <div class="chat-settings-card-kicker mag-card-decor"><span class="mag-pulse-symbol">&#10022;</span> VIS-01</div>
                             <div class="chat-settings-card-title mag-card-title"><i class="ri-layout-4-line"></i><span>Display System</span></div>
-                            <div class="ios-list-group editorial-card-group">
-                            <div class="list-item">
-                                <div class="list-content column">
-                                    <div style="display: flex; justify-content: space-between; width: 100%;">
-                                        <label>字体大小</label>
-                                        <span id="chat-font-size-value">16px</span>
-                                    </div>
-                                    <input type="range" id="chat-font-size-slider" min="12" max="30" step="1" value="16" style="width: 100%;">
+
+                            <div class="mag-field editorial-display-font-field">
+                                <label class="mag-label">Font Size <span class="separator">/</span> <span class="mag-zh">字体大小</span></label>
+                                <div class="editorial-display-font-row">
+                                    <span id="chat-font-size-value" class="editorial-display-font-value">16px</span>
+                                    <input type="range" id="chat-font-size-slider" class="mag-slider editorial-display-font-slider" min="12" max="30" step="1" value="16">
                                 </div>
                             </div>
-                            <div class="list-item">
-                                <div class="list-content">
-                                    <label>头像显示范围</label>
-                                    <select id="chat-setting-avatar-visibility">
-                                        <option value="show-both">都显示</option>
-                                        <option value="hide-other">隐藏对方</option>
-                                        <option value="hide-self">隐藏自己</option>
-                                        <option value="hide-both">隐藏双方</option>
-                                    </select>
-                                </div>
+
+                            <div class="mag-field editorial-visual-select-field">
+                                <label class="mag-label">Avatar Visibility <span class="separator">/</span> <span class="mag-zh">头像显示范围</span></label>
+                                <select id="chat-setting-avatar-visibility" class="mag-select">
+                                    <option value="show-both">Show Both / 都显示</option>
+                                    <option value="hide-other">Hide Other / 隐藏对方</option>
+                                    <option value="hide-self">Hide Self / 隐藏自己</option>
+                                    <option value="hide-both">Hide Both / 隐藏双方</option>
+                                </select>
                             </div>
-                            <div class="list-item">
-                                <div class="list-content">
-                                    <label>时间戳显示</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="chat-setting-show-timestamp" checked>
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
+
+                            <div class="mag-toggle">
+                                <span class="mag-toggle-text">Show Timestamps <span class="separator">/</span> <span class="mag-zh">时间戳显示</span></span>
+                                <label><input type="checkbox" id="chat-setting-show-timestamp" class="mag-toggle-input" checked><div class="mag-toggle-switch"></div></label>
                             </div>
-                            <div class="list-item">
-                                <div class="list-content column">
-                                    <label>AI消息间隔 (毫秒)</label>
-                                    <div style="display: flex; gap: 10px; align-items: center;">
-                                        <input type="number" id="chat-setting-interval-min" placeholder="最小(默认400)" style="flex: 1;width: 70%;">
-                                        <span>-</span>
-                                        <input type="number" id="chat-setting-interval-max" placeholder="最大(默认2200)" style="flex: 1;">
-                                    </div>
+
+                            <div class="mag-field editorial-interval-field" style="margin-top: 18px;">
+                                <label class="mag-label">AI Message Interval (ms) <span class="separator">/</span> <span class="mag-zh">AI 消息间隔</span></label>
+                                <div class="mag-split-fields mag-inline-number-pair editorial-interval-pair">
+                                    <input type="number" id="chat-setting-interval-min" class="mag-input editorial-interval-input" value="400" placeholder="Min">
+                                    <input type="number" id="chat-setting-interval-max" class="mag-input editorial-interval-input" value="2200" placeholder="Max">
                                 </div>
-                            </div>
                             </div>
                         </div>
 
-                        <div class="editorial-card-shell mag-card">
-                            <div class="chat-settings-card-kicker mag-card-decor">VIS-02 ○</div>
+                        <div class="editorial-card-shell mag-card editorial-background-library-card">
+                            <div class="chat-settings-card-kicker mag-card-decor"><span class="mag-pulse-symbol">&#10022;</span> VIS-02</div>
                             <div class="chat-settings-card-title mag-card-title"><i class="ri-image-line"></i><span>Background Library</span></div>
-                            <div class="ios-list-group editorial-card-group">
-                            <div class="list-item">
-                                <div class="list-content column">
-                                    <label>聊天背景</label>
-                                    <input type="file" id="chat-setting-bg" accept="image/*" class="file-input-hidden">
-                                    <label for="chat-setting-bg" class="ios-btn">选择图片</label>
+
+                            <div class="mag-field">
+                                <label class="mag-label">Chat Background <span class="separator">/</span> <span class="mag-zh">聊天背景</span></label>
+                                <input type="file" id="chat-setting-bg" accept="image/*" class="file-input-hidden">
+                                <div class="mag-action-row editorial-background-actions" style="margin-top: 0;">
+                                    <label for="chat-setting-bg" class="mag-btn" role="button" tabindex="0">Upload Images</label>
+                                    <button type="button" id="reset-chat-bg" class="mag-btn editorial-ghost-btn">Reset Default</button>
                                 </div>
+                                <div id="chat-bg-gallery" class="mag-background-list gallery-scroll"></div>
                             </div>
-                            <div class="list-item">
-                                <div class="list-content column">
-                                    <label>视频通话背景</label>
-                                    <input type="file" id="chat-setting-video-bg" accept="image/*" class="file-input-hidden">
-                                    <label for="chat-setting-video-bg" class="ios-btn">选择图片</label>
-                                </div>
-                            </div>
-                            <div class="list-item no-padding">
-                                <div id="chat-bg-gallery" class="gallery-scroll">
-                                    <!-- 壁纸缩略图将在这里生成 -->
-                                </div>
-                            </div>
-                            <div class="list-item center-content" id="reset-chat-bg">
-                                <span class="danger-text">重置默认背景</span>
-                            </div>
+
+                            <div class="mag-field">
+                                <label class="mag-label">Video Background <span class="separator">/</span> <span class="mag-zh">视频通话背景</span></label>
+                                <input type="file" id="chat-setting-video-bg" accept="image/*" class="file-input-hidden">
+                                <label for="chat-setting-video-bg" class="mag-btn editorial-background-full-btn" role="button" tabindex="0">Select Image</label>
                             </div>
                         </div>
 

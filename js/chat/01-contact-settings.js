@@ -2243,11 +2243,13 @@ function openChatSettings() {
     document.getElementById('chat-setting-avatar').value = '';
     document.getElementById('chat-setting-my-avatar').value = '';
     document.getElementById('chat-setting-bg').value = '';
+    window.iphoneSimState.tempSelectedChatBg = contact.chatBg || '';
+    if (window.renderChatWallpaperGallery) window.renderChatWallpaperGallery();
     document.getElementById('chat-setting-custom-css').value = contact.customCss || '';
 
     // 消息间隔设置
-    document.getElementById('chat-setting-interval-min').value = contact.replyIntervalMin || '';
-    document.getElementById('chat-setting-interval-max').value = contact.replyIntervalMax || '';
+    document.getElementById('chat-setting-interval-min').value = contact.replyIntervalMin || 400;
+    document.getElementById('chat-setting-interval-max').value = contact.replyIntervalMax || 2200;
 
     // 主动发消息设置
     document.getElementById('chat-setting-active-reply').checked = contact.activeReplyEnabled || false;

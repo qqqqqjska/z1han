@@ -3936,6 +3936,7 @@ function setupChatListeners() {
         resetChatBgBtn.addEventListener('click', () => {
             window.iphoneSimState.tempSelectedChatBg = '';
             renderChatWallpaperGallery();
+        if (typeof previewSelectedChatWallpaper === 'function') previewSelectedChatWallpaper();
         });
     }
 
