@@ -1713,6 +1713,24 @@ function applyChatDisplayPreferences(contactOrId = null) {
 
 window.applyChatDisplayPreferences = applyChatDisplayPreferences;
 
+function applyChatSettingsCustomCssPreview() {
+    const cssTextarea = document.getElementById('chat-setting-custom-css');
+    if (!cssTextarea) return;
+
+    const existingStyle = document.getElementById('chat-custom-css');
+    if (existingStyle) existingStyle.remove();
+
+    const customCss = cssTextarea.value.trim();
+    if (!customCss) return;
+
+    const style = document.createElement('style');
+    style.id = 'chat-custom-css';
+    style.textContent = `#chat-screen#chat-screen#chat-screen { ${customCss} }`;
+    document.head.appendChild(style);
+}
+
+window.applyChatSettingsCustomCssPreview = applyChatSettingsCustomCssPreview;
+
 function openChat(contactId) {
     const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
     if (!contact) return;
@@ -2168,6 +2186,8 @@ function openChatSettings() {
     if (!contact) return;
     mountChatSettingsEditorialNav();
     ensureContactRestWindowFields(contact);
+    setChatSettingsFloatingSaveVisible(true);
+    setChatSettingsFloatingSaveState(false);
 
     document.getElementById('chat-setting-name').value = contact.name || '';
     document.getElementById('chat-setting-avatar-preview').src = contact.avatar || '';
@@ -2739,6 +2759,40 @@ function handleImportCharacterData(e) {
     e.target.value = '';
 }
 
+
+function mountChatSettingsFloatingSaveButton() {
+    const button = document.getElementById('chat-settings-editorial-save');
+    if (!button) return null;
+    if (button.parentElement !== document.body) {
+        document.body.appendChild(button);
+    }
+    return button;
+}
+
+function setChatSettingsFloatingSaveVisible(visible) {
+    const button = mountChatSettingsFloatingSaveButton();
+    if (!button) return;
+    button.classList.toggle('hidden', !visible);
+}
+
+window.setChatSettingsFloatingSaveVisible = setChatSettingsFloatingSaveVisible;
+
+function setChatSettingsFloatingSaveState(saved) {
+    const button = mountChatSettingsFloatingSaveButton();
+    if (!button) return;
+    button.classList.toggle('is-saved', !!saved);
+    button.innerHTML = saved ? '<i class="ri-check-line"></i>' : '<i class="ri-save-line"></i>';
+    button.setAttribute('aria-label', saved ? 'Saved chat settings' : 'Save chat settings');
+    button.setAttribute('title', saved ? 'Saved' : 'Save');
+}
+
+function handleChatSettingsFloatingSave() {
+    const legacySaveButton = document.getElementById('save-chat-settings-btn');
+    if (!legacySaveButton) return;
+    setChatSettingsFloatingSaveState(true);
+    legacySaveButton.click();
+}
+
 function handleSaveChatSettings() {
     if (!window.iphoneSimState.currentChatContactId) return;
     const contact = window.iphoneSimState.contacts.find(c => c.id === window.iphoneSimState.currentChatContactId);
@@ -2941,6 +2995,7 @@ function handleSaveChatSettings() {
 
     Promise.all(promises).then(() => {
         saveConfig();
+        setChatSettingsFloatingSaveState(true);
         if (window.renderContactList) window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
         renderChatHistory(contact.id);
         if (typeof window.renderThoughtEntryUI === 'function') {
@@ -2976,6 +3031,7 @@ function handleSaveChatSettings() {
         applyChatDisplayPreferences(contact);
 
         document.getElementById('chat-settings-screen').classList.add('hidden');
+        setChatSettingsFloatingSaveVisible(false);
     });
 }
 

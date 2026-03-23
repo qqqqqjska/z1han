@@ -4072,7 +4072,7 @@ function setupChatListeners() {
     if (aiMomentsEntry) aiMomentsEntry.addEventListener('click', window.openAiMoments);
 
     if (chatSettingsBtn) chatSettingsBtn.addEventListener('click', openChatSettings);
-    if (closeChatSettingsBtn) closeChatSettingsBtn.addEventListener('click', () => chatSettingsScreen.classList.add('hidden'));
+    if (closeChatSettingsBtn) closeChatSettingsBtn.addEventListener('click', () => { chatSettingsScreen.classList.add('hidden'); if (window.setChatSettingsFloatingSaveVisible) window.setChatSettingsFloatingSaveVisible(false); });
     if (saveChatSettingsBtn) saveChatSettingsBtn.addEventListener('click', handleSaveChatSettings);
     if (triggerAiMomentBtn) triggerAiMomentBtn.addEventListener('click', () => generateAiMoment(false));
 

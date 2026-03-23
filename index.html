@@ -1233,29 +1233,31 @@
                             </div>
                         </div>
 
-                        <div class="editorial-card-shell mag-card">
-                            <div class="chat-settings-card-kicker mag-card-decor">VIS-03 ○</div>
+                        <div class="editorial-card-shell mag-card editorial-custom-css-card" style="grid-column: 1 / -1;">
+                            <div class="chat-settings-card-kicker mag-card-decor"><span class="mag-pulse-symbol">&#10022;</span> CSS-03</div>
                             <div class="chat-settings-card-title mag-card-title"><i class="ri-code-line"></i><span>Custom CSS</span></div>
-                            <div class="ios-list-group editorial-card-group">
-                            <div class="list-item">
-                                <div class="list-content column">
-                                    <label>CSS预设</label>
-                                    <div class="input-row full-width">
-                                        <select id="chat-css-preset-select">
-                                            <option value="">-- 选择预设 --</option>
-                                        </select>
-                                        <button id="save-chat-css-preset" class="ios-btn-small">保存</button>
-                                        <button id="delete-chat-css-preset" class="ios-btn-small danger">删除</button>
+                            <div class="mag-field">
+                                <label class="mag-label">CSS Preset <span class="separator">/</span> <span class="mag-zh">样式预设</span></label>
+                                <div class="mag-icon-actions mag-icon-actions-inline editorial-css-actions">
+                                    <select id="chat-css-preset-select" class="mag-select">
+                                        <option value="">-- Select Preset --</option>
+                                    </select>
+                                    <div class="mag-icon-btn-group">
+                                        <button id="save-chat-css-preset" class="mag-icon-btn" type="button" aria-label="Save preset"><i class="ri-save-line"></i></button>
+                                        <button id="delete-chat-css-preset" class="mag-icon-btn danger" type="button" aria-label="Delete preset"><i class="ri-delete-bin-6-line"></i></button>
                                     </div>
                                 </div>
                             </div>
-                            <div class="list-item no-padding">
-                                <textarea id="chat-setting-custom-css" placeholder="/* 仅针对当前聊天页面的CSS */" style="height: 200px;"></textarea>
-                            </div>
-                            </div>
+
+                            <textarea id="chat-setting-custom-css" class="mag-textarea editorial-code-textarea" placeholder="/* 仅针对当前聊天页面的 CSS */"></textarea>
+
+                            <button type="button" class="mag-btn editorial-custom-css-apply" onclick="applyChatSettingsCustomCssPreview()">Apply Styles</button>
                         </div>
                     </div>
                 </div>
+                <button type="button" id="chat-settings-editorial-save" class="chat-settings-editorial-save hidden" onclick="handleChatSettingsFloatingSave()" aria-label="Save chat settings" title="Save">
+                    <i class="ri-save-line"></i>
+                </button>
             </div>
 
             <!-- 添加联系人弹窗 -->
@@ -1757,9 +1759,6 @@
                         </button>
                     </div>
                 </div>
-                <button type="button" id="chat-settings-editorial-save" class="chat-settings-editorial-save" onclick="document.getElementById('save-chat-settings-btn').click()" aria-label="保存聊天设置" title="保存">
-                    <i class="ri-save-line"></i>
-                </button>
             </div>
 
             <!-- 钱包页面 -->
