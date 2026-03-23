@@ -3028,6 +3028,7 @@ function buildChatSettingsDraftContact(contact) {
 function renderChatTokenPreviewState(state = {}) {
     const previewEl = document.getElementById('chat-setting-token-preview');
     const countEl = document.getElementById('chat-setting-token-count');
+    const visualStateEl = document.getElementById('chat-setting-token-visual-state');
     const systemBaseEl = document.getElementById('chat-setting-token-system-base');
     const memoryEl = document.getElementById('chat-setting-token-memory');
     const worldbookEl = document.getElementById('chat-setting-token-worldbook');
@@ -3041,25 +3042,27 @@ function renderChatTokenPreviewState(state = {}) {
     previewEl.classList.toggle('has-error', !!state.error);
 
     if (state.loading) {
-        countEl.textContent = state.message || '计算中...';
+        countEl.textContent = '--';
         systemBaseEl.textContent = '--';
         memoryEl.textContent = '--';
         worldbookEl.textContent = '--';
         contextEl.textContent = '--';
         extraEl.textContent = '--';
-        visualEl.textContent = '视觉输入：检测中...';
+        if (visualStateEl) visualStateEl.textContent = '--';
+        visualEl.textContent = '当前检测中...';
         metaEl.textContent = '按当前未保存设置实时估算';
         return;
     }
 
     if (state.error) {
-        countEl.textContent = state.message || '本轮输入文本估算失败';
+        countEl.textContent = '--';
         systemBaseEl.textContent = '--';
         memoryEl.textContent = '--';
         worldbookEl.textContent = '--';
         contextEl.textContent = '--';
         extraEl.textContent = '--';
-        visualEl.textContent = '视觉输入：无法估算';
+        if (visualStateEl) visualStateEl.textContent = '--';
+        visualEl.textContent = '无法估算';
         metaEl.textContent = state.detail || '按当前未保存设置实时估算';
         return;
     }
@@ -3083,7 +3086,7 @@ function renderChatTokenPreviewState(state = {}) {
         visualParts.push(`${visualInputs.screenShareCount} 次共享屏幕`);
     }
 
-    countEl.textContent = `本轮输入文本约 ${totalTextTokens.toLocaleString()} tokens`;
+    countEl.textContent = totalTextTokens.toLocaleString();
     systemBaseEl.textContent = systemBaseTokens.toLocaleString();
     memoryEl.textContent = memoryTokens.toLocaleString();
     worldbookEl.textContent = worldbookTokens.toLocaleString();
@@ -3092,9 +3095,12 @@ function renderChatTokenPreviewState(state = {}) {
     if (memoryTokens >= CHAT_SETTINGS_MEMORY_TOKEN_WARNING_THRESHOLD) {
         metaParts.push('记忆注入较长，可能显著增加本轮提示词长度');
     }
+    if (visualStateEl) {
+        visualStateEl.textContent = visualParts.length > 0 ? 'ON' : 'OFF';
+    }
     visualEl.textContent = visualParts.length > 0
-        ? `视觉输入：${visualParts.join(' / ')}（未计入上方总数）`
-        : '视觉输入：未检测到（未计入上方总数）';
+        ? `当前检测到 ${visualParts.join(' / ')}（未计入上方总数）`
+        : '未检测到视觉输入（未计入上方总数）';
     metaEl.textContent = metaParts.join('，');
 }
 

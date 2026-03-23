@@ -887,208 +887,165 @@
                         </div>
 
                         <div class="editorial-card-shell mag-card">
-                            <div class="chat-settings-card-kicker mag-card-decor">ENGINE-01 ○</div>
+                            <div class="chat-settings-card-kicker mag-card-decor"><span class="mag-pulse-symbol">&#10022;</span> SYS-02</div>
                             <div class="chat-settings-card-title mag-card-title"><i class="ri-star-line"></i><span>Logic Engine</span></div>
-                            <div class="ios-list-group editorial-card-group">
-                            <div class="list-item">
-                                <div class="list-content column">
-                                    <label>上下文条数限制 (0为不限制)</label>
-                                    <input type="number" id="chat-setting-context-limit" placeholder="默认全部" min="0">
-                                </div>
+
+                            <div class="mag-field">
+                                <label class="mag-label">Context Limit <span class="separator">/</span> <span class="mag-zh">上下文条数限制</span></label>
+                                <input type="number" id="chat-setting-context-limit" class="mag-input" placeholder="0 为不限" min="0">
                             </div>
-                            <div class="list-item">
-                                <div class="list-content column">
-                                    <label>本轮提示词 Token 概览</label>
-                                    <div id="chat-setting-token-preview" class="chat-token-preview is-loading">
-                                        <div class="chat-token-preview-main">
-                                            <strong id="chat-setting-token-count" class="chat-token-preview-count">计算中...</strong>
+
+                            <div class="mag-field">
+                                <label class="mag-label">Prompt Token Overview <span class="separator">/</span> <span class="mag-zh">提示词 Token 概览</span></label>
+                                <div id="chat-setting-token-preview" class="chat-token-preview editorial-token-overview is-loading">
+                                    <div class="mag-metrics">
+                                        <div class="mag-metric">
+                                            <div class="mag-metric-label">Estimated Total</div>
+                                            <div id="chat-setting-token-count" class="chat-token-preview-count mag-metric-value">--</div>
+                                            <span class="mag-metric-note">按当前未保存设置实时估算</span>
                                         </div>
-                                        <div class="chat-token-preview-breakdown">
-                                            <div class="chat-token-preview-item">
-                                                <span>系统基础</span>
-                                                <strong id="chat-setting-token-system-base">--</strong>
-                                            </div>
-                                            <div class="chat-token-preview-item">
-                                                <span>记忆</span>
-                                                <strong id="chat-setting-token-memory">--</strong>
-                                            </div>
-                                            <div class="chat-token-preview-item">
-                                                <span>世界书</span>
-                                                <strong id="chat-setting-token-worldbook">--</strong>
-                                            </div>
-                                            <div class="chat-token-preview-item">
-                                                <span>聊天上下文</span>
-                                                <strong id="chat-setting-token-context">--</strong>
-                                            </div>
-                                            <div class="chat-token-preview-item">
-                                                <span>场景附加</span>
-                                                <strong id="chat-setting-token-extra">--</strong>
-                                            </div>
+                                        <div class="mag-metric">
+                                            <div class="mag-metric-label">Visual Input</div>
+                                            <div id="chat-setting-token-visual-state" class="mag-metric-value">--</div>
+                                            <span id="chat-setting-token-visual" class="chat-token-preview-visual mag-metric-note">当前检测中...</span>
                                         </div>
-                                        <div id="chat-setting-token-visual" class="chat-token-preview-visual">视觉输入：检测中...</div>
-                                        <div id="chat-setting-token-meta" class="chat-token-preview-meta">按当前未保存设置实时估算</div>
                                     </div>
+                                    <div class="chat-token-preview-breakdown mag-chip-list">
+                                        <div class="chat-token-preview-item mag-chip">
+                                            <span>System</span>
+                                            <strong id="chat-setting-token-system-base">--</strong>
+                                        </div>
+                                        <div class="chat-token-preview-item mag-chip">
+                                            <span>Memory</span>
+                                            <strong id="chat-setting-token-memory">--</strong>
+                                        </div>
+                                        <div class="chat-token-preview-item mag-chip">
+                                            <span>Worldbook</span>
+                                            <strong id="chat-setting-token-worldbook">--</strong>
+                                        </div>
+                                        <div class="chat-token-preview-item mag-chip">
+                                            <span>Context</span>
+                                            <strong id="chat-setting-token-context">--</strong>
+                                        </div>
+                                        <div class="chat-token-preview-item mag-chip">
+                                            <span>Extra</span>
+                                            <strong id="chat-setting-token-extra">--</strong>
+                                        </div>
+                                    </div>
+                                    <div id="chat-setting-token-meta" class="chat-token-preview-meta editorial-token-meta">按当前未保存设置实时估算</div>
                                 </div>
                             </div>
-                            <div class="list-item">
-                                <div class="list-content column">
-                                    <label>自动总结触发条数 (0为关闭)</label>
-                                    <input type="number" id="chat-setting-summary-limit" placeholder="默认关闭" min="0">
-                                </div>
+
+                            <div class="mag-field">
+                                <label class="mag-label">Summary Trigger <span class="separator">/</span> <span class="mag-zh">自动总结触发条数</span></label>
+                                <input type="number" id="chat-setting-summary-limit" class="mag-input" placeholder="0 disables summary" min="0">
                             </div>
+
+                            <div class="mag-block-decor"></div>
+
+                            <label class="mag-label">Behavior Automation <span class="separator">/</span> <span class="mag-zh">行为自动化</span></label>
+                            <div class="mag-toggle">
+                                <span class="mag-toggle-text">Active Reply <span class="separator">/</span> <span class="mag-zh">主动发消息</span></span>
+                                <label><input type="checkbox" id="chat-setting-active-reply" class="mag-toggle-input"><div class="mag-toggle-switch"></div></label>
+                            </div>
+
+                            <div class="mag-field" style="margin-top: 10px;">
+                                <label class="mag-label">Interval in Seconds <span class="separator">/</span> <span class="mag-zh">主动消息间隔</span></label>
+                                <input type="number" id="chat-setting-active-interval" class="mag-input" placeholder="e.g. 60" min="5">
+                            </div>
+
+                            <div class="mag-toggle">
+                                <span class="mag-toggle-text">Rest Window <span class="separator">/</span> <span class="mag-zh">休息时间段</span></span>
+                                <label><input type="checkbox" id="chat-setting-rest-window-enabled" class="mag-toggle-input"><div class="mag-toggle-switch"></div></label>
+                            </div>
+
+                            <div id="chat-setting-rest-window-time-panel" class="mag-field" style="display: none; margin-top: 10px;">
+                                <label class="mag-label">Quiet Hours <span class="separator">/</span> <span class="mag-zh">休息时间（跨天生效）</span></label>
+                                <div class="mag-split-fields mag-time-range-row">
+                                    <input type="time" id="chat-setting-rest-window-start" class="mag-input">
+                                    <span class="mag-time-range-separator">TO</span>
+                                    <input type="time" id="chat-setting-rest-window-end" class="mag-input">
+                                </div>
                             </div>
                         </div>
 
                         <div class="editorial-card-shell mag-card">
-                            <div class="chat-settings-card-kicker mag-card-decor">THOUGHT-01 ○</div>
+                            <div class="chat-settings-card-kicker mag-card-decor"><span class="mag-pulse-symbol">&#10022;</span> MOD-03</div>
                             <div class="chat-settings-card-title mag-card-title"><i class="ri-bubble-chart-line"></i><span>Thought System</span></div>
-                            <div class="ios-list-group editorial-card-group">
-                            <div class="list-item">
-                                <div class="list-content">
-                                    <label>主动发消息</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="chat-setting-active-reply">
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
+
+                            <div class="mag-toggle">
+                                <span class="mag-toggle-text">Show Thoughts <span class="separator">/</span> <span class="mag-zh">显示心声</span></span>
+                                <label><input type="checkbox" id="chat-setting-show-thought" class="mag-toggle-input"><div class="mag-toggle-switch"></div></label>
                             </div>
-                            <div class="list-item">
-                                <div class="list-content column">
-                                    <label>主动发消息间隔 (秒)</label>
-                                    <input type="number" id="chat-setting-active-interval" placeholder="例如: 60" min="5">
-                                </div>
+
+                            <div class="mag-field" style="margin-top: 10px;">
+                                <label class="mag-label">Thought Style <span class="separator">/</span> <span class="mag-zh">心声显示样式</span></label>
+                                <select id="chat-setting-thought-style" class="mag-select">
+                                    <option value="title">Title Tap / 点击备注名</option>
+                                    <option value="desktop-pet">Desktop Pet / 桌宠悬浮</option>
+                                </select>
                             </div>
-                            <div class="list-item">
-                                <div class="list-content">
-                                    <label>休息时间段</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="chat-setting-rest-window-enabled">
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="list-item" id="chat-setting-rest-window-time-panel" style="display: none;">
-                                <div class="list-content column">
-                                    <label>休息时间（跨天也生效）</label>
-                                    <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
-                                        <input type="time" id="chat-setting-rest-window-start" style="flex: 1; min-width: 0;">
-                                        <span style="color: #8e8e93; flex-shrink: 0;">到</span>
-                                        <input type="time" id="chat-setting-rest-window-end" style="flex: 1; min-width: 0;">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="list-item">
-                                <div class="list-content">
-                                    <label>显示AI心声</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="chat-setting-show-thought">
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="list-item">
-                                <div class="list-content">
-                                    <label>心声显示样式</label>
-                                    <select id="chat-setting-thought-style">
-                                        <option value="title">点击备注名</option>
-                                        <option value="desktop-pet">桌宠悬浮</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="list-item" id="chat-setting-thought-pet-panel" style="display: none;">
-                                <div class="list-content column">
-                                    <label>桌宠设置</label>
-                                    <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
-                                        <img id="chat-setting-thought-pet-preview" src="" alt="桌宠预览" style="width: 56px; height: 56px; object-fit: contain; border-radius: 10px; background: #f2f2f7; border: 1px solid #e5e5ea; padding: 4px; flex-shrink: 0;">
-                                        <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-                                            <input type="file" id="chat-setting-thought-pet-image" accept="image/*" class="file-input-hidden">
-                                            <label for="chat-setting-thought-pet-image" class="ios-btn">上传桌宠图片</label>
-                                            <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
-                                                <label style="font-size: 14px; color: #6d6d72; white-space: nowrap;">大小 <span id="chat-setting-thought-pet-size-value">88px</span></label>
-                                                <input type="range" id="chat-setting-thought-pet-size" min="52" max="140" step="1" value="88" style="width: 100%;">
-                                            </div>
+
+                            <div id="chat-setting-thought-pet-panel" class="mag-field" style="display: none; margin-top: 10px;">
+                                <label class="mag-label">Thought Pet <span class="separator">/</span> <span class="mag-zh">心声桌宠</span></label>
+                                <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+                                    <img id="chat-setting-thought-pet-preview" src="" alt="Thought Pet Preview" style="width: 56px; height: 56px; object-fit: contain; border-radius: 10px; background: rgba(255,255,255,0.45); border: 1px solid var(--mag-line); padding: 4px; flex-shrink: 0;">
+                                    <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                                        <input type="file" id="chat-setting-thought-pet-image" accept="image/*" class="file-input-hidden">
+                                        <label for="chat-setting-thought-pet-image" class="ios-btn">Upload Pet Image</label>
+                                        <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                            <label style="font-size: 13px; color: var(--mag-sec-text); white-space: nowrap; margin: 0;">Size <span id="chat-setting-thought-pet-size-value">88px</span></label>
+                                            <input type="range" id="chat-setting-thought-pet-size" min="52" max="140" step="1" value="88" style="width: 100%;">
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="list-item">
-                                <div class="list-content">
-                                    <label>AI可知晓心声</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="chat-setting-thought-visible">
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
+
+                            <div class="mag-toggle">
+                                <span class="mag-toggle-text">AI Reads Thoughts <span class="separator">/</span> <span class="mag-zh">AI 可知晓心声</span></span>
+                                <label><input type="checkbox" id="chat-setting-thought-visible" class="mag-toggle-input"><div class="mag-toggle-switch"></div></label>
                             </div>
-                            <div class="list-item">
-                                <div class="list-content">
-                                    <label>AI可知晓真实时间</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="chat-setting-real-time-visible">
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
+
+                            <div class="mag-toggle">
+                                <span class="mag-toggle-text">Real Time Awareness <span class="separator">/</span> <span class="mag-zh">AI 可知晓真实时间</span></span>
+                                <label><input type="checkbox" id="chat-setting-real-time-visible" class="mag-toggle-input"><div class="mag-toggle-switch"></div></label>
                             </div>
-                            <div class="list-item">
-                                <div class="list-content">
-                                    <label>知晓节假日与日程</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="chat-setting-calendar-aware">
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                            </div>
+
+                            <div class="mag-toggle">
+                                <span class="mag-toggle-text">Holiday & Schedule Awareness <span class="separator">/</span> <span class="mag-zh">知晓节假日与日程</span></span>
+                                <label><input type="checkbox" id="chat-setting-calendar-aware" class="mag-toggle-input"><div class="mag-toggle-switch"></div></label>
                             </div>
                         </div>
-
                         <div class="editorial-card-shell mag-card">
-                            <div class="chat-settings-card-kicker mag-card-decor">FIRE-01 ○</div>
+                            <div class="chat-settings-card-kicker mag-card-decor">FIRE-01 ?</div>
                             <div class="chat-settings-card-title mag-card-title"><i class="ri-fire-line"></i><span>Fire Buddy</span></div>
                             <div class="ios-list-group editorial-card-group">
                             <div class="list-item">
                                 <div class="list-content">
-                                    <label>启用小火人</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="chat-setting-fire-buddy-enabled" checked>
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="list-item">
-                                <div class="list-content">
-                                    <label>手动调试开启</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="chat-setting-fire-buddy-manual-enabled">
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="list-item">
-                                <div class="list-content">
-                                    <label>调试状态</label>
+                                    <label>Debug Status</label>
                                     <select id="chat-setting-fire-buddy-mode">
-                                        <option value="locked">未解锁</option>
-                                        <option value="warming">升温中</option>
-                                        <option value="invitable">可邀请</option>
-                                        <option value="invited">已邀请</option>
-                                        <option value="bound">已绑定</option>
-                                        <option value="gray">已变灰</option>
-                                        <option value="wake-ready">可唤醒</option>
+                                        <option value="locked">Locked / ???</option>
+                                        <option value="warming">Warming / ???</option>
+                                        <option value="invitable">Invitable / ???</option>
+                                        <option value="invited">Invited / ???</option>
+                                        <option value="bound">Bound / ???</option>
+                                        <option value="gray">Gray / ???</option>
+                                        <option value="wake-ready">Wake Ready / ???</option>
                                     </select>
                                 </div>
                             </div>
                             <div class="list-item">
                                 <div class="list-content">
-                                    <label>显示方式</label>
+                                    <label>Display Mode</label>
                                     <select id="chat-setting-fire-buddy-display-mode">
-                                        <option value="topbar">顶栏入口</option>
-                                        <option value="desktop-pet">桌宠悬浮</option>
+                                        <option value="topbar">Topbar Entry / ????</option>
+                                        <option value="desktop-pet">Desktop Pet / ????</option>
                                     </select>
                                 </div>
                             </div>
                             <div class="list-item" id="chat-setting-fire-buddy-topbar-icon-row">
                                 <div class="list-content">
-                                    <label>显示顶栏图标</label>
+                                    <label>Show Topbar Icon</label>
                                     <label class="toggle-switch">
                                         <input type="checkbox" id="chat-setting-fire-buddy-topbar-icon-visible" checked>
                                         <span class="slider"></span>
@@ -1097,85 +1054,62 @@
                             </div>
                             <div class="list-item" id="chat-setting-fire-buddy-pet-panel" style="display: none;">
                                 <div class="list-content column">
-                                    <label>桌宠设置</label>
+                                    <label>Desktop Pet Setup</label>
                                     <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
-                                        <img id="chat-setting-fire-buddy-pet-preview" src="" alt="小火人桌宠预览" style="width: 56px; height: 56px; object-fit: contain; border-radius: 10px; background: #f2f2f7; border: 1px solid #e5e5ea; padding: 4px; flex-shrink: 0;">
+                                        <img id="chat-setting-fire-buddy-pet-preview" src="" alt="Fire Buddy Pet Preview" style="width: 56px; height: 56px; object-fit: contain; border-radius: 10px; background: #f2f2f7; border: 1px solid #e5e5ea; padding: 4px; flex-shrink: 0;">
                                         <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
                                             <input type="file" id="chat-setting-fire-buddy-pet-image" accept="image/*" class="file-input-hidden">
-                                            <label for="chat-setting-fire-buddy-pet-image" class="ios-btn">上传桌宠图片</label>
+                                            <label for="chat-setting-fire-buddy-pet-image" class="ios-btn">Upload Pet Image</label>
                                             <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
-                                                <label style="font-size: 14px; color: #6d6d72; white-space: nowrap;">大小 <span id="chat-setting-fire-buddy-pet-size-value">92px</span></label>
+                                                <label style="font-size: 14px; color: #6d6d72; white-space: nowrap;">Size <span id="chat-setting-fire-buddy-pet-size-value">92px</span></label>
                                                 <input type="range" id="chat-setting-fire-buddy-pet-size" min="56" max="150" step="1" value="92" style="width: 100%;">
                                             </div>
-                                            <div class="fire-buddy-settings-hint">此桌宠形象与心声桌宠独立保存。</div>
+                                            <div class="fire-buddy-settings-hint">Saved independently from the Thought pet.</div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             <div class="list-item">
                                 <div class="list-content column">
-                                    <label>当前进度</label>
-                                    <div id="chat-setting-fire-buddy-summary" class="fire-buddy-settings-summary">继续聊天点亮火花</div>
+                                    <label>Current Progress</label>
+                                    <div id="chat-setting-fire-buddy-summary" class="fire-buddy-settings-summary">????????</div>
                                 </div>
                             </div>
                             </div>
                         </div>
-
-                        <div class="editorial-card-shell mag-card">
-                            <div class="chat-settings-card-kicker mag-card-decor">ASSET-01 ○</div>
+                        <div class="editorial-card-shell mag-card" style="grid-column: 1 / -1;">
+                            <div class="chat-settings-card-kicker mag-card-decor"><span class="mag-pulse-symbol">&#10022;</span> ASSET-05</div>
                             <div class="chat-settings-card-title mag-card-title"><i class="ri-links-line"></i><span>Assets &amp; Actions</span></div>
-                            <div class="ios-list-group editorial-card-group">
-                            <div class="list-item">
-                                <div class="list-content">
-                                    <label>启用 TTS (Minimax)</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="chat-setting-tts-enabled">
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="list-item">
-                                <div class="list-content column">
-                                    <label>音色 ID (Voice ID)</label>
-                                    <input type="text" id="chat-setting-tts-voice-id" placeholder="例如: male-qn-qingse">
-                                    <div style="font-size: 12px; color: #888; margin-top: 5px;">
-                                        常用: male-qn-qingse (青涩), female-shaonv (少女), male-qn-jingying (精英)
+
+                            <div class="mag-grid" style="gap: 24px;">
+                                <div>
+                                    <div class="mag-toggle">
+                                        <span class="mag-toggle-text">Voice TTS <span class="separator">/</span> <span class="mag-zh">语音合成</span></span>
+                                        <label><input type="checkbox" id="chat-setting-tts-enabled" class="mag-toggle-input"><div class="mag-toggle-switch"></div></label>
+                                    </div>
+
+                                    <div class="mag-field" style="margin-top: 12px;">
+                                        <label class="mag-label">Voice ID <span class="separator">/</span> <span class="mag-zh">音色 ID</span></label>
+                                        <input type="text" id="chat-setting-tts-voice-id" class="mag-input" placeholder="e.g. male-qn-qingse">
+                                        <div style="font-size: 12px; color: var(--mag-sec-text); margin-top: 8px; line-height: 1.6;">常用: male-qn-qingse (青涩), female-shaonv (少女), male-qn-jingying (精英)</div>
+                                    </div>
+
+                                    <div class="mag-field">
+                                        <label class="mag-label">NovelAI Preset <span class="separator">/</span> <span class="mag-zh">生图预设</span></label>
+                                        <select id="chat-setting-novelai-preset" class="mag-select">
+<option value="">-- 不使用预设 --</option>
+                                        </select>
+                                        <div style="font-size: 12px; color: var(--mag-sec-text); margin-top: 8px; line-height: 1.6;">当在聊天中生成该角色的图片时，将使用此预设的提示词。</div>
                                     </div>
                                 </div>
                             </div>
-                            </div>
-                            <div class="editorial-subsection-label">NovelAI Preset <span class="separator">/</span> 生图预设</div>
-                            <div class="ios-list-group editorial-card-group">
-                            <div class="list-item">
-                                <div class="list-content column">
-                                    <label>选择预设</label>
-                                    <select id="chat-setting-novelai-preset" style="width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #ddd; background-color: #f2f2f7;">
-                                        <option value="">-- 不使用预设 --</option>
-                                    </select>
-                                    <div style="font-size: 12px; color: #888; margin-top: 5px;">
-                                        当在聊天中生成该角色的图片时，将使用此预设的提示词。
-                                    </div>
-                                </div>
-                            </div>
-                            </div>
-                            <div class="ios-list-group editorial-card-group" style="margin-top: 18px;">
-                            <div class="list-item">
-                                <button id="trigger-ai-moment-btn" class="ios-btn-block secondary">让TA发动态</button>
-                            </div>
-                            </div>
-                            <div class="ios-list-group editorial-card-group">
-                            <div class="list-item">
-                                <button id="export-character-btn" class="ios-btn-block secondary">导出角色数据</button>
-                            </div>
-                            <div class="list-item">
+
+                            <div class="mag-action-row">
+                                <button id="trigger-ai-moment-btn" class="mag-btn"><i class="ri-quill-pen-line"></i> 让TA发动态</button>
+                                <button id="export-character-btn" class="mag-btn"><i class="ri-download-line"></i> 导出角色数据</button>
                                 <input type="file" id="import-character-input" accept=".json" class="file-input-hidden">
-                                <label for="import-character-input" class="ios-btn-block secondary" style="margin-bottom:0; text-align:center;">导入角色数据</label>
-                            </div>
-                            </div>
-                            <div class="ios-list-group editorial-card-group">
-                            <div class="list-item center-content" id="clear-chat-history-btn">
-                                <span class="danger-text">清空聊天记录</span>
-                            </div>
+                                <label for="import-character-input" class="mag-btn" style="margin-bottom: 0; text-align: center;"><i class="ri-upload-line"></i> 导入角色数据</label>
+                                <button id="clear-chat-history-btn" class="mag-btn" style="border-color: var(--soft-danger, #d39a94); color: var(--soft-danger, #d39a94);"><i class="ri-delete-bin-line"></i> 清空聊天记录</button>
                             </div>
                         </div>
                     </div>

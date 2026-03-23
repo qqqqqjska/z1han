@@ -925,6 +925,12 @@
     opacity: 0.7;
 }
 
+#chat-settings-screen .mag-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 30px;
+}
+
 #chat-settings-screen .mag-avatar-upload {
     display: flex;
     align-items: center;
@@ -1184,6 +1190,21 @@
 @keyframes magPulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+@media (max-width: 640px) {
+    #chat-settings-screen .mag-split-fields {
+        flex-direction: column;
+    }
+
+    #chat-settings-screen .mag-time-range-row {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    #chat-settings-screen .mag-metrics {
+        grid-template-columns: 1fr;
+    }
 }
 
 #chat-settings-screen .list-content label:not(.toggle-switch),
@@ -1715,6 +1736,10 @@
 #chat-settings-screen .mag-action-row .ios-btn-block,
 #chat-settings-screen .mag-action-row .ios-btn {
     flex: 1 1 150px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 }
 
 #chat-settings-screen .mag-btn,
