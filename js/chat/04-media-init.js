@@ -3852,6 +3852,9 @@ function setupChatListeners() {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     document.getElementById('chat-setting-avatar-preview').src = event.target.result;
+                    if (window.syncChatSettingsEditorialHeader) {
+                        window.syncChatSettingsEditorialHeader();
+                    }
                 };
                 reader.readAsDataURL(file);
             }

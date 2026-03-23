@@ -317,6 +317,60 @@ const LOCATION_DATA = {
     }
 };
 
+function getChatSettingsLocationSummaryText() {
+    const country = document.getElementById('chat-setting-location-country')?.value || '';
+    const province = document.getElementById('chat-setting-location-province')?.value || '';
+    const city = document.getElementById('chat-setting-location-city')?.value || '';
+    if (province || city) return [province, city].filter(Boolean).join(' · ');
+    if (country) return country;
+    return '点击选择国家、省份、城市';
+}
+
+function updateChatSettingsLocationSummary() {
+    const trigger = document.getElementById('chat-setting-location-trigger');
+    const summary = document.getElementById('chat-setting-location-summary');
+    const country = document.getElementById('chat-setting-location-country')?.value || '';
+    const province = document.getElementById('chat-setting-location-province')?.value || '';
+    const city = document.getElementById('chat-setting-location-city')?.value || '';
+    const isEmpty = !country && !province && !city;
+    if (summary) summary.textContent = getChatSettingsLocationSummaryText();
+    if (trigger) trigger.classList.toggle('is-empty', isEmpty);
+}
+
+function setChatSettingsLocationPickerOpen(isOpen) {
+    const trigger = document.getElementById('chat-setting-location-trigger');
+    const picker = document.getElementById('chat-setting-location-picker');
+    if (!trigger || !picker) return;
+    trigger.classList.toggle('is-open', !!isOpen);
+    picker.classList.toggle('mag-hidden', !isOpen);
+    syncChatSettingsFloatingCardState(trigger);
+}
+
+function bindChatSettingsLocationPicker() {
+    const trigger = document.getElementById('chat-setting-location-trigger');
+    if (trigger && trigger.dataset.bound !== '1') {
+        trigger.dataset.bound = '1';
+        trigger.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const picker = document.getElementById('chat-setting-location-picker');
+            const willOpen = picker ? picker.classList.contains('mag-hidden') : false;
+            if (willOpen) closeAllChatSettingsMultiSelects();
+            setChatSettingsLocationPickerOpen(willOpen);
+        });
+    }
+
+    if (!window.__chatSettingsLocationPickerDocBound) {
+        window.__chatSettingsLocationPickerDocBound = true;
+        document.addEventListener('click', (event) => {
+            const field = document.querySelector('#chat-settings-screen .mag-target-location-field');
+            const picker = document.getElementById('chat-setting-location-picker');
+            if (!field || !picker || picker.classList.contains('mag-hidden')) return;
+            if (!field.contains(event.target)) setChatSettingsLocationPickerOpen(false);
+        });
+    }
+}
+
 // 初始化位置选择器
 function initLocationSelectors() {
     const countrySelect = document.getElementById('chat-setting-location-country');
@@ -324,7 +378,6 @@ function initLocationSelectors() {
     const citySelect = document.getElementById('chat-setting-location-city');
     if (!countrySelect || !provinceSelect || !citySelect) return;
 
-    // 填充国家
     countrySelect.innerHTML = '<option value="">选择国家</option>';
     Object.keys(LOCATION_DATA).forEach(country => {
         const opt = document.createElement('option');
@@ -333,7 +386,6 @@ function initLocationSelectors() {
         countrySelect.appendChild(opt);
     });
 
-    // 国家变化 -> 更新省份
     countrySelect.onchange = function() {
         const country = this.value;
         provinceSelect.innerHTML = '<option value="">选择省/州</option>';
@@ -349,9 +401,9 @@ function initLocationSelectors() {
             });
             provinceSelect.disabled = false;
         }
+        updateChatSettingsLocationSummary();
     };
 
-    // 省份变化 -> 更新城市
     provinceSelect.onchange = function() {
         const country = countrySelect.value;
         const province = this.value;
@@ -366,6 +418,12 @@ function initLocationSelectors() {
             });
             citySelect.disabled = false;
         }
+        updateChatSettingsLocationSummary();
+    };
+
+    citySelect.onchange = function() {
+        updateChatSettingsLocationSummary();
+        setChatSettingsLocationPickerOpen(false);
     };
 }
 
@@ -376,20 +434,22 @@ function loadLocationToSelectors(contact) {
     const citySelect = document.getElementById('chat-setting-location-city');
     if (!countrySelect || !provinceSelect || !citySelect) return;
 
+    bindChatSettingsLocationPicker();
     initLocationSelectors();
 
     const loc = contact.location || {};
     if (loc.country) {
         countrySelect.value = loc.country;
-        countrySelect.onchange(); // trigger province populate
+        countrySelect.onchange();
         if (loc.province) {
             provinceSelect.value = loc.province;
-            provinceSelect.onchange(); // trigger city populate
-            if (loc.city) {
-                citySelect.value = loc.city;
-            }
+            provinceSelect.onchange();
+            if (loc.city) citySelect.value = loc.city;
         }
     }
+
+    updateChatSettingsLocationSummary();
+    setChatSettingsLocationPickerOpen(false);
 }
 
 // 从选择器获取位置数据
@@ -404,6 +464,337 @@ function getLocationFromSelectors() {
         city,
         query: [country, province, city].filter(Boolean).join(' ')
     };
+}
+
+let activeChatSettingsPromptPreview = null;
+
+const CHAT_SETTINGS_LINKED_MULTI_SELECTS = {
+    worldbooks: {
+        triggerId: 'chat-setting-wb-trigger',
+        panelId: 'chat-setting-wb-list',
+        tagsId: 'chat-setting-wb-tags',
+        placeholder: '点击选择关联世界书',
+        chipClass: 'is-accent',
+        checkboxClass: 'wb-category-checkbox',
+        emptyText: '暂无世界书分类'
+    },
+    stickers: {
+        triggerId: 'chat-setting-sticker-trigger',
+        panelId: 'chat-setting-sticker-list',
+        tagsId: 'chat-setting-sticker-tags',
+        placeholder: '点击选择关联表情包',
+        chipClass: '',
+        checkboxClass: 'sticker-category-checkbox',
+        emptyText: '暂无表情包分类'
+    }
+};
+
+function syncChatSettingsFloatingCardState(source) {
+    const card = source && source.closest ? source.closest('.mag-card') : source;
+    if (!card) return;
+    const hasOpenLocation = !!card.querySelector('#chat-setting-location-picker:not(.mag-hidden)');
+    const hasOpenMulti = !!card.querySelector('.mag-multi-select-panel:not(.mag-hidden)');
+    card.classList.toggle('is-elevated', hasOpenLocation || hasOpenMulti);
+}
+
+function getChatSettingsPromptSource(previewElement) {
+    if (!previewElement) return null;
+    const inputId = previewElement.dataset.inputId || '';
+    return inputId ? document.getElementById(inputId) : null;
+}
+
+function getChatSettingsPromptTextNode(previewElement) {
+    if (!previewElement) return null;
+    let textNode = previewElement.querySelector('.mag-prompt-preview-text');
+    if (!textNode) {
+        textNode = document.createElement('span');
+        textNode.className = 'mag-prompt-preview-text';
+        previewElement.innerHTML = '';
+        previewElement.appendChild(textNode);
+    }
+    return textNode;
+}
+
+function syncChatSettingsPromptPreview(previewElement) {
+    if (!previewElement) return;
+    const source = getChatSettingsPromptSource(previewElement);
+    const defaultText = previewElement.getAttribute('data-default-text') || '';
+    const actualText = source ? String(source.value || '').trim() : '';
+    const textNode = getChatSettingsPromptTextNode(previewElement);
+    const displayText = actualText || defaultText;
+    const normalizedText = previewElement.classList.contains('mag-prompt-preview-clamp')
+        ? displayText.split(/\r?\n+/).join(' ')
+        : displayText;
+    if (textNode) textNode.textContent = normalizedText;
+    previewElement.dataset.fullText = actualText;
+    previewElement.style.color = actualText ? 'var(--mag-text)' : 'rgba(0,0,0,0.3)';
+}
+
+function syncChatSettingsPromptPreviewByIds(previewId, inputId) {
+    const previewElement = document.getElementById(previewId);
+    const source = document.getElementById(inputId);
+    if (!previewElement || !source) return;
+    previewElement.dataset.inputId = inputId;
+    syncChatSettingsPromptPreview(previewElement);
+}
+
+function openChatSettingsPromptModal(previewElementOrId) {
+    const previewElement = typeof previewElementOrId === 'string'
+        ? document.getElementById(previewElementOrId)
+        : previewElementOrId;
+    const promptModal = document.getElementById('chat-settings-prompt-modal');
+    const textarea = document.getElementById('chat-settings-modal-textarea');
+    if (!previewElement || !promptModal || !textarea) return;
+    const source = getChatSettingsPromptSource(previewElement);
+    activeChatSettingsPromptPreview = previewElement;
+    const titleEn = document.getElementById('chat-settings-modal-title-en');
+    const titleZh = document.getElementById('chat-settings-modal-title-zh');
+    if (titleEn) titleEn.textContent = previewElement.dataset.modalEn || 'Edit Prompt';
+    if (titleZh) titleZh.textContent = previewElement.dataset.modalZh || '编辑指令';
+    textarea.placeholder = previewElement.dataset.modalPlaceholder || '在此输入详细的指令...';
+    textarea.value = source ? String(source.value || '') : '';
+    promptModal.classList.add('active');
+    setTimeout(() => textarea.focus(), 220);
+}
+
+function closeChatSettingsPromptModal() {
+    const promptModal = document.getElementById('chat-settings-prompt-modal');
+    if (promptModal) promptModal.classList.remove('active');
+    activeChatSettingsPromptPreview = null;
+}
+
+function saveChatSettingsPromptModal() {
+    if (activeChatSettingsPromptPreview) {
+        const textarea = document.getElementById('chat-settings-modal-textarea');
+        const source = getChatSettingsPromptSource(activeChatSettingsPromptPreview);
+        if (textarea && source) {
+            source.value = textarea.value.trim();
+            source.dispatchEvent(new Event('input', { bubbles: true }));
+            source.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        syncChatSettingsPromptPreview(activeChatSettingsPromptPreview);
+    }
+    closeChatSettingsPromptModal();
+}
+
+function initializeChatSettingsPromptUI() {
+    const screen = document.getElementById('chat-settings-screen');
+    const promptModal = document.getElementById('chat-settings-prompt-modal');
+
+    if (promptModal && promptModal.parentElement !== document.body) {
+        document.body.appendChild(promptModal);
+    }
+
+    if (!window.__chatSettingsPromptDelegatedBound) {
+        window.__chatSettingsPromptDelegatedBound = true;
+        document.addEventListener('click', event => {
+            const previewElement = event.target.closest('#chat-settings-screen .chat-settings-prompt-trigger');
+            if (!previewElement) return;
+            event.preventDefault();
+            openChatSettingsPromptModal(previewElement);
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            const activeElement = document.activeElement;
+            if (!activeElement || !activeElement.matches('#chat-settings-screen .chat-settings-prompt-trigger')) return;
+            event.preventDefault();
+            openChatSettingsPromptModal(activeElement);
+        });
+    }
+
+    document.querySelectorAll('#chat-settings-screen .chat-settings-prompt-trigger').forEach(previewElement => {
+        if (previewElement.dataset.promptBound !== '1') {
+            previewElement.dataset.promptBound = '1';
+            previewElement.addEventListener('click', () => openChatSettingsPromptModal(previewElement));
+            previewElement.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openChatSettingsPromptModal(previewElement);
+                }
+            });
+        }
+        const source = getChatSettingsPromptSource(previewElement);
+        if (source && source.dataset.promptSyncBound !== '1') {
+            source.dataset.promptSyncBound = '1';
+            source.addEventListener('input', () => syncChatSettingsPromptPreview(previewElement));
+            source.addEventListener('change', () => syncChatSettingsPromptPreview(previewElement));
+        }
+        syncChatSettingsPromptPreview(previewElement);
+    });
+
+    const cancelBtn = document.getElementById('chat-settings-modal-cancel');
+    const saveBtn = document.getElementById('chat-settings-modal-save');
+    if (cancelBtn && cancelBtn.dataset.bound !== '1') {
+        cancelBtn.dataset.bound = '1';
+        cancelBtn.addEventListener('click', closeChatSettingsPromptModal);
+    }
+    if (saveBtn && saveBtn.dataset.bound !== '1') {
+        saveBtn.dataset.bound = '1';
+        saveBtn.addEventListener('click', saveChatSettingsPromptModal);
+    }
+    if (promptModal && promptModal.dataset.bound !== '1') {
+        promptModal.dataset.bound = '1';
+        promptModal.addEventListener('click', event => {
+            if (event.target === promptModal) closeChatSettingsPromptModal();
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && promptModal.classList.contains('active')) {
+                closeChatSettingsPromptModal();
+            }
+        });
+    }
+}
+
+function getChatSettingsMultiSelectConfig(key) {
+    return CHAT_SETTINGS_LINKED_MULTI_SELECTS[key] || null;
+}
+
+function closeAllChatSettingsMultiSelects(exceptKey = '') {
+    Object.keys(CHAT_SETTINGS_LINKED_MULTI_SELECTS).forEach(key => {
+        if (key === exceptKey) return;
+        const config = getChatSettingsMultiSelectConfig(key);
+        const trigger = config ? document.getElementById(config.triggerId) : null;
+        const panel = config ? document.getElementById(config.panelId) : null;
+        const field = trigger ? trigger.closest('.mag-multi-select-field') : null;
+        if (trigger) trigger.classList.remove('is-open');
+        if (field) field.classList.remove('is-open');
+        if (panel) panel.classList.add('mag-hidden');
+        if (field) syncChatSettingsFloatingCardState(field);
+    });
+}
+
+function renderChatSettingsMultiSelectTags(key) {
+    const config = getChatSettingsMultiSelectConfig(key);
+    const tags = config ? document.getElementById(config.tagsId) : null;
+    const trigger = config ? document.getElementById(config.triggerId) : null;
+    const panel = config ? document.getElementById(config.panelId) : null;
+    if (!config || !tags || !trigger || !panel) return;
+
+    tags.innerHTML = '';
+    const selected = Array.from(panel.querySelectorAll(`.${config.checkboxClass}:checked`)).map(cb => cb.dataset.name).filter(Boolean);
+    if (!selected.length) {
+        const placeholder = document.createElement('span');
+        placeholder.className = 'mag-multi-select-placeholder';
+        placeholder.textContent = config.placeholder;
+        tags.appendChild(placeholder);
+        trigger.classList.add('is-empty');
+        return;
+    }
+
+    trigger.classList.remove('is-empty');
+    const firstRow = document.createElement('div');
+    firstRow.className = 'mag-inline-tag-row';
+    const secondRow = document.createElement('div');
+    secondRow.className = 'mag-inline-tag-row';
+    selected.forEach((item, index) => {
+        const chip = document.createElement('span');
+        chip.className = `mag-chip${config.chipClass ? ' ' + config.chipClass : ''}`;
+        chip.textContent = item;
+        (index % 2 === 0 ? firstRow : secondRow).appendChild(chip);
+    });
+    if (firstRow.childElementCount) tags.appendChild(firstRow);
+    if (secondRow.childElementCount) tags.appendChild(secondRow);
+}
+
+function renderChatSettingsMultiSelectOptions(key, options, selectedIds) {
+    const config = getChatSettingsMultiSelectConfig(key);
+    const panel = config ? document.getElementById(config.panelId) : null;
+    if (!config || !panel) return;
+
+    panel.innerHTML = '';
+    if (!Array.isArray(options) || options.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'mag-multi-option';
+        empty.textContent = config.emptyText;
+        panel.appendChild(empty);
+        renderChatSettingsMultiSelectTags(key);
+        return;
+    }
+
+    options.forEach(option => {
+        const label = document.createElement('label');
+        label.className = 'mag-multi-option';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = config.checkboxClass;
+        checkbox.dataset.id = option.id;
+        checkbox.dataset.name = option.name || '未命名';
+        checkbox.checked = selectedIds.has(Number(option.id));
+        checkbox.addEventListener('change', () => {
+            renderChatSettingsMultiSelectTags(key);
+            scheduleChatSettingsTokenPreviewRefresh();
+        });
+
+        const text = document.createElement('span');
+        text.textContent = option.name || '未命名';
+
+        label.appendChild(checkbox);
+        label.appendChild(text);
+        panel.appendChild(label);
+    });
+
+    renderChatSettingsMultiSelectTags(key);
+}
+
+function toggleChatSettingsMultiSelect(key, forceOpen) {
+    const config = getChatSettingsMultiSelectConfig(key);
+    const trigger = config ? document.getElementById(config.triggerId) : null;
+    const panel = config ? document.getElementById(config.panelId) : null;
+    const field = trigger ? trigger.closest('.mag-multi-select-field') : null;
+    if (!config || !trigger || !panel) return;
+
+    const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : panel.classList.contains('mag-hidden');
+    closeAllChatSettingsMultiSelects(shouldOpen ? key : '');
+    if (shouldOpen) setChatSettingsLocationPickerOpen(false);
+    panel.classList.toggle('mag-hidden', !shouldOpen);
+    trigger.classList.toggle('is-open', shouldOpen);
+    if (field) {
+        field.classList.toggle('is-open', shouldOpen);
+        syncChatSettingsFloatingCardState(field);
+    }
+}
+
+function initializeChatSettingsLinkedSelectors(contact) {
+    const worldbookOptions = Array.isArray(window.iphoneSimState.wbCategories) ? window.iphoneSimState.wbCategories : [];
+    const stickerOptions = Array.isArray(window.iphoneSimState.stickerCategories) ? window.iphoneSimState.stickerCategories : [];
+    const selectedWorldbooks = Array.isArray(contact.linkedWbCategories)
+        ? new Set(contact.linkedWbCategories.map(id => Number(id)))
+        : new Set(worldbookOptions.map(option => Number(option.id)));
+    const selectedStickers = Array.isArray(contact.linkedStickerCategories)
+        ? new Set(contact.linkedStickerCategories.map(id => Number(id)))
+        : new Set(stickerOptions.map(option => Number(option.id)));
+
+    renderChatSettingsMultiSelectOptions('worldbooks', worldbookOptions, selectedWorldbooks);
+    renderChatSettingsMultiSelectOptions('stickers', stickerOptions, selectedStickers);
+
+    Object.keys(CHAT_SETTINGS_LINKED_MULTI_SELECTS).forEach(key => {
+        const config = getChatSettingsMultiSelectConfig(key);
+        const trigger = config ? document.getElementById(config.triggerId) : null;
+        const panel = config ? document.getElementById(config.panelId) : null;
+        if (trigger && trigger.dataset.bound !== '1') {
+            trigger.dataset.bound = '1';
+            trigger.addEventListener('click', event => {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleChatSettingsMultiSelect(key);
+            });
+        }
+        if (panel && panel.dataset.bound !== '1') {
+            panel.dataset.bound = '1';
+            panel.addEventListener('click', event => event.stopPropagation());
+        }
+    });
+
+    if (!window.__chatSettingsMultiSelectDocBound) {
+        window.__chatSettingsMultiSelectDocBound = true;
+        document.addEventListener('click', event => {
+            const settingsScreen = document.getElementById('chat-settings-screen');
+            if (!settingsScreen || settingsScreen.classList.contains('hidden')) return;
+            if (!settingsScreen.contains(event.target)) return;
+            closeAllChatSettingsMultiSelects();
+        });
+    }
 }
 
 // 语音相关全局变量
@@ -853,31 +1244,7 @@ function shouldExcludeFromAiContext(msg) {
 }
 
 function normalizeChatSettingsListRows() {
-    const screen = document.getElementById('chat-settings-screen');
-    if (!screen) return;
-
-    const rows = screen.querySelectorAll('.list-item:not(.no-padding)');
-    rows.forEach(row => {
-        row.style.paddingTop = '12px';
-        row.style.paddingBottom = '12px';
-        row.style.boxSizing = 'border-box';
-        row.style.alignItems = 'center';
-    });
-
-    const textNodes = screen.querySelectorAll(
-        '.list-item .list-content > span, .list-item .list-content > label:not(.toggle-switch), .list-item .ios-btn'
-    );
-    textNodes.forEach(node => {
-        node.style.marginTop = '0';
-        node.style.marginBottom = '0';
-        node.style.lineHeight = '1.2';
-    });
-
-    const controls = screen.querySelectorAll('.list-item .list-content > input, .list-item .list-content > select, .list-item .list-content > textarea');
-    controls.forEach(node => {
-        node.style.marginTop = '0';
-        node.style.marginBottom = '0';
-    });
+    return;
 }
 
 const CONTACT_PREVIEW_MAX_LENGTH = 28;
@@ -1728,26 +2095,98 @@ function setRelation(relation) {
 
 // --- 聊天设置功能 ---
 
+function setChatSettingsEditorialAvatar(elementId, imageUrl, fallbackHtml) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    if (imageUrl) {
+        element.style.backgroundImage = `url(${imageUrl})`;
+        element.innerHTML = '';
+    } else {
+        element.style.backgroundImage = '';
+        element.innerHTML = fallbackHtml;
+    }
+}
+
+function syncChatSettingsEditorialHeader(contact = null) {
+    const activeContact = contact || (typeof getActiveAiProfileContact === 'function' ? getActiveAiProfileContact() : null);
+    const contactPreview = document.getElementById('chat-setting-avatar-preview');
+    const userPreview = document.getElementById('chat-setting-my-avatar-preview');
+    const contactPreviewSrc = contactPreview ? (contactPreview.getAttribute('src') || '').trim() : '';
+    const userPreviewSrc = userPreview ? (userPreview.getAttribute('src') || '').trim() : '';
+    const contactAvatar = contactPreviewSrc || (activeContact && activeContact.avatar) || '';
+    const userAvatar = userPreviewSrc || (activeContact && activeContact.myAvatar) || (window.iphoneSimState.userProfile && window.iphoneSimState.userProfile.avatar) || '';
+
+    setChatSettingsEditorialAvatar('chat-settings-editorial-contact-avatar', contactAvatar, '<i class="ri-user-line"></i>');
+    setChatSettingsEditorialAvatar('chat-settings-editorial-user-avatar', userAvatar, '<i class="ri-user-smile-line"></i>');
+}
+
+window.syncChatSettingsEditorialHeader = syncChatSettingsEditorialHeader;
+
+function syncChatSettingsStickyChrome() {
+    const screen = document.getElementById('chat-settings-screen');
+    const header = screen ? screen.querySelector('.chat-settings-editorial-header') : null;
+    const nav = screen ? screen.querySelector('.chat-settings-nav') : null;
+    if (!screen || !header) return;
+
+    requestAnimationFrame(() => {
+        const headerHeight = Math.ceil(header.getBoundingClientRect().height || 0);
+        const navHeight = nav ? Math.ceil(nav.getBoundingClientRect().height || 0) : 0;
+
+        if (headerHeight > 0) {
+            screen.style.setProperty('--chat-settings-header-height', `${headerHeight}px`);
+        }
+
+        if (navHeight > 0) {
+            screen.style.setProperty('--chat-settings-nav-height', `${navHeight}px`);
+        }
+    });
+}
+
+window.syncChatSettingsStickyChrome = syncChatSettingsStickyChrome;
+
+function mountChatSettingsEditorialNav() {
+    const screen = document.getElementById('chat-settings-screen');
+    const header = screen ? screen.querySelector('.chat-settings-editorial-header') : null;
+    const hero = header ? header.querySelector('.chat-settings-editorial-hero') : null;
+    const nav = screen ? screen.querySelector('.chat-settings-nav') : null;
+    if (!screen || !header || !hero || !nav) return;
+    if (nav.parentElement === header) return;
+    hero.insertAdjacentElement('afterend', nav);
+}
+
+window.mountChatSettingsEditorialNav = mountChatSettingsEditorialNav;
+
+if (!window.__chatSettingsStickyChromeResizeBound) {
+    window.__chatSettingsStickyChromeResizeBound = true;
+    window.addEventListener('resize', () => {
+        syncChatSettingsStickyChrome();
+    });
+}
+
 function openChatSettings() {
     const contact = getActiveAiProfileContact();
     if (!contact) return;
+    mountChatSettingsEditorialNav();
     ensureContactRestWindowFields(contact);
 
     document.getElementById('chat-setting-name').value = contact.name || '';
     document.getElementById('chat-setting-avatar-preview').src = contact.avatar || '';
     const aiBgContainer = document.getElementById('ai-setting-bg-container');
-    if (contact.aiSettingBg) {
+    if (aiBgContainer && contact.aiSettingBg) {
         aiBgContainer.style.backgroundImage = `url(${contact.aiSettingBg})`;
-    } else {
+    } else if (aiBgContainer) {
         aiBgContainer.style.backgroundImage = '';
     }
-    document.getElementById('chat-setting-ai-bg-input').value = '';
+    const aiBgInput = document.getElementById('chat-setting-ai-bg-input');
+    if (aiBgInput) aiBgInput.value = '';
 
     document.getElementById('chat-setting-remark').value = contact.remark || '';
     document.getElementById('chat-setting-group-value').textContent = contact.group || '未分组';
     window.iphoneSimState.tempSelectedGroup = contact.group || '';
 
     document.getElementById('chat-setting-persona').value = contact.persona || '';
+    initializeChatSettingsPromptUI();
+    syncChatSettingsPromptPreviewByIds('chat-setting-persona-preview', 'chat-setting-persona');
 
     // 加载位置选择器
     loadLocationToSelectors(contact);
@@ -1860,56 +2299,25 @@ function openChatSettings() {
     if (contact.userPersonaId) {
         userPersonaSelect.value = contact.userPersonaId;
     }
-
-    // 动态添加用户人设编辑框
+    // 动态补一个用户人设编辑框（优先使用 HTML 中已存在的 showcase 容器）
     let userPromptTextarea = document.getElementById('chat-setting-user-prompt');
     if (!userPromptTextarea) {
-        // 尝试跳出 select 所在的行容器，以实现垂直布局
         const selectContainer = userPersonaSelect.parentNode;
-        const mainContainer = selectContainer.parentNode;
-        
+        const mainContainer = selectContainer ? selectContainer.parentNode : null;
+        const promptField = document.querySelector('#chat-settings-screen .editorial-user-prompt-field');
+
         userPromptTextarea = document.createElement('textarea');
         userPromptTextarea.id = 'chat-setting-user-prompt';
-        userPromptTextarea.className = 'setting-input';
+        userPromptTextarea.className = 'mag-textarea';
         userPromptTextarea.rows = 3;
         userPromptTextarea.placeholder = '在此输入人设...';
-        
-        // 样式调整：居中、无标签、类似个性签名
-        userPromptTextarea.style.width = '90%';
-        userPromptTextarea.style.margin = '15px auto 0 auto';
-        userPromptTextarea.style.display = 'block';
-        userPromptTextarea.style.textAlign = 'center';
-        userPromptTextarea.style.border = 'none';
-        userPromptTextarea.style.background = 'transparent';
-        userPromptTextarea.style.resize = 'none';
-        userPromptTextarea.style.fontSize = '14px';
-        userPromptTextarea.style.color = '#666';
-        
-        // 聚焦时样式
-        userPromptTextarea.onfocus = () => {
-            userPromptTextarea.style.background = '#f5f5f5';
-            userPromptTextarea.style.borderRadius = '8px';
-            userPromptTextarea.style.padding = '8px';
-        };
-        userPromptTextarea.onblur = () => {
-            userPromptTextarea.style.background = 'transparent';
-            userPromptTextarea.style.padding = '0';
-        };
-        
-        // 插入到 selectContainer 后面 (即主容器中，位于行容器下方)
-        if (mainContainer) {
-            if (selectContainer.nextSibling) {
-                mainContainer.insertBefore(userPromptTextarea, selectContainer.nextSibling);
-            } else {
-                mainContainer.appendChild(userPromptTextarea);
-            }
-        } else {
-            // Fallback: 如果没有 mainContainer，就插在 select 后面
-            if (userPersonaSelect.nextSibling) {
-                selectContainer.insertBefore(userPromptTextarea, userPersonaSelect.nextSibling);
-            } else {
-                selectContainer.appendChild(userPromptTextarea);
-            }
+
+        if (promptField) {
+            promptField.appendChild(userPromptTextarea);
+        } else if (mainContainer) {
+            mainContainer.appendChild(userPromptTextarea);
+        } else if (selectContainer) {
+            selectContainer.appendChild(userPromptTextarea);
         }
     }
 
@@ -1927,6 +2335,7 @@ function openChatSettings() {
         } else {
             userPromptTextarea.value = '';
         }
+        syncChatSettingsPromptPreviewByIds('chat-setting-user-prompt-preview', 'chat-setting-user-prompt');
     };
     loadUserPrompt();
 
@@ -1935,6 +2344,7 @@ function openChatSettings() {
         const selectedId = userPersonaSelect.value;
         const p = window.iphoneSimState.userPersonas.find(p => p.id == selectedId);
         userPromptTextarea.value = p ? (p.aiPrompt || '') : '';
+        syncChatSettingsPromptPreviewByIds('chat-setting-user-prompt-preview', 'chat-setting-user-prompt');
         scheduleChatSettingsTokenPreviewRefresh();
     };
 
@@ -1960,6 +2370,8 @@ function openChatSettings() {
     if (userAvatarPreview) {
         userAvatarPreview.src = contact.myAvatar || window.iphoneSimState.userProfile.avatar;
     }
+    syncChatSettingsEditorialHeader(contact);
+    syncChatSettingsStickyChrome();
     
     const userAvatarInput = document.getElementById('chat-setting-my-avatar');
     if (userAvatarInput) {
@@ -1972,72 +2384,28 @@ function openChatSettings() {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     if (userAvatarPreview) userAvatarPreview.src = event.target.result;
+                    syncChatSettingsEditorialHeader();
                 };
                 reader.readAsDataURL(file);
             }
         });
     }
 
-    const wbList = document.getElementById('chat-setting-wb-list');
-    wbList.innerHTML = '';
-    
-    if (window.iphoneSimState.wbCategories && window.iphoneSimState.wbCategories.length > 0) {
-        window.iphoneSimState.wbCategories.forEach(cat => {
-            const item = document.createElement('div');
-            item.className = 'list-item';
-            
-            let isChecked = false;
-            if (!contact.linkedWbCategories) {
-                isChecked = true;
-            } else {
-                isChecked = contact.linkedWbCategories.includes(cat.id);
-            }
-
-            item.innerHTML = `
-                <div class="list-content" style="justify-content: space-between; align-items: center; width: 100%;">
-                    <span>${cat.name}</span>
-                    <input type="checkbox" class="wb-category-checkbox" data-id="${cat.id}" ${isChecked ? 'checked' : ''}>
-                </div>
-            `;
-            wbList.appendChild(item);
-        });
-    } else {
-        wbList.innerHTML = '<div class="list-item"><div class="list-content">暂无世界书分类</div></div>';
-    }
-
-    const stickerList = document.getElementById('chat-setting-sticker-list');
-    stickerList.innerHTML = '';
-    
-    if (window.iphoneSimState.stickerCategories && window.iphoneSimState.stickerCategories.length > 0) {
-        window.iphoneSimState.stickerCategories.forEach(cat => {
-            const item = document.createElement('div');
-            item.className = 'list-item';
-            
-            let isChecked = false;
-            if (!contact.linkedStickerCategories) {
-                isChecked = true;
-            } else {
-                isChecked = contact.linkedStickerCategories.includes(cat.id);
-            }
-
-            item.innerHTML = `
-                <div class="list-content" style="justify-content: space-between; align-items: center; width: 100%;">
-                    <span>${cat.name}</span>
-                    <input type="checkbox" class="sticker-category-checkbox" data-id="${cat.id}" ${isChecked ? 'checked' : ''}>
-                </div>
-            `;
-            stickerList.appendChild(item);
-        });
-    } else {
-        stickerList.innerHTML = '<div class="list-item"><div class="list-content">暂无表情包分类</div></div>';
-    }
+    initializeChatSettingsLinkedSelectors(contact);
 
     renderUserPerception(contact);
     if (window.renderChatCssPresets) window.renderChatCssPresets();
 
     normalizeChatSettingsListRows();
     ensureChatSettingsTokenPreviewBindings();
-    document.getElementById('chat-settings-screen').classList.remove('hidden');
+    const chatSettingsScreen = document.getElementById('chat-settings-screen');
+    const chatSettingsBody = chatSettingsScreen ? chatSettingsScreen.querySelector('.chat-settings-editorial-body') : null;
+    if (chatSettingsScreen) chatSettingsScreen.classList.remove('hidden');
+    if (chatSettingsScreen) chatSettingsScreen.scrollTop = 0;
+    if (chatSettingsBody) chatSettingsBody.scrollTop = 0;
+    syncChatSettingsStickyChrome();
+    requestAnimationFrame(() => syncChatSettingsStickyChrome());
+    setTimeout(() => syncChatSettingsStickyChrome(), 120);
     if (contact.id) {
         refreshTokenCountForContact(contact.id);
     }
@@ -2078,13 +2446,15 @@ function renderUserPerception(contact) {
 
     list.innerHTML = '';
     if (contact.userPerception.length === 0) {
-        list.innerHTML = '<div style="color: #999; font-size: 14px; padding: 10px 0;">暂无认知信息</div>';
+        const emptyItem = document.createElement('div');
+        emptyItem.className = 'mag-quote-item mag-perception-empty';
+        emptyItem.textContent = '暂无认知信息';
+        list.appendChild(emptyItem);
     } else {
         contact.userPerception.forEach(item => {
             const div = document.createElement('div');
-            div.textContent = `• ${item}`;
-            div.style.marginBottom = '5px';
-            div.style.fontSize = '14px';
+            div.className = 'mag-quote-item';
+            div.textContent = item;
             list.appendChild(div);
         });
     }
@@ -2518,7 +2888,7 @@ function handleSaveChatSettings() {
         }));
     }
 
-    if (aiBgInput.files && aiBgInput.files[0]) {
+    if (aiBgInput && aiBgInput.files && aiBgInput.files[0]) {
         promises.push(new Promise(resolve => {
             compressImage(aiBgInput.files[0], 800, 0.7).then(base64 => {
                 contact.aiSettingBg = base64;
@@ -2837,3 +3207,14 @@ async function refreshTokenCountForContact(contactId) {
 }
 
 // --- 聊天界面功能 ---
+
+
+
+
+
+
+
+
+
+
+
