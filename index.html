@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <title>iPhone Simulator</title>
@@ -50,6 +50,7 @@
     <link rel="stylesheet" href="css/screen_share.css">
     <link rel="stylesheet" href="css/calendar_app.css">
     <link rel="stylesheet" href="css/garden_app.css?v=20">
+    <link rel="stylesheet" href="css/chat_settings_editorial.css">
 </head>
 <body>
     <div class="screen-container" id="screen-container">
@@ -777,76 +778,118 @@
 
             <!-- 聊天设置全屏页 -->
             <div id="chat-settings-screen" class="sub-screen hidden" style="z-index: 160;">
-                <div class="chat-header">
-                    <button id="close-chat-settings" class="back-btn"><i class="fas fa-chevron-left"></i> 返回</button>
-                    <span>聊天详情</span>
-                    <button id="save-chat-settings-btn" class="wechat-icon-btn" style="font-size: 16px; font-weight: 600; color: #07C160; width: auto; padding: 0 10px;">保存</button>
+                <div class="chat-header chat-settings-editorial-header mag-header">
+                    <button id="close-chat-settings" class="back-btn chat-settings-legacy-control"><i class="fas fa-chevron-left"></i> 返回</button>
+                    <div class="chat-settings-editorial-hero">
+                        <div id="chat-settings-editorial-back" class="chat-settings-editorial-back" onclick="document.getElementById('close-chat-settings').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('close-chat-settings').click();}" role="button" tabindex="0" aria-label="返回聊天">
+                            <div class="chat-settings-editorial-subtitle mag-subtitle"><span class="chat-settings-editorial-spark">✦</span> SYSTEM CONFIG // 01</div>
+                            <div class="chat-settings-editorial-title-row mag-title-row">
+                                <h1 class="chat-settings-editorial-title mag-title">Chat Details <span class="separator" style="margin: 0 10px;">/</span></h1>
+                            </div>
+                        </div>
+                        <div class="chat-settings-editorial-avatars mag-header-avatars" aria-hidden="true">
+                            <div id="chat-settings-editorial-contact-avatar" class="chat-settings-editorial-avatar mag-header-avatar"><i class="ri-user-line"></i></div>
+                            <div id="chat-settings-editorial-user-avatar" class="chat-settings-editorial-avatar mag-header-avatar"><i class="ri-user-smile-line"></i></div>
+                        </div>
+                    </div>
+                    <span class="chat-settings-legacy-title">聊天详情</span>
+                    <button id="save-chat-settings-btn" class="wechat-icon-btn chat-settings-legacy-control" style="font-size: 16px; font-weight: 600; color: #07C160; width: auto; padding: 0 10px;">保存</button>
                 </div>
-                <div class="app-body" style="background-color: var(--bg-color);">
+                <div class="app-body chat-settings-editorial-body" style="background-color: var(--bg-color);">
                     <!-- 导航栏 -->
-                    <div class="chat-settings-nav">
-                        <div class="nav-item active" data-tab="ai">TA</div>
-                        <div class="nav-item" data-tab="user">我</div>
-                        <div class="nav-item" data-tab="appearance">外观</div>
+                    <div class="chat-settings-nav mag-nav">
+                        <div class="nav-item mag-nav-item active" data-tab="ai">TARGET <span class="mag-nav-zh"><span class="separator">/</span> 目标</span></div>
+                        <div class="nav-item mag-nav-item" data-tab="user">USER <span class="mag-nav-zh"><span class="separator">/</span> 我</span></div>
+                        <div class="nav-item mag-nav-item" data-tab="appearance">VISUALS <span class="mag-nav-zh"><span class="separator">/</span> 外观</span></div>
                         <div class="nav-indicator"></div>
                     </div>
 
                     <!-- AI Tab -->
-                    <div id="chat-setting-tab-ai" class="chat-setting-tab-content active">
+                    <div id="chat-setting-tab-ai" class="chat-setting-tab-content mag-section active">
                         <!-- AI 设置卡片 -->
-                        <div class="ai-setting-card">
-                            <!-- 背景图区域 -->
-                            <div class="ai-setting-bg" id="ai-setting-bg-container">
-                                <input type="file" id="chat-setting-ai-bg-input" accept="image/*" class="file-input-hidden">
+                        <div class="ai-setting-card editorial-primary-card editorial-target-card mag-card">
+                            <div class="chat-settings-card-kicker mag-card-decor">ID-01 ○</div>
+                            <div class="chat-settings-card-title mag-card-title"><i class="ri-fingerprint-line"></i><span>Identity</span></div>
+                            <div class="editorial-identity-inline mag-avatar-upload mag-target-identity">
+                                <div class="ai-setting-avatar-container">
+                                    <input type="file" id="chat-setting-avatar" accept="image/*" class="file-input-hidden">
+                                    <label for="chat-setting-avatar" class="ai-setting-avatar-wrapper mag-avatar-preview is-clickable">
+                                        <img id="chat-setting-avatar-preview" src="" alt="Avatar">
+                                    </label>
+                                </div>
+                                <div class="editorial-identity-meta mag-target-meta">
+                                    <div class="chat-setting-target-name-row mag-field is-compact">
+                                        <input type="text" id="chat-setting-name" class="chat-setting-target-name-input mag-input" placeholder="姓名" style="width:100% !important; text-align:left !important; text-align-last:left !important; display:block !important; margin:0 !important; padding-left:0 !important; padding-right:0 !important; background:transparent !important;">
+                                    </div>
+                                    <div class="chat-setting-target-location-row editorial-inline-location mag-field is-compact mag-target-location-field">
+                                        <button id="chat-setting-location-trigger" class="mag-location-trigger is-empty" type="button" style="width:100% !important;">
+                                            <i class="ri-map-pin-2-line"></i>
+                                            <span id="chat-setting-location-summary" class="mag-location-summary">点击选择国家、省份、城市</span>
+                                            <i class="ri-arrow-down-s-line mag-location-arrow"></i>
+                                        </button>
+                                        <div id="chat-setting-location-picker" class="mag-location-picker mag-hidden">
+                                            <div class="ai-setting-location-selects">
+                                                <select id="chat-setting-location-country" class="ai-setting-location-select mag-select">
+                                                    <option value="">选择国家</option>
+                                                </select>
+                                                <select id="chat-setting-location-province" class="ai-setting-location-select mag-select" disabled>
+                                                    <option value="">选择省份</option>
+                                                </select>
+                                                <select id="chat-setting-location-city" class="ai-setting-location-select mag-select" disabled>
+                                                    <option value="">选择城市</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            
-                            <!-- 头像区域 -->
-                            <div class="ai-setting-avatar-container">
-                                <input type="file" id="chat-setting-avatar" accept="image/*" class="file-input-hidden">
-                                <label for="chat-setting-avatar" class="ai-setting-avatar-wrapper">
-                                    <img id="chat-setting-avatar-preview" src="" alt="Avatar">
-                                </label>
+                            <div class="mag-field editorial-remark-group-field">
+                                <label class="mag-label">Remark &amp; Group <span class="separator">/</span> <span class="mag-zh">备注与分组</span></label>
+                                <div class="editorial-split-row">
+                                    <div class="ai-setting-remark-container mag-field is-compact">
+                                        <input type="text" id="chat-setting-remark" class="ai-setting-remark-input mag-input" placeholder="备注">
+                                    </div>
+                                    <div class="ai-setting-group-container mag-field is-compact" id="chat-setting-group-trigger">
+                                        <span id="chat-setting-group-value" class="ai-setting-group-text">未分组</span>
+                                        <i class="fas fa-chevron-right editorial-inline-arrow"></i>
+                                    </div>
+                                </div>
                             </div>
-
-                            <!-- 姓名 -->
-                            <div class="ai-setting-name-container">
-                                <input type="text" id="chat-setting-name" class="ai-setting-name-input" placeholder="姓名">
+                            <div class="ai-setting-persona-container mag-field">
+                                <label class="mag-label">Persona Prompt <span class="separator">/</span> <span class="mag-zh">人设指令</span></label>
+                                <div id="chat-setting-persona-preview" class="mag-prompt-preview mag-prompt-preview-clamp chat-settings-prompt-trigger" data-input-id="chat-setting-persona" data-default-text="点击填写角色指令内容..." data-modal-en="Persona Prompt" data-modal-zh="人设指令" data-modal-placeholder="描述 TA 的性格、说话方式、行为倾向..." role="button" tabindex="0">点击填写角色指令内容...</div>
+                                <textarea id="chat-setting-persona" class="ai-setting-persona-input mag-textarea chat-settings-prompt-source" placeholder="输入人设..." hidden></textarea>
                             </div>
-
-                            <!-- 备注 -->
-                            <div class="ai-setting-remark-container">
-                                <input type="text" id="chat-setting-remark" class="ai-setting-remark-input" placeholder="备注">
+                            <div class="mag-field">
+                                <label class="mag-label">Linked Worldbooks <span class="separator">/</span> <span class="mag-zh">关联世界书</span></label>
+                                <div class="mag-multi-select-field" data-multiselect-key="worldbooks">
+                                    <button id="chat-setting-wb-trigger" class="mag-multi-select-trigger" type="button">
+                                        <span id="chat-setting-wb-tags" class="mag-inline-tag-list"></span>
+                                        <i class="ri-arrow-down-s-line mag-location-arrow"></i>
+                                    </button>
+                                    <div id="chat-setting-wb-list" class="mag-multi-select-panel mag-hidden">
+                                        <!-- 世界书分类列表将通过JS生成 -->
+                                    </div>
+                                </div>
                             </div>
-
-                            <!-- 分组 -->
-                            <div class="ai-setting-group-container" id="chat-setting-group-trigger">
-                                <span id="chat-setting-group-value" class="ai-setting-group-text">未分组</span>
-                                <i class="fas fa-chevron-right" style="font-size: 12px; color: #ccc;"></i>
-                            </div>
-
-                            <!-- 人设 -->
-                            <div class="ai-setting-persona-container">
-                                <textarea id="chat-setting-persona" class="ai-setting-persona-input" placeholder="输入人设..."></textarea>
+                            <div class="mag-field">
+                                <label class="mag-label">Linked Sticker Packs <span class="separator">/</span> <span class="mag-zh">关联表情包</span></label>
+                                <div class="mag-multi-select-field" data-multiselect-key="stickers">
+                                    <button id="chat-setting-sticker-trigger" class="mag-multi-select-trigger" type="button">
+                                        <span id="chat-setting-sticker-tags" class="mag-inline-tag-list"></span>
+                                        <i class="ri-arrow-down-s-line mag-location-arrow"></i>
+                                    </button>
+                                    <div id="chat-setting-sticker-list" class="mag-multi-select-panel mag-hidden">
+                                        <!-- 表情包分类列表将通过JS生成 -->
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- 所在位置 -->
-                        <div class="ai-setting-location-container">
-                            <div class="ai-setting-location-label">📍 所在位置</div>
-                            <div class="ai-setting-location-selects">
-                                <select id="chat-setting-location-country" class="ai-setting-location-select">
-                                    <option value="">选择国家</option>
-                                </select>
-                                <select id="chat-setting-location-province" class="ai-setting-location-select" disabled>
-                                    <option value="">选择省份</option>
-                                </select>
-                                <select id="chat-setting-location-city" class="ai-setting-location-select" disabled>
-                                    <option value="">选择城市</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="ios-list-group">
+                        <div class="editorial-card-shell mag-card">
+                            <div class="chat-settings-card-kicker mag-card-decor">ENGINE-01 ○</div>
+                            <div class="chat-settings-card-title mag-card-title"><i class="ri-star-line"></i><span>Logic Engine</span></div>
+                            <div class="ios-list-group editorial-card-group">
                             <div class="list-item">
                                 <div class="list-content column">
                                     <label>上下文条数限制 (0为不限制)</label>
@@ -893,6 +936,13 @@
                                     <input type="number" id="chat-setting-summary-limit" placeholder="默认关闭" min="0">
                                 </div>
                             </div>
+                            </div>
+                        </div>
+
+                        <div class="editorial-card-shell mag-card">
+                            <div class="chat-settings-card-kicker mag-card-decor">THOUGHT-01 ○</div>
+                            <div class="chat-settings-card-title mag-card-title"><i class="ri-bubble-chart-line"></i><span>Thought System</span></div>
+                            <div class="ios-list-group editorial-card-group">
                             <div class="list-item">
                                 <div class="list-content">
                                     <label>主动发消息</label>
@@ -988,10 +1038,13 @@
                                     </label>
                                 </div>
                             </div>
+                            </div>
                         </div>
 
-                        <div class="section-title">小火人（阶段 2）</div>
-                        <div class="ios-list-group">
+                        <div class="editorial-card-shell mag-card">
+                            <div class="chat-settings-card-kicker mag-card-decor">FIRE-01 ○</div>
+                            <div class="chat-settings-card-title mag-card-title"><i class="ri-fire-line"></i><span>Fire Buddy</span></div>
+                            <div class="ios-list-group editorial-card-group">
                             <div class="list-item">
                                 <div class="list-content">
                                     <label>启用小火人</label>
@@ -1065,10 +1118,13 @@
                                     <div id="chat-setting-fire-buddy-summary" class="fire-buddy-settings-summary">继续聊天点亮火花</div>
                                 </div>
                             </div>
+                            </div>
                         </div>
 
-                        <div class="section-title">语音合成 (TTS)</div>
-                        <div class="ios-list-group">
+                        <div class="editorial-card-shell mag-card">
+                            <div class="chat-settings-card-kicker mag-card-decor">ASSET-01 ○</div>
+                            <div class="chat-settings-card-title mag-card-title"><i class="ri-links-line"></i><span>Assets &amp; Actions</span></div>
+                            <div class="ios-list-group editorial-card-group">
                             <div class="list-item">
                                 <div class="list-content">
                                     <label>启用 TTS (Minimax)</label>
@@ -1087,20 +1143,9 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="section-title">关联世界书</div>
-                        <div class="ios-list-group" id="chat-setting-wb-list">
-                            <!-- 世界书分类列表将通过JS生成 -->
-                        </div>
-
-                        <div class="section-title">关联表情包</div>
-                        <div class="ios-list-group" id="chat-setting-sticker-list">
-                            <!-- 表情包分类列表将通过JS生成 -->
-                        </div>
-
-                        <div class="section-title">NovelAI 生图预设</div>
-                        <div class="ios-list-group">
+                            </div>
+                            <div class="editorial-subsection-label">NovelAI Preset <span class="separator">/</span> 生图预设</div>
+                            <div class="ios-list-group editorial-card-group">
                             <div class="list-item">
                                 <div class="list-content column">
                                     <label>选择预设</label>
@@ -1112,14 +1157,13 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="ios-list-group" style="margin-top: 20px;">
+                            </div>
+                            <div class="ios-list-group editorial-card-group" style="margin-top: 18px;">
                             <div class="list-item">
                                 <button id="trigger-ai-moment-btn" class="ios-btn-block secondary">让TA发动态</button>
                             </div>
-                        </div>
-                        <div class="ios-list-group">
+                            </div>
+                            <div class="ios-list-group editorial-card-group">
                             <div class="list-item">
                                 <button id="export-character-btn" class="ios-btn-block secondary">导出角色数据</button>
                             </div>
@@ -1127,67 +1171,69 @@
                                 <input type="file" id="import-character-input" accept=".json" class="file-input-hidden">
                                 <label for="import-character-input" class="ios-btn-block secondary" style="margin-bottom:0; text-align:center;">导入角色数据</label>
                             </div>
-                        </div>
-                        <div class="ios-list-group">
+                            </div>
+                            <div class="ios-list-group editorial-card-group">
                             <div class="list-item center-content" id="clear-chat-history-btn">
                                 <span class="danger-text">清空聊天记录</span>
+                            </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- User Tab -->
-                    <div id="chat-setting-tab-user" class="chat-setting-tab-content">
+                    <div id="chat-setting-tab-user" class="chat-setting-tab-content mag-section">
                         <!-- 用户设置卡片 -->
-                        <div class="ai-setting-card">
-                            <!-- 背景图区域 -->
-                            <div class="ai-setting-bg" id="user-setting-bg-container" style="background-color: #ccc;">
-                                <input type="file" id="chat-setting-user-bg-input" accept="image/*" class="file-input-hidden">
-                            </div>
-                            
-                            <!-- 头像区域 -->
-                            <div class="ai-setting-avatar-container">
-                                <input type="file" id="chat-setting-my-avatar" accept="image/*" class="file-input-hidden">
-                                <label for="chat-setting-my-avatar" class="ai-setting-avatar-wrapper">
-                                    <img id="chat-setting-my-avatar-preview" src="" alt="Avatar">
-                                </label>
-                            </div>
-
-                            <!-- 身份选择 -->
-                            <div class="ai-setting-name-container">
-                                <select id="chat-setting-user-persona" class="ai-setting-name-input" style="background: transparent; border: none; text-align: center; width: auto; min-width: 150px;">
-                                    <option value="">-- 选择身份 --</option>
-                                </select>
-                            </div>
-
-                            <!-- 分隔线 -->
-                            <div style="width: 90%; height: 1px; background-color: #eee; margin: 20px 0;"></div>
-
-                            <!-- 性别设置 -->
-                            <div style="width: 100%; padding: 0 20px; margin-bottom: 20px;">
-                                <div style="font-size: 13px; color: #6d6d72; margin-bottom: 10px; text-align: left; font-weight: 500;">性别</div>
-                                <div id="user-gender-display" style="width: 100%; cursor: pointer; padding: 10px; background-color: #f9f9f9; border-radius: 8px; text-align: center; font-size: 16px; color: #333;">
-                                    性别：女
+                        <div class="ai-setting-card editorial-primary-card editorial-user-card mag-card">
+                            <div class="chat-settings-card-kicker mag-card-decor">USER-01 ○</div>
+                            <div class="chat-settings-card-title mag-card-title"><i class="ri-user-smile-line"></i><span>User Profile</span></div>
+                            <div class="editorial-identity-inline editorial-user-inline mag-avatar-upload">
+                                <div class="ai-setting-avatar-container">
+                                    <input type="file" id="chat-setting-my-avatar" accept="image/*" class="file-input-hidden">
+                                    <label for="chat-setting-my-avatar" class="ai-setting-avatar-wrapper mag-avatar-preview is-clickable">
+                                        <img id="chat-setting-my-avatar-preview" src="" alt="Avatar">
+                                    </label>
                                 </div>
-                            </div>
-
-                            <!-- TA眼中的我 -->
-                            <div style="width: 100%; padding: 0 20px;">
-                                <div style="font-size: 13px; color: #6d6d72; margin-bottom: 10px; text-align: left; font-weight: 500;">TA眼中的我</div>
-                                
-                                <!-- 显示模式 -->
-                                <div id="user-perception-display" style="width: 100%;">
-                                    <div id="user-perception-list" style="margin-bottom: 15px; min-height: 20px; text-align: left; max-height: 150px; overflow-y: auto;">
-                                        <!-- 列表项将通过JS生成 -->
+                                <div class="editorial-identity-meta">
+                                    <div class="ai-setting-name-container mag-field is-compact">
+                                        <select id="chat-setting-user-persona" class="ai-setting-name-input mag-select">
+                                            <option value="">-- 选择身份 --</option>
+                                        </select>
                                     </div>
-                                    <button id="edit-user-perception-btn" class="ios-btn-block secondary">编辑</button>
+                                    <div class="editorial-user-gender-wrap mag-field is-compact">
+                                        <div id="user-gender-display">性别：女</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mag-field editorial-user-prompt-field">
+                                <label class="mag-label">User Prompt</label>
+                                <div id="chat-setting-user-prompt-preview" class="mag-prompt-preview mag-prompt-preview-clamp chat-settings-prompt-trigger" data-input-id="chat-setting-user-prompt" data-default-text="点击填写我的身份设定..." data-modal-en="User Prompt" data-modal-zh="身份设定" data-modal-placeholder="告诉 AI 你是谁、希望如何被理解..." role="button" tabindex="0">点击填写我的身份设定...</div>
+                                <textarea id="chat-setting-user-prompt" class="mag-textarea chat-settings-prompt-source" rows="3" placeholder="在此输入人设..." hidden></textarea>
+                            </div>
+                        </div>
+                        <div class="editorial-card-shell editorial-user-perception-card mag-card">
+                            <div class="chat-settings-card-kicker mag-card-decor">USER-02 ○</div>
+                            <div class="chat-settings-card-title mag-card-title"><i class="ri-eye-line"></i><span>User Perception</span></div>
+                            <div class="editorial-user-perception-panel">
+                                <div id="user-perception-display">
+                                    <div class="mag-field">
+                                        <label class="mag-label">Perception List</label>
+                                        <div id="user-perception-list">
+                                            <!-- 列表项将通过JS生成 -->
+                                        </div>
+                                    </div>
+                                    <div class="mag-action-row">
+                                        <button id="edit-user-perception-btn" class="ios-btn-block secondary mag-btn">编辑</button>
+                                    </div>
                                 </div>
 
-                                <!-- 编辑模式 -->
-                                <div id="user-perception-edit" class="hidden" style="width: 100%;">
-                                    <textarea id="user-perception-input" style="width: 100%; height: 150px; border: 1px solid #ddd; border-radius: 8px; padding: 8px; margin-bottom: 10px; font-family: inherit; background-color: #f9f9f9;" placeholder="每行一条认知信息"></textarea>
-                                    <div style="display: flex; gap: 10px;">
-                                        <button id="save-user-perception-btn" class="ios-btn-block" style="background-color: #000; color: white; flex: 1;">保存</button>
-                                        <button id="cancel-user-perception-btn" class="ios-btn-block" style="background-color: #8e8e93; color: white; flex: 1;">取消</button>
+                                <div id="user-perception-edit" class="hidden">
+                                    <div class="mag-field">
+                                        <label class="mag-label">Edit Buffer</label>
+                                        <textarea id="user-perception-input" class="mag-textarea editorial-perception-textarea" placeholder="每行一条认知信息"></textarea>
+                                    </div>
+                                    <div class="mag-action-row">
+                                        <button id="save-user-perception-btn" class="ios-btn-block mag-btn">保存</button>
+                                        <button id="cancel-user-perception-btn" class="ios-btn-block secondary mag-btn">取消</button>
                                     </div>
                                 </div>
                             </div>
@@ -1195,8 +1241,11 @@
                     </div>
 
                     <!-- Appearance Tab -->
-                    <div id="chat-setting-tab-appearance" class="chat-setting-tab-content">
-                        <div class="ios-list-group">
+                    <div id="chat-setting-tab-appearance" class="chat-setting-tab-content mag-section">
+                        <div class="editorial-card-shell mag-card">
+                            <div class="chat-settings-card-kicker mag-card-decor">VIS-01 ○</div>
+                            <div class="chat-settings-card-title mag-card-title"><i class="ri-layout-4-line"></i><span>Display System</span></div>
+                            <div class="ios-list-group editorial-card-group">
                             <div class="list-item">
                                 <div class="list-content column">
                                     <div style="display: flex; justify-content: space-between; width: 100%;">
@@ -1236,6 +1285,13 @@
                                     </div>
                                 </div>
                             </div>
+                            </div>
+                        </div>
+
+                        <div class="editorial-card-shell mag-card">
+                            <div class="chat-settings-card-kicker mag-card-decor">VIS-02 ○</div>
+                            <div class="chat-settings-card-title mag-card-title"><i class="ri-image-line"></i><span>Background Library</span></div>
+                            <div class="ios-list-group editorial-card-group">
                             <div class="list-item">
                                 <div class="list-content column">
                                     <label>聊天背景</label>
@@ -1258,10 +1314,13 @@
                             <div class="list-item center-content" id="reset-chat-bg">
                                 <span class="danger-text">重置默认背景</span>
                             </div>
+                            </div>
                         </div>
 
-                        <div class="section-title">聊天页面自定义CSS</div>
-                        <div class="ios-list-group">
+                        <div class="editorial-card-shell mag-card">
+                            <div class="chat-settings-card-kicker mag-card-decor">VIS-03 ○</div>
+                            <div class="chat-settings-card-title mag-card-title"><i class="ri-code-line"></i><span>Custom CSS</span></div>
+                            <div class="ios-list-group editorial-card-group">
                             <div class="list-item">
                                 <div class="list-content column">
                                     <label>CSS预设</label>
@@ -1276,6 +1335,7 @@
                             </div>
                             <div class="list-item no-padding">
                                 <textarea id="chat-setting-custom-css" placeholder="/* 仅针对当前聊天页面的CSS */" style="height: 200px;"></textarea>
+                            </div>
                             </div>
                         </div>
                     </div>
@@ -1703,6 +1763,20 @@
                     
                     <input type="file" id="chat-photo-input" accept="image/*" class="file-input-hidden">
                 </div>
+                <div id="chat-settings-prompt-modal" class="mag-modal-overlay">
+                    <div class="mag-modal-card">
+                        <h3 class="mag-modal-title">
+                            <span id="chat-settings-modal-title-en">Edit Prompt</span>
+                            <span class="separator" style="font-size: 20px; margin: 0 10px;">/</span>
+                            <span id="chat-settings-modal-title-zh" style="font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 400; font-style: normal; opacity: 0.8;">编辑指令</span>
+                        </h3>
+                        <textarea id="chat-settings-modal-textarea" class="mag-modal-textarea" placeholder="在此输入详细的指令..."></textarea>
+                        <div class="mag-modal-actions">
+                            <button id="chat-settings-modal-cancel" class="mag-btn" type="button">Cancel / 取消</button>
+                            <button id="chat-settings-modal-save" class="mag-btn" type="button" style="background: var(--mag-accent); color: #fff;">Save / 保存</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="fire-buddy-panel" class="sub-screen hidden fire-buddy-v2-panel" style="z-index: 165;">
@@ -1767,6 +1841,9 @@
                         </button>
                     </div>
                 </div>
+                <button type="button" id="chat-settings-editorial-save" class="chat-settings-editorial-save" onclick="document.getElementById('save-chat-settings-btn').click()" aria-label="保存聊天设置" title="保存">
+                    <i class="ri-save-line"></i>
+                </button>
             </div>
 
             <!-- 钱包页面 -->
@@ -8096,6 +8173,10 @@
 
 </body>
 </html>
+
+
+
+
 
 
 
