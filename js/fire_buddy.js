@@ -993,10 +993,9 @@
 
         if (manualEnabledEl && manualModeEl) {
             fireBuddy.manualUnlock.enabled = !!manualEnabledEl.checked;
-            fireBuddy.manualUnlock.mode = FIRE_BUDDY_MANUAL_MODES.includes(manualModeEl.value) ? manualModeEl.value : 'locked';
-            if (!fireBuddy.manualUnlock.enabled) {
-                fireBuddy.manualUnlock.mode = 'locked';
-            }
+            fireBuddy.manualUnlock.mode = FIRE_BUDDY_MANUAL_MODES.includes(manualModeEl.value)
+                ? manualModeEl.value
+                : (fireBuddy.manualUnlock.mode || 'locked');
         }
 
         fireBuddy.ui.displayMode = displayModeEl && displayModeEl.value === 'desktop-pet' ? 'desktop-pet' : DEFAULT_FIRE_BUDDY_DISPLAY_MODE;
