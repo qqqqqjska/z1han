@@ -851,6 +851,14 @@
     font-style: normal;
 }
 
+#chat-settings-screen .mag-en-short {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85em;
+    color: var(--mag-sec-text);
+    font-weight: 400;
+    font-style: normal;
+}
+
 #chat-settings-screen .mag-nav-item.active .mag-nav-zh {
     color: var(--mag-accent);
 }
@@ -3483,5 +3491,57 @@
     #chat-settings-screen .chat-settings-editorial-hero {
         transform: translateY(18px);
     }
+}
+
+/* Restore showcase card corner markers */
+#chat-settings-screen .chat-settings-card-kicker,
+#chat-settings-screen .mag-card-decor {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#chat-settings-screen .chat-settings-card-kicker .mag-pulse-symbol,
+#chat-settings-screen .mag-card-decor .mag-pulse-symbol {
+    margin-right: 0;
+}
+
+#chat-settings-screen .chat-settings-card-kicker::after,
+#chat-settings-screen .mag-card-decor::after {
+    content: '';
+    width: 4px;
+    height: 4px;
+    flex: 0 0 4px;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    transition: background 0.4s ease, border-color 0.4s ease;
+}
+
+#chat-settings-screen .mag-card:hover .chat-settings-card-kicker::after,
+#chat-settings-screen .mag-card:hover .mag-card-decor::after,
+#chat-settings-screen .editorial-card-shell:hover .chat-settings-card-kicker::after,
+#chat-settings-screen .editorial-card-shell:hover .mag-card-decor::after,
+#chat-settings-screen .editorial-primary-card:hover .chat-settings-card-kicker::after,
+#chat-settings-screen .editorial-primary-card:hover .mag-card-decor::after {
+    background: var(--mag-accent);
+    border-color: var(--mag-accent);
+}
+
+/* Force token breakdown chips to keep label + value on one line */
+#chat-settings-screen #chat-setting-token-preview .chat-token-preview-item {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+
+#chat-settings-screen #chat-setting-token-preview .chat-token-preview-item > span,
+#chat-settings-screen #chat-setting-token-preview .chat-token-preview-item > strong {
+    display: inline !important;
+    white-space: nowrap;
+    line-height: 1 !important;
 }
 
