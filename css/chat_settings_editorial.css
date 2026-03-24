@@ -3257,6 +3257,41 @@
     letter-spacing: 0;
 }
 
+@media (max-width: 640px) {
+    #chat-settings-screen .chat-settings-editorial-title,
+    #chat-settings-screen .mag-title {
+        font-size: clamp(36px, 6.9vw, 54px);
+    }
+
+    #chat-settings-screen .chat-setting-tab-content.mag-section.active {
+        min-width: 0;
+    }
+
+    #chat-settings-screen .chat-setting-tab-content.mag-section.active > .mag-card,
+    #chat-settings-screen .chat-setting-tab-content.mag-section.active > .editorial-card-shell,
+    #chat-settings-screen .chat-setting-tab-content.mag-section.active > .editorial-primary-card {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    #chat-settings-screen .mag-inline-tag-list {
+        width: 100%;
+        min-width: 0;
+        overflow-x: hidden;
+    }
+
+    #chat-settings-screen .mag-inline-tag-row {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        flex-wrap: wrap;
+    }
+}
+
 #chat-settings-screen .editorial-custom-css-card .editorial-code-textarea {
     min-height: 240px !important;
     height: 240px !important;
