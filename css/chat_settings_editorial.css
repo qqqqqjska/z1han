@@ -3474,3 +3474,14 @@
     opacity: 0;
 }
 
+/* Nudge only the header hero content downward without moving the sticky top bar or nav */
+#chat-settings-screen .chat-settings-editorial-hero {
+    transform: translateY(24px);
+}
+
+@media (max-width: 640px) {
+    #chat-settings-screen .chat-settings-editorial-hero {
+        transform: translateY(18px);
+    }
+}
+
