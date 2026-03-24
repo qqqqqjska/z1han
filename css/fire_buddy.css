@@ -2,15 +2,18 @@
     position: relative;
     margin-left: auto;
     margin-right: 6px;
-    width: 36px;
-    min-width: 36px;
-    min-height: 32px;
+    width: 30px;
+    min-width: 30px;
+    min-height: 30px;
     display: inline-flex;
-    flex: 0 0 36px;
+    flex: 0 0 30px;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     pointer-events: auto;
+    padding: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
 }
 
 .fire-buddy-entry.hidden {
@@ -21,13 +24,22 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 14px;
-    background: linear-gradient(135deg, #ffb15c, #ff6b35);
-    color: #fff;
-    font-size: 15px;
-    box-shadow: 0 6px 12px rgba(255, 107, 53, 0.2);
+    width: 22px;
+    height: 22px;
+    border-radius: 0;
+    background: transparent;
+    color: #111;
+    box-shadow: none;
+}
+
+.fire-buddy-brand-icon {
+    display: block;
+    flex-shrink: 0;
+}
+
+.fire-buddy-entry-icon .fire-buddy-brand-icon {
+    width: 22px;
+    height: 22px;
 }
 
 .fire-buddy-entry.is-icon-hidden .fire-buddy-entry-icon {
@@ -37,8 +49,9 @@
 }
 
 .fire-buddy-entry.is-gray .fire-buddy-entry-icon {
-    filter: grayscale(1);
-    opacity: 0.72;
+    filter: none;
+    opacity: 0.38;
+    color: #9f9fa4;
 }
 
 .fire-buddy-contact-badge {
@@ -483,6 +496,13 @@
     font-weight: 300;
 }
 
+.fire-buddy-v2-status-detail {
+    margin-top: 12px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: rgba(0, 0, 0, 0.45);
+}
+
 .fire-buddy-v2-status-text strong {
     color: var(--text-main);
     font-weight: 500;
@@ -665,6 +685,15 @@
 
 .fire-buddy-v2-btn-outline:active::before {
     transform: translateY(0);
+}
+
+.fire-buddy-v2-btn-outline:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
+}
+
+.fire-buddy-v2-btn-outline:disabled::before {
+    transform: translateY(100%);
 }
 
 @keyframes fire-buddy-v2-breathe {

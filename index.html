@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css">
     <link rel="stylesheet" href="css/album.css">
     <link rel="stylesheet" href="css/chat_ui_v1_overrides.css">
-    <link rel="stylesheet" href="css/fire_buddy.css">
+    <link rel="stylesheet" href="css/fire_buddy.css?v=20260324b1">
     <link rel="stylesheet" href="css/screen_share.css">
     <link rel="stylesheet" href="css/calendar_app.css">
     <link rel="stylesheet" href="css/garden_app.css?v=20">
@@ -1505,7 +1505,11 @@
                     <button id="multi-select-cancel" class="multi-select-cancel hidden">退出</button>
                     <span id="chat-title" style="cursor: pointer;">用户名</span>
                     <button id="fire-buddy-entry" class="wechat-icon-btn fire-buddy-entry hidden" aria-label="打开小火人面板">
-                        <span class="fire-buddy-entry-icon">🔥</span>
+                        <span class="fire-buddy-entry-icon" aria-hidden="true">
+                            <svg class="fire-buddy-brand-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path>
+                            </svg>
+                        </span>
                     </button>
                     <button id="chat-settings-btn" class="wechat-icon-btn"><i class="fas fa-ellipsis-h"></i></button>
                 </div>
@@ -1706,7 +1710,7 @@
                     <div>
                         <div id="fire-buddy-panel-subtitle" class="fire-buddy-v2-header-sub">STATUS / BOUND</div>
                         <div class="fire-buddy-v2-header-title">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <svg class="fire-buddy-brand-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path>
                             </svg>
                             <span id="fire-buddy-panel-title">Spark.</span>
@@ -1726,6 +1730,10 @@
                         <p id="fire-buddy-status-text" class="fire-buddy-v2-status-text">
                             羁绊已建立。当前互动处于 <strong>活跃</strong> 状态。继续保持日常沟通，以免星火熄灭进入休眠。
                         </p>
+                        <div id="fire-buddy-panel-detail" class="fire-buddy-v2-status-detail">绑定时间：-- · 最近有效互动：--</div>
+                        <button id="fire-buddy-panel-action" class="fire-buddy-v2-btn-outline hidden" type="button" aria-label="执行小火人当前阶段操作">
+                            <span>发起邀请</span>
+                        </button>
                     </div>
 
                     <div class="fire-buddy-v2-grid-stats">
@@ -7783,7 +7791,7 @@
     <script src="js/chat/03-ai-engine.js"></script>
     <script src="js/chat/04-media-init.js"></script>
     <script src="js/chat/05-addressbook-friends.js"></script>
-    <script src="js/fire_buddy.js"></script>
+    <script src="js/fire_buddy.js?v=20260324b1"></script>
     <script src="js/offline_push_sync.js"></script>
     <script src="js/shopping.js"></script>
     <script src="js/forum.js"></script>

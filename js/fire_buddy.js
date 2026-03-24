@@ -187,6 +187,14 @@
         return `@${getFireBuddyDisplayName(contact)}`;
     }
 
+    function getFireBuddyPersonaHint(contact, buddyName) {
+        const fireBuddy = ensureFireBuddy(contact);
+        const personaText = String(fireBuddy && fireBuddy.profile && fireBuddy.profile.persona || '').trim();
+        if (!personaText) return '';
+        const resolvedName = String(buddyName || getFireBuddyDisplayName(contact) || '小火人').trim();
+        return `${resolvedName}的人设补充：${personaText}。`;
+    }
+
     function replaceGenericFireBuddyMention(text, contactId) {
         const contact = getContactById(contactId || getState().currentChatContactId);
         const source = String(text || '');
@@ -245,7 +253,10 @@
         const cleanText = mentionState && mentionState.cleanText
             ? mentionState.cleanText
             : String(msg.content || '').replace(new RegExp(escapeFireBuddyRegExp(`@${mentionName}`), 'g'), '').replace(/\s{2,}/g, ' ').trim();
-        const loreText = `${mentionName}是你和用户连续续火花后才会激活的第三方AI角色，由AI扮演，并不是你本人；如果后续不继续续火花，${mentionName}会熄灭、变灰，像“死掉”一样进入休眠。`;
+        const loreText = [
+            `${mentionName}是你和用户连续续火花后才会激活的第三方AI角色，由AI扮演，并不是你本人；如果后续不继续续火花，${mentionName}会熄灭、变灰，像“死掉”一样进入休眠。`,
+            getFireBuddyPersonaHint(contact, mentionName)
+        ].filter(Boolean).join(' ');
 
         if (!cleanText) {
             return `[用户刚刚 @了${mentionName}。补充设定：${loreText} 这句话主要是对${mentionName}说的，不是直接对你说。若本轮需要让${mentionName}正式出声，必须在同一个 JSON 数组里直接输出几条 {"type":"text_message","speaker":"fire_buddy","content":"..."}，并让这些${mentionName}消息连续出现；你自己的话继续用普通 text_message。]`;
@@ -262,7 +273,10 @@
 
         const speakerName = String(msg.fireBuddySpeakerName || getFireBuddyDisplayName(contact) || '小火人').trim();
         const content = String(msg.content || '').trim();
-        const loreText = `${speakerName}是你和用户连续续火花后才激活的第三方AI角色，由AI扮演，不是你本人；如果后续没有继续续火花，${speakerName}会熄灭、变灰，像“死掉”一样休眠。`;
+        const loreText = [
+            `${speakerName}是你和用户连续续火花后才激活的第三方AI角色，由AI扮演，不是你本人；如果后续没有继续续火花，${speakerName}会熄灭、变灰，像“死掉”一样休眠。`,
+            getFireBuddyPersonaHint(contact, speakerName)
+        ].filter(Boolean).join(' ');
         if (!content) {
             return `[聊天里的另一位发言人 ${speakerName} 刚刚插话了。补充设定：${loreText} 这不是你说的。你接下来可以顺势对ta的插话做一点轻微反应或吐槽。]`;
         }
@@ -278,6 +292,7 @@
         const status = getDerivedFireBuddyStatus(contact, metrics);
         const buddyName = getFireBuddyDisplayName(contact);
         const stageLabel = getFireBuddyStageLabel(status);
+        const personaHint = getFireBuddyPersonaHint(contact, buddyName);
 
         let statusHint = `${buddyName}当前状态为“${stageLabel}”。`;
         if (status === 'bound') {
@@ -299,7 +314,7 @@
             mentionHint = `如果这一轮聊天气氛合适，你可以直接在本轮 JSON 数组中安排 ${buddyName} 加入。做法是：你自己的消息继续用普通 text_message；凡是要由${buddyName}说的话，必须写成 {"type":"text_message","speaker":"fire_buddy","content":"..."}。如果你决定 @${buddyName}，请在同一轮数组里一次性给出完整顺序，例如“你先 @ta → ${buddyName}连续回复几条 → 你再接一句”。在可见正文里提到ta时，优先使用“@${buddyName}”，不要写成泛称“@小火人”。不要依赖第二次 API，也不要每一轮都强行 @ta。`;
         }
 
-        return `${buddyName}是一个独立的第三方AI角色，由AI扮演，不是你本人，也不是普通联系人。它只有在你和用户连续聊天、持续续火花后才会被激活或绑定；如果之后长时间不继续续火花，它会熄灭、变灰，像“死掉”一样进入休眠。${statusHint}${mentionHint} 当${buddyName}发言时，你要把ta当作聊天里的另一个角色来看待，可以自然回应、调侃、吐槽、吃味或接话，但不要把ta说的话当成你自己说的，也不要冒充ta。`;
+        return `${buddyName}是一个独立的第三方AI角色，由AI扮演，不是你本人，也不是普通联系人。它只有在你和用户连续聊天、持续续火花后才会被激活或绑定；如果之后长时间不继续续火花，它会熄灭、变灰，像“死掉”一样进入休眠。${statusHint}${personaHint}${mentionHint} 当${buddyName}发言时，你要把ta当作聊天里的另一个角色来看待，可以自然回应、调侃、吐槽、吃味或接话，但不要把ta说的话当成你自己说的，也不要冒充ta。`;
     }
 
     function getPendingFireBuddyMentionMessage(contactId) {
@@ -1506,7 +1521,8 @@
 
         const iconEl = entryBtn.querySelector('.fire-buddy-entry-icon');
         if (iconEl) {
-            iconEl.textContent = getFireBuddyHeaderIcon(status);
+            iconEl.dataset.status = status;
+            iconEl.setAttribute('aria-label', getFireBuddyStageLabel(status));
         }
 
         entryBtn.dataset.contactId = contact.id;
@@ -1601,10 +1617,13 @@
         const panelSubtitleEl = document.getElementById('fire-buddy-panel-subtitle');
         const panelTitleEl = document.getElementById('fire-buddy-panel-title');
         const statusTextEl = document.getElementById('fire-buddy-status-text');
+        const panelDetailEl = document.getElementById('fire-buddy-panel-detail');
         const currentStreakEl = document.getElementById('fire-buddy-current-streak');
         const longestStreakEl = document.getElementById('fire-buddy-longest-streak');
         const nameInputEl = document.getElementById('fire-buddy-name-input');
         const personaInputEl = document.getElementById('fire-buddy-persona-input');
+        const actionBtn = document.getElementById('fire-buddy-panel-action');
+        const actionBtnLabel = actionBtn ? (actionBtn.querySelector('span') || actionBtn) : null;
 
         if (!contact || !avatarEl || !stageLabelTextEl || !statusTextEl || !currentStreakEl || !longestStreakEl || !nameInputEl || !personaInputEl) {
             return;
@@ -1612,16 +1631,27 @@
 
         const fireBuddy = ensureFireBuddy(contact);
         const stageMeta = getFireBuddyV2StageMeta(status);
+        const actionConfig = getFireBuddyActionConfig(status);
 
-        if (panelSubtitleEl) panelSubtitleEl.textContent = 'Status / Bound';
+        if (panelSubtitleEl) panelSubtitleEl.textContent = `Status / ${getFireBuddyStageLabel(status)}`;
         if (panelTitleEl) panelTitleEl.textContent = 'Spark.';
         avatarEl.textContent = stageMeta.icon;
         stageLabelTextEl.textContent = stageMeta.label;
         statusTextEl.innerHTML = getFireBuddyV2StatusMarkup(status);
+        if (panelDetailEl) panelDetailEl.textContent = buildStatusDetail(contact, metrics, status);
         currentStreakEl.innerHTML = formatFireBuddyV2DayStat(metrics.currentStreak);
         longestStreakEl.innerHTML = formatFireBuddyV2DayStat(metrics.longestStreak);
         nameInputEl.value = fireBuddy.profile.name || '';
         personaInputEl.value = fireBuddy.profile.persona || '';
+        if (actionBtn) {
+            actionBtn.classList.toggle('hidden', !!actionConfig.hidden);
+            actionBtn.disabled = !!actionConfig.disabled;
+            actionBtn.dataset.status = status;
+            actionBtn.onclick = actionConfig.hidden ? null : bindFireBuddyCurrentContact;
+        }
+        if (actionBtnLabel) {
+            actionBtnLabel.textContent = actionConfig.label || '';
+        }
     }
 
     function decorateContactList(filterGroup) {
@@ -1653,7 +1683,8 @@
     }
 
     function bindFireBuddyCurrentContact() {
-        const contactId = getState().currentChatContactId;
+        const panel = document.getElementById('fire-buddy-panel');
+        const contactId = (panel && panel.dataset.contactId) || getState().currentChatContactId;
         const contact = getContactById(contactId);
         if (!contact) return;
         if (!isFireBuddyEnabled(contact)) return;
@@ -2177,6 +2208,7 @@
         const entryBtn = document.getElementById('fire-buddy-entry');
         const closeBtn = document.getElementById('close-fire-buddy-panel');
         const unlockCard = document.getElementById('fire-buddy-unlock-card');
+        const actionBtn = document.getElementById('fire-buddy-panel-action');
         const profileSaveBtn = document.getElementById('fire-buddy-profile-save');
         const moreBtn = document.getElementById('chat-more-fire-buddy-btn');
         const composeCloseBtn = document.getElementById('fire-buddy-compose-close');
