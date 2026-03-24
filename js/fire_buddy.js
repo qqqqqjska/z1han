@@ -135,6 +135,7 @@
             ui: {
                 lastPanelTab: typeof ui.lastPanelTab === 'string' ? ui.lastPanelTab : 'home',
                 displayMode: ui.displayMode === 'desktop-pet' ? 'desktop-pet' : DEFAULT_FIRE_BUDDY_DISPLAY_MODE,
+                topbarIconVisible: ui.topbarIconVisible !== false,
                 petImage: typeof ui.petImage === 'string' ? ui.petImage : '',
                 petSize: clampFireBuddyPetSize(ui.petSize),
                 petPosition: normalizeFireBuddyPetPosition(ui.petPosition),
@@ -868,9 +869,13 @@
         const enabledEl = document.getElementById('chat-setting-fire-buddy-enabled');
         const displayModeEl = document.getElementById('chat-setting-fire-buddy-display-mode');
         const petPanel = document.getElementById('chat-setting-fire-buddy-pet-panel');
+        const topbarIconRow = document.getElementById('chat-setting-fire-buddy-topbar-icon-row');
         if (!displayModeEl || !petPanel) return;
         const isEnabled = !enabledEl || enabledEl.checked;
         petPanel.style.display = isEnabled && displayModeEl.value === 'desktop-pet' ? '' : 'none';
+        if (topbarIconRow) {
+            topbarIconRow.style.display = isEnabled && displayModeEl.value !== 'desktop-pet' ? '' : 'none';
+        }
     }
 
     function syncFireBuddySettingsAvailability() {
@@ -878,9 +883,10 @@
         const manualEnabledEl = document.getElementById('chat-setting-fire-buddy-manual-enabled');
         const manualModeEl = document.getElementById('chat-setting-fire-buddy-mode');
         const displayModeEl = document.getElementById('chat-setting-fire-buddy-display-mode');
+        const topbarIconVisibleEl = document.getElementById('chat-setting-fire-buddy-topbar-icon-visible');
         const petImageInput = document.getElementById('chat-setting-fire-buddy-pet-image');
         const petSizeSlider = document.getElementById('chat-setting-fire-buddy-pet-size');
-        const profileItems = [manualEnabledEl, manualModeEl, displayModeEl, petImageInput, petSizeSlider].filter(Boolean);
+        const profileItems = [manualEnabledEl, manualModeEl, displayModeEl, topbarIconVisibleEl, petImageInput, petSizeSlider].filter(Boolean);
         const isEnabled = !enabledEl || enabledEl.checked;
 
         profileItems.forEach((el) => {
@@ -951,6 +957,7 @@
         const manualEnabledEl = document.getElementById('chat-setting-fire-buddy-manual-enabled');
         const manualModeEl = document.getElementById('chat-setting-fire-buddy-mode');
         const displayModeEl = document.getElementById('chat-setting-fire-buddy-display-mode');
+        const topbarIconVisibleEl = document.getElementById('chat-setting-fire-buddy-topbar-icon-visible');
         const petImageInput = document.getElementById('chat-setting-fire-buddy-pet-image');
         const petPreview = document.getElementById('chat-setting-fire-buddy-pet-preview');
         const petSizeSlider = document.getElementById('chat-setting-fire-buddy-pet-size');
@@ -962,6 +969,7 @@
             manualModeEl.disabled = !fireBuddy.manualUnlock.enabled;
         }
         if (displayModeEl) displayModeEl.value = getFireBuddyDisplayMode(contact);
+        if (topbarIconVisibleEl) topbarIconVisibleEl.checked = fireBuddy.ui.topbarIconVisible !== false;
         if (petImageInput) petImageInput.value = '';
         if (petSizeSlider) petSizeSlider.value = String(clampFireBuddyPetSize(fireBuddy.ui.petSize));
         if (petPreview) {
@@ -986,6 +994,7 @@
         const manualEnabledEl = document.getElementById('chat-setting-fire-buddy-manual-enabled');
         const manualModeEl = document.getElementById('chat-setting-fire-buddy-mode');
         const displayModeEl = document.getElementById('chat-setting-fire-buddy-display-mode');
+        const topbarIconVisibleEl = document.getElementById('chat-setting-fire-buddy-topbar-icon-visible');
         const petImageInput = document.getElementById('chat-setting-fire-buddy-pet-image');
         const petSizeSlider = document.getElementById('chat-setting-fire-buddy-pet-size');
 
@@ -999,6 +1008,7 @@
         }
 
         fireBuddy.ui.displayMode = displayModeEl && displayModeEl.value === 'desktop-pet' ? 'desktop-pet' : DEFAULT_FIRE_BUDDY_DISPLAY_MODE;
+        fireBuddy.ui.topbarIconVisible = !topbarIconVisibleEl || !!topbarIconVisibleEl.checked;
         fireBuddy.ui.petSize = clampFireBuddyPetSize(petSizeSlider ? petSizeSlider.value : fireBuddy.ui.petSize);
         fireBuddy.ui.petPosition = normalizeFireBuddyPetPosition(fireBuddy.ui.petPosition);
 
@@ -1032,6 +1042,7 @@
         const manualEnabledEl = document.getElementById('chat-setting-fire-buddy-manual-enabled');
         const manualModeEl = document.getElementById('chat-setting-fire-buddy-mode');
         const displayModeEl = document.getElementById('chat-setting-fire-buddy-display-mode');
+        const topbarIconVisibleEl = document.getElementById('chat-setting-fire-buddy-topbar-icon-visible');
         const petImageInput = document.getElementById('chat-setting-fire-buddy-pet-image');
         const petPreview = document.getElementById('chat-setting-fire-buddy-pet-preview');
         const petSizeSlider = document.getElementById('chat-setting-fire-buddy-pet-size');
@@ -1055,6 +1066,16 @@
         if (displayModeEl) {
             displayModeEl.addEventListener('change', () => {
                 syncFireBuddyPetPanelVisibility();
+            });
+        }
+
+        if (topbarIconVisibleEl) {
+            topbarIconVisibleEl.addEventListener('change', () => {
+                const contact = getFireBuddySettingsContact();
+                if (!contact) return;
+                const fireBuddy = ensureFireBuddy(contact);
+                fireBuddy.ui.topbarIconVisible = !!topbarIconVisibleEl.checked;
+                refreshFireBuddyState(contact.id, 'settings-topbar-icon-toggle');
             });
         }
 
@@ -1468,12 +1489,16 @@
         const entryBtn = document.getElementById('fire-buddy-entry');
         if (!entryBtn || !contact) return;
 
+        const fireBuddy = ensureFireBuddy(contact);
+
         if (!isFireBuddyEnabled(contact)) {
             entryBtn.classList.add('hidden');
             return;
         }
 
-        const shouldShow = isFireBuddyVisibleStatus(status) && getFireBuddyDisplayMode(contact) !== 'desktop-pet';
+        const shouldShow = isFireBuddyVisibleStatus(status)
+            && getFireBuddyDisplayMode(contact) !== 'desktop-pet'
+            && fireBuddy.ui.topbarIconVisible !== false;
         const isGray = status === 'gray' || status === 'wake-ready';
         entryBtn.classList.toggle('hidden', !shouldShow);
         entryBtn.classList.toggle('is-gray', isGray);

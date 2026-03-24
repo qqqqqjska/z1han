@@ -2946,6 +2946,10 @@
     margin-bottom: 20px;
 }
 
+#chat-settings-screen .editorial-fire-buddy-card .mag-field + #chat-setting-fire-buddy-topbar-icon-row {
+    margin-top: -12px;
+}
+
 #chat-settings-screen .editorial-fire-buddy-panel {
     display: block;
 }
