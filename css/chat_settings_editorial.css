@@ -682,7 +682,7 @@
 
 #chat-settings-screen::before {
     content: '';
-    position: absolute;
+    position: fixed;
     inset: 0;
     pointer-events: none;
     z-index: 0;
@@ -769,9 +769,8 @@
 }
 
 #chat-settings-screen .chat-settings-editorial-body {
-    background-color: #f0f5f9 !important;
-    background-image: radial-gradient(rgba(130, 150, 170, 0.15) 1.5px, transparent 1.5px) !important;
-    background-size: 24px 24px !important;
+    background: transparent !important;
+    background-image: none !important;
     min-height: auto;
     margin-top: 0 !important;
     padding: 0 40px 110px !important;
@@ -2144,7 +2143,9 @@
 
 #chat-settings-screen .mag-location-trigger > .ri-map-pin-2-line {
     flex-shrink: 0;
+    width: 16px;
     font-size: 16px;
+    text-align: center;
     opacity: 0.76;
 }
 
@@ -2256,6 +2257,9 @@
     min-width: 0;
 }
 
+#chat-settings-screen .mag-target-identity .mag-target-meta {
+    gap: 4px;
+}
 #chat-settings-screen .chat-setting-target-name-row,
 #chat-settings-screen .chat-setting-target-location-row {
     width: 100%;
@@ -2265,6 +2269,23 @@
 
 #chat-settings-screen .chat-setting-target-name-row {
     display: block !important;
+    position: relative;
+}
+
+#chat-settings-screen .chat-setting-target-name-row::before {
+    content: '@';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateY(calc(-50% - 2px));
+    width: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    color: var(--mag-sec-text);
+    pointer-events: none;
 }
 
 #chat-settings-screen .chat-setting-target-location-row {
@@ -2290,6 +2311,7 @@
 #chat-settings-screen .chat-setting-target-name-input {
     text-align: left !important;
     text-align-last: left !important;
+    padding-left: 26px !important;
 }
 
 #chat-settings-screen .mag-target-meta .mag-field.is-compact,
@@ -3559,4 +3581,9 @@
     white-space: nowrap;
     line-height: 1 !important;
 }
+
+
+
+
+
 
