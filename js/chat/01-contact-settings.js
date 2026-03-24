@@ -682,18 +682,79 @@ function renderChatSettingsMultiSelectTags(key) {
     }
 
     trigger.classList.remove('is-empty');
-    const firstRow = document.createElement('div');
-    firstRow.className = 'mag-inline-tag-row';
-    const secondRow = document.createElement('div');
-    secondRow.className = 'mag-inline-tag-row';
-    selected.forEach((item, index) => {
+    const availableWidth = Math.max(tags.clientWidth, trigger.clientWidth - 28, 220);
+    const overflowTolerance = 1;
+
+    const createChip = item => {
         const chip = document.createElement('span');
         chip.className = `mag-chip${config.chipClass ? ' ' + config.chipClass : ''}`;
         chip.textContent = item;
-        (index % 2 === 0 ? firstRow : secondRow).appendChild(chip);
+        return chip;
+    };
+
+    const createPage = () => {
+        const page = document.createElement('div');
+        page.className = 'mag-inline-tag-page';
+
+        const firstRow = document.createElement('div');
+        firstRow.className = 'mag-inline-tag-row';
+        const secondRow = document.createElement('div');
+        secondRow.className = 'mag-inline-tag-row';
+
+        page.appendChild(firstRow);
+        page.appendChild(secondRow);
+        tags.appendChild(page);
+
+        return {
+            page,
+            rows: [firstRow, secondRow]
+        };
+    };
+
+    let currentPage = createPage();
+    let currentRowIndex = 0;
+
+    const appendToFreshPage = chip => {
+        currentPage = createPage();
+        currentRowIndex = 0;
+        currentPage.rows[0].appendChild(chip);
+    };
+
+    selected.forEach(item => {
+        const chip = createChip(item);
+        const currentRow = currentPage.rows[currentRowIndex];
+        currentRow.appendChild(chip);
+
+        if (currentRow.scrollWidth <= availableWidth + overflowTolerance || currentRow.childElementCount === 1) {
+            return;
+        }
+
+        chip.remove();
+
+        if (currentRowIndex === 0) {
+            currentRowIndex = 1;
+            const secondRow = currentPage.rows[1];
+            secondRow.appendChild(chip);
+
+            if (secondRow.scrollWidth <= availableWidth + overflowTolerance || secondRow.childElementCount === 1) {
+                return;
+            }
+
+            chip.remove();
+            appendToFreshPage(chip);
+            return;
+        }
+
+        appendToFreshPage(chip);
     });
-    if (firstRow.childElementCount) tags.appendChild(firstRow);
-    if (secondRow.childElementCount) tags.appendChild(secondRow);
+
+    tags.querySelectorAll('.mag-inline-tag-page').forEach(page => {
+        const rows = page.querySelectorAll('.mag-inline-tag-row');
+        const secondRow = rows[1];
+        if (secondRow && !secondRow.childElementCount) {
+            secondRow.remove();
+        }
+    });
 }
 
 function renderChatSettingsMultiSelectOptions(key, options, selectedIds) {
@@ -2485,10 +2546,14 @@ function openChatSettings() {
     syncChatSettingsStickyChrome();
     syncChatSettingsNavIndicator();
     requestAnimationFrame(() => {
+        renderChatSettingsMultiSelectTags('worldbooks');
+        renderChatSettingsMultiSelectTags('stickers');
         syncChatSettingsStickyChrome();
         syncChatSettingsNavIndicator();
     });
     setTimeout(() => {
+        renderChatSettingsMultiSelectTags('worldbooks');
+        renderChatSettingsMultiSelectTags('stickers');
         syncChatSettingsStickyChrome();
         syncChatSettingsNavIndicator();
     }, 120);

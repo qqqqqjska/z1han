@@ -738,7 +738,8 @@
 #chat-settings-screen .mag-header-avatars {
     display: inline-flex;
     align-items: center;
-    margin-left: 10px;
+    margin-left: 0;
+    transform: translateY(4px);
 }
 
 #chat-settings-screen .mag-header-avatar {
@@ -2430,8 +2431,8 @@
     flex: 1;
     min-width: 0;
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    align-items: flex-start;
+    gap: 0;
     overflow-x: auto;
     overflow-y: hidden;
     padding: 2px 2px 2px 0;
@@ -2445,6 +2446,16 @@
 
 #chat-settings-screen .mag-inline-tag-list::-webkit-scrollbar {
     display: none;
+}
+
+#chat-settings-screen .mag-inline-tag-page {
+    flex: 0 0 100%;
+    min-width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow: hidden;
+    scroll-snap-align: start;
 }
 
 #chat-settings-screen .mag-inline-tag-row {
@@ -3289,14 +3300,18 @@
     #chat-settings-screen .mag-inline-tag-list {
         width: 100%;
         min-width: 0;
-        overflow-x: hidden;
+        overflow-x: auto;
+    }
+
+    #chat-settings-screen .mag-inline-tag-page {
+        min-width: 100%;
     }
 
     #chat-settings-screen .mag-inline-tag-row {
-        width: 100%;
-        max-width: 100%;
+        width: max-content;
+        max-width: none;
         min-width: 0;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
     }
 }
 
