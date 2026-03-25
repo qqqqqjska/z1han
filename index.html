@@ -51,6 +51,7 @@
     <link rel="stylesheet" href="css/calendar_app.css">
     <link rel="stylesheet" href="css/garden_app.css?v=20">
     <link rel="stylesheet" href="css/chat_settings_editorial.css">
+    <link rel="stylesheet" href="css/chat_oracle_quick_replies.css">
 </head>
 <body>
     <div class="screen-container" id="screen-container">
@@ -1659,6 +1660,10 @@
                                 <div class="more-icon"><i class="fas fa-comment-dots"></i></div>
                                 <div class="more-label">让TA发消息</div>
                             </div>
+                            <div class="more-item" id="chat-more-oracle-btn">
+                                <div class="more-icon"><i class="fas fa-star"></i></div>
+                                <div class="more-label">抽牌</div>
+                            </div>
                             <div class="more-item" id="chat-more-fire-buddy-btn">
                                 <div class="more-icon"><i class="fas fa-fire"></i></div>
                                 <div class="more-label">小火人代发</div>
@@ -1685,6 +1690,188 @@
                     
                     <input type="file" id="chat-photo-input" accept="image/*" class="file-input-hidden">
                 </div>
+                <div id="chat-oracle-inline-draw" class="chat-oracle-inline-draw hidden">
+                    <div class="chat-oracle-inline-head">
+                        <button id="chat-oracle-draw-back-btn" class="chat-oracle-nav-btn" type="button" aria-label="返回聊天页面">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <div class="chat-oracle-head-copy">
+                            <div class="chat-oracle-title">开始抽牌</div>
+                        </div>
+                        <button id="chat-oracle-inline-close-btn" class="chat-oracle-close-btn" type="button" aria-label="关闭抽牌页面">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <div id="chat-oracle-draw-select-state" class="chat-oracle-draw-state">
+                        <div id="chat-oracle-draw-deck-list" class="chat-oracle-list-block"></div>
+                        <div id="chat-oracle-draw-empty-state" class="chat-oracle-section hidden">
+                            <div class="chat-oracle-empty">还没有可抽取的牌组。</div>
+                            <div class="chat-oracle-text-actions single">
+                                <button id="chat-oracle-draw-open-manage-btn" class="chat-oracle-text-btn primary" type="button">去管理页导入牌组</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="chat-oracle-draw-fan-state" class="chat-oracle-draw-state hidden">
+                        <div class="chat-oracle-draw-stage-head">
+                            <div id="chat-oracle-draw-current-deck" class="chat-oracle-draw-current-deck"></div>
+                        </div>
+
+                        <div id="chat-oracle-fan-zone" class="chat-oracle-fan-zone">
+                            <div id="chat-oracle-fan" class="chat-oracle-fan" aria-label="抽牌卡列"></div>
+                        </div>
+                    </div>
+
+                    <div id="chat-oracle-draw-detail" class="chat-oracle-draw-detail hidden">
+                        <button id="chat-oracle-draw-detail-backdrop" class="chat-oracle-draw-detail-backdrop" type="button" aria-label="关闭抽牌详情"></button>
+                        <div class="chat-oracle-draw-detail-card">
+                            <button id="chat-oracle-draw-detail-close" class="chat-oracle-draw-detail-close" type="button" aria-label="关闭抽牌详情">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <div class="chat-oracle-draw-detail-label">快捷回复</div>
+                            <div id="chat-oracle-draw-detail-title" class="chat-oracle-draw-detail-title">请选择一张牌</div>
+                            <div id="chat-oracle-draw-detail-keywords" class="chat-oracle-draw-detail-keywords"></div>
+                            <div id="chat-oracle-draw-detail-reply-label" class="chat-oracle-draw-detail-reply-label"></div>
+                            <div id="chat-oracle-draw-detail-reply" class="chat-oracle-draw-detail-reply"></div>
+                            <div class="chat-oracle-text-actions">
+                                <button id="chat-oracle-draw-send-btn" class="chat-oracle-text-btn primary" type="button">发送</button>
+                                <button id="chat-oracle-draw-reset-btn" class="chat-oracle-text-btn" type="button">重新抽取</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="chat-oracle-modal" class="chat-oracle-modal hidden">
+                    <button id="chat-oracle-backdrop" class="chat-oracle-backdrop" type="button" aria-label="关闭抽牌快捷回复"></button>
+                    <div class="chat-oracle-sheet" role="dialog" aria-modal="true" aria-label="抽牌快捷回复">
+                        <div class="chat-oracle-view" data-oracle-view="home">
+                            <div class="chat-oracle-head">
+                                <div>
+                                    <div class="chat-oracle-title">抽牌快捷回复</div>
+                                    <div class="chat-oracle-subtitle">请选择你要进入的功能</div>
+                                </div>
+                                <button class="chat-oracle-close-btn" data-oracle-close="true" type="button" aria-label="关闭抽牌快捷回复">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+
+                            <div class="chat-oracle-home-actions">
+                                <button id="chat-oracle-open-manage-btn" class="chat-oracle-home-btn manage" type="button">
+                                    <div class="chat-oracle-home-icon"><i class="fas fa-sliders-h"></i></div>
+                                    <div class="chat-oracle-home-copy">
+                                        <div class="chat-oracle-home-title">管理快捷回复</div>
+                                        <div class="chat-oracle-home-desc">导入牌组、应用牌组，并管理当前已有的回复</div>
+                                    </div>
+                                </button>
+                                <button id="chat-oracle-open-draw-btn" class="chat-oracle-home-btn draw" type="button">
+                                    <div class="chat-oracle-home-icon"><i class="fas fa-star"></i></div>
+                                    <div class="chat-oracle-home-copy">
+                                        <div class="chat-oracle-home-title">开始抽牌</div>
+                                        <div class="chat-oracle-home-desc">抽出已配置的牌，并一键发送对应回复</div>
+                                    </div>
+                                </button>
+                            </div>
+
+                            <div id="chat-oracle-home-summary" class="chat-oracle-home-summary">尚未导入快捷回复</div>
+                        </div>
+
+                        <div class="chat-oracle-view hidden" data-oracle-view="manage">
+                            <div class="chat-oracle-head">
+                                <button class="chat-oracle-nav-btn" data-oracle-back="home" type="button" aria-label="返回抽牌入口">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <div class="chat-oracle-head-copy">
+                                    <div class="chat-oracle-title">管理快捷回复</div>
+                                    <div class="chat-oracle-subtitle">导入牌组、应用牌组，并整理当前已有的回复</div>
+                                </div>
+                                <button class="chat-oracle-close-btn" data-oracle-close="true" type="button" aria-label="关闭抽牌快捷回复">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+
+                            <div class="chat-oracle-section">
+                                <div class="chat-oracle-section-title">导入牌组</div>
+                                <button id="chat-oracle-open-import-modal-btn" class="chat-oracle-pill-btn" type="button">
+                                    <i class="fas fa-file-import"></i>
+                                    <span>导入并保存牌组</span>
+                                </button>
+                                <div class="chat-oracle-note">导入时需要填写牌组名称，导入成功后会自动保存到牌组列表，并同时应用到当前配置。</div>
+                            </div>
+
+                            <div class="chat-oracle-section">
+                                <div id="chat-oracle-decks-title" class="chat-oracle-section-title">牌组</div>
+                                <div id="chat-oracle-presets-list" class="chat-oracle-list-block">
+                                    <div class="chat-oracle-empty">还没有保存任何牌组。</div>
+                                </div>
+                                <div id="chat-oracle-preset-status" class="chat-oracle-note">导入牌组后会自动保存到列表，可在这里一键应用</div>
+                            </div>
+
+                            <div class="chat-oracle-section">
+                                <div class="chat-oracle-section-head">
+                                    <div id="chat-oracle-existing-title" class="chat-oracle-section-title">牌组内快捷回复</div>
+                                    <button id="chat-oracle-clear-btn" class="chat-oracle-small-btn" type="button">清空当前配置</button>
+                                </div>
+                                <div id="chat-oracle-existing-list" class="chat-oracle-list-block">
+                                    <div class="chat-oracle-empty">当前还没有导入任何快捷回复。</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="chat-oracle-import-modal" class="chat-oracle-import-modal hidden">
+                            <button id="chat-oracle-import-modal-backdrop" class="chat-oracle-import-modal-backdrop" type="button" aria-label="关闭导入牌组"></button>
+                            <div class="chat-oracle-import-card">
+                                <div class="chat-oracle-head chat-oracle-import-head">
+                                    <div>
+                                        <div class="chat-oracle-title">导入牌组</div>
+                                        <div class="chat-oracle-subtitle">填写牌组名称后，导入内容会直接保存为牌组</div>
+                                    </div>
+                                    <button id="chat-oracle-import-modal-close" class="chat-oracle-close-btn" type="button" aria-label="关闭导入牌组">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+
+                                <input id="chat-oracle-import-name" class="chat-oracle-text-input" type="text" placeholder="输入牌组名称，例如：温柔回复组">
+                                <button id="chat-oracle-import-file-btn" class="chat-oracle-pill-btn" type="button">
+                                    <i class="fas fa-file-arrow-up"></i>
+                                    <span>选择 JSON 文件</span>
+                                </button>
+                                <input type="file" id="chat-oracle-file-input" accept=".json,application/json" class="file-input-hidden">
+                                <textarea id="chat-oracle-import-textarea" class="chat-oracle-import-textarea" placeholder='支持直接粘贴 JSON，例如：{"月井":"我想先慢慢想一下","金羽":{"label":"主动一点","content":"我来先给你回消息啦"}}'></textarea>
+
+                                <div class="chat-oracle-text-actions">
+                                    <button id="chat-oracle-confirm-import-btn" class="chat-oracle-text-btn primary" type="button">导入并保存牌组</button>
+                                    <button id="chat-oracle-cancel-import-btn" class="chat-oracle-text-btn" type="button">取消</button>
+                                </div>
+
+                                <div id="chat-oracle-import-status" class="chat-oracle-note">每张牌只保留 1 条回复；如果牌组名称重复，会覆盖同名牌组。</div>
+                                <div class="chat-oracle-format-tip">支持格式：直接用牌名 / 牌序号作为键，例如 <code>"月井"</code>、<code>"I"</code>。</div>
+                            </div>
+                        </div>
+
+                        <div id="chat-oracle-edit-modal" class="chat-oracle-import-modal hidden">
+                            <button id="chat-oracle-edit-modal-backdrop" class="chat-oracle-import-modal-backdrop" type="button" aria-label="关闭编辑快捷回复"></button>
+                            <div class="chat-oracle-import-card">
+                                <div class="chat-oracle-head chat-oracle-import-head">
+                                    <div class="chat-oracle-title" id="chat-oracle-edit-title">编辑快捷回复</div>
+                                    <button id="chat-oracle-edit-modal-close" class="chat-oracle-close-btn" type="button" aria-label="关闭编辑快捷回复">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+
+                                <input id="chat-oracle-edit-label" class="chat-oracle-text-input" type="text" placeholder="快捷回复标题（可选）">
+                                <textarea id="chat-oracle-edit-content" class="chat-oracle-import-textarea" placeholder="编辑这张牌对应的快捷回复内容"></textarea>
+
+                                <div class="chat-oracle-text-actions">
+                                    <button id="chat-oracle-save-edit-btn" class="chat-oracle-text-btn primary" type="button">保存修改</button>
+                                    <button id="chat-oracle-cancel-edit-btn" class="chat-oracle-text-btn" type="button">取消</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
                 <div id="chat-settings-prompt-modal" class="mag-modal-overlay">
                     <div class="mag-modal-card">
                         <h3 class="mag-modal-title">
@@ -7791,6 +7978,7 @@
     <script src="js/chat/03-ai-engine.js"></script>
     <script src="js/chat/04-media-init.js"></script>
     <script src="js/chat/05-addressbook-friends.js"></script>
+    <script src="js/chat/06-oracle-quick-replies.js"></script>
     <script src="js/fire_buddy.js?v=20260324b1"></script>
     <script src="js/offline_push_sync.js"></script>
     <script src="js/shopping.js"></script>
@@ -8096,6 +8284,10 @@
 
 </body>
 </html>
+
+
+
+
 
 
 
