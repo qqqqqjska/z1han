@@ -221,6 +221,20 @@
     min-height: 46px;
 }
 
+.chat-oracle-select-input {
+    appearance: none;
+    padding-right: 42px;
+    background-image:
+        linear-gradient(45deg, transparent 50%, #6b7280 50%),
+        linear-gradient(135deg, #6b7280 50%, transparent 50%);
+    background-position:
+        calc(100% - 21px) calc(50% - 3px),
+        calc(100% - 15px) calc(50% - 3px);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+    cursor: pointer;
+}
+
 .chat-oracle-text-actions {
     display: flex;
     gap: 8px;
@@ -296,6 +310,7 @@
 .chat-oracle-inline-actions {
     display: flex;
     gap: 8px;
+    flex-wrap: wrap;
     flex-shrink: 0;
 }
 

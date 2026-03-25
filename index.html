@@ -1800,7 +1800,10 @@
                             </div>
 
                             <div class="chat-oracle-section">
-                                <div id="chat-oracle-decks-title" class="chat-oracle-section-title">牌组</div>
+                                <div class="chat-oracle-section-head">
+                                    <div id="chat-oracle-decks-title" class="chat-oracle-section-title">牌组</div>
+                                    <button id="chat-oracle-open-create-deck-modal-btn" class="chat-oracle-small-btn" type="button">新建牌组</button>
+                                </div>
                                 <div id="chat-oracle-presets-list" class="chat-oracle-list-block">
                                     <div class="chat-oracle-empty">还没有保存任何牌组。</div>
                                 </div>
@@ -1810,7 +1813,10 @@
                             <div class="chat-oracle-section">
                                 <div class="chat-oracle-section-head">
                                     <div id="chat-oracle-existing-title" class="chat-oracle-section-title">牌组内快捷回复</div>
-                                    <button id="chat-oracle-clear-btn" class="chat-oracle-small-btn" type="button">清空当前配置</button>
+                                    <div class="chat-oracle-inline-actions">
+                                        <button id="chat-oracle-open-add-reply-modal-btn" class="chat-oracle-small-btn" type="button">新增快捷回复</button>
+                                        <button id="chat-oracle-clear-btn" class="chat-oracle-small-btn" type="button">清空当前配置</button>
+                                    </div>
                                 </div>
                                 <div id="chat-oracle-existing-list" class="chat-oracle-list-block">
                                     <div class="chat-oracle-empty">当前还没有导入任何快捷回复。</div>
@@ -1866,6 +1872,56 @@
                                     <button id="chat-oracle-save-edit-btn" class="chat-oracle-text-btn primary" type="button">保存修改</button>
                                     <button id="chat-oracle-cancel-edit-btn" class="chat-oracle-text-btn" type="button">取消</button>
                                 </div>
+                            </div>
+                        </div>
+
+                        <div id="chat-oracle-create-deck-modal" class="chat-oracle-import-modal hidden">
+                            <button id="chat-oracle-create-deck-modal-backdrop" class="chat-oracle-import-modal-backdrop" type="button" aria-label="关闭新建牌组"></button>
+                            <div class="chat-oracle-import-card">
+                                <div class="chat-oracle-head chat-oracle-import-head">
+                                    <div>
+                                        <div class="chat-oracle-title">新建牌组</div>
+                                        <div class="chat-oracle-subtitle">先创建一个空牌组，再继续手动添加快捷回复</div>
+                                    </div>
+                                    <button id="chat-oracle-create-deck-modal-close" class="chat-oracle-close-btn" type="button" aria-label="关闭新建牌组">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+
+                                <input id="chat-oracle-create-deck-name" class="chat-oracle-text-input" type="text" placeholder="输入牌组名称，例如：日常安抚组">
+
+                                <div class="chat-oracle-text-actions">
+                                    <button id="chat-oracle-save-create-deck-btn" class="chat-oracle-text-btn primary" type="button">保存牌组</button>
+                                    <button id="chat-oracle-cancel-create-deck-btn" class="chat-oracle-text-btn" type="button">取消</button>
+                                </div>
+
+                                <div id="chat-oracle-create-deck-status" class="chat-oracle-note">新建后会自动在牌组列表中选中，你可以继续手动添加快捷回复。</div>
+                            </div>
+                        </div>
+
+                        <div id="chat-oracle-add-reply-modal" class="chat-oracle-import-modal hidden">
+                            <button id="chat-oracle-add-reply-modal-backdrop" class="chat-oracle-import-modal-backdrop" type="button" aria-label="关闭新增快捷回复"></button>
+                            <div class="chat-oracle-import-card">
+                                <div class="chat-oracle-head chat-oracle-import-head">
+                                    <div>
+                                        <div class="chat-oracle-title" id="chat-oracle-add-reply-title">新增快捷回复</div>
+                                        <div class="chat-oracle-subtitle">为当前选中的牌组手动添加一张牌对应的快捷回复</div>
+                                    </div>
+                                    <button id="chat-oracle-add-reply-modal-close" class="chat-oracle-close-btn" type="button" aria-label="关闭新增快捷回复">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+
+                                <select id="chat-oracle-add-reply-card" class="chat-oracle-text-input chat-oracle-select-input"></select>
+                                <input id="chat-oracle-add-reply-label" class="chat-oracle-text-input" type="text" placeholder="快捷回复标题（可选）">
+                                <textarea id="chat-oracle-add-reply-content" class="chat-oracle-import-textarea" placeholder="输入这张牌要发送的快捷回复内容"></textarea>
+
+                                <div class="chat-oracle-text-actions">
+                                    <button id="chat-oracle-save-add-reply-btn" class="chat-oracle-text-btn primary" type="button">保存快捷回复</button>
+                                    <button id="chat-oracle-cancel-add-reply-btn" class="chat-oracle-text-btn" type="button">取消</button>
+                                </div>
+
+                                <div id="chat-oracle-add-reply-status" class="chat-oracle-note">每张牌只能保留 1 条快捷回复；已存在的牌可以直接在列表中点击编辑。</div>
                             </div>
                         </div>
                     </div>

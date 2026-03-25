@@ -22,6 +22,7 @@
 
     let selectedDeckId = null;
     let editingReplyState = null;
+    let addingReplyState = null;
     const drawSession = {
         mode: 'choose',
         selectedPresetId: '',
@@ -156,7 +157,6 @@
     function normalizePresetItem(item, index) {
         if (!item || typeof item !== 'object') return null;
         const mappings = safeNormalizeMappings(item.mappings || item.cards || item.data || {});
-        if (!Object.keys(mappings).length) return null;
         return {
             id: String(item.id || `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`),
             name: String(item.name || item.title || `牌组 ${index + 1}`).trim() || `牌组 ${index + 1}`,
@@ -225,6 +225,11 @@
     function getConfiguredCards(mappings) {
         const source = mappings || ensureOracleConfig().mappings;
         return ORACLE_CARDS.filter((card) => !!getReplyForCard(source, card.name));
+    }
+
+    function getUnconfiguredCards(mappings) {
+        const source = mappings || ensureOracleConfig().mappings;
+        return ORACLE_CARDS.filter((card) => !getReplyForCard(source, card.name));
     }
 
     function getSelectedDeckContext() {
@@ -1162,21 +1167,15 @@
 
             const remainingCount = countConfiguredCards(selectedContext.preset.mappings);
             if (remainingCount === 0) {
-                const removedName = selectedContext.preset.name;
-                const removedId = selectedContext.preset.id;
-                config.presets = config.presets.filter((item) => item.id !== removedId);
-                if (config.activeDeckId === removedId) {
-                    config.activeDeckId = '';
+                if (config.activeDeckId === selectedContext.preset.id) {
                     config.mappings = {};
-                }
-                if (selectedDeckId === removedId) {
-                    selectedDeckId = null;
+                    config.lastDrawCard = '';
                 }
                 persistOracleConfig();
                 renderHomeSummary();
                 renderManagePage();
                 renderDrawPage();
-                toast(`已删除牌组「${removedName}」中的最后一条回复，牌组已移除`);
+                toast(`已删除「${cardName}」的快捷回复，这个牌组现在是空的`);
                 return;
             }
 
@@ -1226,9 +1225,13 @@
         const sheet = document.querySelector('#chat-oracle-modal .chat-oracle-sheet');
         const importModal = document.getElementById('chat-oracle-import-modal');
         const editModal = document.getElementById('chat-oracle-edit-modal');
+        const createDeckModal = document.getElementById('chat-oracle-create-deck-modal');
+        const addReplyModal = document.getElementById('chat-oracle-add-reply-modal');
         const hasOpenSubmodal = !!(
             (importModal && !importModal.classList.contains('hidden')) ||
-            (editModal && !editModal.classList.contains('hidden'))
+            (editModal && !editModal.classList.contains('hidden')) ||
+            (createDeckModal && !createDeckModal.classList.contains('hidden')) ||
+            (addReplyModal && !addReplyModal.classList.contains('hidden'))
         );
 
         if (sheet) {
@@ -1257,6 +1260,183 @@
         const modal = document.getElementById('chat-oracle-import-modal');
         if (modal) modal.classList.add('hidden');
         syncNestedModalLock();
+    }
+
+    function updateCreateDeckStatus(message) {
+        const status = document.getElementById('chat-oracle-create-deck-status');
+        if (!status) return;
+        status.textContent = message || '新建后会自动在牌组列表中选中，你可以继续手动添加快捷回复。';
+    }
+
+    function resetCreateDeckForm() {
+        const nameInput = document.getElementById('chat-oracle-create-deck-name');
+        if (nameInput) nameInput.value = '';
+        updateCreateDeckStatus();
+    }
+
+    function openCreateDeckModal() {
+        resetCreateDeckForm();
+        const modal = document.getElementById('chat-oracle-create-deck-modal');
+        if (modal) modal.classList.remove('hidden');
+        syncNestedModalLock();
+    }
+
+    function closeCreateDeckModal() {
+        const modal = document.getElementById('chat-oracle-create-deck-modal');
+        if (modal) modal.classList.add('hidden');
+        syncNestedModalLock();
+    }
+
+    function createPreset(name) {
+        const config = ensureOracleConfig();
+        const nextPreset = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            name,
+            mappings: {},
+            createdAt: Date.now()
+        };
+        config.presets.unshift(nextPreset);
+        return nextPreset;
+    }
+
+    function saveCreatedDeck() {
+        const nameInput = document.getElementById('chat-oracle-create-deck-name');
+        const presetName = String(nameInput && nameInput.value || '').trim();
+
+        if (!presetName) {
+            toast('请先填写牌组名称');
+            return;
+        }
+
+        const config = ensureOracleConfig();
+        if (config.presets.some((preset) => preset.name === presetName)) {
+            toast('已经有同名牌组了，请换一个名称');
+            return;
+        }
+
+        const preset = createPreset(presetName);
+        selectedDeckId = preset.id;
+        persistOracleConfig();
+        closeCreateDeckModal();
+        renderHomeSummary();
+        renderManagePage();
+        renderDrawPage();
+        updatePresetStatus(`已新建牌组「${preset.name}」`);
+        toast(`已新建牌组「${preset.name}」`);
+    }
+
+    function updateAddReplyStatus(message) {
+        const status = document.getElementById('chat-oracle-add-reply-status');
+        if (!status) return;
+        status.textContent = message || '每张牌只能保留 1 条快捷回复；已存在的牌可以直接在列表中点击编辑。';
+    }
+
+    function resetAddReplyForm() {
+        addingReplyState = null;
+
+        const title = document.getElementById('chat-oracle-add-reply-title');
+        const cardSelect = document.getElementById('chat-oracle-add-reply-card');
+        const labelInput = document.getElementById('chat-oracle-add-reply-label');
+        const contentInput = document.getElementById('chat-oracle-add-reply-content');
+
+        if (title) title.textContent = '新增快捷回复';
+        if (cardSelect) cardSelect.innerHTML = '';
+        if (labelInput) labelInput.value = '';
+        if (contentInput) contentInput.value = '';
+        updateAddReplyStatus();
+    }
+
+    function openAddReplyModal() {
+        const selectedContext = getSelectedDeckContext();
+        if (!selectedContext.isPreset || !selectedContext.preset) {
+            toast('请先新建或选择一个牌组');
+            return;
+        }
+
+        const availableCards = getUnconfiguredCards(selectedContext.preset.mappings);
+        if (!availableCards.length) {
+            toast('这个牌组里的 18 张牌都已经配置好了');
+            return;
+        }
+
+        resetAddReplyForm();
+        addingReplyState = {
+            presetId: selectedContext.preset.id,
+            presetName: selectedContext.preset.name
+        };
+
+        const modal = document.getElementById('chat-oracle-add-reply-modal');
+        const title = document.getElementById('chat-oracle-add-reply-title');
+        const cardSelect = document.getElementById('chat-oracle-add-reply-card');
+
+        if (title) title.textContent = `新增快捷回复 · ${selectedContext.preset.name}`;
+        if (cardSelect) {
+            availableCards.forEach((card) => {
+                const option = document.createElement('option');
+                option.value = card.name;
+                option.textContent = `${card.code} · ${card.name} · ${card.keywords}`;
+                cardSelect.appendChild(option);
+            });
+        }
+
+        if (modal) modal.classList.remove('hidden');
+        syncNestedModalLock();
+
+        const contentInput = document.getElementById('chat-oracle-add-reply-content');
+        if (contentInput) contentInput.focus();
+    }
+
+    function closeAddReplyModal() {
+        const modal = document.getElementById('chat-oracle-add-reply-modal');
+        if (modal) modal.classList.add('hidden');
+        syncNestedModalLock();
+        resetAddReplyForm();
+    }
+
+    function saveAddedReply() {
+        if (!addingReplyState || !addingReplyState.presetId) {
+            closeAddReplyModal();
+            return;
+        }
+
+        const cardSelect = document.getElementById('chat-oracle-add-reply-card');
+        const labelInput = document.getElementById('chat-oracle-add-reply-label');
+        const contentInput = document.getElementById('chat-oracle-add-reply-content');
+        const cardName = String(cardSelect && cardSelect.value || '').trim();
+        const nextReply = normalizeReplyItem({
+            label: String(labelInput && labelInput.value || '').trim(),
+            content: String(contentInput && contentInput.value || '').trim()
+        });
+
+        if (!cardName) {
+            toast('请先选择一张牌');
+            return;
+        }
+
+        if (!nextReply) {
+            toast('快捷回复内容不能为空');
+            return;
+        }
+
+        const config = ensureOracleConfig();
+        const preset = getPresetById(addingReplyState.presetId, config);
+        if (!preset) {
+            toast('未找到这个牌组');
+            closeAddReplyModal();
+            return;
+        }
+
+        preset.mappings[cardName] = nextReply;
+        if (config.activeDeckId === preset.id) {
+            config.mappings = cloneData(preset.mappings);
+        }
+
+        persistOracleConfig();
+        closeAddReplyModal();
+        renderHomeSummary();
+        renderManagePage();
+        renderDrawPage();
+        toast(`已为「${cardName}」添加快捷回复`);
     }
 
     function resetEditForm() {
@@ -1435,6 +1615,8 @@
         closeChatMorePanel();
         ensureOracleConfig();
         closeImportModal();
+        closeCreateDeckModal();
+        closeAddReplyModal();
         closeEditReplyModal();
         renderHomeSummary();
         setView('home');
@@ -1445,6 +1627,8 @@
 
     function closeOracleModal() {
         closeImportModal();
+        closeCreateDeckModal();
+        closeAddReplyModal();
         closeEditReplyModal();
         const modal = document.getElementById('chat-oracle-modal');
         if (modal) modal.classList.add('hidden');
@@ -1479,12 +1663,22 @@
         const openManageBtn = document.getElementById('chat-oracle-open-manage-btn');
         const openDrawBtn = document.getElementById('chat-oracle-open-draw-btn');
         const openImportBtn = document.getElementById('chat-oracle-open-import-modal-btn');
+        const openCreateDeckBtn = document.getElementById('chat-oracle-open-create-deck-modal-btn');
+        const openAddReplyBtn = document.getElementById('chat-oracle-open-add-reply-modal-btn');
         const importBackdrop = document.getElementById('chat-oracle-import-modal-backdrop');
         const importCloseBtn = document.getElementById('chat-oracle-import-modal-close');
         const importCancelBtn = document.getElementById('chat-oracle-cancel-import-btn');
         const importFileBtn = document.getElementById('chat-oracle-import-file-btn');
         const importFileInput = document.getElementById('chat-oracle-file-input');
         const confirmImportBtn = document.getElementById('chat-oracle-confirm-import-btn');
+        const createDeckBackdrop = document.getElementById('chat-oracle-create-deck-modal-backdrop');
+        const createDeckCloseBtn = document.getElementById('chat-oracle-create-deck-modal-close');
+        const createDeckCancelBtn = document.getElementById('chat-oracle-cancel-create-deck-btn');
+        const createDeckSaveBtn = document.getElementById('chat-oracle-save-create-deck-btn');
+        const addReplyBackdrop = document.getElementById('chat-oracle-add-reply-modal-backdrop');
+        const addReplyCloseBtn = document.getElementById('chat-oracle-add-reply-modal-close');
+        const addReplyCancelBtn = document.getElementById('chat-oracle-cancel-add-reply-btn');
+        const addReplySaveBtn = document.getElementById('chat-oracle-save-add-reply-btn');
         const editBackdrop = document.getElementById('chat-oracle-edit-modal-backdrop');
         const editCloseBtn = document.getElementById('chat-oracle-edit-modal-close');
         const editCancelBtn = document.getElementById('chat-oracle-cancel-edit-btn');
@@ -1542,6 +1736,16 @@
             openImportBtn.addEventListener('click', openImportModal);
         }
 
+        if (openCreateDeckBtn && openCreateDeckBtn.dataset.oracleBound !== '1') {
+            openCreateDeckBtn.dataset.oracleBound = '1';
+            openCreateDeckBtn.addEventListener('click', openCreateDeckModal);
+        }
+
+        if (openAddReplyBtn && openAddReplyBtn.dataset.oracleBound !== '1') {
+            openAddReplyBtn.dataset.oracleBound = '1';
+            openAddReplyBtn.addEventListener('click', openAddReplyModal);
+        }
+
         if (importBackdrop && importBackdrop.dataset.oracleBound !== '1') {
             importBackdrop.dataset.oracleBound = '1';
             importBackdrop.addEventListener('click', closeImportModal);
@@ -1570,6 +1774,46 @@
         if (confirmImportBtn && confirmImportBtn.dataset.oracleBound !== '1') {
             confirmImportBtn.dataset.oracleBound = '1';
             confirmImportBtn.addEventListener('click', importDeckAndSavePreset);
+        }
+
+        if (createDeckBackdrop && createDeckBackdrop.dataset.oracleBound !== '1') {
+            createDeckBackdrop.dataset.oracleBound = '1';
+            createDeckBackdrop.addEventListener('click', closeCreateDeckModal);
+        }
+
+        if (createDeckCloseBtn && createDeckCloseBtn.dataset.oracleBound !== '1') {
+            createDeckCloseBtn.dataset.oracleBound = '1';
+            createDeckCloseBtn.addEventListener('click', closeCreateDeckModal);
+        }
+
+        if (createDeckCancelBtn && createDeckCancelBtn.dataset.oracleBound !== '1') {
+            createDeckCancelBtn.dataset.oracleBound = '1';
+            createDeckCancelBtn.addEventListener('click', closeCreateDeckModal);
+        }
+
+        if (createDeckSaveBtn && createDeckSaveBtn.dataset.oracleBound !== '1') {
+            createDeckSaveBtn.dataset.oracleBound = '1';
+            createDeckSaveBtn.addEventListener('click', saveCreatedDeck);
+        }
+
+        if (addReplyBackdrop && addReplyBackdrop.dataset.oracleBound !== '1') {
+            addReplyBackdrop.dataset.oracleBound = '1';
+            addReplyBackdrop.addEventListener('click', closeAddReplyModal);
+        }
+
+        if (addReplyCloseBtn && addReplyCloseBtn.dataset.oracleBound !== '1') {
+            addReplyCloseBtn.dataset.oracleBound = '1';
+            addReplyCloseBtn.addEventListener('click', closeAddReplyModal);
+        }
+
+        if (addReplyCancelBtn && addReplyCancelBtn.dataset.oracleBound !== '1') {
+            addReplyCancelBtn.dataset.oracleBound = '1';
+            addReplyCancelBtn.addEventListener('click', closeAddReplyModal);
+        }
+
+        if (addReplySaveBtn && addReplySaveBtn.dataset.oracleBound !== '1') {
+            addReplySaveBtn.dataset.oracleBound = '1';
+            addReplySaveBtn.addEventListener('click', saveAddedReply);
         }
 
         if (editBackdrop && editBackdrop.dataset.oracleBound !== '1') {
