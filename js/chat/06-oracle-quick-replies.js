@@ -1491,6 +1491,7 @@
         const saveEditBtn = document.getElementById('chat-oracle-save-edit-btn');
         const drawBackBtn = document.getElementById('chat-oracle-draw-back-btn');
         const inlineCloseBtn = document.getElementById('chat-oracle-inline-close-btn');
+        const drawCurrentDeckBtn = document.getElementById('chat-oracle-draw-current-deck');
         const drawOpenManageBtn = document.getElementById('chat-oracle-draw-open-manage-btn');
         const drawDetailBackdrop = document.getElementById('chat-oracle-draw-detail-backdrop');
         const drawDetailCloseBtn = document.getElementById('chat-oracle-draw-detail-close');
@@ -1599,6 +1600,11 @@
         if (inlineCloseBtn && inlineCloseBtn.dataset.oracleBound !== '1') {
             inlineCloseBtn.dataset.oracleBound = '1';
             inlineCloseBtn.addEventListener('click', closeInlineDraw);
+        }
+
+        if (drawCurrentDeckBtn && drawCurrentDeckBtn.dataset.oracleBound !== '1') {
+            drawCurrentDeckBtn.dataset.oracleBound = '1';
+            drawCurrentDeckBtn.addEventListener('click', closeInlineDraw);
         }
 
         if (drawOpenManageBtn && drawOpenManageBtn.dataset.oracleBound !== '1') {

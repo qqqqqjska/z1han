@@ -479,43 +479,51 @@
 }
 
 @media (max-width: 430px) {
-    .chat-oracle-home-btn {
-        grid-template-columns: 46px 1fr;
-        padding: 14px;
+    .chat-oracle-inline-head {
+        top: calc(70px + env(safe-area-inset-top));
+        left: 12px;
+        right: 12px;
     }
 
-    .chat-oracle-home-icon {
-        width: 46px;
-        height: 46px;
-        border-radius: 14px;
+    #chat-oracle-draw-select-state {
+        left: 12px;
+        right: 12px;
+        top: 48%;
+        transform: translateY(-38%);
     }
 
-    .chat-oracle-text-actions {
-        flex-direction: column;
+    #chat-oracle-draw-fan-state {
+        bottom: calc(92px + env(safe-area-inset-bottom));
+        padding: 0 2px;
     }
 
-    .chat-oracle-preset-top,
-    .chat-oracle-card-group-head,
-    .chat-oracle-reply-row,
-    .chat-oracle-section-head {
-        flex-direction: column;
+    .chat-oracle-fan-zone {
+        --chat-oracle-card-w: min(24vw, 96px);
+        min-height: 300px;
+        padding-left: 0;
+        padding-right: 0;
     }
 
-    .chat-oracle-inline-actions {
-        width: 100%;
+    .chat-oracle-fan {
+        min-height: 286px;
     }
 
-    .chat-oracle-small-btn {
-        flex: 1;
+    .chat-oracle-fan-card.is-picked {
+        --y: -52px !important;
     }
 
-    .chat-oracle-import-modal {
-        padding: 14px;
+    .chat-oracle-fan-front-icon {
+        width: 58px;
+        height: 58px;
+        font-size: 26px;
     }
 
-    .chat-oracle-import-card {
-        padding: 16px;
-        border-radius: 20px;
+    .chat-oracle-fan-front-title {
+        font-size: 14px;
+    }
+
+    .chat-oracle-fan-front-text {
+        font-size: 10px;
     }
 }
 
@@ -565,6 +573,7 @@
     overflow: hidden;
 }
 
+.chat-oracle-inline-head,
 .chat-oracle-inline-draw.is-fan-mode .chat-oracle-inline-head {
     display: none;
 }
@@ -692,6 +701,7 @@
 }
 
 .chat-oracle-draw-current-deck {
+    appearance: none;
     padding: 8px 14px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.9);
@@ -702,6 +712,7 @@
     -webkit-backdrop-filter: blur(12px);
     font-size: 13px;
     font-weight: 700;
+    cursor: pointer;
 }
 
 .chat-oracle-fan-zone {
@@ -1165,8 +1176,52 @@
 }
 
 @media (max-width: 430px) {
-    .chat-oracle-inline-draw.is-fan-mode .chat-oracle-inline-head {
-    display: none;
+    .chat-oracle-inline-head {
+        top: calc(70px + env(safe-area-inset-top));
+        left: 12px;
+        right: 12px;
+    }
+
+    #chat-oracle-draw-select-state {
+        left: 12px;
+        right: 12px;
+        top: 48%;
+        transform: translateY(-38%);
+    }
+
+    #chat-oracle-draw-fan-state {
+        bottom: calc(92px + env(safe-area-inset-bottom));
+        padding: 0 2px;
+    }
+
+    .chat-oracle-fan-zone {
+        --chat-oracle-card-w: min(24vw, 96px);
+        min-height: 300px;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .chat-oracle-fan {
+        min-height: 286px;
+    }
+
+    .chat-oracle-fan-card.is-picked {
+        --y: -52px !important;
+    }
+
+    .chat-oracle-fan-front-icon {
+        width: 58px;
+        height: 58px;
+        font-size: 26px;
+    }
+
+    .chat-oracle-fan-front-title {
+        font-size: 14px;
+    }
+
+    .chat-oracle-fan-front-text {
+        font-size: 10px;
+    }
 }
 
 
