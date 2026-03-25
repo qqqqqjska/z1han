@@ -1647,7 +1647,6 @@
             actionBtn.classList.toggle('hidden', !!actionConfig.hidden);
             actionBtn.disabled = !!actionConfig.disabled;
             actionBtn.dataset.status = status;
-            actionBtn.onclick = actionConfig.hidden ? null : bindFireBuddyCurrentContact;
         }
         if (actionBtnLabel) {
             actionBtnLabel.textContent = actionConfig.label || '';
@@ -2204,6 +2203,257 @@
         });
     }
 
+    function isFireBuddyVisibleStatus(status) {
+        return ['bound', 'gray', 'wake-ready'].includes(status);
+    }
+
+    function getFireBuddyStageLabel(status) {
+        const labels = {
+            locked: '\u672a\u89e3\u9501',
+            warming: '\u5347\u6e29\u4e2d',
+            invitable: '\u81ea\u52a8\u7ed1\u5b9a',
+            invited: '\u81ea\u52a8\u7ed1\u5b9a\u4e2d',
+            bound: '\u5df2\u7ed1\u5b9a',
+            gray: '\u5df2\u53d8\u7070',
+            'wake-ready': '\u53ef\u5524\u9192'
+        };
+        return labels[status] || labels.locked;
+    }
+
+    function showFireBuddyUnlockCard(contact) {
+        const card = document.getElementById('fire-buddy-unlock-card');
+        const titleEl = document.getElementById('fire-buddy-unlock-card-title');
+        const textEl = document.getElementById('fire-buddy-unlock-card-text');
+        if (!card || !contact) return;
+
+        const name = contact.remark || contact.nickname || contact.name || '\u5bf9\u65b9';
+        if (titleEl) titleEl.textContent = '\u5df2\u81ea\u52a8\u7ed1\u5b9a\u5c0f\u706b\u4eba';
+        if (textEl) {
+            textEl.textContent = `\u4f60\u548c ${name} \u5df2\u6ee1\u8db3\u8fde\u7eed ${INVITE_STREAK_DAYS} \u5929\u6709\u6548\u4e92\u52a8\u6761\u4ef6\uff0c\u7cfb\u7edf\u5df2\u81ea\u52a8\u5b8c\u6210\u7ed1\u5b9a\u3002`;
+        }
+        card.dataset.contactId = contact.id;
+        card.classList.remove('hidden');
+    }
+
+    function syncFireBuddyUnlockCard(contact, status) {
+        const chatScreen = document.getElementById('chat-screen');
+        const card = document.getElementById('fire-buddy-unlock-card');
+        if (!card || !contact || !chatScreen || chatScreen.classList.contains('hidden')) {
+            hideFireBuddyUnlockCard();
+            return;
+        }
+
+        if (!isFireBuddyEnabled(contact)) {
+            hideFireBuddyUnlockCard();
+            return;
+        }
+
+        const isCurrentChat = String(getState().currentChatContactId || '') === String(contact.id);
+        if (!isCurrentChat || status !== 'bound') {
+            hideFireBuddyUnlockCard();
+            return;
+        }
+
+        const fireBuddy = ensureFireBuddy(contact);
+        const lastShownAt = Number(fireBuddy.ui.invitableCardShownAt) || 0;
+        const autoBoundAt = Number(fireBuddy.boundAt) || 0;
+        const shouldAutoShow = !!autoBoundAt && (!lastShownAt || lastShownAt < autoBoundAt);
+
+        if (!shouldAutoShow) {
+            hideFireBuddyUnlockCard();
+            return;
+        }
+
+        showFireBuddyUnlockCard(contact);
+        fireBuddy.ui.invitableCardShownAt = Date.now();
+        if (typeof window.saveConfig === 'function') {
+            window.saveConfig();
+        }
+    }
+
+    function getFireBuddyActionConfig(status) {
+        if (status === 'wake-ready') {
+            return { hidden: false, disabled: false, label: '\u5524\u9192\u5c0f\u706b\u4eba' };
+        }
+        if (status === 'bound') {
+            return { hidden: false, disabled: true, label: '\u5df2\u7ed1\u5b9a' };
+        }
+        if (status === 'gray') {
+            return { hidden: false, disabled: true, label: '\u7b49\u5f85\u5524\u9192' };
+        }
+        return { hidden: true, disabled: true, label: '' };
+    }
+
+    function buildStatusHeadline(contact, status) {
+        const name = contact.remark || contact.nickname || contact.name || '\u5bf9\u65b9';
+        const buddyName = getFireBuddyDisplayName(contact);
+        const headlineMap = {
+            locked: `${name}\u7684${buddyName}\u8fd8\u5728\u917f\u9020\u706b\u82b1`,
+            warming: `${name}\u7684${buddyName}\u6b63\u5728\u5347\u6e29`,
+            invitable: `${name}\u7684${buddyName}\u5df2\u6ee1\u8db3\u81ea\u52a8\u7ed1\u5b9a\u6761\u4ef6`,
+            invited: `${name}\u7684${buddyName}\u6b63\u5728\u540c\u6b65\u81ea\u52a8\u7ed1\u5b9a`,
+            bound: `\u4f60\u4eec\u5df2\u7ecf\u5b8c\u6210${buddyName}\u81ea\u52a8\u7ed1\u5b9a`,
+            gray: `${name}\u7684${buddyName}\u56e0\u4e3a\u51b7\u5374\u800c\u53d8\u7070`,
+            'wake-ready': `${name}\u7684${buddyName}\u5df2\u7ecf\u53ef\u4ee5\u5524\u9192`
+        };
+        return headlineMap[status] || headlineMap.locked;
+    }
+
+    function buildStatusDetail(contact, metrics, status) {
+        const fireBuddy = ensureFireBuddy(contact);
+        if (status === 'bound' || status === 'invitable' || status === 'invited') {
+            const boundAt = Number.isFinite(fireBuddy.boundAt) ? fireBuddy.boundAt : fireBuddy.invitedAt;
+            return `\u7ed1\u5b9a\u65f6\u95f4\uff1a${formatStatusTimestamp(boundAt)} \u00b7 \u6700\u8fd1\u6709\u6548\u4e92\u52a8\uff1a${getFireBuddyLastActiveDayLabel(metrics)}`;
+        }
+        if (status === 'gray') {
+            return `\u53d8\u7070\u65f6\u95f4\uff1a${formatStatusTimestamp(fireBuddy.grayAt)} \u00b7 \u9700\u8981\u5148\u6062\u590d\u65b0\u7684\u6709\u6548\u4e92\u52a8`;
+        }
+        if (status === 'wake-ready') {
+            return `\u6700\u8fd1\u6709\u6548\u4e92\u52a8\uff1a${getFireBuddyLastActiveDayLabel(metrics)} \u00b7 \u5df2\u6ee1\u8db3\u5524\u9192\u6761\u4ef6`;
+        }
+        if (status === 'warming') {
+            return `\u5f53\u524d\u8fde\u7eed ${metrics.currentStreak} / ${INVITE_STREAK_DAYS} \u5929\uff0c\u518d\u575a\u6301 ${Math.max(0, INVITE_STREAK_DAYS - metrics.currentStreak)} \u5929\u5c31\u4f1a\u81ea\u52a8\u7ed1\u5b9a`;
+        }
+        return `\u5f53\u524d\u8fde\u7eed ${metrics.currentStreak} / ${INVITE_STREAK_DAYS} \u5929\uff0c\u8fd8\u9700\u7ee7\u7eed\u804a\u5929\u70b9\u4eae\u706b\u82b1\u5e76\u89e3\u9501\u81ea\u52a8\u7ed1\u5b9a`;
+    }
+
+    function getFireBuddyHeaderIcon(status) {
+        if (status === 'gray') return '\ud83d\udca4';
+        if (status === 'wake-ready') return '\u2728';
+        if (status === 'bound' || status === 'invitable' || status === 'invited') return '\ud83d\udd25';
+        return '\u2728';
+    }
+
+    function getFireBuddyContactBadge(status) {
+        const badgeMap = {
+            invitable: '\u706b',
+            invited: '\u706b',
+            bound: '\u706b',
+            gray: '\u7070',
+            'wake-ready': '\u9192'
+        };
+        return badgeMap[status] || '\u706b';
+    }
+
+    function autoBindFireBuddyIfReady(contact, metrics) {
+        if (!contact || !isFireBuddyEnabled(contact)) return false;
+
+        const fireBuddy = ensureFireBuddy(contact);
+        if (fireBuddy.manualUnlock.enabled || Number.isFinite(fireBuddy.boundAt)) {
+            return false;
+        }
+
+        const shouldAutoBind = Number.isFinite(fireBuddy.invitedAt) || metrics.currentStreak >= INVITE_STREAK_DAYS;
+        if (!shouldAutoBind) {
+            return false;
+        }
+
+        fireBuddy.boundAt = Number.isFinite(fireBuddy.invitedAt) ? fireBuddy.invitedAt : Date.now();
+        fireBuddy.invitedAt = null;
+        fireBuddy.grayAt = null;
+        fireBuddy.awakenedAt = null;
+
+        if (typeof window.saveConfig === 'function') {
+            window.saveConfig();
+        }
+
+        return true;
+    }
+
+    function getDerivedFireBuddyStatus(contact, metrics) {
+        const fireBuddy = ensureFireBuddy(contact);
+        const manualMode = fireBuddy.manualUnlock.enabled ? fireBuddy.manualUnlock.mode : null;
+        if (manualMode) {
+            return FIRE_BUDDY_MANUAL_MODES.includes(manualMode) ? manualMode : 'locked';
+        }
+
+        autoBindFireBuddyIfReady(contact, metrics);
+
+        if (fireBuddy.boundAt) {
+            const isStale = !metrics.lastMessageAt || (Date.now() - metrics.lastMessageAt) > GRAY_TIMEOUT_MS;
+            const hasGrayRecord = Number.isFinite(fireBuddy.grayAt);
+            const canWake = hasGrayRecord
+                && Number.isFinite(metrics.lastMessageAt)
+                && metrics.lastMessageAt > fireBuddy.grayAt
+                && metrics.currentStreak > 0;
+
+            if (hasGrayRecord) {
+                return canWake ? 'wake-ready' : 'gray';
+            }
+
+            return isStale ? 'gray' : 'bound';
+        }
+
+        if (metrics.currentStreak >= WARM_STREAK_DAYS) return 'warming';
+        return 'locked';
+    }
+
+    function buildProgressTip(status, metrics) {
+        if (status === 'gray') {
+            return '\u8d85\u8fc7 48 \u5c0f\u65f6\u672a\u4e92\u52a8\uff0c\u5c0f\u706b\u4eba\u4f1a\u53d8\u7070\u3002\u5148\u6062\u590d\u65b0\u7684\u6709\u6548\u4e92\u52a8\uff0c\u624d\u80fd\u8fdb\u5165\u5524\u9192\u6d41\u7a0b\u3002';
+        }
+        if (status === 'wake-ready') {
+            return '\u5df2\u7ecf\u6062\u590d\u4e86\u65b0\u7684\u6709\u6548\u4e92\u52a8\uff0c\u73b0\u5728\u53ef\u4ee5\u624b\u52a8\u5524\u9192\u5c0f\u706b\u4eba\u3002';
+        }
+        if (status === 'bound') {
+            return '\u5c0f\u706b\u4eba\u5df2\u81ea\u52a8\u7ed1\u5b9a\uff0c\u4fdd\u6301\u4e92\u52a8\u5c31\u80fd\u8ba9\u706b\u82b1\u4e00\u76f4\u4eae\u7740\u3002';
+        }
+        if (status === 'warming') {
+            return `\u5f53\u524d\u5df2\u7ecf\u8fdb\u5165\u5347\u6e29\u9636\u6bb5\uff0c\u518d\u7ee7\u7eed ${Math.max(0, INVITE_STREAK_DAYS - metrics.currentStreak)} \u5929\u6709\u6548\u4e92\u52a8\u5c31\u4f1a\u81ea\u52a8\u7ed1\u5b9a\u3002`;
+        }
+        return `\u8fde\u7eed ${INVITE_STREAK_DAYS} \u4e2a\u6709\u6548\u4e92\u52a8\u65e5\u540e\u4f1a\u81ea\u52a8\u7ed1\u5b9a\u3002\u6709\u6548\u4e92\u52a8\u65e5\u9700\u8981\u5f53\u5929\u53cc\u65b9\u90fd\u53d1\u8fc7\u79c1\u804a\u6d88\u606f\u3002`;
+    }
+
+    function getFireBuddyV2StageMeta(status) {
+        const stageMap = {
+            locked: { icon: '\u2726', label: '\u7b49\u5f85\u70b9\u4eae' },
+            warming: { icon: '\u2726', label: '\u5347\u6e29\u4e2d' },
+            invitable: { icon: '\u2728', label: '\u81ea\u52a8\u7ed1\u5b9a' },
+            invited: { icon: '\u2728', label: '\u81ea\u52a8\u7ed1\u5b9a' },
+            bound: { icon: '\u2728', label: '\u6d3b\u8dc3\u7fb1\u7eca' },
+            gray: { icon: '\u25cb', label: '\u4f11\u7720\u4e2d' },
+            'wake-ready': { icon: '\u2728', label: '\u7b49\u5f85\u5524\u9192' }
+        };
+        return stageMap[status] || stageMap.locked;
+    }
+
+    function getFireBuddyV2StatusMarkup(status) {
+        const statusMap = {
+            locked: '\u7fb1\u7eca\u5c1a\u672a\u5efa\u7acb\u3002\u5f53\u524d\u4ecd\u5728 <strong>\u79ef\u84c4\u706b\u82b1</strong>\u3002\u7ee7\u7eed\u4fdd\u6301\u7a33\u5b9a\u4e92\u52a8\uff0c\u7b49\u5b83\u771f\u6b63\u88ab\u70b9\u4eae\u3002',
+            warming: '\u7fb1\u7eca\u6b63\u5728 <strong>\u5347\u6e29</strong>\u3002\u518d\u591a\u4e00\u4e9b\u8fde\u7eed\u6709\u6548\u4e92\u52a8\uff0c\u5c31\u4f1a\u81ea\u52a8\u5b8c\u6210\u7ed1\u5b9a\u3002',
+            invitable: '\u6761\u4ef6\u5df2\u8fbe\u6210\uff0c\u7cfb\u7edf\u4f1a\u76f4\u63a5 <strong>\u81ea\u52a8\u7ed1\u5b9a</strong> \u5c0f\u706b\u4eba\u3002',
+            invited: '\u65e7\u7684\u9080\u8bf7\u72b6\u6001\u5df2\u5408\u5e76\u4e3a <strong>\u81ea\u52a8\u7ed1\u5b9a</strong> \u6d41\u7a0b\u3002',
+            bound: '\u7fb1\u7eca\u5df2\u81ea\u52a8\u5efa\u7acb\u3002\u5f53\u524d\u4e92\u52a8\u5904\u4e8e <strong>\u6d3b\u8dc3</strong> \u72b6\u6001\uff0c\u7ee7\u7eed\u4fdd\u6301\u65e5\u5e38\u6c9f\u901a\u5373\u53ef\u3002',
+            gray: '\u7fb1\u7eca\u6682\u65f6\u8fdb\u5165 <strong>\u4f11\u7720</strong>\u3002\u6062\u590d\u65b0\u7684\u6709\u6548\u4e92\u52a8\u540e\uff0c\u624d\u80fd\u518d\u6b21\u628a\u661f\u706b\u70b9\u4eae\u3002',
+            'wake-ready': '\u65b0\u7684\u4e92\u52a8\u5df2\u7ecf\u6062\u590d\u3002\u5f53\u524d\u5904\u4e8e <strong>\u53ef\u5524\u9192</strong> \u72b6\u6001\uff0c\u518d\u63a8\u8fdb\u4e00\u6b65\u5c31\u80fd\u8ba9\u5b83\u91cd\u65b0\u82cf\u9192\u3002'
+        };
+        return statusMap[status] || statusMap.locked;
+    }
+
+    function bindFireBuddyCurrentContact() {
+        const panel = document.getElementById('fire-buddy-panel');
+        const contactId = (panel && panel.dataset.contactId) || getState().currentChatContactId;
+        const contact = getContactById(contactId);
+        if (!contact || !isFireBuddyEnabled(contact)) return;
+
+        const fireBuddy = ensureFireBuddy(contact);
+        const result = refreshFireBuddyState(contact.id, 'panel-action');
+        if (!result || result.status !== 'wake-ready') return;
+
+        fireBuddy.grayAt = null;
+        fireBuddy.awakenedAt = Date.now();
+        fireBuddy.manualUnlock.enabled = false;
+        fireBuddy.manualUnlock.mode = 'locked';
+
+        if (typeof window.saveConfig === 'function') {
+            window.saveConfig();
+        }
+        refreshFireBuddyState(contact.id, 'panel-action-commit');
+        if (typeof window.renderContactList === 'function') {
+            window.renderContactList(getState().currentContactGroup || 'all');
+        }
+    }
+
     function bindPanelEvents() {
         const entryBtn = document.getElementById('fire-buddy-entry');
         const closeBtn = document.getElementById('close-fire-buddy-panel');
@@ -2222,6 +2472,9 @@
         }
         if (unlockCard) {
             unlockCard.addEventListener('click', () => openFireBuddyPanel(unlockCard.dataset.contactId || getState().currentChatContactId));
+        }
+        if (actionBtn) {
+            actionBtn.addEventListener('click', bindFireBuddyCurrentContact);
         }
         if (profileSaveBtn) {
             profileSaveBtn.addEventListener('click', saveFireBuddyProfileFromPanel);
