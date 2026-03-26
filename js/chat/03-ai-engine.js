@@ -4685,10 +4685,8 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                             };
 
                             // 先发送占位图片以占据正确的历史记录顺序
-                            const placeholderUrl = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Generating...';
-                            const placeholderMsg = sendMessage(placeholderUrl, false, 'virtual_image', msg.content, contactId);
-                            
-                            appendMessageToUI('[系统]: 正在生成图片...', false, 'system', null, null, null, null, false);
+                            const placeholderUrl = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Photo';
+                            const placeholderMsg = sendMessage(placeholderUrl, false, 'virtual_image', virtualImageDescription, contactId);
 
                             window.generateNovelAiImageApi(genOptions).then(base64Image => {
                                 // 图片生成成功，直接更新占位消息，而不是发送新消息
@@ -4704,30 +4702,16 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                                 }
                             }).catch(err => {
                                 console.error("NovelAI Gen Error", err);
-                                appendMessageToUI(`[系统]: 生图失败 - ${err.message}`, false, 'system', null, null, null, null, false);
-                                // 失败时占位符保持为 virtual_image，无需额外处理，或可更新为错误图
                             });
                             
                             sent = true;
 
                         } catch (e) {
                             console.error("NovelAI Setup Error", e);
-                            appendMessageToUI(`[系统]: 生图配置错误 - ${e.message}`, false, 'text', null, null, null, null, false);
                         }
                     }
 
                     if (!sent) {
-                        if (globalEnabled) {
-                            const failReason = [];
-                            if (!contact.novelaiPreset) failReason.push("未选择预设");
-                            if (!window.generateNovelAiImageApi) failReason.push("生图模块未加载");
-                            if (!novelaiSettings || !novelaiSettings.key) failReason.push("API Key缺失");
-
-                            if (failReason.length > 0) {
-                                appendMessageToUI(`[系统诊断]: 无法生成图片 - ${failReason.join('; ')}`, false, 'text', null, null, null, null, false);
-                            }
-                        }
-
                         const defaultImageUrl = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Photo';
                         sendMessage(defaultImageUrl, false, 'virtual_image', virtualImageDescription, contactId);
                     }
@@ -4920,11 +4904,8 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                         };
 
                         // 先发送占位图片
-                        const placeholderUrl = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Generating...';
-                        const placeholderMsg = sendMessage(placeholderUrl, false, 'virtual_image', imageToSend.content, contactId);
-
-                        // 直接调用当前作用域内的函数
-                        appendMessageToUI('[系统]: 正在生成图片...', false, 'system', null, null, null, null, false);
+                        const placeholderUrl = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Photo';
+                        const placeholderMsg = sendMessage(placeholderUrl, false, 'virtual_image', virtualImageDescription, contactId);
 
                         window.generateNovelAiImageApi(genOptions).then(base64Image => {
                             // 更新占位消息
@@ -4939,29 +4920,16 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                             }
                         }).catch(err => {
                             console.error("NovelAI Gen Error", err);
-                            appendMessageToUI(`[系统]: 生图API错误 - ${err.message}`, false, 'system', null, null, null, null, false);
                         });
                         
                         sent = true;
 
                     } catch (e) {
                         console.error("NovelAI Setup Error", e);
-                        appendMessageToUI(`[系统]: 生图配置错误 - ${e.message}`, false, 'text', null, null, null, null, false);
                     }
                 }
 
                 if (!sent) {
-                    if (globalEnabled) {
-                        const failReason = [];
-                        if (!contact.novelaiPreset) failReason.push("未选择预设");
-                        if (!window.generateNovelAiImageApi) failReason.push("生图模块未加载");
-                        if (!novelaiSettings || !novelaiSettings.key) failReason.push("API Key缺失");
-
-                        if (failReason.length > 0) {
-                            appendMessageToUI(`[系统诊断]: 无法生成图片 - ${failReason.join('; ')}`, false, 'text', null, null, null, null, false);
-                        }
-                    }
-                    
                     const defaultImageUrl = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Photo';
                     sendMessage(defaultImageUrl, false, 'virtual_image', virtualImageDescription, contactId);
                 }
