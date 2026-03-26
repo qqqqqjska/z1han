@@ -320,6 +320,21 @@ function openMeetingDetail(meetingId) {
     renderMeetingCards(meeting);
 }
 
+function syncMeetingAiControlsState(isGenerating) {
+    const continueBtn = document.getElementById('meeting-ai-continue-btn');
+    const inputEl = document.getElementById('meeting-input');
+
+    if (continueBtn) {
+        continueBtn.disabled = !!isGenerating;
+        continueBtn.style.pointerEvents = isGenerating ? 'none' : '';
+        continueBtn.style.opacity = isGenerating ? '0.6' : '';
+    }
+
+    if (inputEl) {
+        inputEl.disabled = !!isGenerating;
+    }
+}
+
 // 5. 渲染详情页卡片流
 function renderMeetingCards(meeting) {
     const container = document.getElementById('meeting-card-container');
@@ -386,6 +401,8 @@ function renderMeetingCards(meeting) {
 
     // 自动滚动到底部
     container.scrollTop = container.scrollHeight;
+
+    syncMeetingAiControlsState(!!(meeting && meeting.isGeneratingAi));
 }
 
 // 6. 发送剧情文本
@@ -1029,9 +1046,7 @@ async function handleMeetingAI(type) {
     container.scrollTop = container.scrollHeight;
 
     // 锁定按钮
-    const continueBtn = document.getElementById('meeting-ai-continue-btn');
-    if(continueBtn) continueBtn.disabled = true;
-    inputEl.disabled = true; 
+    syncMeetingAiControlsState(true);
 
     try {
         const settings = window.iphoneSimState.aiSettings.url ? window.iphoneSimState.aiSettings : window.iphoneSimState.aiSettings2;
@@ -1093,8 +1108,7 @@ async function handleMeetingAI(type) {
         contentEl.innerHTML = `<span style="color:red">生成失败: ${error.message}</span>`;
     } finally {
         meeting.isGeneratingAi = false;
-        if(continueBtn) continueBtn.disabled = false;
-        inputEl.disabled = false;
+        syncMeetingAiControlsState(false);
         inputEl.focus(); 
     }
 }
