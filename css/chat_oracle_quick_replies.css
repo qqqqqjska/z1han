@@ -493,54 +493,6 @@
     gap: 12px;
 }
 
-@media (max-width: 430px) {
-    .chat-oracle-inline-head {
-        top: calc(70px + env(safe-area-inset-top));
-        left: 12px;
-        right: 12px;
-    }
-
-    #chat-oracle-draw-select-state {
-        left: 12px;
-        right: 12px;
-        top: 48%;
-        transform: translateY(-38%);
-    }
-
-    #chat-oracle-draw-fan-state {
-        bottom: calc(92px + env(safe-area-inset-bottom));
-        padding: 0 2px;
-    }
-
-    .chat-oracle-fan-zone {
-        --chat-oracle-card-w: min(24vw, 96px);
-        min-height: 300px;
-        padding-left: 0;
-        padding-right: 0;
-    }
-
-    .chat-oracle-fan {
-        min-height: 286px;
-    }
-
-    .chat-oracle-fan-card.is-picked {
-        --y: -52px !important;
-    }
-
-    .chat-oracle-fan-front-icon {
-        width: 58px;
-        height: 58px;
-        font-size: 26px;
-    }
-
-    .chat-oracle-fan-front-title {
-        font-size: 14px;
-    }
-
-    .chat-oracle-fan-front-text {
-        font-size: 10px;
-    }
-}
 
 
 
@@ -588,39 +540,6 @@
     overflow: hidden;
 }
 
-.chat-oracle-inline-head,
-.chat-oracle-inline-draw.is-fan-mode .chat-oracle-inline-head {
-    display: none;
-}
-
-.chat-oracle-inline-head {
-    position: absolute;
-    top: calc(74px + env(safe-area-inset-top));
-    left: 14px;
-    right: 14px;
-    z-index: 1;
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    align-items: center;
-    gap: 12px;
-    pointer-events: auto;
-}
-
-.chat-oracle-inline-head .chat-oracle-title {
-    color: #111;
-    text-align: center;
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
-}
-
-.chat-oracle-inline-head .chat-oracle-nav-btn,
-.chat-oracle-inline-head .chat-oracle-close-btn {
-    background: rgba(255, 255, 255, 0.9);
-    color: #111;
-    border: 1px solid rgba(60, 60, 67, 0.1);
-    box-shadow: 0 8px 22px rgba(17, 24, 39, 0.1);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-}
 
 .chat-oracle-draw-state {
     display: flex;
@@ -784,26 +703,6 @@
     pointer-events: none;
 }
 
-.chat-oracle-draw-detail-close {
-    position: absolute;
-    top: 14px;
-    right: 14px;
-    width: 40px;
-    height: 40px;
-    border: 1px solid rgba(216,177,93,0.18);
-    border-radius: 50%;
-    background: rgba(255,255,255,0.03);
-    color: #f7f3ea;
-}
-
-.chat-oracle-draw-detail-label,
-.chat-oracle-draw-detail-reply-label {
-    position: relative;
-    color: #f1d38e;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    font-size: 12px;
-}
 
 .chat-oracle-draw-detail-title {
     position: relative;
@@ -882,6 +781,14 @@
     cursor: grabbing;
 }
 
+.chat-oracle-fan.is-dealing {
+    cursor: default;
+}
+
+.chat-oracle-fan.is-collecting {
+    cursor: default;
+}
+
 .chat-oracle-fan.is-dragging .chat-oracle-fan-card {
     transition: none;
 }
@@ -912,6 +819,26 @@
     filter: drop-shadow(0 16px 30px rgba(0, 0, 0, 0.42)) blur(var(--blur, 0px));
     outline: none;
     will-change: transform, opacity;
+}
+
+.chat-oracle-fan.is-dealing .chat-oracle-fan-card {
+    pointer-events: none;
+}
+
+.chat-oracle-fan.is-collecting .chat-oracle-fan-card {
+    pointer-events: none;
+}
+
+.chat-oracle-fan-card.is-deal-enter {
+    transform: translate(-50%, calc(-50% + 170px)) rotate(0deg) translateY(0) scale(0.56);
+    opacity: 0;
+    filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.2)) blur(0px);
+}
+
+.chat-oracle-fan-card.is-collect-leave {
+    transform: translate(-50%, calc(-50% + 170px)) rotate(0deg) translateY(0) scale(0.56);
+    opacity: 0;
+    filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.2)) blur(0px);
 }
 
 .chat-oracle-fan-card:hover:not(.is-picked):not(.is-muted),
@@ -1191,11 +1118,6 @@
 }
 
 @media (max-width: 430px) {
-    .chat-oracle-inline-head {
-        top: calc(70px + env(safe-area-inset-top));
-        left: 12px;
-        right: 12px;
-    }
 
     #chat-oracle-draw-select-state {
         left: 12px;
@@ -1210,79 +1132,31 @@
     }
 
     .chat-oracle-fan-zone {
-        --chat-oracle-card-w: min(24vw, 96px);
-        min-height: 300px;
+        --chat-oracle-card-w: min(28vw, 116px);
+        min-height: 342px;
         padding-left: 0;
         padding-right: 0;
     }
 
     .chat-oracle-fan {
-        min-height: 286px;
+        min-height: 324px;
     }
 
     .chat-oracle-fan-card.is-picked {
-        --y: -52px !important;
+        --y: -58px !important;
     }
 
     .chat-oracle-fan-front-icon {
-        width: 58px;
-        height: 58px;
-        font-size: 26px;
+        width: 64px;
+        height: 64px;
+        font-size: 29px;
     }
 
     .chat-oracle-fan-front-title {
-        font-size: 14px;
+        font-size: 15px;
     }
 
     .chat-oracle-fan-front-text {
-        font-size: 10px;
-    }
-}
-
-
-        top: calc(70px + env(safe-area-inset-top));
-        left: 12px;
-        right: 12px;
-    }
-
-    #chat-oracle-draw-select-state {
-        left: 12px;
-        right: 12px;
-        top: 48%;
-        transform: translateY(-38%);
-    }
-
-    #chat-oracle-draw-fan-state {
-        bottom: calc(92px + env(safe-area-inset-bottom));
-        padding: 0 2px;
-    }
-
-    .chat-oracle-fan-zone {
-        --chat-oracle-card-w: min(24vw, 96px);
-        min-height: 300px;
-        padding-left: 0;
-        padding-right: 0;
-    }
-
-    .chat-oracle-fan {
-        min-height: 286px;
-    }
-
-    .chat-oracle-fan-card.is-picked {
-        --y: -52px !important;
-    }
-
-    .chat-oracle-fan-front-icon {
-        width: 58px;
-        height: 58px;
-        font-size: 26px;
-    }
-
-    .chat-oracle-fan-front-title {
-        font-size: 14px;
-    }
-
-    .chat-oracle-fan-front-text {
-        font-size: 10px;
+        font-size: 11px;
     }
 }

@@ -42,7 +42,9 @@
         suppressClickUntil: 0,
         snapTimer: null,
         resultReady: false,
-        detailOpen: false
+        detailOpen: false,
+        dealTimer: null,
+        collectTimer: null
     };
 
     const cardLookup = new Map();
@@ -461,13 +463,79 @@
         drawSession.detailOpen = false;
     }
 
-    function closeInlineDraw() {
+    function finishCloseInlineDraw() {
         const overlay = document.getElementById('chat-oracle-inline-draw');
         const screen = document.getElementById('chat-screen');
+        const fan = document.getElementById('chat-oracle-fan');
+
+        clearTimeout(drawSession.dealTimer);
+        clearTimeout(drawSession.collectTimer);
         closeDrawDetail();
+
+        if (fan) {
+            fan.classList.remove('is-dealing', 'is-collecting');
+            fan.querySelectorAll('.chat-oracle-fan-card').forEach((cardNode) => {
+                cardNode.classList.remove('is-deal-enter', 'is-collect-leave');
+                cardNode.style.transitionDelay = '';
+            });
+        }
+
         if (overlay) overlay.classList.add('hidden');
         if (screen) screen.classList.remove('chat-oracle-inline-open');
+        drawSession.locked = false;
         drawSession.mode = 'choose';
+    }
+
+    function startCollectAnimation(onComplete) {
+        clearTimeout(drawSession.dealTimer);
+        clearTimeout(drawSession.collectTimer);
+
+        const fan = document.getElementById('chat-oracle-fan');
+        const cards = fan ? [...fan.querySelectorAll('.chat-oracle-fan-card')] : [];
+
+        if (!fan || !cards.length) {
+            if (typeof onComplete === 'function') onComplete();
+            return;
+        }
+
+        drawSession.locked = true;
+        fan.classList.remove('is-dealing');
+        fan.classList.add('is-collecting');
+
+        cards.forEach((cardNode, index) => {
+            const reverseIndex = cards.length - 1 - index;
+            cardNode.classList.remove('is-deal-enter');
+            cardNode.style.transitionDelay = `${reverseIndex * 34}ms`;
+        });
+
+        requestAnimationFrame(() => {
+            cards.forEach((cardNode) => {
+                cardNode.classList.add('is-collect-leave');
+            });
+        });
+
+        const totalDuration = 520 + Math.max(0, cards.length - 1) * 34;
+        drawSession.collectTimer = setTimeout(() => {
+            if (typeof onComplete === 'function') onComplete();
+        }, totalDuration);
+    }
+
+    function closeInlineDraw(options) {
+        const settings = options || {};
+        const overlay = document.getElementById('chat-oracle-inline-draw');
+        const shouldAnimate = !!settings.animateCollect
+            && !!(overlay && !overlay.classList.contains('hidden'))
+            && drawSession.mode === 'fan';
+
+        if (!shouldAnimate) {
+            finishCloseInlineDraw();
+            return;
+        }
+
+        closeDrawDetail();
+        startCollectAnimation(() => {
+            finishCloseInlineDraw();
+        });
     }
 
     function openDrawDetail() {
@@ -491,6 +559,7 @@
         button.type = 'button';
         button.setAttribute('aria-label', `抽取 ${card.name}`);
         button.dataset.index = String(index);
+        button.style.setProperty('--deal-order', String(index));
         button.innerHTML = `
             <div class="chat-oracle-fan-card-shell">
                 <div class="chat-oracle-fan-card-inner">
@@ -589,6 +658,7 @@
 
     function resetDrawDeck(cards) {
         clearTimeout(drawSession.snapTimer);
+        clearTimeout(drawSession.dealTimer);
         drawSession.cards = shuffleList(cards || []);
         drawSession.cardsSignature = getDrawDeckSignature(cards || []);
         drawSession.selectedIndex = null;
@@ -618,6 +688,43 @@
         renderDrawResultPlaceholder();
         closeDrawDetail();
         layoutDrawFan();
+        startDealAnimation();
+    }
+
+    function startDealAnimation() {
+        clearTimeout(drawSession.dealTimer);
+
+        const fan = document.getElementById('chat-oracle-fan');
+        if (!fan) return;
+
+        const cards = [...fan.querySelectorAll('.chat-oracle-fan-card')];
+        if (!cards.length) return;
+
+        drawSession.locked = true;
+        fan.classList.add('is-dealing');
+
+        cards.forEach((cardNode, index) => {
+            cardNode.classList.add('is-deal-enter');
+            cardNode.style.transitionDelay = `${index * 42}ms`;
+        });
+
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                cards.forEach((cardNode) => {
+                    cardNode.classList.remove('is-deal-enter');
+                });
+            });
+        });
+
+        const totalDuration = 720 + Math.max(0, cards.length - 1) * 42;
+        drawSession.dealTimer = setTimeout(() => {
+            fan.classList.remove('is-dealing');
+            cards.forEach((cardNode) => {
+                cardNode.style.transitionDelay = '';
+            });
+            drawSession.locked = false;
+            drawSession.suppressClickUntil = Date.now() + 120;
+        }, totalDuration);
     }
 
     function pickDrawCard(index) {
@@ -830,6 +937,7 @@
         renderDrawResultPlaceholder();
     }
     function onDrawFanPointerDown(event) {
+        if (drawSession.locked) return;
         if (drawSession.selectedIndex !== null) return;
         if (event.pointerType === 'mouse' && event.button !== 0) return;
 
@@ -889,6 +997,7 @@
     }
 
     function onDrawFanWheel(event) {
+        if (drawSession.locked) return;
         if (drawSession.selectedIndex !== null) return;
 
         const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
@@ -1848,7 +1957,7 @@
 
         if (drawCurrentDeckBtn && drawCurrentDeckBtn.dataset.oracleBound !== '1') {
             drawCurrentDeckBtn.dataset.oracleBound = '1';
-            drawCurrentDeckBtn.addEventListener('click', closeInlineDraw);
+            drawCurrentDeckBtn.addEventListener('click', () => closeInlineDraw({ animateCollect: true }));
         }
 
         if (drawOpenManageBtn && drawOpenManageBtn.dataset.oracleBound !== '1') {
