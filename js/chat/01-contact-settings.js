@@ -2641,11 +2641,23 @@ function renderUserPerception(contact) {
     });
 }
 
-function handleClearChatHistory() {
+function collectRemoteMessageIdsFromHistory(history) {
+    if (!Array.isArray(history)) return [];
+    return history
+        .filter(message => message && (message.pushedByBackend || message.source === 'offline-backend' || message.remoteId))
+        .map(message => String(message.remoteId || message.id || '').trim())
+        .filter(Boolean);
+}
+
+async function handleClearChatHistory() {
     if (!window.iphoneSimState.currentChatContactId) return;
     
     if (confirm('确定要清空与该联系人的所有聊天记录吗？此操作不可恢复。')) {
         const contactId = window.iphoneSimState.currentChatContactId;
+        const history = Array.isArray(window.iphoneSimState.chatHistory[contactId])
+            ? window.iphoneSimState.chatHistory[contactId]
+            : [];
+        const remoteMessageIds = collectRemoteMessageIdsFromHistory(history);
         window.iphoneSimState.chatHistory[contactId] = [];
         
         // 重置总结和行程生成索引，确保清空后能重新触发
@@ -2657,7 +2669,15 @@ function handleClearChatHistory() {
         }
         
         saveConfig();
+        if (window.renderContactList) window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
         renderChatHistory(contactId);
+        if (remoteMessageIds.length > 0 && window.offlinePushSync && typeof window.offlinePushSync.deleteMessages === 'function') {
+            try {
+                await window.offlinePushSync.deleteMessages(remoteMessageIds);
+            } catch (err) {
+                console.error('[offline-push-sync] clear chat remote delete failed', err);
+            }
+        }
         alert('聊天记录已清空');
         document.getElementById('chat-settings-screen').classList.add('hidden');
     }
