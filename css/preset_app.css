@@ -1,0 +1,542 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Space+Grotesk:wght@300;400;500;600&display=swap');
+
+#preset-app {
+    --preset-bg-color: #dcdce0;
+    --preset-surface-color: #fcfcfc;
+    --preset-text-dark: #0a0a0a;
+    --preset-text-mute: #a0a0a5;
+    --preset-border-line: rgba(0, 0, 0, 0.08);
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+    color: var(--preset-text-dark);
+}
+
+#preset-app,
+#preset-app * {
+    box-sizing: border-box;
+}
+
+#preset-app.preset-app-screen {
+    background: var(--preset-bg-color);
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+    overflow: hidden;
+}
+
+#preset-app .preset-shell {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: var(--preset-surface-color);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#preset-app .preset-header {
+    position: relative;
+    z-index: 30;
+    isolation: isolate;
+    padding: calc(20px + max(28px, env(safe-area-inset-top, 0px))) 30px 20px;
+    border-bottom: 1px solid var(--preset-border-line);
+}
+
+#preset-app .preset-brand-meta {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--preset-text-mute);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 30px;
+    font-weight: 500;
+}
+
+#preset-app .preset-brand-meta > span {
+    display: none;
+}
+
+#preset-app .preset-exit-btn {
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#preset-app .preset-exit-btn:hover {
+    opacity: 0.75;
+}
+
+#preset-app .preset-exit-btn:active {
+    transform: scale(0.97);
+}
+
+#preset-app .preset-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+#preset-app .preset-action-icon {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: var(--preset-text-dark);
+    cursor: pointer;
+    transition: transform 0.25s ease;
+}
+
+#preset-app .preset-action-icon:active {
+    transform: scale(0.86);
+}
+
+#preset-app .preset-carousel {
+    position: relative;
+    z-index: 40;
+    min-height: 92px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#preset-app .preset-trigger {
+    width: 100%;
+    border: none;
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 0 10px;
+    border-radius: 24px;
+    text-align: center;
+    color: var(--preset-text-dark);
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+#preset-app .preset-trigger:hover {
+    background: rgba(0, 0, 0, 0.03);
+}
+
+#preset-app .preset-trigger:active {
+    transform: scale(0.98);
+}
+
+#preset-app .preset-title-index {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 14px;
+    color: var(--preset-text-mute);
+}
+
+#preset-app .preset-title-main-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+#preset-app .preset-title-main {
+    font-family: 'Playfair Display', serif;
+    font-size: 42px;
+    line-height: 1.1;
+    letter-spacing: -1px;
+    white-space: nowrap;
+}
+
+#preset-app .preset-title-caret {
+    font-size: 20px;
+    color: var(--preset-text-mute);
+    transition: transform 0.25s ease, color 0.25s ease;
+}
+
+#preset-app .preset-carousel.open .preset-title-caret {
+    transform: rotate(180deg);
+    color: var(--preset-text-dark);
+}
+
+#preset-app .preset-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    width: min(100%, 290px);
+    padding: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 24px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0.24));
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    overflow: hidden;
+    transform: translateX(-50%) translateY(8px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s ease;
+    z-index: 80;
+}
+
+#preset-app .preset-carousel.open .preset-dropdown {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+}
+
+#preset-app .preset-option {
+    width: 100%;
+    border: none;
+    background: transparent;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+#preset-app .preset-option:hover {
+    background: rgba(255, 255, 255, 0.22);
+}
+
+#preset-app .preset-option.active {
+    background: rgba(255, 255, 255, 0.34);
+}
+
+#preset-app .preset-option-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+#preset-app .preset-option-index {
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--preset-text-mute);
+}
+
+#preset-app .preset-option-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--preset-text-dark);
+}
+
+#preset-app .preset-option-check {
+    font-size: 16px;
+    color: var(--preset-text-dark);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+#preset-app .preset-option.active .preset-option-check {
+    opacity: 1;
+}
+
+#preset-app .preset-nav-dots {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 20px;
+    padding-bottom: 5px;
+}
+
+#preset-app .preset-dot {
+    width: 4px;
+    height: 4px;
+    border: none;
+    background: var(--preset-text-mute);
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+#preset-app .preset-dot.active {
+    width: 16px;
+    border-radius: 4px;
+    background: var(--preset-text-dark);
+}
+
+#preset-app .preset-content {
+    position: relative;
+    z-index: 0;
+    flex: 1;
+    overflow-y: auto;
+    scrollbar-width: none;
+}
+
+#preset-app .preset-content::-webkit-scrollbar {
+    display: none;
+}
+
+#preset-app .preset-list-container {
+    padding: 20px 30px calc(40px + env(safe-area-inset-bottom, 0px));
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1), transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#preset-app .preset-list-container.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+#preset-app .preset-list-item {
+    position: relative;
+    padding: 24px 0;
+    border-bottom: 1px solid var(--preset-border-line);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+#preset-app .preset-list-item::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    width: 0;
+    height: 1px;
+    background: var(--preset-text-dark);
+    transition: width 0.35s ease;
+}
+
+#preset-app .preset-list-item:hover::after {
+    width: 100%;
+}
+
+#preset-app .preset-item-content {
+    border: none;
+    background: transparent;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    flex: 1;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    padding: 0 15px 0 0;
+}
+
+#preset-app .preset-item-content:active {
+    opacity: 0.5;
+}
+
+#preset-app .preset-item-icon {
+    font-size: 20px;
+    color: var(--preset-text-dark);
+    opacity: 0.8;
+    margin-top: 2px;
+}
+
+#preset-app .preset-item-text {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#preset-app .preset-item-en {
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: -0.5px;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#preset-app .preset-item-zh {
+    font-size: 12px;
+    color: var(--preset-text-mute);
+    font-weight: 300;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#preset-app .preset-toggle {
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--preset-text-mute);
+    border-radius: 4px;
+    background: transparent;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+#preset-app .preset-toggle::after {
+    content: '';
+    width: 0;
+    height: 0;
+    background: var(--preset-text-dark);
+    border-radius: 2px;
+    transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#preset-app .preset-toggle.active {
+    border-color: var(--preset-text-dark);
+}
+
+#preset-app .preset-toggle.active::after {
+    width: 14px;
+    height: 14px;
+}
+
+#preset-app .preset-sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(5px);
+    z-index: 40;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+}
+
+#preset-app .preset-sheet-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#preset-app .preset-editor-sheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: min(60%, 460px);
+    background: var(--preset-surface-color);
+    border-top-left-radius: 32px;
+    border-top-right-radius: 32px;
+    box-shadow: 0 -20px 40px rgba(0, 0, 0, 0.1);
+    transform: translateY(100%);
+    transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    z-index: 50;
+    padding: 40px 30px calc(30px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+}
+
+#preset-app .preset-editor-sheet.active {
+    transform: translateY(0);
+}
+
+#preset-app .preset-sheet-handle {
+    width: 40px;
+    height: 4px;
+    background: var(--preset-border-line);
+    border-radius: 2px;
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+#preset-app .preset-editor-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-style: italic;
+    margin-bottom: 30px;
+}
+
+#preset-app .preset-form-group {
+    margin-bottom: 24px;
+    position: relative;
+}
+
+#preset-app .preset-form-group label {
+    position: absolute;
+    top: -8px;
+    left: 12px;
+    background: var(--preset-surface-color);
+    padding: 0 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--preset-text-mute);
+    font-weight: 500;
+}
+
+#preset-app .preset-styled-input {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--preset-border-line);
+    padding: 16px;
+    font-size: 16px;
+    border-radius: 8px;
+    outline: none;
+    color: var(--preset-text-dark);
+    font-family: inherit;
+    transition: border-color 0.3s ease;
+}
+
+#preset-app .preset-styled-input:focus {
+    border-color: var(--preset-text-dark);
+}
+
+#preset-app .preset-sheet-actions {
+    margin-top: auto;
+    display: flex;
+    gap: 16px;
+}
+
+#preset-app .preset-btn {
+    flex: 1;
+    padding: 18px 0;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    transition: transform 0.2s ease;
+}
+
+#preset-app .preset-btn:active {
+    transform: scale(0.96);
+}
+
+#preset-app .preset-btn-outline {
+    border: 1px solid var(--preset-border-line);
+    color: var(--preset-text-dark);
+}
+
+#preset-app .preset-btn-fill {
+    background: var(--preset-text-dark);
+    color: var(--preset-surface-color);
+}
+
+@keyframes presetSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

@@ -52,6 +52,7 @@
     <link rel="stylesheet" href="css/garden_app.css?v=20">
     <link rel="stylesheet" href="css/chat_settings_editorial.css">
     <link rel="stylesheet" href="css/chat_oracle_quick_replies.css">
+    <link rel="stylesheet" href="css/preset_app.css">
 </head>
 <body>
     <div class="screen-container" id="screen-container">
@@ -8005,6 +8006,7 @@
     <script src="js/icity.js"></script>
     <script src="js/garden_app.js?v=10"></script>
     <script src="js/mood_flora.js"></script>
+    <script src="js/preset_app.js"></script>
     <script src="js/home.js"></script>
     <script src="js/calendar_app.js"></script>
     <script src="js/music_app_screen.js"></script>
@@ -8313,6 +8315,53 @@
                             </div>
                             <div id="voice-real-result" style="margin-top: 20px; font-style: italic; color: #333; min-height: 20px;"></div>
                             <button id="send-real-voice-btn" class="ios-btn-block" style="background-color: #07C160; margin-top: 20px;" disabled>发送</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="preset-app" class="app-screen hidden preset-app-screen">
+                <div class="preset-shell">
+                    <div class="preset-header">
+                        <div class="preset-brand-meta">
+                            <button type="button" class="preset-exit-btn" id="preset-exit-btn" aria-label="退出预设应用">Vol. <span class="preset-vol-num-display">1</span> — Config</button>
+                            <span>Vol. <span id="preset-vol-num">1</span> — Config</span>
+                            <div class="preset-header-actions">
+                                <span>SYSTEM</span>
+                                <button type="button" class="preset-action-icon" id="close-preset-app" aria-label="关闭预设应用">
+                                    <i class="ri-folder-add-line"></i>
+                                </button>
+                                <input type="file" id="preset-import-input" accept=".json" hidden>
+                            </div>
+                        </div>
+
+                        <div class="preset-carousel" id="preset-carousel"></div>
+                        <div class="preset-nav-dots" id="preset-dots"></div>
+                    </div>
+
+                    <div class="preset-content" id="preset-app-content">
+                        <div class="preset-list-container" id="preset-list-content"></div>
+                    </div>
+
+                    <div class="preset-sheet-backdrop" id="preset-sheet-backdrop"></div>
+
+                    <div class="preset-editor-sheet" id="preset-editor-sheet">
+                        <div class="preset-sheet-handle"></div>
+                        <div class="preset-editor-title">Refine Parameter</div>
+
+                        <div class="preset-form-group">
+                            <label for="preset-input-en">Nomenclature</label>
+                            <input type="text" class="preset-styled-input" id="preset-input-en" placeholder="Parameter Name">
+                        </div>
+
+                        <div class="preset-form-group">
+                            <label for="preset-input-zh">Definition</label>
+                            <input type="text" class="preset-styled-input" id="preset-input-zh" placeholder="Chinese Definition">
+                        </div>
+
+                        <div class="preset-sheet-actions">
+                            <button type="button" class="preset-btn preset-btn-outline" id="preset-discard-btn">Discard</button>
+                            <button type="button" class="preset-btn preset-btn-fill" id="preset-commit-btn">Commit</button>
                         </div>
                     </div>
                 </div>
