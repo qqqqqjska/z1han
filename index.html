@@ -3412,6 +3412,38 @@
                 <div id="meeting-action-suggestion-list" style="padding-bottom:10px;"></div>
             </div>
 
+            <div id="meeting-integration-modal" class="meeting-integration-modal hidden">
+                <div class="meeting-integration-dialog">
+                    <button type="button" id="close-meeting-integration" class="meeting-integration-close" aria-label="关闭">×</button>
+
+                    <div class="meeting-integration-kicker">Offline Meeting</div>
+                    <div class="meeting-integration-title">接入预设与正则</div>
+                    <div class="meeting-integration-subtitle">预设会接入当前已开启的条目，正则可按分类勾选。</div>
+
+                    <div class="meeting-integration-body">
+                        <section class="meeting-integration-section">
+                            <div class="meeting-integration-section-head">
+                                <div class="meeting-integration-section-title">预设</div>
+                            </div>
+                            <div id="meeting-integration-preset-list" class="meeting-integration-preset-list"></div>
+                        </section>
+
+                        <section class="meeting-integration-section">
+                            <div class="meeting-integration-section-head">
+                                <div class="meeting-integration-section-title">正则</div>
+                            </div>
+                            <div id="meeting-integration-regex-summary" class="meeting-integration-regex-summary">已选 0 条正则</div>
+                            <div id="meeting-integration-regex-list" class="meeting-integration-regex-list"></div>
+                        </section>
+                    </div>
+
+                    <div class="meeting-integration-actions">
+                        <button type="button" id="meeting-integration-cancel" class="meeting-integration-btn meeting-integration-btn-ghost">取消</button>
+                        <button type="button" id="meeting-integration-save" class="meeting-integration-btn meeting-integration-btn-fill">保存</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- 见面剧情编辑弹窗 -->
             <div id="edit-meeting-msg-modal" class="modal hidden" style="z-index: 210;">
                 <div class="modal-content">

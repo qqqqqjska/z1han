@@ -33,6 +33,7 @@
     const defaultPresetData = clonePresetData(presetState.data);
     let stateDbPromise = null;
     let pendingConfirmAction = null;
+    let presetReadyPromise = null;
 
     function byId(id) {
         return document.getElementById(id);
@@ -104,7 +105,19 @@
             return [];
         }
 
+        const usedPresetUids = new Set();
+
         return presets.map(function (preset, index) {
+            const displayId = String(preset?.id || buildPresetId(index));
+            let uid = String(preset?.uid || '').trim();
+            if (!uid) {
+                uid = displayId;
+            }
+            if (!uid || usedPresetUids.has(uid)) {
+                uid = createEntityId('preset');
+            }
+            usedPresetUids.add(uid);
+
             const regexEntries = cloneRegexEntries(preset?.regexEntries);
             const regexCategories = cloneRegexCategories(preset?.regexCategories, regexEntries.map(function (entry) {
                 return entry.id;
@@ -114,7 +127,8 @@
             }) ? String(preset.activeRegexCategoryId) : null;
 
             return {
-                id: String(preset?.id || buildPresetId(index)),
+                uid: uid,
+                id: displayId,
                 title: String(preset?.title || ('预设' + (index + 1))),
                 items: clonePresetItems(preset?.items),
                 regexEntries: regexEntries,
@@ -291,6 +305,14 @@
             .then(function (payload) {
                 if (payload && Array.isArray(payload.data)) {
                     applyPersistedState(payload);
+                    writeStateToIndexedDb(createPersistedStatePayload());
+                    const storage = getStorage();
+                    if (storage) {
+                        try {
+                            storage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(createPersistedStatePayload()));
+                        } catch (error) {
+                        }
+                    }
                     return;
                 }
 
@@ -705,6 +727,7 @@
         const regexEntries = parseRegexScripts(parsed?.extensions?.regex_scripts);
 
         return {
+            uid: createEntityId('preset'),
             id: buildPresetId(presetState.data.length),
             title: getBaseName(fileName),
             items: items,
@@ -722,6 +745,7 @@
         const regexEntries = normalizeRegexEntries(parsed.regexEntries || parsed.regex || parsed?.extensions?.regex_scripts);
 
         return {
+            uid: parsed.uid || createEntityId('preset'),
             id: parsed.id || buildPresetId(presetState.data.length),
             title: String(parsed.title || getBaseName(fileName)),
             items: normalizeLegacyItems(parsed.items),
@@ -1239,6 +1263,7 @@
 
         if (editorContext.type === 'preset-create') {
             const newPreset = {
+                uid: createEntityId('preset'),
                 id: getNextPresetId(),
                 title: enValue || ('Preset ' + (presetState.data.length + 1)),
                 items: [],
@@ -2028,7 +2053,7 @@
 
     function init() {
         if (presetState.initialized) {
-            return;
+            return presetReadyPromise || Promise.resolve();
         }
 
         const screen = byId('preset-app');
@@ -2129,12 +2154,14 @@
         document.addEventListener('click', handleDocumentClick);
         document.addEventListener('keydown', handleKeydown);
 
-        restoreState().finally(function () {
+        presetReadyPromise = restoreState().finally(function () {
             renderPresetHeader();
             renderPresetList(presetState.currentIndex);
             renderRegexGrid();
             setActiveTab(presetState.activeTab);
         });
+
+        return presetReadyPromise;
     }
 
     function getActivePresetPrompts() {
@@ -2161,10 +2188,75 @@
         }).join('\n');
     }
 
+    function getPresets() {
+        return clonePresetData(presetState.data);
+    }
+
+    function getPresetById(presetId) {
+        if (!presetId) {
+            return null;
+        }
+
+        const matchedByUid = presetState.data.find(function (preset) {
+            return String(preset?.uid || '') === String(presetId);
+        });
+
+        const matchedPreset = matchedByUid || presetState.data.find(function (preset) {
+            return String(preset?.id || '') === String(presetId);
+        });
+
+        if (!matchedPreset) {
+            return null;
+        }
+
+        return clonePresetData([matchedPreset])[0] || null;
+    }
+
+    function getActivePresetItemsById(presetId) {
+        const preset = getPresetById(presetId);
+        if (!preset || !Array.isArray(preset.items)) {
+            return [];
+        }
+
+        return preset.items.filter(function (item) {
+            return item && item.active;
+        }).map(function (item) {
+            return Object.assign({}, item, {
+                content: getItemContent(item),
+                summary: getItemSubtitle(item)
+            });
+        });
+    }
+
+    function getRegexEntriesByPresetId(presetId) {
+        const preset = getPresetById(presetId);
+        return preset && Array.isArray(preset.regexEntries) ? cloneRegexEntries(preset.regexEntries) : [];
+    }
+
+    function getRegexCategoriesByPresetId(presetId) {
+        const preset = getPresetById(presetId);
+        return preset && Array.isArray(preset.regexCategories)
+            ? cloneRegexCategories(preset.regexCategories, (preset.regexEntries || []).map(function (entry) {
+                return entry.id;
+            }))
+            : [];
+    }
+
     window.PresetApp = {
         init: init,
         openApp: openApp,
         closeApp: closeApp,
+        whenReady: function () {
+            return presetReadyPromise || Promise.resolve();
+        },
+        isReady: function () {
+            return !presetState.restoring;
+        },
+        getPresets: getPresets,
+        getPresetById: getPresetById,
+        getActivePresetItemsById: getActivePresetItemsById,
+        getRegexEntriesByPresetId: getRegexEntriesByPresetId,
+        getRegexCategoriesByPresetId: getRegexCategoriesByPresetId,
         getActivePresetPrompts: getActivePresetPrompts,
         getPresetContextString: getPresetContextString
     };

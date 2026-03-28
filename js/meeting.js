@@ -62,6 +62,277 @@ function getMeetingSummaryText(meeting) {
     return text.substring(0, 68) + (text.length > 68 ? '…' : '');
 }
 
+function escapeMeetingHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getMeetingCompactText(value, maxLength = 48) {
+    const normalized = String(value ?? '').replace(/\s+/g, ' ').trim();
+    if (!normalized) {
+        return '';
+    }
+
+    if (normalized.length <= maxLength) {
+        return normalized;
+    }
+
+    return normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd() + '…';
+}
+
+function getCurrentMeetingRecord() {
+    const contactId = window.iphoneSimState.currentChatContactId;
+    const meetingId = window.iphoneSimState.currentMeetingId;
+    const meetings = window.iphoneSimState.meetings?.[contactId];
+    if (!contactId || !meetingId || !Array.isArray(meetings)) {
+        return null;
+    }
+
+    return meetings.find(meeting => meeting.id === meetingId) || null;
+}
+
+function normalizeMeetingIntegration(meeting) {
+    if (!meeting || typeof meeting !== 'object') {
+        return { presetId: '', regexEntryKeys: [] };
+    }
+
+    let presetId = typeof meeting.integration?.presetId === 'string' ? meeting.integration.presetId : '';
+    let regexEntryKeys = Array.isArray(meeting.integration?.regexEntryKeys)
+        ? Array.from(new Set(meeting.integration.regexEntryKeys.map(item => String(item || '').trim()).filter(Boolean)))
+        : [];
+
+    const presetApp = getPresetAppApi();
+    if (presetApp && presetId) {
+        const resolvedPreset = typeof presetApp.getPresetById === 'function' ? presetApp.getPresetById(presetId) : null;
+        if (resolvedPreset && resolvedPreset.uid && resolvedPreset.uid !== presetId) {
+            const legacyPresetId = presetId;
+            presetId = resolvedPreset.uid;
+            regexEntryKeys = regexEntryKeys.map(function (key) {
+                const parsedKey = parseMeetingRegexKey(key);
+                if (parsedKey.presetId !== legacyPresetId) {
+                    return key;
+                }
+
+                return buildMeetingRegexKey(presetId, parsedKey.entryId);
+            });
+        }
+    }
+
+    meeting.integration = {
+        presetId,
+        regexEntryKeys
+    };
+
+    return meeting.integration;
+}
+
+function buildMeetingRegexKey(presetId, entryId) {
+    return `${String(presetId || '')}::${String(entryId || '')}`;
+}
+
+function parseMeetingRegexKey(key) {
+    const raw = String(key || '');
+    const separatorIndex = raw.indexOf('::');
+    if (separatorIndex === -1) {
+        return { presetId: '', entryId: '' };
+    }
+
+    return {
+        presetId: raw.slice(0, separatorIndex),
+        entryId: raw.slice(separatorIndex + 2)
+    };
+}
+
+function getPresetAppApi() {
+    return window.PresetApp && typeof window.PresetApp.getPresets === 'function' ? window.PresetApp : null;
+}
+
+function getMeetingIntegrationCollections() {
+    const presetApp = getPresetAppApi();
+    if (!presetApp) {
+        return [];
+    }
+
+    const presetList = presetApp.getPresets();
+    const presets = Array.isArray(presetList) ? presetList : [];
+
+    return presets.map(preset => {
+        const presetKey = String(preset?.uid || preset?.id || '');
+        const entries = typeof presetApp.getRegexEntriesByPresetId === 'function'
+            ? presetApp.getRegexEntriesByPresetId(presetKey)
+            : (Array.isArray(preset.regexEntries) ? preset.regexEntries : []);
+        const categories = typeof presetApp.getRegexCategoriesByPresetId === 'function'
+            ? presetApp.getRegexCategoriesByPresetId(presetKey)
+            : (Array.isArray(preset.regexCategories) ? preset.regexCategories : []);
+        const activeItems = typeof presetApp.getActivePresetItemsById === 'function'
+            ? presetApp.getActivePresetItemsById(presetKey)
+            : [];
+        const entryMap = new Map();
+        const assignedEntryIds = new Set();
+
+        (Array.isArray(entries) ? entries : []).forEach(entry => {
+            if (!entry) {
+                return;
+            }
+            entryMap.set(String(entry.id), Object.assign({}, entry));
+        });
+
+        const normalizedCategories = (Array.isArray(categories) ? categories : []).map(category => {
+            const categoryEntries = (Array.isArray(category?.regexEntryIds) ? category.regexEntryIds : []).map(entryId => {
+                return entryMap.get(String(entryId));
+            }).filter(Boolean);
+
+            categoryEntries.forEach(entry => assignedEntryIds.add(String(entry.id)));
+
+            return {
+                id: String(category?.id || ''),
+                name: String(category?.name || '未分类'),
+                entries: categoryEntries,
+                entryKeys: categoryEntries.map(entry => buildMeetingRegexKey(presetKey, entry.id))
+            };
+        }).filter(category => category.entries.length > 0);
+
+        const uncategorizedEntries = Array.from(entryMap.values()).filter(entry => !assignedEntryIds.has(String(entry.id)));
+        if (uncategorizedEntries.length > 0) {
+            normalizedCategories.push({
+                id: '__uncategorized__',
+                name: '未分类',
+                entries: uncategorizedEntries,
+                entryKeys: uncategorizedEntries.map(entry => buildMeetingRegexKey(presetKey, entry.id))
+            });
+        }
+
+        return {
+            presetId: presetKey,
+            presetTitle: String(preset.title || '未命名预设'),
+            activeItemCount: Array.isArray(activeItems) ? activeItems.length : 0,
+            categories: normalizedCategories
+        };
+    });
+}
+
+function getMeetingIntegrationPresetSelection(meeting) {
+    const presetApp = getPresetAppApi();
+    const integration = normalizeMeetingIntegration(meeting);
+    if (!presetApp || !integration.presetId) {
+        return { preset: null, items: [] };
+    }
+
+    const preset = typeof presetApp.getPresetById === 'function' ? presetApp.getPresetById(integration.presetId) : null;
+    const items = typeof presetApp.getActivePresetItemsById === 'function' ? presetApp.getActivePresetItemsById(integration.presetId) : [];
+    return {
+        preset: preset || null,
+        items: Array.isArray(items) ? items : []
+    };
+}
+
+function getMeetingIntegrationRegexRules(meeting) {
+    const selectedKeys = new Set(normalizeMeetingIntegration(meeting).regexEntryKeys);
+    const collections = getMeetingIntegrationCollections();
+    const selectedRuleMap = new Map();
+
+    collections.forEach(collection => {
+        collection.categories.forEach(category => {
+            category.entries.forEach(entry => {
+                const ruleKey = buildMeetingRegexKey(collection.presetId, entry.id);
+                if (!selectedKeys.has(ruleKey)) {
+                    return;
+                }
+
+                if (!selectedRuleMap.has(ruleKey)) {
+                    selectedRuleMap.set(ruleKey, {
+                        key: ruleKey,
+                        presetId: collection.presetId,
+                        presetTitle: collection.presetTitle,
+                        categoryNames: [],
+                        title: String(entry.title || '未命名正则'),
+                        pattern: String(entry.pattern || ''),
+                        template: String(entry.template || '')
+                    });
+                }
+
+                const currentRule = selectedRuleMap.get(ruleKey);
+                if (!currentRule.categoryNames.includes(category.name)) {
+                    currentRule.categoryNames.push(category.name);
+                }
+            });
+        });
+    });
+
+    return Array.from(selectedRuleMap.values());
+}
+
+function buildMeetingPresetIntegrationPrompt(meeting) {
+    const selection = getMeetingIntegrationPresetSelection(meeting);
+    if (!selection.preset || !selection.items.length) {
+        return '';
+    }
+
+    const lines = selection.items.map((item, index) => {
+        const label = String(item.en || item.name || `条目${index + 1}`).trim();
+        const content = String(item.content || item.zh || '').trim();
+        return `${index + 1}. ${label}${content ? `：${content}` : ''}`;
+    });
+
+    return `【接入预设】\n本次见面接入预设《${selection.preset.title}》。请将以下已开启条目视为当前剧情创作的额外约束、偏好与表达方向，并自然融入正文：\n${lines.join('\n')}\n\n`;
+}
+
+function buildMeetingRegexIntegrationPrompt(meeting) {
+    const rules = getMeetingIntegrationRegexRules(meeting);
+    if (!rules.length) {
+        return '';
+    }
+
+    const lines = rules.map((rule, index) => {
+        const categoryLabel = rule.categoryNames.length ? ` / ${rule.categoryNames.join('、')}` : '';
+        return `${index + 1}. ${rule.presetTitle}${categoryLabel} / ${rule.title}\n- 匹配：${rule.pattern || '(空)'}\n- 替换：${rule.template || '(空)'}`;
+    });
+
+    return `【接入正则】\n以下规则由用户手动勾选，请把它们理解为本次生成时需要尽量贴合的文本处理与表达规则。不要解释规则本身，只需要尽量直接生成符合这些规则处理结果的内容：\n${lines.join('\n')}\n\n`;
+}
+
+function updateMeetingIntegrationButtonState(meeting) {
+    const button = document.getElementById('meeting-detail-style-btn');
+    if (!button) {
+        return;
+    }
+
+    const integration = normalizeMeetingIntegration(meeting || {});
+    const isConfigured = Boolean(integration.presetId) || integration.regexEntryKeys.length > 0;
+    button.classList.toggle('is-configured', isConfigured);
+    button.setAttribute('title', isConfigured ? '已接入预设或正则' : '接入预设与正则');
+}
+
+function logMeetingAiDebug(stage, payload) {
+    if (!window.console) {
+        return;
+    }
+
+    const title = `[Meeting Debug] ${stage}`;
+    if (typeof console.groupCollapsed === 'function') {
+        console.groupCollapsed(title);
+    } else {
+        console.log(title);
+    }
+
+    Object.keys(payload || {}).forEach(function (key) {
+        console.log(key + ':', payload[key]);
+    });
+
+    if (typeof console.groupEnd === 'function') {
+        console.groupEnd();
+    }
+
+    window.__meetingAiDebug = Object.assign({}, window.__meetingAiDebug, {
+        lastStage: stage,
+        timestamp: Date.now()
+    }, payload || {});
+}
+
 // 1. 打开见面列表页
 function openMeetingsScreen(contactId) {
     if (!contactId) return;
@@ -255,7 +526,11 @@ function createNewMeeting() {
         title: `第 ${count} 次见面`,
         content: [], // 结构: { role: 'user'|'ai', text: '...' }
         style: contact.meetingStyle || '正常',
-        isFinished: false
+        isFinished: false,
+        integration: {
+            presetId: '',
+            regexEntryKeys: []
+        }
     };
 
     if (!window.iphoneSimState.meetings[window.iphoneSimState.currentChatContactId]) window.iphoneSimState.meetings[window.iphoneSimState.currentChatContactId] = [];
@@ -274,6 +549,8 @@ function openMeetingDetail(meetingId) {
     const meeting = meetings.find(m => m.id === meetingId);
     
     if (!meeting) return;
+
+    normalizeMeetingIntegration(meeting);
 
     // 检查是否已设置同步选项 (仅针对未完成或新进入的)
     if (meeting.syncWithChat === undefined) {
@@ -318,6 +595,7 @@ function openMeetingDetail(meetingId) {
     document.getElementById('meeting-detail-screen').classList.remove('hidden');
     
     renderMeetingCards(meeting);
+    updateMeetingIntegrationButtonState(meeting);
 }
 
 function syncMeetingAiControlsState(isGenerating) {
@@ -601,6 +879,7 @@ function endMeeting() {
     const meeting = meetings.find(m => m.id === meetingId);
 
     document.getElementById('meeting-detail-screen').classList.add('hidden');
+    closeMeetingIntegrationModal();
     
     window.iphoneSimState.currentMeetingId = null;
     renderMeetingsList(contactId); // 刷新列表
@@ -944,6 +1223,9 @@ function constructMeetingPrompt(contactId, newUserInput) {
         prompt += `【关系背景摘要】(仅作人物关系和熟悉度参考，不代表当前仍在线上聊天)\n${chatContext}\n\n`;
     }
 
+    prompt += buildMeetingPresetIntegrationPrompt(currentMeeting);
+    prompt += buildMeetingRegexIntegrationPrompt(currentMeeting);
+
     prompt += `【规则】\n`;
     prompt += `1. 这是一次线下见面的酒馆式 RP 共写，不是聊天软件对话。你不是${contact.name}本人，也不是在替他回复消息。\n`;
     prompt += `2. 用户当前输入默认应被视为“设定补充、剧情素材、情境假设、关系假设、动作草稿、氛围关键词、片段化灵感”，优先作为世界设定或剧情条件处理，而不是直接当成角色已经说出口的话。\n`;
@@ -985,6 +1267,246 @@ function constructMeetingPrompt(contactId, newUserInput) {
     prompt += lengthInstruction; // 将字数限制放在最后，增强权重
     
     return prompt;
+}
+
+function updateMeetingIntegrationPresetTip(collections) {
+    const tip = document.getElementById('meeting-integration-preset-tip');
+    if (!tip) {
+        return;
+    }
+
+    const selectedPresetId = document.querySelector('#meeting-integration-modal input[name="meeting-integration-preset"]:checked')?.value || '';
+    const matchedCollection = (Array.isArray(collections) ? collections : []).find(collection => collection.presetId === selectedPresetId);
+
+    if (!matchedCollection) {
+        tip.textContent = '当前不接入任何预设条目';
+        return;
+    }
+
+    if (matchedCollection.activeItemCount > 0) {
+        tip.textContent = `将接入“${matchedCollection.presetTitle}”中已开启的 ${matchedCollection.activeItemCount} 条条目`;
+        return;
+    }
+
+    tip.textContent = `“${matchedCollection.presetTitle}”当前没有开启条目`;
+}
+
+function updateMeetingIntegrationRegexSummary() {
+    const summary = document.getElementById('meeting-integration-regex-summary');
+    if (!summary) {
+        return;
+    }
+
+    const selectedKeys = new Set();
+    document.querySelectorAll('#meeting-integration-modal .meeting-integration-entry-checkbox:checked').forEach(checkbox => {
+        if (checkbox.dataset.regexKey) {
+            selectedKeys.add(checkbox.dataset.regexKey);
+        }
+    });
+
+    summary.textContent = `已选 ${selectedKeys.size} 条正则`;
+}
+
+function updateMeetingIntegrationCategoryStates() {
+    document.querySelectorAll('#meeting-integration-modal .meeting-integration-category-card').forEach(card => {
+        const categoryCheckbox = card.querySelector('.meeting-integration-category-checkbox');
+        const entryCheckboxes = Array.from(card.querySelectorAll('.meeting-integration-entry-checkbox'));
+        if (!categoryCheckbox || entryCheckboxes.length === 0) {
+            return;
+        }
+
+        const checkedCount = entryCheckboxes.filter(checkbox => checkbox.checked).length;
+        categoryCheckbox.checked = checkedCount > 0 && checkedCount === entryCheckboxes.length;
+        categoryCheckbox.indeterminate = checkedCount > 0 && checkedCount < entryCheckboxes.length;
+    });
+}
+
+function syncMeetingIntegrationLinkedEntryCheckboxes(regexKey, checked) {
+    document.querySelectorAll('#meeting-integration-modal .meeting-integration-entry-checkbox').forEach(checkbox => {
+        if (checkbox.dataset.regexKey === regexKey) {
+            checkbox.checked = checked;
+        }
+    });
+}
+
+function renderMeetingIntegrationModal(meeting) {
+    const collections = getMeetingIntegrationCollections();
+    const integration = normalizeMeetingIntegration(meeting);
+    const presetList = document.getElementById('meeting-integration-preset-list');
+    const regexList = document.getElementById('meeting-integration-regex-list');
+    const hasPresetMatch = collections.some(collection => collection.presetId === integration.presetId);
+    const selectedRegexKeys = new Set(integration.regexEntryKeys);
+
+    if (presetList) {
+        const presetOptions = [`
+            <label class="meeting-integration-preset-option">
+                <input type="radio" name="meeting-integration-preset" value="" ${hasPresetMatch ? '' : 'checked'}>
+                <span class="meeting-integration-preset-card">
+                    <span>
+                        <span class="meeting-integration-preset-name">不接入预设</span>
+                        <span class="meeting-integration-preset-meta">仅使用见面页本身的设定</span>
+                    </span>
+                    <span class="meeting-integration-preset-check">✓</span>
+                </span>
+            </label>
+        `];
+
+        collections.forEach(collection => {
+            presetOptions.push(`
+                <label class="meeting-integration-preset-option">
+                    <input type="radio" name="meeting-integration-preset" value="${escapeMeetingHtml(collection.presetId)}" ${collection.presetId === integration.presetId ? 'checked' : ''}>
+                    <span class="meeting-integration-preset-card">
+                        <span>
+                            <span class="meeting-integration-preset-name">${escapeMeetingHtml(collection.presetTitle)}</span>
+                            <span class="meeting-integration-preset-meta">已开启 ${collection.activeItemCount} 条条目</span>
+                        </span>
+                        <span class="meeting-integration-preset-check">✓</span>
+                    </span>
+                </label>
+            `);
+        });
+
+        presetList.innerHTML = collections.length
+            ? presetOptions.join('')
+            : '<div class="meeting-integration-empty">暂无可用预设，请先去预设应用中导入或创建。</div>';
+    }
+
+    if (regexList) {
+        const regexGroups = collections.filter(collection => collection.categories.length > 0).map(collection => {
+            return `
+                <div class="meeting-integration-regex-group">
+                    <div class="meeting-integration-regex-group-title">${escapeMeetingHtml(collection.presetTitle)}</div>
+                    ${collection.categories.map(category => {
+                        const categoryEntryKeys = category.entries.map(function (entry) {
+                            return buildMeetingRegexKey(collection.presetId, entry.id);
+                        });
+                        const hasSelectedEntry = categoryEntryKeys.some(function (key) {
+                            return selectedRegexKeys.has(key);
+                        });
+                        return `
+                            <div class="meeting-integration-category-card ${hasSelectedEntry ? 'open' : ''}">
+                                <div class="meeting-integration-category-header">
+                                    <input type="checkbox" class="meeting-integration-category-checkbox" data-preset-id="${escapeMeetingHtml(collection.presetId)}" data-category-id="${escapeMeetingHtml(category.id)}">
+                                    <button type="button" class="meeting-integration-category-trigger" aria-expanded="${hasSelectedEntry ? 'true' : 'false'}">
+                                        <span class="meeting-integration-category-copy">
+                                            <span class="meeting-integration-category-name">${escapeMeetingHtml(category.name)}</span>
+                                        </span>
+                                        <span class="meeting-integration-category-caret">⌄</span>
+                                    </button>
+                                </div>
+                                <div class="meeting-integration-entry-list">
+                                    <div class="meeting-integration-category-copy meeting-integration-category-copy-detail">
+                                        <span class="meeting-integration-category-name">${escapeMeetingHtml(category.name)}</span>
+                                        <span class="meeting-integration-category-meta">${category.entries.length} 条正则</span>
+                                    </div>
+                                    ${category.entries.map(entry => {
+                                        const regexKey = buildMeetingRegexKey(collection.presetId, entry.id);
+                                        return `
+                                            <label class="meeting-integration-entry-row">
+                                                <input type="checkbox" class="meeting-integration-entry-checkbox" data-regex-key="${escapeMeetingHtml(regexKey)}" ${selectedRegexKeys.has(regexKey) ? 'checked' : ''}>
+                                                <span class="meeting-integration-entry-copy">
+                                                    <span class="meeting-integration-entry-title">${escapeMeetingHtml(entry.title || '未命名正则')}</span>
+                                                    <span class="meeting-integration-entry-meta">${escapeMeetingHtml(getMeetingCompactText(entry.pattern || entry.template || '')) || '无内容'}</span>
+                                                </span>
+                                            </label>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        });
+
+        regexList.innerHTML = regexGroups.length
+            ? regexGroups.join('')
+            : '<div class="meeting-integration-empty">暂无可选正则</div>';
+    }
+
+    updateMeetingIntegrationPresetTip(collections);
+    updateMeetingIntegrationCategoryStates();
+    updateMeetingIntegrationRegexSummary();
+}
+
+function renderMeetingIntegrationLoadingState(message) {
+    const presetList = document.getElementById('meeting-integration-preset-list');
+    const regexList = document.getElementById('meeting-integration-regex-list');
+    const tip = document.getElementById('meeting-integration-preset-tip');
+    const loadingMessage = String(message || '正在读取预设数据...');
+
+    if (tip) {
+        tip.textContent = loadingMessage;
+    }
+
+    if (presetList) {
+        presetList.innerHTML = `<div class="meeting-integration-empty">${escapeMeetingHtml(loadingMessage)}</div>`;
+    }
+
+    if (regexList) {
+        regexList.innerHTML = `<div class="meeting-integration-empty">${escapeMeetingHtml(loadingMessage)}</div>`;
+    }
+}
+
+async function openMeetingIntegrationModal() {
+    const modal = document.getElementById('meeting-integration-modal');
+    const meeting = getCurrentMeetingRecord();
+    if (!modal || !meeting) {
+        return;
+    }
+
+    modal.classList.remove('hidden');
+
+    const presetApp = getPresetAppApi();
+    renderMeetingIntegrationLoadingState(presetApp ? '正在读取预设数据...' : '预设应用尚未初始化');
+
+    if (!presetApp) {
+        return;
+    }
+
+    try {
+        if (typeof presetApp.whenReady === 'function') {
+            await presetApp.whenReady();
+        }
+    } catch (error) {
+    }
+
+    if (modal.classList.contains('hidden')) {
+        return;
+    }
+
+    renderMeetingIntegrationModal(meeting);
+}
+
+function closeMeetingIntegrationModal() {
+    const modal = document.getElementById('meeting-integration-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+function saveMeetingIntegration() {
+    const meeting = getCurrentMeetingRecord();
+    if (!meeting) {
+        closeMeetingIntegrationModal();
+        return;
+    }
+
+    const selectedPresetId = document.querySelector('#meeting-integration-modal input[name="meeting-integration-preset"]:checked')?.value || '';
+    const selectedRegexKeys = Array.from(new Set(Array.from(document.querySelectorAll('#meeting-integration-modal .meeting-integration-entry-checkbox:checked')).map(checkbox => checkbox.dataset.regexKey).filter(Boolean)));
+
+    meeting.integration = {
+        presetId: selectedPresetId,
+        regexEntryKeys: selectedRegexKeys
+    };
+
+    saveConfig();
+    updateMeetingIntegrationButtonState(meeting);
+    closeMeetingIntegrationModal();
+
+    if (typeof showNotification === 'function') {
+        showNotification('已保存接入设置', 1600, 'success');
+    }
 }
 
 /**
@@ -1061,6 +1583,15 @@ async function handleMeetingAI(type) {
             fetchUrl = fetchUrl.endsWith('/') ? fetchUrl + 'chat/completions' : fetchUrl + '/chat/completions';
         }
 
+        logMeetingAiDebug('Request', {
+            contactId: contactId,
+            meetingId: meetingId,
+            apiUrl: fetchUrl,
+            model: settings.model,
+            effectiveUserInput: effectiveUserInput,
+            prompt: fullPrompt
+        });
+
         const response = await fetch(fetchUrl, {
             method: 'POST',
             headers: {
@@ -1081,6 +1612,12 @@ async function handleMeetingAI(type) {
 
         const data = await response.json();
         const rawResponse = data.choices[0].message.content.trim();
+        logMeetingAiDebug('Response', {
+            contactId: contactId,
+            meetingId: meetingId,
+            rawResponse: rawResponse,
+            responseData: data
+        });
         const parsedResult = parseMeetingAiResponse(rawResponse, meeting);
         const finalTezt = parsedResult.reply;
         
@@ -1121,6 +1658,12 @@ function setupMeetingListeners() {
     const meetingStyleModal = document.getElementById('meeting-style-modal');
     const closeMeetingStyleBtn = document.getElementById('close-meeting-style');
     const saveMeetingStyleBtn = document.getElementById('save-meeting-style-btn');
+    const meetingIntegrationModal = document.getElementById('meeting-integration-modal');
+    const closeMeetingIntegrationBtn = document.getElementById('close-meeting-integration');
+    const meetingIntegrationCancelBtn = document.getElementById('meeting-integration-cancel');
+    const meetingIntegrationSaveBtn = document.getElementById('meeting-integration-save');
+    const meetingIntegrationPresetList = document.getElementById('meeting-integration-preset-list');
+    const meetingIntegrationRegexList = document.getElementById('meeting-integration-regex-list');
 
     // 预设相关元素
     const saveMeetingStylePresetBtn = document.getElementById('save-meeting-style-preset');
@@ -1293,9 +1836,73 @@ function setupMeetingListeners() {
     if (endMeetingBtn) endMeetingBtn.addEventListener('click', endMeeting);
     if (meetingSendBtn) meetingSendBtn.addEventListener('click', handleSendMeetingText);
     if (meetingAiContinueBtn) meetingAiContinueBtn.addEventListener('click', () => handleMeetingAI('continue'));
-    if (meetingDetailStyleBtn) meetingDetailStyleBtn.addEventListener('click', () => meetingStyleModal.classList.remove('hidden'));
+    if (meetingDetailStyleBtn) meetingDetailStyleBtn.addEventListener('click', openMeetingIntegrationModal);
     if (meetingDetailMagicBtn) meetingDetailMagicBtn.addEventListener('click', () => window.toggleMeetingActionSuggestionMenu());
     if (closeMeetingActionSuggestionMenuBtn) closeMeetingActionSuggestionMenuBtn.addEventListener('click', () => window.toggleMeetingActionSuggestionMenu(false));
+
+    if (meetingIntegrationModal) {
+        meetingIntegrationModal.addEventListener('click', event => {
+            if (event.target === meetingIntegrationModal) {
+                closeMeetingIntegrationModal();
+            }
+        });
+    }
+
+    if (closeMeetingIntegrationBtn) closeMeetingIntegrationBtn.addEventListener('click', closeMeetingIntegrationModal);
+    if (meetingIntegrationCancelBtn) meetingIntegrationCancelBtn.addEventListener('click', closeMeetingIntegrationModal);
+    if (meetingIntegrationSaveBtn) meetingIntegrationSaveBtn.addEventListener('click', saveMeetingIntegration);
+
+    if (meetingIntegrationPresetList) {
+        meetingIntegrationPresetList.addEventListener('change', () => {
+            updateMeetingIntegrationPresetTip(getMeetingIntegrationCollections());
+        });
+    }
+
+    if (meetingIntegrationRegexList) {
+        meetingIntegrationRegexList.addEventListener('click', event => {
+            const trigger = event.target.closest('.meeting-integration-category-trigger');
+            if (!trigger) {
+                return;
+            }
+
+            const categoryCard = trigger.closest('.meeting-integration-category-card');
+            if (!categoryCard) {
+                return;
+            }
+
+            const willOpen = !categoryCard.classList.contains('open');
+            categoryCard.classList.toggle('open', willOpen);
+            trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        });
+
+        meetingIntegrationRegexList.addEventListener('change', event => {
+            const target = event.target;
+            if (!(target instanceof HTMLInputElement)) {
+                return;
+            }
+
+            if (target.classList.contains('meeting-integration-category-checkbox')) {
+                const categoryCard = target.closest('.meeting-integration-category-card');
+                if (!categoryCard) {
+                    return;
+                }
+
+                categoryCard.querySelectorAll('.meeting-integration-entry-checkbox').forEach(checkbox => {
+                    checkbox.checked = target.checked;
+                    if (checkbox.dataset.regexKey) {
+                        syncMeetingIntegrationLinkedEntryCheckboxes(checkbox.dataset.regexKey, target.checked);
+                    }
+                });
+            }
+
+            if (target.classList.contains('meeting-integration-entry-checkbox') && target.dataset.regexKey) {
+                syncMeetingIntegrationLinkedEntryCheckboxes(target.dataset.regexKey, target.checked);
+            }
+
+            updateMeetingIntegrationCategoryStates();
+            updateMeetingIntegrationRegexSummary();
+        });
+    }
 
     const meetingInput = document.getElementById('meeting-input');
     if (meetingInput) {

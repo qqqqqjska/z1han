@@ -1421,7 +1421,360 @@
     }
 }
 
+.meeting-integration-modal {
+    position: absolute;
+    inset: 0;
+    z-index: 236;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 26px;
+    background: rgba(17, 17, 17, 0.18);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.meeting-integration-dialog {
+    position: relative;
+    width: min(100%, 430px);
+    max-height: min(78vh, 720px);
+    padding: 26px 22px 20px;
+    border-radius: 28px;
+    border: 1px solid rgba(17, 17, 17, 0.08);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 246, 241, 0.98) 100%);
+    box-shadow: 0 26px 70px rgba(17, 17, 17, 0.16);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.meeting-integration-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(17, 17, 17, 0.06);
+    color: #222;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.meeting-integration-kicker {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #7c8797;
+}
+
+.meeting-integration-title {
+    margin-top: 8px;
+    font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, 'Times New Roman', serif;
+    font-size: 28px;
+    font-style: italic;
+    color: #111;
+}
+
+.meeting-integration-subtitle {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #6f6a62;
+}
+
+.meeting-integration-body {
+    margin-top: 22px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.meeting-integration-section {
+    padding: 16px;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(17, 17, 17, 0.06);
+}
+
+.meeting-integration-section-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.meeting-integration-section-title {
+    font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, 'Times New Roman', serif;
+    font-size: 20px;
+    color: #111;
+}
+
+.meeting-integration-section-note,
+.meeting-integration-regex-summary {
+    font-size: 12px;
+    line-height: 1.5;
+    color: #7d756b;
+}
+
+.meeting-integration-regex-summary {
+    margin-top: 10px;
+}
+
+.meeting-integration-preset-list,
+.meeting-integration-regex-list {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.meeting-integration-preset-list {
+    gap: 10px;
+}
+
+.meeting-integration-preset-option {
+    display: block;
+    cursor: pointer;
+}
+
+.meeting-integration-preset-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.meeting-integration-preset-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    border: 1px solid rgba(17, 17, 17, 0.08);
+    background: rgba(253, 253, 252, 0.86);
+    transition: all 0.22s ease;
+}
+
+.meeting-integration-preset-option input:checked + .meeting-integration-preset-card {
+    border-color: rgba(17, 17, 17, 0.22);
+    background: rgba(17, 17, 17, 0.06);
+    box-shadow: inset 0 0 0 1px rgba(17, 17, 17, 0.05);
+}
+
+.meeting-integration-preset-name {
+    display: block;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #111;
+    word-break: break-word;
+}
+
+.meeting-integration-preset-meta {
+    display: block;
+    margin-top: 3px;
+    font-size: 12px;
+    color: #7d756b;
+}
+
+.meeting-integration-preset-check {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid rgba(17, 17, 17, 0.2);
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: transparent;
+    font-size: 12px;
+    background: rgba(255, 255, 255, 0.86);
+}
+
+.meeting-integration-preset-option input:checked + .meeting-integration-preset-card .meeting-integration-preset-check {
+    color: #111;
+    background: #fff;
+}
+
+.meeting-integration-regex-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.meeting-integration-regex-group-title {
+    font-size: 12px;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: #7c8797;
+}
+
+.meeting-integration-category-card {
+    padding: 12px 12px 10px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(17, 17, 17, 0.06);
+}
+
+.meeting-integration-category-header,
+.meeting-integration-category-toggle,
+.meeting-integration-entry-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.meeting-integration-category-header {
+    align-items: center;
+}
+
+.meeting-integration-category-toggle input,
+.meeting-integration-entry-row input {
+    margin-top: 2px;
+    accent-color: #111;
+    flex-shrink: 0;
+}
+
+.meeting-integration-category-header .meeting-integration-category-checkbox {
+    margin-top: 0;
+}
+
+.meeting-integration-category-copy,
+.meeting-integration-entry-copy {
+    min-width: 0;
+    flex: 1;
+}
+
+.meeting-integration-category-trigger {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.meeting-integration-category-copy-detail {
+    margin-bottom: 6px;
+}
+
+.meeting-integration-category-caret {
+    flex-shrink: 0;
+    font-size: 20px;
+    line-height: 1;
+    color: #7d756b;
+    transform: rotate(-90deg);
+    transition: transform 0.2s ease;
+}
+
+.meeting-integration-category-card.open .meeting-integration-category-caret {
+    transform: rotate(0deg);
+}
+
+.meeting-integration-category-name,
+.meeting-integration-entry-title {
+    display: block;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #111;
+    word-break: break-word;
+}
+
+.meeting-integration-category-meta,
+.meeting-integration-entry-meta,
+.meeting-integration-empty {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #7d756b;
+    word-break: break-word;
+}
+
+.meeting-integration-entry-list {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(17, 17, 17, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.meeting-integration-category-card .meeting-integration-entry-list {
+    display: none;
+}
+
+.meeting-integration-category-card.open .meeting-integration-entry-list {
+    display: flex;
+}
+
+.meeting-integration-entry-row {
+    padding: 8px 0;
+}
+
+.meeting-integration-actions {
+    margin-top: 18px;
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+    padding-top: 14px;
+    background: linear-gradient(180deg, rgba(248, 246, 241, 0) 0%, rgba(248, 246, 241, 0.98) 36%);
+}
+
+.meeting-integration-btn {
+    flex: 1;
+    height: 46px;
+    border-radius: 999px;
+    border: 1px solid rgba(17, 17, 17, 0.08);
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.meeting-integration-btn-ghost {
+    background: rgba(255, 255, 255, 0.72);
+    color: #111;
+}
+
+.meeting-integration-btn-fill {
+    background: #111;
+    color: #fff;
+    border-color: #111;
+}
+
+.meeting-editorial-icon-btn.is-configured {
+    border-radius: 999px;
+    background: rgba(17, 17, 17, 0.05) !important;
+    box-shadow: inset 0 0 0 1px rgba(17, 17, 17, 0.08);
+}
+
 @media (max-width: 480px) {
+    .meeting-integration-modal {
+        padding: 18px;
+    }
+
+    .meeting-integration-dialog {
+        width: 100%;
+        max-height: 82vh;
+        padding: 24px 18px 18px;
+        border-radius: 24px;
+    }
+
+    .meeting-integration-title {
+        font-size: 25px;
+    }
+
     #preset-app .preset-editor-sheet {
         width: calc(100% - 22px);
         max-height: calc(100% - 28px);
