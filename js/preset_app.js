@@ -20,6 +20,7 @@
         currentIndex: 0,
         activeTab: 'preset',
         editContext: null,
+        regexEditContext: null,
         initialized: false,
         restoring: false
     };
@@ -31,6 +32,7 @@
     const STATE_RECORD_ID = 'main';
     const defaultPresetData = clonePresetData(presetState.data);
     let stateDbPromise = null;
+    let pendingConfirmAction = null;
 
     function byId(id) {
         return document.getElementById(id);
@@ -57,17 +59,67 @@
         });
     }
 
+    function createEntityId(prefix) {
+        return String(prefix || 'id') + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    }
+
+    function buildRegexEntryId(index) {
+        return 'regex-' + String(index + 1);
+    }
+
+    function buildRegexCategoryId(index) {
+        return 'category-' + String(index + 1);
+    }
+
+    function uniqueStringList(values) {
+        return Array.from(new Set((Array.isArray(values) ? values : []).map(function (value) {
+            return String(value);
+        }).filter(Boolean)));
+    }
+
+    function cloneRegexCategories(categories, allowedEntryIds) {
+        if (!Array.isArray(categories)) {
+            return [];
+        }
+
+        const allowedSet = new Set(Array.isArray(allowedEntryIds) ? allowedEntryIds.map(String) : []);
+
+        return categories.map(function (category, index) {
+            const regexEntryIds = uniqueStringList(category?.regexEntryIds).filter(function (entryId) {
+                return !allowedSet.size || allowedSet.has(entryId);
+            });
+
+            return {
+                id: String(category?.id || buildRegexCategoryId(index)),
+                name: String(category?.name || ('Category ' + (index + 1))),
+                regexEntryIds: regexEntryIds
+            };
+        }).filter(function (category) {
+            return Boolean(String(category.name).trim());
+        });
+    }
+
     function clonePresetData(presets) {
         if (!Array.isArray(presets)) {
             return [];
         }
 
         return presets.map(function (preset, index) {
+            const regexEntries = cloneRegexEntries(preset?.regexEntries);
+            const regexCategories = cloneRegexCategories(preset?.regexCategories, regexEntries.map(function (entry) {
+                return entry.id;
+            }));
+            const activeRegexCategoryId = regexCategories.some(function (category) {
+                return category.id === String(preset?.activeRegexCategoryId || '');
+            }) ? String(preset.activeRegexCategoryId) : null;
+
             return {
                 id: String(preset?.id || buildPresetId(index)),
                 title: String(preset?.title || ('Preset ' + (index + 1))),
                 items: clonePresetItems(preset?.items),
-                regexEntries: cloneRegexEntries(preset?.regexEntries)
+                regexEntries: regexEntries,
+                regexCategories: regexCategories,
+                activeRegexCategoryId: activeRegexCategoryId
             };
         });
     }
@@ -290,8 +342,9 @@
             return [];
         }
 
-        return entries.map(function (entry) {
+        return entries.map(function (entry, index) {
             return {
+                id: String(entry?.id ?? entry?.identifier ?? buildRegexEntryId(index)),
                 title: String(entry?.title ?? entry?.scriptName ?? 'Untitled Regex'),
                 icon: entry?.icon || 'ri-braces-line',
                 pattern: String(entry?.pattern ?? entry?.findRegex ?? ''),
@@ -305,6 +358,10 @@
         return String(index + 1).padStart(2, '0');
     }
 
+    function getNextPresetId() {
+        return buildPresetId(presetState.data.length);
+    }
+
     function getBaseName(fileName) {
         return String(fileName || 'Imported Preset').replace(/\.[^.]+$/, '').trim() || 'Imported Preset';
     }
@@ -313,17 +370,75 @@
         return presetState.data[presetState.currentIndex] || null;
     }
 
+    function syncCurrentRegexState(currentPreset) {
+        if (!currentPreset) {
+            return null;
+        }
+
+        currentPreset.regexEntries = cloneRegexEntries(currentPreset.regexEntries);
+        currentPreset.regexCategories = cloneRegexCategories(currentPreset.regexCategories, currentPreset.regexEntries.map(function (entry) {
+            return entry.id;
+        }));
+
+        if (!currentPreset.regexCategories.some(function (category) {
+            return category.id === currentPreset.activeRegexCategoryId;
+        })) {
+            currentPreset.activeRegexCategoryId = null;
+        }
+
+        return currentPreset;
+    }
+
     function getCurrentRegexEntries() {
-        const currentPreset = getCurrentPreset();
+        const currentPreset = syncCurrentRegexState(getCurrentPreset());
         if (!currentPreset) {
             return [];
         }
 
-        if (!Array.isArray(currentPreset.regexEntries)) {
-            currentPreset.regexEntries = [];
+        return currentPreset.regexEntries;
+    }
+
+    function getCurrentRegexCategories() {
+        const currentPreset = syncCurrentRegexState(getCurrentPreset());
+        if (!currentPreset) {
+            return [];
         }
 
-        return currentPreset.regexEntries;
+        return currentPreset.regexCategories;
+    }
+
+    function getActiveRegexCategory() {
+        const activeCategoryId = syncCurrentRegexState(getCurrentPreset())?.activeRegexCategoryId || null;
+        if (!activeCategoryId) {
+            return null;
+        }
+
+        return getCurrentRegexCategories().find(function (category) {
+            return category.id === activeCategoryId;
+        }) || null;
+    }
+
+    function getActiveRegexCategoryName() {
+        const activeCategory = getActiveRegexCategory();
+        return activeCategory ? activeCategory.name : 'All Regex';
+    }
+
+    function getVisibleRegexEntries() {
+        const entries = getCurrentRegexEntries();
+        const activeCategory = getActiveRegexCategory();
+
+        if (!activeCategory) {
+            return entries.map(function (entry, index) {
+                return { entry: entry, index: index };
+            });
+        }
+
+        const visibleIdSet = new Set(activeCategory.regexEntryIds || []);
+        return entries.map(function (entry, index) {
+            return { entry: entry, index: index };
+        }).filter(function (item) {
+            return visibleIdSet.has(item.entry.id);
+        });
     }
 
     function getTextPreview(text, maxLength) {
@@ -445,6 +560,7 @@
 
         return rawEntries.map(function (entry, index) {
             return {
+                id: String(entry?.id ?? entry?.identifier ?? buildRegexEntryId(index)),
                 title: String(entry?.title ?? entry?.scriptName ?? `Regex ${index + 1}`),
                 icon: entry?.icon || inferRegexIcon(entry),
                 pattern: String(entry?.pattern ?? entry?.findRegex ?? ''),
@@ -496,6 +612,7 @@
             }
 
             return {
+                id: String(script?.id ?? script?.identifier ?? buildRegexEntryId(index)),
                 title: String(script?.scriptName ?? `Regex ${index + 1}`),
                 icon: inferRegexIcon(script),
                 pattern: String(script?.findRegex ?? ''),
@@ -585,11 +702,15 @@
             item.zh = item.summary;
         });
 
+        const regexEntries = parseRegexScripts(parsed?.extensions?.regex_scripts);
+
         return {
             id: buildPresetId(presetState.data.length),
             title: getBaseName(fileName),
             items: items,
-            regexEntries: parseRegexScripts(parsed?.extensions?.regex_scripts)
+            regexEntries: regexEntries,
+            regexCategories: [],
+            activeRegexCategoryId: null
         };
     }
 
@@ -598,11 +719,17 @@
             return null;
         }
 
+        const regexEntries = normalizeRegexEntries(parsed.regexEntries || parsed.regex || parsed?.extensions?.regex_scripts);
+
         return {
             id: parsed.id || buildPresetId(presetState.data.length),
             title: String(parsed.title || getBaseName(fileName)),
             items: normalizeLegacyItems(parsed.items),
-            regexEntries: normalizeRegexEntries(parsed.regexEntries || parsed.regex || parsed?.extensions?.regex_scripts)
+            regexEntries: regexEntries,
+            regexCategories: cloneRegexCategories(parsed.regexCategories, regexEntries.map(function (entry) {
+                return entry.id;
+            })),
+            activeRegexCategoryId: parsed.activeRegexCategoryId || null
         };
     }
 
@@ -640,16 +767,114 @@
         }
     }
 
-    function renderPresetHeader() {
-        const carousel = byId('preset-carousel');
-        const dots = byId('preset-dots');
-        const currentPreset = getCurrentPreset();
+    function closeConfirmDialog() {
+        const overlay = byId('preset-confirm-overlay');
+        const sheet = byId('preset-confirm-sheet');
+        const kicker = byId('preset-confirm-kicker');
+        const title = byId('preset-confirm-title');
+        const copy = byId('preset-confirm-copy');
+        const commitButton = byId('preset-confirm-commit');
 
-        if (!carousel || !dots || !currentPreset) {
+        if (overlay) {
+            overlay.classList.remove('active');
+        }
+        if (sheet) {
+            sheet.classList.remove('active');
+        }
+        if (kicker) {
+            kicker.textContent = 'Confirm';
+        }
+        if (title) {
+            title.textContent = 'Are you sure?';
+        }
+        if (copy) {
+            copy.textContent = 'This action cannot be undone.';
+        }
+        if (commitButton) {
+            commitButton.textContent = 'Delete';
+        }
+
+        pendingConfirmAction = null;
+    }
+
+    function openConfirmDialog(options) {
+        const overlay = byId('preset-confirm-overlay');
+        const sheet = byId('preset-confirm-sheet');
+        const kicker = byId('preset-confirm-kicker');
+        const title = byId('preset-confirm-title');
+        const copy = byId('preset-confirm-copy');
+        const commitButton = byId('preset-confirm-commit');
+
+        if (!overlay || !sheet || !title || !copy || !commitButton) {
             return;
         }
 
+        pendingConfirmAction = typeof options?.onConfirm === 'function' ? options.onConfirm : null;
+        if (kicker) {
+            kicker.textContent = options?.kicker || 'Confirm';
+        }
+        title.textContent = options?.title || 'Are you sure?';
+        copy.textContent = options?.copy || 'This action cannot be undone.';
+        commitButton.textContent = options?.confirmLabel || 'Delete';
+
+        overlay.classList.add('active');
+        sheet.classList.add('active');
+    }
+
+    function commitConfirmDialog() {
+        const action = pendingConfirmAction;
+        closeConfirmDialog();
+        if (typeof action === 'function') {
+            action();
+        }
+    }
+
+    function renderPresetEmptyState(listContent, title, copy) {
+        if (!listContent) {
+            return;
+        }
+
+        listContent.innerHTML = `
+            <div class="preset-empty-state" style="animation: presetSlideUp 0.45s ease both;">
+                <div class="preset-empty-title">${escapeHtml(title)}</div>
+                <div class="preset-empty-copy">${escapeHtml(copy)}</div>
+            </div>
+        `;
+
+        void listContent.offsetWidth;
+        listContent.classList.add('show');
+    }
+
+    function renderPresetHeader() {
+        const carousel = byId('preset-carousel');
+        const dots = byId('preset-dots');
+        const deletePresetButton = byId('preset-delete-preset-btn');
+        const currentPreset = getCurrentPreset();
+
+        if (!carousel || !dots) {
+            return;
+        }
+
+        if (deletePresetButton) {
+            deletePresetButton.disabled = !currentPreset;
+        }
+
         carousel.classList.remove('open');
+
+        if (!currentPreset) {
+            carousel.innerHTML = `
+                <div class="preset-trigger preset-trigger-empty">
+                    <div class="preset-title-index">Preset Library</div>
+                    <div class="preset-title-main-wrap">
+                        <div class="preset-title-main">No Preset Yet</div>
+                    </div>
+                </div>
+            `;
+            dots.innerHTML = '';
+            updateVolDisplays();
+            return;
+        }
+
         carousel.innerHTML = `
             <button type="button" class="preset-trigger" id="preset-trigger-btn">
                 <div class="preset-title-index">No. ${escapeHtml(currentPreset.id || buildPresetId(presetState.currentIndex))}</div>
@@ -675,7 +900,7 @@
 
         dots.innerHTML = presetState.data.map(function (_, index) {
             return `
-                <button type="button" class="preset-dot ${index === presetState.currentIndex ? 'active' : ''}" data-index="${index}" aria-label="????"></button>
+                <button type="button" class="preset-dot ${index === presetState.currentIndex ? 'active' : ''}" data-index="${index}" aria-label="Select preset ${index + 1}"></button>
             `;
         }).join('');
 
@@ -708,13 +933,25 @@
         const listContent = byId('preset-list-content');
         const preset = presetState.data[index];
 
-        if (!listContent || !preset) {
+        if (!listContent) {
+            return;
+        }
+
+        if (!preset) {
+            renderPresetEmptyState(listContent, 'No Preset Yet', 'Use the top-right buttons to create a preset or import one from JSON.');
+            return;
+        }
+
+        if (!Array.isArray(preset.items) || !preset.items.length) {
+            renderPresetEmptyState(listContent, 'No Entries Yet', 'Create the first entry from the top-right add button to start building this preset.');
             return;
         }
 
         listContent.innerHTML = preset.items.map(function (item, itemIndex) {
+            const itemDelay = Math.min(itemIndex * 0.03, 0.18);
+
             return `
-                <div class="preset-list-item" style="animation: presetSlideUp 0.45s ${itemIndex * 0.06}s both;">
+                <div class="preset-list-item" style="animation: presetSlideUp 0.36s ${itemDelay}s both;">
                     <button type="button" class="preset-item-content" data-index="${itemIndex}">
                         <i class="${escapeHtml(item.icon || 'ri-text')} preset-item-icon"></i>
                         <div class="preset-item-text">
@@ -740,6 +977,12 @@
             button.addEventListener('click', function () {
                 toggleItem(button, Number(button.dataset.index));
             });
+        });
+
+        listContent.querySelectorAll('.preset-list-item').forEach(function (itemNode) {
+            itemNode.addEventListener('animationend', function handleAnimationEnd() {
+                itemNode.style.animation = 'none';
+            }, { once: true });
         });
     }
 
@@ -808,26 +1051,77 @@
         }
     }
 
-    function openEditor(itemIndex) {
-        const item = getCurrentPreset()?.items?.[itemIndex];
-        if (!item) {
-            return;
-        }
-
-        presetState.editContext = { index: itemIndex };
-
+    function setEditorMode(mode) {
+        const title = byId('preset-editor-title');
+        const inputEnLabel = byId('preset-input-en-label');
+        const inputZhLabel = byId('preset-input-zh-label');
         const inputEn = byId('preset-input-en');
         const inputZh = byId('preset-input-zh');
+        const definitionGroup = byId('preset-definition-group');
+        const discardButton = byId('preset-discard-btn');
+        const commitButton = byId('preset-commit-btn');
+
+        const editorConfigs = {
+            'item-edit': {
+                title: 'Refine Parameter',
+                inputEnLabel: 'Nomenclature',
+                inputZhLabel: 'Definition',
+                inputEnPlaceholder: 'Parameter Name',
+                inputZhPlaceholder: 'Definition Content',
+                commitLabel: 'Save',
+                showDefinition: true
+            },
+            'item-create': {
+                title: 'New Entry',
+                inputEnLabel: 'Nomenclature',
+                inputZhLabel: 'Definition',
+                inputEnPlaceholder: 'Entry Name',
+                inputZhPlaceholder: 'Definition Content',
+                commitLabel: 'Add Entry',
+                showDefinition: true
+            },
+            'preset-create': {
+                title: 'New Preset',
+                inputEnLabel: 'Preset Name',
+                inputZhLabel: 'Definition',
+                inputEnPlaceholder: 'Preset Title',
+                inputZhPlaceholder: 'Definition Content',
+                commitLabel: 'Create Preset',
+                showDefinition: false
+            }
+        };
+
+        const config = editorConfigs[mode] || editorConfigs['item-edit'];
+
+        if (title) {
+            title.textContent = config.title;
+        }
+        if (inputEnLabel) {
+            inputEnLabel.textContent = config.inputEnLabel;
+        }
+        if (inputZhLabel) {
+            inputZhLabel.textContent = config.inputZhLabel;
+        }
+        if (inputEn) {
+            inputEn.placeholder = config.inputEnPlaceholder;
+        }
+        if (inputZh) {
+            inputZh.placeholder = config.inputZhPlaceholder;
+        }
+        if (definitionGroup) {
+            definitionGroup.classList.toggle('preset-form-group-hidden', !config.showDefinition);
+        }
+        if (discardButton) {
+            discardButton.textContent = 'Cancel';
+        }
+        if (commitButton) {
+            commitButton.textContent = config.commitLabel;
+        }
+    }
+
+    function openEditorSheet() {
         const backdrop = byId('preset-sheet-backdrop');
         const sheet = byId('preset-editor-sheet');
-
-        if (inputEn) {
-            inputEn.value = item.en || '';
-        }
-
-        if (inputZh) {
-            inputZh.value = getItemContent(item);
-        }
 
         if (backdrop) {
             backdrop.classList.add('active');
@@ -838,33 +1132,155 @@
         }
     }
 
+    function openPresetCreator() {
+        const inputEn = byId('preset-input-en');
+        const inputZh = byId('preset-input-zh');
+
+        presetState.editContext = { type: 'preset-create' };
+        setEditorMode('preset-create');
+
+        if (inputEn) {
+            inputEn.value = '';
+            inputEn.focus();
+        }
+        if (inputZh) {
+            inputZh.value = '';
+        }
+
+        openEditorSheet();
+    }
+
+    function openItemCreator() {
+        const currentPreset = getCurrentPreset();
+        const inputEn = byId('preset-input-en');
+        const inputZh = byId('preset-input-zh');
+
+        if (!currentPreset) {
+            alert('Create or import a preset first.');
+            return;
+        }
+
+        presetState.editContext = { type: 'item-create' };
+        setEditorMode('item-create');
+
+        if (inputEn) {
+            inputEn.value = '';
+            inputEn.focus();
+        }
+        if (inputZh) {
+            inputZh.value = '';
+        }
+
+        openEditorSheet();
+    }
+
+    function openEditor(itemIndex) {
+        const item = getCurrentPreset()?.items?.[itemIndex];
+        if (!item) {
+            return;
+        }
+
+        presetState.editContext = { type: 'item-edit', index: itemIndex };
+        setEditorMode('item-edit');
+
+        const inputEn = byId('preset-input-en');
+        const inputZh = byId('preset-input-zh');
+
+        if (inputEn) {
+            inputEn.value = item.en || '';
+        }
+
+        if (inputZh) {
+            inputZh.value = getItemContent(item);
+        }
+
+        openEditorSheet();
+    }
+
     function closeEditor() {
+        const inputEn = byId('preset-input-en');
+        const inputZh = byId('preset-input-zh');
         const backdrop = byId('preset-sheet-backdrop');
         const sheet = byId('preset-editor-sheet');
+
         if (backdrop) {
             backdrop.classList.remove('active');
         }
         if (sheet) {
             sheet.classList.remove('active');
         }
+
+        if (inputEn) {
+            inputEn.value = '';
+        }
+        if (inputZh) {
+            inputZh.value = '';
+        }
+
+        setEditorMode('item-edit');
         presetState.editContext = null;
     }
 
     function saveEditor() {
-        if (!presetState.editContext) {
+        const editorContext = presetState.editContext;
+        if (!editorContext) {
             return;
         }
 
-        const currentItem = getCurrentPreset()?.items?.[presetState.editContext.index];
         const inputEn = byId('preset-input-en');
         const inputZh = byId('preset-input-zh');
 
-        if (!currentItem || !inputEn || !inputZh) {
+        if (!inputEn || !inputZh) {
             return;
         }
 
         const enValue = inputEn.value.trim();
         const zhValue = inputZh.value.trim();
+
+        if (editorContext.type === 'preset-create') {
+            const newPreset = {
+                id: getNextPresetId(),
+                title: enValue || ('Preset ' + (presetState.data.length + 1)),
+                items: [],
+                regexEntries: [],
+                regexCategories: [],
+                activeRegexCategoryId: null
+            };
+
+            presetState.data.push(newPreset);
+            presetState.currentIndex = presetState.data.length - 1;
+            persistState();
+            closeEditor();
+            setActiveTab('preset');
+            renderPresetHeader();
+            renderPresetList(presetState.currentIndex);
+            renderRegexGrid();
+            return;
+        }
+
+        if (editorContext.type === 'item-create') {
+            const currentPreset = getCurrentPreset();
+            if (!currentPreset) {
+                return;
+            }
+
+            currentPreset.items.push({
+                en: enValue || ('Entry ' + (currentPreset.items.length + 1)),
+                zh: zhValue,
+                icon: 'ri-text',
+                active: true
+            });
+
+            persistState();
+            closeEditor();
+            renderPresetList(presetState.currentIndex);
+            return;
+        }
+
+        const currentItem = getCurrentPreset()?.items?.[editorContext.index];
+        if (!currentItem) {
+            return;
+        }
 
         if (enValue) {
             currentItem.en = enValue;
@@ -898,6 +1314,18 @@
                     importedPreset.regexEntries = [];
                 }
 
+                if (!importedPreset.regexCategories?.length) {
+                    importedPreset.regexCategories = [];
+                }
+
+                if (!importedPreset.regexCategories.some(function (category) {
+                    return category.id === importedPreset.activeRegexCategoryId;
+                })) {
+                    importedPreset.activeRegexCategoryId = null;
+                }
+
+                importedPreset = applyImportedRegexCategory(importedPreset);
+
                 presetState.data.push(importedPreset);
                 persistState();
                 setActiveTab('preset');
@@ -911,12 +1339,308 @@
         event.target.value = '';
     }
 
-    function regexCardMarkup(entry) {
+    function applyImportedRegexCategory(preset) {
+        if (!preset) {
+            return preset;
+        }
+
+        const regexEntries = cloneRegexEntries(preset.regexEntries);
+        const presetTitle = String(preset.title || 'Imported Preset').trim() || 'Imported Preset';
+
+        preset.regexEntries = regexEntries;
+
+        if (!regexEntries.length) {
+            preset.regexCategories = [];
+            preset.activeRegexCategoryId = null;
+            return preset;
+        }
+
+        const importedCategory = {
+            id: createEntityId('regex-category'),
+            name: presetTitle,
+            regexEntryIds: regexEntries.map(function (entry) {
+                return entry.id;
+            })
+        };
+
+        preset.regexCategories = [importedCategory];
+        preset.activeRegexCategoryId = importedCategory.id;
+        return preset;
+    }
+
+    function closeRegexCategoryDropdown() {
+        const switcher = byId('preset-regex-category-switcher');
+        if (switcher) {
+            switcher.classList.remove('open');
+        }
+    }
+
+    function selectRegexCategory(categoryId) {
+        const currentPreset = syncCurrentRegexState(getCurrentPreset());
+        if (!currentPreset) {
+            return;
+        }
+
+        currentPreset.activeRegexCategoryId = categoryId || null;
+        persistState();
+        closeRegexCategoryDropdown();
+        renderRegexCategorySwitcher();
+        renderRegexGrid();
+    }
+
+    function renderRegexCategorySwitcher() {
+        const switcher = byId('preset-regex-category-switcher');
+        const trigger = byId('preset-regex-category-trigger');
+        const nameNode = byId('preset-regex-category-name');
+        const dropdown = byId('preset-regex-category-dropdown');
+
+        if (!switcher || !trigger || !nameNode || !dropdown) {
+            return;
+        }
+
+        const currentPreset = syncCurrentRegexState(getCurrentPreset());
+        if (!currentPreset) {
+            nameNode.textContent = 'All Regex';
+            dropdown.innerHTML = '';
+            switcher.classList.remove('open');
+            return;
+        }
+
+        const categories = getCurrentRegexCategories();
+        const activeCategoryId = currentPreset.activeRegexCategoryId || null;
+        const totalCount = getCurrentRegexEntries().length;
+
+        nameNode.textContent = getActiveRegexCategoryName();
+        dropdown.innerHTML = [
+            `
+                <button type="button" class="regex-category-option ${activeCategoryId ? '' : 'active'}" data-category-id="">
+                    <div class="regex-category-option-meta">
+                        <div class="regex-category-option-name">All Regex</div>
+                        <div class="regex-category-option-count">${totalCount} item${totalCount === 1 ? '' : 's'}</div>
+                    </div>
+                    <i class="ri-check-line regex-category-option-check"></i>
+                </button>
+            `,
+            categories.map(function (category) {
+                const count = Array.isArray(category.regexEntryIds) ? category.regexEntryIds.length : 0;
+                return `
+                    <button type="button" class="regex-category-option ${category.id === activeCategoryId ? 'active' : ''}" data-category-id="${escapeHtml(category.id)}">
+                        <div class="regex-category-option-meta">
+                            <div class="regex-category-option-name">${escapeHtml(category.name)}</div>
+                            <div class="regex-category-option-count">${count} item${count === 1 ? '' : 's'}</div>
+                        </div>
+                        <i class="ri-check-line regex-category-option-check"></i>
+                    </button>
+                `;
+            }).join('')
+        ].join('');
+
+        trigger.onclick = function (event) {
+            event.stopPropagation();
+            switcher.classList.toggle('open');
+        };
+
+        dropdown.querySelectorAll('.regex-category-option').forEach(function (button) {
+            button.onclick = function (event) {
+                event.stopPropagation();
+                selectRegexCategory(button.dataset.categoryId || null);
+            };
+        });
+    }
+
+    function renderRegexCategoryChecklist() {
+        const list = byId('preset-regex-category-list');
+        if (!list) {
+            return;
+        }
+
+        const entries = getCurrentRegexEntries();
+        if (!entries.length) {
+            list.innerHTML = '<div class="regex-category-empty">No regex entries yet. You can still create an empty category now and add regex to it later.</div>';
+            return;
+        }
+
+        list.innerHTML = entries.map(function (entry) {
+            return `
+                <label class="regex-category-checkbox">
+                    <input type="checkbox" value="${escapeHtml(entry.id)}">
+                    <div class="regex-category-checkbox-body">
+                        <div class="regex-category-checkbox-title">${escapeHtml(entry.title)}</div>
+                        <div class="regex-category-checkbox-meta">${escapeHtml(getTextPreview(entry.pattern, 88) || 'No pattern')}</div>
+                    </div>
+                </label>
+            `;
+        }).join('');
+    }
+
+    function openRegexCategorySheet() {
+        const currentPreset = getCurrentPreset();
+        const overlay = byId('preset-regex-category-overlay');
+        const sheet = byId('preset-regex-category-sheet');
+        const input = byId('preset-regex-category-input');
+
+        if (!currentPreset) {
+            alert('Create or import a preset first.');
+            return;
+        }
+
+        closeRegexCategoryDropdown();
+        closeRegexDrawer();
+        renderRegexCategoryChecklist();
+
+        if (input) {
+            input.value = '';
+        }
+        if (overlay) {
+            overlay.classList.add('active');
+        }
+        if (sheet) {
+            sheet.classList.add('active');
+        }
+        if (input) {
+            input.focus();
+        }
+    }
+
+    function closeRegexCategorySheet() {
+        const overlay = byId('preset-regex-category-overlay');
+        const sheet = byId('preset-regex-category-sheet');
+        const input = byId('preset-regex-category-input');
+        const list = byId('preset-regex-category-list');
+
+        if (overlay) {
+            overlay.classList.remove('active');
+        }
+        if (sheet) {
+            sheet.classList.remove('active');
+        }
+        if (input) {
+            input.value = '';
+        }
+        if (list) {
+            list.innerHTML = '';
+        }
+    }
+
+    function saveRegexCategory() {
+        const currentPreset = syncCurrentRegexState(getCurrentPreset());
+        const input = byId('preset-regex-category-input');
+        const list = byId('preset-regex-category-list');
+
+        if (!currentPreset || !input || !list) {
+            return;
+        }
+
+        const categories = getCurrentRegexCategories();
+        const selectedIds = Array.from(list.querySelectorAll('input[type="checkbox"]:checked')).map(function (checkbox) {
+            return checkbox.value;
+        });
+        const newCategory = {
+            id: createEntityId('regex-category'),
+            name: input.value.trim() || ('Category ' + (categories.length + 1)),
+            regexEntryIds: uniqueStringList(selectedIds)
+        };
+
+        currentPreset.regexCategories.push(newCategory);
+        currentPreset.activeRegexCategoryId = newCategory.id;
+
+        persistState();
+        renderRegexCategorySwitcher();
+        renderRegexGrid();
+        closeRegexCategorySheet();
+    }
+
+    function requestDeleteCurrentPreset() {
+        const currentPreset = getCurrentPreset();
+        if (!currentPreset) {
+            return;
+        }
+
+        closeDropdown();
+        closeRegexCategoryDropdown();
+
+        openConfirmDialog({
+            kicker: 'Delete Preset',
+            title: 'Delete this preset?',
+            copy: `Preset "${currentPreset.title}" and its regex entries will be removed from the app. This cannot be undone.`,
+            confirmLabel: 'Delete Preset',
+            onConfirm: function () {
+                deleteCurrentPreset();
+            }
+        });
+    }
+
+    function deleteCurrentPreset() {
+        if (!presetState.data.length) {
+            return;
+        }
+
+        presetState.data.splice(presetState.currentIndex, 1);
+        if (presetState.currentIndex >= presetState.data.length) {
+            presetState.currentIndex = Math.max(0, presetState.data.length - 1);
+        }
+
+        closeDropdown();
+        closeEditor();
+        closeRegexDrawer();
+        closeRegexCategoryDropdown();
+        closeRegexCategorySheet();
+
+        persistState();
+        renderPresetHeader();
+        renderPresetList(presetState.currentIndex);
+        renderRegexGrid();
+    }
+
+    function requestDeleteRegexEntry(index) {
+        const entry = getCurrentRegexEntries()[index];
+        if (!entry) {
+            return;
+        }
+
+        openConfirmDialog({
+            kicker: 'Delete Regex',
+            title: 'Delete this regex?',
+            copy: `Regex "${entry.title}" will be removed from this preset and from all of its categories. This cannot be undone.`,
+            confirmLabel: 'Delete Regex',
+            onConfirm: function () {
+                deleteRegexEntry(index);
+            }
+        });
+    }
+
+    function deleteRegexEntry(index) {
+        const currentPreset = syncCurrentRegexState(getCurrentPreset());
+        if (!currentPreset) {
+            return;
+        }
+
+        const entries = getCurrentRegexEntries();
+        const entry = entries[index];
+        if (!entry) {
+            return;
+        }
+
+        currentPreset.regexEntries.splice(index, 1);
+        currentPreset.regexCategories.forEach(function (category) {
+            category.regexEntryIds = (Array.isArray(category.regexEntryIds) ? category.regexEntryIds : []).filter(function (entryId) {
+                return entryId !== entry.id;
+            });
+        });
+
+        persistState();
+        renderRegexCategorySwitcher();
+        renderRegexGrid();
+    }
+
+    function regexCardMarkup(entry, index) {
         return `
-            <article class="regex-card" style="animation: regexFadeInUp 0.45s ease both;">
+            <article class="regex-card" data-index="${index}" tabindex="0" role="button" aria-label="Edit regex ${escapeHtml(entry.title)}" style="animation: regexFadeInUp 0.45s ease both;">
                 <div class="regex-card-top">
                     <div class="regex-card-title">${escapeHtml(entry.title)}</div>
-                    <div class="regex-card-icon"><i class="${escapeHtml(entry.icon || 'ri-function-line')}"></i></div>
+                    <button type="button" class="regex-card-delete" data-index="${index}" aria-label="Delete regex ${escapeHtml(entry.title)}">
+                        <i class="ri-delete-bin-6-line"></i>
+                    </button>
                 </div>
 
                 <div class="regex-data-section">
@@ -928,7 +1652,7 @@
 
                 <div class="regex-data-section">
                     <div class="regex-data-label"><i class="ri-html5-line"></i> Markup</div>
-                    <div class="regex-data-value">${escapeHtml(entry.template)}</div>
+                    <div class="regex-data-value regex-data-value-clamped">${escapeHtml(entry.template)}</div>
                 </div>
             </article>
         `;
@@ -940,8 +1664,29 @@
             return;
         }
 
-        const entries = getCurrentRegexEntries();
-        if (!entries.length) {
+        renderRegexCategorySwitcher();
+
+        if (!getCurrentPreset()) {
+            grid.innerHTML = `
+                <article class="regex-card" style="animation: regexFadeInUp 0.45s ease both;">
+                    <div class="regex-card-top">
+                        <div class="regex-card-title">No Preset Selected</div>
+                        <div class="regex-card-icon"><i class="ri-braces-line"></i></div>
+                    </div>
+                    <div class="regex-data-section">
+                        <div class="regex-data-label"><i class="ri-information-line"></i> Status</div>
+                        <div class="regex-data-value">Create or import a preset first, then add regex entries here.</div>
+                    </div>
+                </article>
+            `;
+            return;
+        }
+
+        const allEntries = getCurrentRegexEntries();
+        const activeCategory = getActiveRegexCategory();
+        const visibleEntries = getVisibleRegexEntries();
+
+        if (!allEntries.length) {
             grid.innerHTML = `
                 <article class="regex-card" style="animation: regexFadeInUp 0.45s ease both;">
                     <div class="regex-card-top">
@@ -957,12 +1702,101 @@
             return;
         }
 
-        grid.innerHTML = entries.map(regexCardMarkup).join('');
+        if (!visibleEntries.length && activeCategory) {
+            grid.innerHTML = `
+                <article class="regex-card" style="animation: regexFadeInUp 0.45s ease both;">
+                    <div class="regex-card-top">
+                        <div class="regex-card-title">${escapeHtml(activeCategory.name)}</div>
+                        <div class="regex-card-icon"><i class="ri-folder-open-line"></i></div>
+                    </div>
+                    <div class="regex-data-section">
+                        <div class="regex-data-label"><i class="ri-information-line"></i> Status</div>
+                        <div class="regex-data-value">This category is empty right now. Create another category or switch back to All Regex.</div>
+                    </div>
+                </article>
+            `;
+            return;
+        }
+
+        grid.innerHTML = visibleEntries.map(function (item) {
+            return regexCardMarkup(item.entry, item.index);
+        }).join('');
+
+        grid.querySelectorAll('.regex-card[data-index]').forEach(function (card) {
+            const index = Number(card.dataset.index);
+
+            card.addEventListener('click', function () {
+                openRegexDrawer(index);
+            });
+
+            card.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openRegexDrawer(index);
+                }
+            });
+        });
+
+        grid.querySelectorAll('.regex-card-delete').forEach(function (button) {
+            button.addEventListener('click', function (event) {
+                event.stopPropagation();
+                requestDeleteRegexEntry(Number(button.dataset.index));
+            });
+        });
     }
 
-    function openRegexDrawer() {
+    function setRegexDrawerMode(mode) {
+        const drawerTitle = byId('preset-regex-drawer-title');
+        const submitButton = byId('preset-regex-add-entry');
+
+        if (drawerTitle) {
+            drawerTitle.textContent = mode === 'edit' ? 'Edit Regex' : 'Compose';
+        }
+
+        if (submitButton) {
+            submitButton.textContent = mode === 'edit' ? 'Save Regex' : 'Append to Lexicon';
+        }
+    }
+
+    function openRegexDrawer(index) {
+        const currentPreset = getCurrentPreset();
         const drawer = byId('preset-regex-drawer');
         const overlay = byId('preset-regex-overlay');
+        const titleInput = byId('preset-regex-title');
+        const patternInput = byId('preset-regex-pattern');
+        const templateInput = byId('preset-regex-template');
+
+        if (!currentPreset) {
+            alert('Create or import a preset first.');
+            return;
+        }
+
+        closeRegexCategoryDropdown();
+        closeRegexCategorySheet();
+
+        if (titleInput && patternInput && templateInput && typeof index === 'number' && Number.isInteger(index)) {
+            const entry = getCurrentRegexEntries()[index];
+            if (entry) {
+                presetState.regexEditContext = { index: index };
+                setRegexDrawerMode('edit');
+                titleInput.value = entry.title || '';
+                patternInput.value = entry.pattern || '';
+                templateInput.value = entry.template || '';
+            } else {
+                presetState.regexEditContext = null;
+                setRegexDrawerMode('create');
+                titleInput.value = '';
+                patternInput.value = '';
+                templateInput.value = '';
+            }
+        } else if (titleInput && patternInput && templateInput) {
+            presetState.regexEditContext = null;
+            setRegexDrawerMode('create');
+            titleInput.value = '';
+            patternInput.value = '';
+            templateInput.value = '';
+        }
+
         if (drawer) {
             drawer.classList.add('active');
         }
@@ -974,37 +1808,71 @@
     function closeRegexDrawer() {
         const drawer = byId('preset-regex-drawer');
         const overlay = byId('preset-regex-overlay');
+        const titleInput = byId('preset-regex-title');
+        const patternInput = byId('preset-regex-pattern');
+        const templateInput = byId('preset-regex-template');
+
         if (drawer) {
             drawer.classList.remove('active');
         }
         if (overlay) {
             overlay.classList.remove('active');
         }
+
+        if (titleInput) {
+            titleInput.value = '';
+        }
+        if (patternInput) {
+            patternInput.value = '';
+        }
+        if (templateInput) {
+            templateInput.value = '';
+        }
+
+        presetState.regexEditContext = null;
+        setRegexDrawerMode('create');
     }
 
     function addRegexEntry() {
+        const currentPreset = getCurrentPreset();
         const titleInput = byId('preset-regex-title');
         const patternInput = byId('preset-regex-pattern');
         const templateInput = byId('preset-regex-template');
+
+        if (!currentPreset) {
+            alert('Create or import a preset first.');
+            return;
+        }
 
         if (!titleInput || !patternInput || !templateInput) {
             return;
         }
 
+        const entries = getCurrentRegexEntries();
+        const activeCategory = getActiveRegexCategory();
+        const editingIndex = presetState.regexEditContext?.index;
+        const currentEntry = typeof editingIndex === 'number' ? entries[editingIndex] : null;
+
         const entry = {
+            id: currentEntry?.id || createEntityId('regex'),
             title: titleInput.value.trim() || 'Untitled',
-            icon: 'ri-function-line',
+            icon: currentEntry?.icon || 'ri-function-line',
             pattern: patternInput.value.trim() || '/.../g',
             template: templateInput.value.trim() || '...'
         };
 
-        getCurrentRegexEntries().unshift(entry);
+        if (currentEntry) {
+            entries[editingIndex] = Object.assign({}, currentEntry, entry);
+        } else {
+            entries.unshift(entry);
+
+            if (activeCategory && Array.isArray(activeCategory.regexEntryIds)) {
+                activeCategory.regexEntryIds = uniqueStringList(activeCategory.regexEntryIds.concat(entry.id));
+            }
+        }
+
         persistState();
         renderRegexGrid();
-
-        titleInput.value = '';
-        patternInput.value = '';
-        templateInput.value = '';
 
         closeRegexDrawer();
     }
@@ -1028,10 +1896,28 @@
 
         if (tabName !== 'regex') {
             closeRegexDrawer();
+            closeRegexCategoryDropdown();
+            closeRegexCategorySheet();
         }
+
+        closeConfirmDialog();
 
         if (tabName === 'regex') {
             renderRegexGrid();
+        }
+
+        if (tabName === 'preset') {
+            const listContent = byId('preset-list-content');
+
+            renderPresetHeader();
+
+            if (listContent && listContent.children.length) {
+                listContent.classList.remove('show');
+                void listContent.offsetWidth;
+                listContent.classList.add('show');
+            } else {
+                renderPresetList(presetState.currentIndex);
+            }
         }
     }
 
@@ -1057,18 +1943,26 @@
         closeDropdown();
         closeEditor();
         closeRegexDrawer();
+        closeRegexCategoryDropdown();
+        closeRegexCategorySheet();
+        closeConfirmDialog();
         screen.classList.add('hidden');
     }
 
     function handleDocumentClick(event) {
         const screen = byId('preset-app');
         const carousel = byId('preset-carousel');
+        const categorySwitcher = byId('preset-regex-category-switcher');
         if (!screen || screen.classList.contains('hidden') || !carousel) {
             return;
         }
 
         if (!carousel.contains(event.target)) {
             closeDropdown();
+        }
+
+        if (categorySwitcher && !categorySwitcher.contains(event.target)) {
+            closeRegexCategoryDropdown();
         }
     }
 
@@ -1079,9 +1973,17 @@
         }
 
         if (event.key === 'Escape') {
+            const confirmSheet = byId('preset-confirm-sheet');
             const sheet = byId('preset-editor-sheet');
             const regexDrawer = byId('preset-regex-drawer');
+            const regexCategorySheet = byId('preset-regex-category-sheet');
+            const regexCategorySwitcher = byId('preset-regex-category-switcher');
             const carousel = byId('preset-carousel');
+
+            if (confirmSheet && confirmSheet.classList.contains('active')) {
+                closeConfirmDialog();
+                return;
+            }
 
             if (sheet && sheet.classList.contains('active')) {
                 closeEditor();
@@ -1090,6 +1992,16 @@
 
             if (regexDrawer && regexDrawer.classList.contains('active')) {
                 closeRegexDrawer();
+                return;
+            }
+
+            if (regexCategorySheet && regexCategorySheet.classList.contains('active')) {
+                closeRegexCategorySheet();
+                return;
+            }
+
+            if (regexCategorySwitcher && regexCategorySwitcher.classList.contains('open')) {
+                closeRegexCategoryDropdown();
                 return;
             }
 
@@ -1133,16 +2045,35 @@
         bindImport('close-preset-app', 'preset-import-input');
 
         const backdrop = byId('preset-sheet-backdrop');
+        const addPresetButton = byId('preset-add-preset-btn');
+        const addItemButton = byId('preset-add-item-btn');
+        const deletePresetButton = byId('preset-delete-preset-btn');
         const discardButton = byId('preset-discard-btn');
         const commitButton = byId('preset-commit-btn');
+        const confirmOverlay = byId('preset-confirm-overlay');
+        const confirmCancelButton = byId('preset-confirm-cancel');
+        const confirmCommitButton = byId('preset-confirm-commit');
         const regexOpenButton = byId('preset-regex-open-drawer');
+        const regexOpenCategoryButton = byId('preset-regex-open-category');
         const regexHomeButton = byId('preset-regex-home');
         const regexCloseButton = byId('preset-regex-close-drawer');
         const regexOverlay = byId('preset-regex-overlay');
         const regexAddButton = byId('preset-regex-add-entry');
+        const regexCategoryCloseButton = byId('preset-regex-category-close');
+        const regexCategoryOverlay = byId('preset-regex-category-overlay');
+        const regexCategorySaveButton = byId('preset-regex-category-save');
 
         if (backdrop) {
             backdrop.addEventListener('click', closeEditor);
+        }
+        if (addPresetButton) {
+            addPresetButton.addEventListener('click', openPresetCreator);
+        }
+        if (addItemButton) {
+            addItemButton.addEventListener('click', openItemCreator);
+        }
+        if (deletePresetButton) {
+            deletePresetButton.addEventListener('click', requestDeleteCurrentPreset);
         }
         if (discardButton) {
             discardButton.addEventListener('click', closeEditor);
@@ -1150,8 +2081,22 @@
         if (commitButton) {
             commitButton.addEventListener('click', saveEditor);
         }
+        if (confirmOverlay) {
+            confirmOverlay.addEventListener('click', closeConfirmDialog);
+        }
+        if (confirmCancelButton) {
+            confirmCancelButton.addEventListener('click', closeConfirmDialog);
+        }
+        if (confirmCommitButton) {
+            confirmCommitButton.addEventListener('click', commitConfirmDialog);
+        }
         if (regexOpenButton) {
-            regexOpenButton.addEventListener('click', openRegexDrawer);
+            regexOpenButton.addEventListener('click', function () {
+                openRegexDrawer();
+            });
+        }
+        if (regexOpenCategoryButton) {
+            regexOpenCategoryButton.addEventListener('click', openRegexCategorySheet);
         }
         if (regexHomeButton) {
             regexHomeButton.addEventListener('click', closeApp);
@@ -1164,6 +2109,15 @@
         }
         if (regexAddButton) {
             regexAddButton.addEventListener('click', addRegexEntry);
+        }
+        if (regexCategoryCloseButton) {
+            regexCategoryCloseButton.addEventListener('click', closeRegexCategorySheet);
+        }
+        if (regexCategoryOverlay) {
+            regexCategoryOverlay.addEventListener('click', closeRegexCategorySheet);
+        }
+        if (regexCategorySaveButton) {
+            regexCategorySaveButton.addEventListener('click', saveRegexCategory);
         }
 
         document.querySelectorAll('#preset-app .preset-tab-item').forEach(function (button) {

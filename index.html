@@ -8330,8 +8330,17 @@
                                     <span>Vol. <span id="preset-vol-num">1</span> — Config</span>
                                     <div class="preset-header-actions">
                                         <span>SYSTEM</span>
+                                        <button type="button" class="preset-action-icon" id="preset-add-preset-btn" aria-label="Add preset">
+                                            <i class="ri-add-line"></i>
+                                        </button>
+                                        <button type="button" class="preset-action-icon" id="preset-add-item-btn" aria-label="Add entry">
+                                            <i class="ri-play-list-add-line"></i>
+                                        </button>
                                         <button type="button" class="preset-action-icon" id="close-preset-app" aria-label="导入预设">
                                             <i class="ri-folder-add-line"></i>
+                                        </button>
+                                        <button type="button" class="preset-action-icon preset-action-icon-danger" id="preset-delete-preset-btn" aria-label="Delete preset">
+                                            <i class="ri-delete-bin-6-line"></i>
                                         </button>
                                         <input type="file" id="preset-import-input" accept=".json" hidden>
                                     </div>
@@ -8351,9 +8360,17 @@
                                 <header class="regex-workspace-header">
                                     <div class="regex-title-block">
                                         <button type="button" class="regex-home-btn" id="preset-regex-home" aria-label="返回主屏幕">Lexicon</button>
-                                        <p><i class="ri-node-tree"></i> Regular Expressions &amp; Templates</p>
+                                        <div class="regex-category-switcher" id="preset-regex-category-switcher">
+                                            <button type="button" class="regex-category-trigger" id="preset-regex-category-trigger" aria-label="切换正则分类">
+                                                <span class="regex-category-trigger-label"><i class="ri-node-tree"></i> Category</span>
+                                                <span class="regex-category-trigger-name" id="preset-regex-category-name">All Regex</span>
+                                                <i class="ri-arrow-down-s-line regex-category-trigger-caret"></i>
+                                            </button>
+                                            <div class="regex-category-dropdown" id="preset-regex-category-dropdown"></div>
+                                        </div>
                                     </div>
                                     <div class="regex-actions">
+                                        <button type="button" id="preset-regex-open-category"><i class="ri-folder-add-line"></i> Category</button>
                                         <button type="button" id="preset-regex-open-drawer"><i class="ri-add-line"></i> New</button>
                                     </div>
                                 </header>
@@ -8378,29 +8395,63 @@
 
                     <div class="preset-editor-sheet" id="preset-editor-sheet">
                         <div class="preset-sheet-handle"></div>
-                        <div class="preset-editor-title">Refine Parameter</div>
+                        <div class="preset-editor-title" id="preset-editor-title">Refine Parameter</div>
 
                         <div class="preset-form-group">
-                            <label for="preset-input-en">Nomenclature</label>
+                            <label for="preset-input-en" id="preset-input-en-label">Nomenclature</label>
                             <input type="text" class="preset-styled-input" id="preset-input-en" placeholder="Parameter Name">
                         </div>
 
-                        <div class="preset-form-group">
-                            <label for="preset-input-zh">Definition</label>
+                        <div class="preset-form-group" id="preset-definition-group">
+                            <label for="preset-input-zh" id="preset-input-zh-label">Definition</label>
                             <textarea class="preset-styled-input preset-styled-textarea" id="preset-input-zh" placeholder="Definition Content"></textarea>
                         </div>
 
                         <div class="preset-sheet-actions">
-                            <button type="button" class="preset-btn preset-btn-outline" id="preset-discard-btn">Discard</button>
-                            <button type="button" class="preset-btn preset-btn-fill" id="preset-commit-btn">Commit</button>
+                            <button type="button" class="preset-btn preset-btn-outline" id="preset-discard-btn">Cancel</button>
+                            <button type="button" class="preset-btn preset-btn-fill" id="preset-commit-btn">Save</button>
                         </div>
                     </div>
 
                     <div class="regex-drawer-overlay" id="preset-regex-overlay"></div>
 
+                    <div class="preset-confirm-overlay" id="preset-confirm-overlay"></div>
+
+                    <div class="preset-confirm-sheet" id="preset-confirm-sheet">
+                        <div class="preset-sheet-handle"></div>
+                        <div class="preset-confirm-kicker" id="preset-confirm-kicker">Confirm</div>
+                        <div class="preset-confirm-title" id="preset-confirm-title">Are you sure?</div>
+                        <div class="preset-confirm-copy" id="preset-confirm-copy">This action cannot be undone.</div>
+                        <div class="preset-sheet-actions">
+                            <button type="button" class="preset-btn preset-btn-outline" id="preset-confirm-cancel">Cancel</button>
+                            <button type="button" class="preset-btn preset-btn-danger" id="preset-confirm-commit">Delete</button>
+                        </div>
+                    </div>
+
+                    <div class="regex-category-overlay" id="preset-regex-category-overlay"></div>
+
+                    <div class="regex-category-sheet" id="preset-regex-category-sheet">
+                        <div class="regex-drawer-header">
+                            <h3 id="preset-regex-category-sheet-title">New Category</h3>
+                            <button type="button" class="regex-drawer-close" id="preset-regex-category-close"><i class="ri-close-line"></i></button>
+                        </div>
+
+                        <div class="regex-form-group">
+                            <label for="preset-regex-category-input">Category Name</label>
+                            <input type="text" id="preset-regex-category-input" placeholder="e.g. Cleanup">
+                        </div>
+
+                        <div class="regex-category-sheet-block">
+                            <div class="regex-category-sheet-label">Include Regex</div>
+                            <div class="regex-category-sheet-list" id="preset-regex-category-list"></div>
+                        </div>
+
+                        <button type="button" class="regex-submit-btn" id="preset-regex-category-save">Create Category</button>
+                    </div>
+
                     <div class="regex-drawer" id="preset-regex-drawer">
                         <div class="regex-drawer-header">
-                            <h3>Compose</h3>
+                            <h3 id="preset-regex-drawer-title">Compose</h3>
                             <button type="button" class="regex-drawer-close" id="preset-regex-close-drawer"><i class="ri-close-line"></i></button>
                         </div>
 
