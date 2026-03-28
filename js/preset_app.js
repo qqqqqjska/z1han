@@ -115,7 +115,7 @@
 
             return {
                 id: String(preset?.id || buildPresetId(index)),
-                title: String(preset?.title || ('Preset ' + (index + 1))),
+                title: String(preset?.title || ('预设' + (index + 1))),
                 items: clonePresetItems(preset?.items),
                 regexEntries: regexEntries,
                 regexCategories: regexCategories,
@@ -561,7 +561,7 @@
         return rawEntries.map(function (entry, index) {
             return {
                 id: String(entry?.id ?? entry?.identifier ?? buildRegexEntryId(index)),
-                title: String(entry?.title ?? entry?.scriptName ?? `Regex ${index + 1}`),
+                title: String(entry?.title ?? entry?.scriptName ?? `正则${index + 1}`),
                 icon: entry?.icon || inferRegexIcon(entry),
                 pattern: String(entry?.pattern ?? entry?.findRegex ?? ''),
                 template: String(entry?.template ?? entry?.replaceString ?? ''),
@@ -613,7 +613,7 @@
 
             return {
                 id: String(script?.id ?? script?.identifier ?? buildRegexEntryId(index)),
-                title: String(script?.scriptName ?? `Regex ${index + 1}`),
+                title: String(script?.scriptName ?? `正则${index + 1}`),
                 icon: inferRegexIcon(script),
                 pattern: String(script?.findRegex ?? ''),
                 template: templateParts.join('\n\n') || '',
@@ -1303,7 +1303,7 @@
         reader.onload = function (loadEvent) {
             try {
                 const parsed = JSON.parse(loadEvent.target.result);
-                const importedPreset = parseImportedPreset(parsed, file.name);
+                let importedPreset = parseImportedPreset(parsed, file.name);
 
                 if (!importedPreset) {
                     alert('Invalid preset format.');
@@ -1562,7 +1562,7 @@
         openConfirmDialog({
             kicker: 'Delete Preset',
             title: 'Delete this preset?',
-            copy: `Preset "${currentPreset.title}" and its regex entries will be removed from the app. This cannot be undone.`,
+            copy: `预设“${currentPreset.title}”以及它包含的正则条目都会从应用中删除，删除后无法恢复。`,
             confirmLabel: 'Delete Preset',
             onConfirm: function () {
                 deleteCurrentPreset();
