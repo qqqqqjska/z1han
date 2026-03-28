@@ -1,4 +1,19 @@
-(function () {
+﻿(function () {
+    const defaultRegexEntries = [
+        {
+            title: 'Extract Links',
+            icon: 'ri-link',
+            pattern: '/https?:\\/\\/[^\\s]+/g',
+            template: '<a href="$&">$&</a>'
+        },
+        {
+            title: 'Highlight Tags',
+            icon: 'ri-hashtag',
+            pattern: '/#\\w+/g',
+            template: '<span class="tag">$&</span>'
+        }
+    ];
+
     const presetState = {
         data: [
             {
@@ -9,7 +24,8 @@
                     { en: 'Sensory Overlay', zh: '五感重叠描写', icon: 'ri-eye-2-line', active: true },
                     { en: 'Poetic Tone', zh: '诗意化语境', icon: 'ri-quill-pen-line', active: false },
                     { en: 'Abstract Logic', zh: '抽象逻辑联想', icon: 'ri-shape-line', active: false }
-                ]
+                ],
+                regexEntries: cloneRegexEntries(defaultRegexEntries)
             },
             {
                 id: '02',
@@ -19,7 +35,8 @@
                     { en: 'Math Precision', zh: '数学精度校验', icon: 'ri-functions', active: true },
                     { en: 'Source Citation', zh: '信源强制标注', icon: 'ri-bookmark-3-line', active: true },
                     { en: 'Error Tracing', zh: '错误回溯排查', icon: 'ri-bug-line', active: false }
-                ]
+                ],
+                regexEntries: cloneRegexEntries(defaultRegexEntries)
             },
             {
                 id: '03',
@@ -29,21 +46,8 @@
                     { en: 'Persona Anchor', zh: '人格锚点锁定', icon: 'ri-anchor-line', active: true },
                     { en: 'Emotion Engine', zh: '情感引擎共鸣', icon: 'ri-heart-pulse-line', active: true },
                     { en: 'Unrestricted', zh: '无边界推演', icon: 'ri-fire-line', active: false }
-                ]
-            }
-        ],
-        regexEntries: [
-            {
-                title: 'Extract Links',
-                icon: 'ri-link',
-                pattern: '/https?:\\/\\/[^\\s]+/g',
-                template: '<a href="$&">$&</a>'
-            },
-            {
-                title: 'Highlight Tags',
-                icon: 'ri-hashtag',
-                pattern: '/#\\w+/g',
-                template: '<span class="tag">$&</span>'
+                ],
+                regexEntries: cloneRegexEntries(defaultRegexEntries)
             }
         ],
         currentIndex: 0,
@@ -63,6 +67,341 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    }
+
+    function cloneRegexEntries(entries) {
+        if (!Array.isArray(entries)) {
+            return [];
+        }
+
+        return entries.map(function (entry) {
+            return {
+                title: String(entry?.title ?? entry?.scriptName ?? 'Untitled Regex'),
+                icon: entry?.icon || 'ri-braces-line',
+                pattern: String(entry?.pattern ?? entry?.findRegex ?? ''),
+                template: String(entry?.template ?? entry?.replaceString ?? ''),
+                active: entry?.active ?? entry?.enabled ?? !entry?.disabled
+            };
+        });
+    }
+
+    function buildPresetId(index) {
+        return String(index + 1).padStart(2, '0');
+    }
+
+    function getBaseName(fileName) {
+        return String(fileName || 'Imported Preset').replace(/\.[^.]+$/, '').trim() || 'Imported Preset';
+    }
+
+    function getCurrentPreset() {
+        return presetState.data[presetState.currentIndex] || null;
+    }
+
+    function getCurrentRegexEntries() {
+        const currentPreset = getCurrentPreset();
+        if (!currentPreset) {
+            return [];
+        }
+
+        if (!Array.isArray(currentPreset.regexEntries)) {
+            currentPreset.regexEntries = [];
+        }
+
+        return currentPreset.regexEntries;
+    }
+
+    function getTextPreview(text, maxLength) {
+        const normalized = String(text ?? '').replace(/\s+/g, ' ').trim();
+        if (!normalized) {
+            return '';
+        }
+
+        if (normalized.length <= maxLength) {
+            return normalized;
+        }
+
+        return normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd() + '…';
+    }
+
+    function getItemContent(item) {
+        if (!item) {
+            return '';
+        }
+
+        if (typeof item.content === 'string') {
+            return item.content;
+        }
+
+        return String(item.zh ?? '');
+    }
+
+    function getItemSubtitle(item) {
+        if (!item) {
+            return '';
+        }
+
+        if (typeof item.summary === 'string' && item.summary.trim()) {
+            return item.summary;
+        }
+
+        return String(item.zh ?? '');
+    }
+
+    function buildImportedItemSummary(item, contentOverride) {
+        const meta = [];
+        const content = typeof contentOverride === 'string' ? contentOverride : getItemContent(item);
+
+        if (item?.role) {
+            meta.push(String(item.role).toUpperCase());
+        }
+
+        if (item?.systemPrompt) {
+            meta.push('SYS');
+        }
+
+        if (item?.marker) {
+            meta.push('MARK');
+        }
+
+        const preview = getTextPreview(content, 54);
+        if (meta.length && preview) {
+            return meta.join(' · ') + ' · ' + preview;
+        }
+
+        return meta.join(' · ') || preview || 'Imported Entry';
+    }
+
+    function setItemContent(item, value) {
+        if (!item) {
+            return;
+        }
+
+        if (Object.prototype.hasOwnProperty.call(item, 'content') || Object.prototype.hasOwnProperty.call(item, 'summary')) {
+            item.content = value;
+            item.summary = buildImportedItemSummary(item, value);
+            item.zh = item.summary;
+            return;
+        }
+
+        item.zh = value;
+    }
+
+    function inferPromptIcon(prompt) {
+        if (prompt?.system_prompt) {
+            return 'ri-shield-star-line';
+        }
+
+        if (prompt?.role === 'assistant') {
+            return 'ri-robot-2-line';
+        }
+
+        if (prompt?.role === 'user') {
+            return 'ri-user-3-line';
+        }
+
+        if (prompt?.marker) {
+            return 'ri-price-tag-3-line';
+        }
+
+        return 'ri-file-text-line';
+    }
+
+    function inferRegexIcon(script) {
+        if (script?.substituteRegex) {
+            return 'ri-magic-line';
+        }
+
+        if (script?.promptOnly) {
+            return 'ri-chat-1-line';
+        }
+
+        if (script?.markdownOnly) {
+            return 'ri-markdown-line';
+        }
+
+        return 'ri-braces-line';
+    }
+
+    function normalizeRegexEntries(rawEntries) {
+        if (!Array.isArray(rawEntries)) {
+            return [];
+        }
+
+        return rawEntries.map(function (entry, index) {
+            return {
+                title: String(entry?.title ?? entry?.scriptName ?? `Regex ${index + 1}`),
+                icon: entry?.icon || inferRegexIcon(entry),
+                pattern: String(entry?.pattern ?? entry?.findRegex ?? ''),
+                template: String(entry?.template ?? entry?.replaceString ?? ''),
+                active: entry?.active ?? entry?.enabled ?? !entry?.disabled
+            };
+        });
+    }
+
+    function parseRegexScripts(regexScripts) {
+        if (!Array.isArray(regexScripts)) {
+            return [];
+        }
+
+        return regexScripts.map(function (script, index) {
+            const templateParts = [];
+            const replaceString = String(script?.replaceString ?? '');
+            const trimStrings = Array.isArray(script?.trimStrings)
+                ? script.trimStrings.filter(function (value) { return value !== ''; })
+                : [];
+            const modes = [];
+
+            if (replaceString) {
+                templateParts.push(replaceString);
+            }
+
+            if (trimStrings.length) {
+                templateParts.push('Trim: ' + trimStrings.join(' | '));
+            }
+
+            if (script?.promptOnly) {
+                modes.push('Prompt');
+            }
+
+            if (script?.markdownOnly) {
+                modes.push('Markdown');
+            }
+
+            if (script?.runOnEdit) {
+                modes.push('Edit');
+            }
+
+            if (script?.disabled) {
+                modes.push('Disabled');
+            }
+
+            if (modes.length) {
+                templateParts.push('Mode: ' + modes.join(' · '));
+            }
+
+            return {
+                title: String(script?.scriptName ?? `Regex ${index + 1}`),
+                icon: inferRegexIcon(script),
+                pattern: String(script?.findRegex ?? ''),
+                template: templateParts.join('\n\n') || '',
+                active: !script?.disabled
+            };
+        });
+    }
+
+    function normalizeLegacyItems(items) {
+        if (!Array.isArray(items)) {
+            return [];
+        }
+
+        return items.map(function (item, index) {
+            return {
+                en: String(item?.en ?? item?.name ?? `Entry ${index + 1}`),
+                zh: String(item?.zh ?? item?.summary ?? item?.content ?? ''),
+                icon: item?.icon || 'ri-text',
+                active: item?.active !== false,
+                content: typeof item?.content === 'string' ? item.content : undefined,
+                summary: typeof item?.summary === 'string' ? item.summary : undefined,
+                role: item?.role || undefined,
+                systemPrompt: Boolean(item?.systemPrompt),
+                marker: Boolean(item?.marker)
+            };
+        });
+    }
+
+    function parsePromptPreset(parsed, fileName) {
+        const prompts = Array.isArray(parsed?.prompts) ? parsed.prompts : [];
+        if (!prompts.length) {
+            return null;
+        }
+
+        const promptMap = new Map();
+        prompts.forEach(function (prompt) {
+            promptMap.set(prompt.identifier, prompt);
+        });
+
+        const orderedRefs = Array.isArray(parsed?.prompt_order?.[0]?.order) ? parsed.prompt_order[0].order : [];
+        const seen = new Set();
+        const items = [];
+
+        orderedRefs.forEach(function (orderItem) {
+            const prompt = promptMap.get(orderItem.identifier);
+            if (!prompt || seen.has(orderItem.identifier)) {
+                return;
+            }
+
+            seen.add(orderItem.identifier);
+            items.push({
+                identifier: prompt.identifier,
+                en: String(prompt.name || prompt.identifier || `Entry ${items.length + 1}`),
+                zh: '',
+                summary: '',
+                content: String(prompt.content ?? ''),
+                icon: inferPromptIcon(prompt),
+                active: orderItem.enabled !== false && prompt.enabled !== false,
+                role: prompt.role || '',
+                systemPrompt: Boolean(prompt.system_prompt),
+                marker: Boolean(prompt.marker)
+            });
+        });
+
+        prompts.forEach(function (prompt) {
+            if (seen.has(prompt.identifier)) {
+                return;
+            }
+
+            items.push({
+                identifier: prompt.identifier,
+                en: String(prompt.name || prompt.identifier || `Entry ${items.length + 1}`),
+                zh: '',
+                summary: '',
+                content: String(prompt.content ?? ''),
+                icon: inferPromptIcon(prompt),
+                active: prompt.enabled !== false,
+                role: prompt.role || '',
+                systemPrompt: Boolean(prompt.system_prompt),
+                marker: Boolean(prompt.marker)
+            });
+        });
+
+        items.forEach(function (item) {
+            item.summary = buildImportedItemSummary(item, item.content);
+            item.zh = item.summary;
+        });
+
+        return {
+            id: buildPresetId(presetState.data.length),
+            title: getBaseName(fileName),
+            items: items,
+            regexEntries: parseRegexScripts(parsed?.extensions?.regex_scripts)
+        };
+    }
+
+    function normalizeLegacyPreset(parsed, fileName) {
+        if (!parsed || !parsed.title || !Array.isArray(parsed.items)) {
+            return null;
+        }
+
+        return {
+            id: parsed.id || buildPresetId(presetState.data.length),
+            title: String(parsed.title || getBaseName(fileName)),
+            items: normalizeLegacyItems(parsed.items),
+            regexEntries: normalizeRegexEntries(parsed.regexEntries || parsed.regex || parsed?.extensions?.regex_scripts)
+        };
+    }
+
+    function parseImportedPreset(parsed, fileName) {
+        const legacyPreset = normalizeLegacyPreset(parsed, fileName);
+        if (legacyPreset) {
+            return legacyPreset;
+        }
+
+        const promptPreset = parsePromptPreset(parsed, fileName);
+        if (promptPreset) {
+            return promptPreset;
+        }
+
+        return null;
     }
 
     function updateVolDisplays() {
@@ -86,7 +425,7 @@
     function renderPresetHeader() {
         const carousel = byId('preset-carousel');
         const dots = byId('preset-dots');
-        const currentPreset = presetState.data[presetState.currentIndex];
+        const currentPreset = getCurrentPreset();
 
         if (!carousel || !dots || !currentPreset) {
             return;
@@ -95,28 +434,32 @@
         carousel.classList.remove('open');
         carousel.innerHTML = `
             <button type="button" class="preset-trigger" id="preset-trigger-btn">
-                <div class="preset-title-index">No. ${escapeHtml(currentPreset.id || String(presetState.currentIndex + 1).padStart(2, '0'))}</div>
+                <div class="preset-title-index">No. ${escapeHtml(currentPreset.id || buildPresetId(presetState.currentIndex))}</div>
                 <div class="preset-title-main-wrap">
                     <div class="preset-title-main">${escapeHtml(currentPreset.title)}</div>
                     <i class="ri-arrow-down-s-line preset-title-caret"></i>
                 </div>
             </button>
             <div class="preset-dropdown">
-                ${presetState.data.map((preset, index) => `
-                    <button type="button" class="preset-option ${index === presetState.currentIndex ? 'active' : ''}" data-index="${index}">
-                        <div class="preset-option-meta">
-                            <div class="preset-option-index">No. ${escapeHtml(preset.id || String(index + 1).padStart(2, '0'))}</div>
-                            <div class="preset-option-title">${escapeHtml(preset.title)}</div>
-                        </div>
-                        <i class="ri-check-line preset-option-check"></i>
-                    </button>
-                `).join('')}
+                ${presetState.data.map(function (preset, index) {
+                    return `
+                        <button type="button" class="preset-option ${index === presetState.currentIndex ? 'active' : ''}" data-index="${index}">
+                            <div class="preset-option-meta">
+                                <div class="preset-option-index">No. ${escapeHtml(preset.id || buildPresetId(index))}</div>
+                                <div class="preset-option-title">${escapeHtml(preset.title)}</div>
+                            </div>
+                            <i class="ri-check-line preset-option-check"></i>
+                        </button>
+                    `;
+                }).join('')}
             </div>
         `;
 
-        dots.innerHTML = presetState.data.map((_, index) => `
-            <button type="button" class="preset-dot ${index === presetState.currentIndex ? 'active' : ''}" data-index="${index}" aria-label="Preset ${index + 1}"></button>
-        `).join('');
+        dots.innerHTML = presetState.data.map(function (_, index) {
+            return `
+                <button type="button" class="preset-dot ${index === presetState.currentIndex ? 'active' : ''}" data-index="${index}" aria-label="Preset ${index + 1}"></button>
+            `;
+        }).join('');
 
         updateVolDisplays();
 
@@ -151,18 +494,20 @@
             return;
         }
 
-        listContent.innerHTML = preset.items.map((item, itemIndex) => `
-            <div class="preset-list-item" style="animation: presetSlideUp 0.45s ${itemIndex * 0.06}s both;">
-                <button type="button" class="preset-item-content" data-index="${itemIndex}">
-                    <i class="${escapeHtml(item.icon || 'ri-text')} preset-item-icon"></i>
-                    <div class="preset-item-text">
-                        <div class="preset-item-en">${escapeHtml(item.en)}</div>
-                        <div class="preset-item-zh">${escapeHtml(item.zh)}</div>
-                    </div>
-                </button>
-                <button type="button" class="preset-toggle ${item.active ? 'active' : ''}" data-index="${itemIndex}" aria-label="切换参数"></button>
-            </div>
-        `).join('');
+        listContent.innerHTML = preset.items.map(function (item, itemIndex) {
+            return `
+                <div class="preset-list-item" style="animation: presetSlideUp 0.45s ${itemIndex * 0.06}s both;">
+                    <button type="button" class="preset-item-content" data-index="${itemIndex}">
+                        <i class="${escapeHtml(item.icon || 'ri-text')} preset-item-icon"></i>
+                        <div class="preset-item-text">
+                            <div class="preset-item-en">${escapeHtml(item.en)}</div>
+                            <div class="preset-item-zh">${escapeHtml(getItemSubtitle(item))}</div>
+                        </div>
+                    </button>
+                    <button type="button" class="preset-toggle ${item.active ? 'active' : ''}" data-index="${itemIndex}" aria-label="切换参数"></button>
+                </div>
+            `;
+        }).join('');
 
         void listContent.offsetWidth;
         listContent.classList.add('show');
@@ -181,7 +526,16 @@
     }
 
     function goToPreset(index) {
-        if (index === presetState.currentIndex || index < 0 || index >= presetState.data.length) {
+        if (index < 0 || index >= presetState.data.length) {
+            return;
+        }
+
+        if (index === presetState.currentIndex) {
+            renderPresetHeader();
+            renderPresetList(index);
+            if (presetState.activeTab === 'regex') {
+                renderRegexGrid();
+            }
             return;
         }
 
@@ -203,13 +557,17 @@
             listContent.classList.remove('show');
         }
 
+        if (presetState.activeTab === 'regex') {
+            renderRegexGrid();
+        }
+
         setTimeout(function () {
             renderPresetList(index);
         }, 180);
     }
 
     function toggleItem(button, itemIndex) {
-        const item = presetState.data[presetState.currentIndex]?.items?.[itemIndex];
+        const item = getCurrentPreset()?.items?.[itemIndex];
         if (!button || !item) {
             return;
         }
@@ -231,7 +589,7 @@
     }
 
     function openEditor(itemIndex) {
-        const item = presetState.data[presetState.currentIndex]?.items?.[itemIndex];
+        const item = getCurrentPreset()?.items?.[itemIndex];
         if (!item) {
             return;
         }
@@ -243,17 +601,32 @@
         const backdrop = byId('preset-sheet-backdrop');
         const sheet = byId('preset-editor-sheet');
 
-        if (inputEn) inputEn.value = item.en || '';
-        if (inputZh) inputZh.value = item.zh || '';
-        if (backdrop) backdrop.classList.add('active');
-        if (sheet) sheet.classList.add('active');
+        if (inputEn) {
+            inputEn.value = item.en || '';
+        }
+
+        if (inputZh) {
+            inputZh.value = getItemContent(item);
+        }
+
+        if (backdrop) {
+            backdrop.classList.add('active');
+        }
+
+        if (sheet) {
+            sheet.classList.add('active');
+        }
     }
 
     function closeEditor() {
         const backdrop = byId('preset-sheet-backdrop');
         const sheet = byId('preset-editor-sheet');
-        if (backdrop) backdrop.classList.remove('active');
-        if (sheet) sheet.classList.remove('active');
+        if (backdrop) {
+            backdrop.classList.remove('active');
+        }
+        if (sheet) {
+            sheet.classList.remove('active');
+        }
         presetState.editContext = null;
     }
 
@@ -262,7 +635,7 @@
             return;
         }
 
-        const currentItem = presetState.data[presetState.currentIndex]?.items?.[presetState.editContext.index];
+        const currentItem = getCurrentPreset()?.items?.[presetState.editContext.index];
         const inputEn = byId('preset-input-en');
         const inputZh = byId('preset-input-zh');
 
@@ -273,8 +646,11 @@
         const enValue = inputEn.value.trim();
         const zhValue = inputZh.value.trim();
 
-        if (enValue) currentItem.en = enValue;
-        if (zhValue) currentItem.zh = zhValue;
+        if (enValue) {
+            currentItem.en = enValue;
+        }
+
+        setItemContent(currentItem, zhValue);
 
         closeEditor();
         renderPresetList(presetState.currentIndex);
@@ -290,15 +666,20 @@
         reader.onload = function (loadEvent) {
             try {
                 const parsed = JSON.parse(loadEvent.target.result);
-                if (parsed && parsed.title && Array.isArray(parsed.items)) {
-                    parsed.id = parsed.id || String(presetState.data.length + 1).padStart(2, '0');
-                    presetState.data.push(parsed);
-                    setActiveTab('preset');
-                    renderPresetHeader();
-                    goToPreset(presetState.data.length - 1);
-                } else {
+                const importedPreset = parseImportedPreset(parsed, file.name);
+
+                if (!importedPreset) {
                     alert('Invalid preset format.');
+                    return;
                 }
+
+                if (!importedPreset.regexEntries?.length) {
+                    importedPreset.regexEntries = [];
+                }
+
+                presetState.data.push(importedPreset);
+                setActiveTab('preset');
+                goToPreset(presetState.data.length - 1);
             } catch (error) {
                 alert('Failed to parse preset JSON.');
             }
@@ -337,21 +718,46 @@
             return;
         }
 
-        grid.innerHTML = presetState.regexEntries.map(regexCardMarkup).join('');
+        const entries = getCurrentRegexEntries();
+        if (!entries.length) {
+            grid.innerHTML = `
+                <article class="regex-card" style="animation: regexFadeInUp 0.45s ease both;">
+                    <div class="regex-card-top">
+                        <div class="regex-card-title">No Regex Yet</div>
+                        <div class="regex-card-icon"><i class="ri-braces-line"></i></div>
+                    </div>
+                    <div class="regex-data-section">
+                        <div class="regex-data-label"><i class="ri-information-line"></i> Status</div>
+                        <div class="regex-data-value">当前预设还没有配套正则，点右上角 New 可以自己补一条。</div>
+                    </div>
+                </article>
+            `;
+            return;
+        }
+
+        grid.innerHTML = entries.map(regexCardMarkup).join('');
     }
 
     function openRegexDrawer() {
         const drawer = byId('preset-regex-drawer');
         const overlay = byId('preset-regex-overlay');
-        if (drawer) drawer.classList.add('active');
-        if (overlay) overlay.classList.add('active');
+        if (drawer) {
+            drawer.classList.add('active');
+        }
+        if (overlay) {
+            overlay.classList.add('active');
+        }
     }
 
     function closeRegexDrawer() {
         const drawer = byId('preset-regex-drawer');
         const overlay = byId('preset-regex-overlay');
-        if (drawer) drawer.classList.remove('active');
-        if (overlay) overlay.classList.remove('active');
+        if (drawer) {
+            drawer.classList.remove('active');
+        }
+        if (overlay) {
+            overlay.classList.remove('active');
+        }
     }
 
     function addRegexEntry() {
@@ -370,7 +776,7 @@
             template: templateInput.value.trim() || '...'
         };
 
-        presetState.regexEntries.unshift(entry);
+        getCurrentRegexEntries().unshift(entry);
         renderRegexGrid();
 
         titleInput.value = '';
@@ -509,14 +915,30 @@
         const regexOverlay = byId('preset-regex-overlay');
         const regexAddButton = byId('preset-regex-add-entry');
 
-        if (backdrop) backdrop.addEventListener('click', closeEditor);
-        if (discardButton) discardButton.addEventListener('click', closeEditor);
-        if (commitButton) commitButton.addEventListener('click', saveEditor);
-        if (regexOpenButton) regexOpenButton.addEventListener('click', openRegexDrawer);
-        if (regexHomeButton) regexHomeButton.addEventListener('click', closeApp);
-        if (regexCloseButton) regexCloseButton.addEventListener('click', closeRegexDrawer);
-        if (regexOverlay) regexOverlay.addEventListener('click', closeRegexDrawer);
-        if (regexAddButton) regexAddButton.addEventListener('click', addRegexEntry);
+        if (backdrop) {
+            backdrop.addEventListener('click', closeEditor);
+        }
+        if (discardButton) {
+            discardButton.addEventListener('click', closeEditor);
+        }
+        if (commitButton) {
+            commitButton.addEventListener('click', saveEditor);
+        }
+        if (regexOpenButton) {
+            regexOpenButton.addEventListener('click', openRegexDrawer);
+        }
+        if (regexHomeButton) {
+            regexHomeButton.addEventListener('click', closeApp);
+        }
+        if (regexCloseButton) {
+            regexCloseButton.addEventListener('click', closeRegexDrawer);
+        }
+        if (regexOverlay) {
+            regexOverlay.addEventListener('click', closeRegexDrawer);
+        }
+        if (regexAddButton) {
+            regexAddButton.addEventListener('click', addRegexEntry);
+        }
 
         document.querySelectorAll('#preset-app .preset-tab-item').forEach(function (button) {
             button.addEventListener('click', function () {
@@ -535,16 +957,27 @@
     }
 
     function getActivePresetPrompts() {
-        const currentPreset = presetState.data[presetState.currentIndex];
-        if (!currentPreset || !currentPreset.items) return [];
-        return currentPreset.items.filter(function (item) { return item.active; }).map(function (item) { return item.zh; });
+        const currentPreset = getCurrentPreset();
+        if (!currentPreset || !Array.isArray(currentPreset.items)) {
+            return [];
+        }
+
+        return currentPreset.items
+            .filter(function (item) { return item.active; })
+            .map(function (item) { return getItemContent(item); })
+            .filter(function (content) { return Boolean(String(content).trim()); });
     }
 
     function getPresetContextString() {
         const activeItems = getActivePresetPrompts();
-        if (activeItems.length === 0) return '';
-        const currentPreset = presetState.data[presetState.currentIndex];
-        return `【当前启用的高级预设 (${currentPreset.title})】\n` + activeItems.map(function (zh) { return `- ${zh}`; }).join('\n');
+        if (activeItems.length === 0) {
+            return '';
+        }
+
+        const currentPreset = getCurrentPreset();
+        return `【当前启用的高级预设 (${currentPreset.title})】\n` + activeItems.map(function (content) {
+            return `- ${content}`;
+        }).join('\n');
     }
 
     window.PresetApp = {

@@ -146,10 +146,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 100%;
+    min-width: 0;
 }
 
 #preset-app .preset-trigger {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     border: none;
     background: transparent;
     display: flex;
@@ -181,18 +185,26 @@
 }
 
 #preset-app .preset-title-main-wrap {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     justify-content: center;
     gap: 10px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
 }
 
 #preset-app .preset-title-main {
     font-family: 'Playfair Display', serif;
-    font-size: 42px;
-    line-height: 1.1;
+    font-size: clamp(28px, 7vw, 42px);
+    line-height: 1.12;
     letter-spacing: -1px;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    min-width: 0;
+    max-width: 100%;
 }
 
 #preset-app .preset-title-caret {
@@ -274,8 +286,11 @@
 #preset-app .preset-option-title {
     font-family: 'Playfair Display', serif;
     font-size: 22px;
-    line-height: 1;
+    line-height: 1.15;
     color: var(--preset-text-dark);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 #preset-app .preset-option-check {
@@ -319,6 +334,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     scrollbar-width: none;
 }
 
@@ -371,6 +387,8 @@
     align-items: flex-start;
     gap: 16px;
     flex: 1;
+    min-width: 0;
+    max-width: 100%;
     cursor: pointer;
     text-align: left;
     color: inherit;
@@ -392,6 +410,8 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-width: 0;
+    max-width: 100%;
 }
 
 #preset-app .preset-item-en {
@@ -414,6 +434,7 @@
 }
 
 #preset-app .preset-toggle {
+    flex-shrink: 0;
     width: 24px;
     height: 24px;
     border: 1px solid var(--preset-text-mute);
@@ -490,12 +511,13 @@
 #preset-app .preset-sheet-backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(5px);
+    background: rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     z-index: 60;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.4s ease;
+    transition: opacity 0.35s ease;
 }
 
 #preset-app .preset-sheet-backdrop.active {
@@ -505,31 +527,44 @@
 
 #preset-app .preset-editor-sheet {
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: min(60%, 460px);
-    background: var(--preset-surface-color);
-    border-top-left-radius: 32px;
-    border-top-right-radius: 32px;
-    box-shadow: 0 -20px 40px rgba(0, 0, 0, 0.1);
-    transform: translateY(100%);
-    transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    width: min(calc(100% - 32px), 560px);
+    max-height: min(calc(100% - 52px), 760px);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.74));
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 30px;
+    box-shadow: 0 28px 72px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    transform: translate(-50%, -46%) scale(0.94);
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease;
     z-index: 70;
-    padding: 40px 30px calc(30px + env(safe-area-inset-bottom, 0px));
+    padding: 38px 26px calc(24px + env(safe-area-inset-bottom, 0px));
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
+    opacity: 0;
+    pointer-events: none;
 }
 
 #preset-app .preset-editor-sheet.active {
-    transform: translateY(0);
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#preset-app .preset-editor-sheet::-webkit-scrollbar {
+    display: none;
 }
 
 #preset-app .preset-sheet-handle {
-    width: 40px;
-    height: 4px;
-    background: var(--preset-border-line);
-    border-radius: 2px;
+    width: 56px;
+    height: 5px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 999px;
     position: absolute;
     top: 16px;
     left: 50%;
@@ -538,9 +573,10 @@
 
 #preset-app .preset-editor-title {
     font-family: 'Playfair Display', serif;
-    font-size: 28px;
+    font-size: 30px;
+    line-height: 1.08;
     font-style: italic;
-    margin-bottom: 30px;
+    margin: 24px 0 28px;
 }
 
 #preset-app .preset-form-group {
@@ -552,7 +588,7 @@
     position: absolute;
     top: -8px;
     left: 12px;
-    background: var(--preset-surface-color);
+    background: rgba(255, 255, 255, 0.82);
     padding: 0 4px;
     font-size: 10px;
     text-transform: uppercase;
@@ -563,23 +599,40 @@
 
 #preset-app .preset-styled-input {
     width: 100%;
-    background: transparent;
+    background: rgba(255, 255, 255, 0.38);
     border: 1px solid var(--preset-border-line);
-    padding: 16px;
+    padding: 16px 18px;
     font-size: 16px;
-    border-radius: 8px;
+    line-height: 1.6;
+    border-radius: 14px;
     outline: none;
     color: var(--preset-text-dark);
     font-family: inherit;
-    transition: border-color 0.3s ease;
+    transition: border-color 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
 }
 
 #preset-app .preset-styled-input:focus {
     border-color: var(--preset-text-dark);
+    background: rgba(255, 255, 255, 0.54);
+    box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.04);
+}
+
+#preset-app .preset-styled-textarea {
+    min-height: 220px;
+    resize: vertical;
+}
+
+#preset-app .preset-styled-textarea::-webkit-scrollbar {
+    width: 8px;
+}
+
+#preset-app .preset-styled-textarea::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.12);
+    border-radius: 999px;
 }
 
 #preset-app .preset-sheet-actions {
-    margin-top: auto;
+    margin-top: 10px;
     display: flex;
     gap: 16px;
 }
@@ -620,6 +673,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: calc(20px + max(28px, env(safe-area-inset-top, 0px))) 24px 28px;
 }
 
@@ -951,6 +1005,21 @@
 }
 
 @media (max-width: 480px) {
+    #preset-app .preset-editor-sheet {
+        width: calc(100% - 22px);
+        max-height: calc(100% - 28px);
+        padding: 36px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+    }
+
+    #preset-app .preset-editor-title {
+        font-size: 26px;
+        margin-top: 20px;
+    }
+
+    #preset-app .preset-styled-textarea {
+        min-height: 190px;
+    }
+
     #preset-app .preset-header,
     #preset-app .regex-pane-topbar {
         padding-left: 22px;
