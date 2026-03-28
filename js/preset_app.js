@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
     const defaultRegexEntries = [
         {
             title: 'Extract Links',
@@ -12,52 +12,268 @@
             pattern: '/#\\w+/g',
             template: '<span class="tag">$&</span>'
         }
+
     ];
 
     const presetState = {
-        data: [
-            {
-                id: '01',
-                title: 'Creative',
-                items: [
-                    { en: 'Artistic Freedom', zh: '艺术自由度解除', icon: 'ri-brush-line', active: true },
-                    { en: 'Sensory Overlay', zh: '五感重叠描写', icon: 'ri-eye-2-line', active: true },
-                    { en: 'Poetic Tone', zh: '诗意化语境', icon: 'ri-quill-pen-line', active: false },
-                    { en: 'Abstract Logic', zh: '抽象逻辑联想', icon: 'ri-shape-line', active: false }
-                ],
-                regexEntries: cloneRegexEntries(defaultRegexEntries)
-            },
-            {
-                id: '02',
-                title: 'Logic',
-                items: [
-                    { en: 'Strict Syntax', zh: '严格语法树', icon: 'ri-code-box-line', active: true },
-                    { en: 'Math Precision', zh: '数学精度校验', icon: 'ri-functions', active: true },
-                    { en: 'Source Citation', zh: '信源强制标注', icon: 'ri-bookmark-3-line', active: true },
-                    { en: 'Error Tracing', zh: '错误回溯排查', icon: 'ri-bug-line', active: false }
-                ],
-                regexEntries: cloneRegexEntries(defaultRegexEntries)
-            },
-            {
-                id: '03',
-                title: 'Roleplay',
-                items: [
-                    { en: 'Deep Memory', zh: '深度记忆检索', icon: 'ri-brain-line', active: true },
-                    { en: 'Persona Anchor', zh: '人格锚点锁定', icon: 'ri-anchor-line', active: true },
-                    { en: 'Emotion Engine', zh: '情感引擎共鸣', icon: 'ri-heart-pulse-line', active: true },
-                    { en: 'Unrestricted', zh: '无边界推演', icon: 'ri-fire-line', active: false }
-                ],
-                regexEntries: cloneRegexEntries(defaultRegexEntries)
-            }
-        ],
+        data: [],
         currentIndex: 0,
         activeTab: 'preset',
         editContext: null,
-        initialized: false
+        initialized: false,
+        restoring: false
     };
+
+    const STORAGE_KEY = 'preset-app-state-v2';
+    const LEGACY_STORAGE_KEY = 'preset-app-state-v1';
+    const STATE_DB_NAME = 'preset-app-db';
+    const STATE_STORE_NAME = 'preset_state';
+    const STATE_RECORD_ID = 'main';
+    const defaultPresetData = clonePresetData(presetState.data);
+    let stateDbPromise = null;
 
     function byId(id) {
         return document.getElementById(id);
+    }
+
+    function clonePresetItems(items) {
+        if (!Array.isArray(items)) {
+            return [];
+        }
+
+        return items.map(function (item, index) {
+            return {
+                identifier: item?.identifier ? String(item.identifier) : undefined,
+                en: String(item?.en ?? item?.name ?? ('Entry ' + (index + 1))),
+                zh: String(item?.zh ?? item?.summary ?? item?.content ?? ''),
+                icon: item?.icon || 'ri-text',
+                active: item?.active !== false,
+                content: typeof item?.content === 'string' ? item.content : undefined,
+                summary: typeof item?.summary === 'string' ? item.summary : undefined,
+                role: item?.role || undefined,
+                systemPrompt: Boolean(item?.systemPrompt),
+                marker: Boolean(item?.marker)
+            };
+        });
+    }
+
+    function clonePresetData(presets) {
+        if (!Array.isArray(presets)) {
+            return [];
+        }
+
+        return presets.map(function (preset, index) {
+            return {
+                id: String(preset?.id || buildPresetId(index)),
+                title: String(preset?.title || ('Preset ' + (index + 1))),
+                items: clonePresetItems(preset?.items),
+                regexEntries: cloneRegexEntries(preset?.regexEntries)
+            };
+        });
+    }
+
+    function isRemovedBuiltinPreset(preset) {
+        const builtinMap = {
+            Creative: ['Artistic Freedom', 'Sensory Overlay', 'Poetic Tone', 'Abstract Logic'],
+            Logic: ['Strict Syntax', 'Math Precision', 'Source Citation', 'Error Tracing'],
+            Roleplay: ['Deep Memory', 'Persona Anchor', 'Emotion Engine', 'Unrestricted']
+        };
+
+        const expectedItems = builtinMap[String(preset?.title || '')];
+        if (!expectedItems || !Array.isArray(preset?.items) || preset.items.length !== expectedItems.length) {
+            return false;
+        }
+
+        return expectedItems.every(function (name, index) {
+            return String(preset.items[index]?.en || '') === name;
+        });
+    }
+
+    function stripRemovedBuiltinPresets(presets) {
+        return clonePresetData(presets).filter(function (preset) {
+            return !isRemovedBuiltinPreset(preset);
+        });
+    }
+
+
+    function getStorage() {
+        try {
+            return window.localStorage;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function createPersistedStatePayload() {
+        const data = stripRemovedBuiltinPresets(presetState.data);
+        const hasData = data.length > 0;
+
+        return {
+            data: data,
+            currentIndex: hasData ? Math.min(Math.max(presetState.currentIndex, 0), data.length - 1) : 0,
+            activeTab: presetState.activeTab === 'regex' ? 'regex' : 'preset'
+        };
+    }
+
+    function applyPersistedState(payload) {
+        const data = stripRemovedBuiltinPresets(payload?.data);
+        presetState.data = data;
+        presetState.currentIndex = data.length
+            ? Math.min(Math.max(Number.isFinite(Number(payload?.currentIndex)) ? Number(payload.currentIndex) : 0, 0), data.length - 1)
+            : 0;
+        presetState.activeTab = payload?.activeTab === 'regex' ? 'regex' : 'preset';
+    }
+
+    function openStateDatabase() {
+        if (stateDbPromise) {
+            return stateDbPromise;
+        }
+
+        stateDbPromise = new Promise(function (resolve) {
+            try {
+                if (!window.indexedDB) {
+                    resolve(null);
+                    return;
+                }
+
+                const request = window.indexedDB.open(STATE_DB_NAME, 1);
+                request.onupgradeneeded = function () {
+                    const db = request.result;
+                    if (!db.objectStoreNames.contains(STATE_STORE_NAME)) {
+                        db.createObjectStore(STATE_STORE_NAME, { keyPath: 'id' });
+                    }
+                };
+                request.onsuccess = function () {
+                    const db = request.result;
+                    db.onversionchange = function () {
+                        db.close();
+                    };
+                    resolve(db);
+                };
+                request.onerror = function () {
+                    resolve(null);
+                };
+            } catch (error) {
+                resolve(null);
+            }
+        });
+
+        return stateDbPromise;
+    }
+
+    function readStateFromIndexedDb() {
+        return openStateDatabase().then(function (db) {
+            if (!db) {
+                return null;
+            }
+
+            return new Promise(function (resolve) {
+                try {
+                    const tx = db.transaction(STATE_STORE_NAME, 'readonly');
+                    const request = tx.objectStore(STATE_STORE_NAME).get(STATE_RECORD_ID);
+                    request.onsuccess = function () {
+                        resolve(request.result || null);
+                    };
+                    request.onerror = function () {
+                        resolve(null);
+                    };
+                } catch (error) {
+                    resolve(null);
+                }
+            });
+        });
+    }
+
+    function writeStateToIndexedDb(payload) {
+        return openStateDatabase().then(function (db) {
+            if (!db) {
+                return false;
+            }
+
+            return new Promise(function (resolve) {
+                try {
+                    const tx = db.transaction(STATE_STORE_NAME, 'readwrite');
+                    tx.objectStore(STATE_STORE_NAME).put({
+                        id: STATE_RECORD_ID,
+                        data: payload.data,
+                        currentIndex: payload.currentIndex,
+                        activeTab: payload.activeTab
+                    });
+                    tx.oncomplete = function () {
+                        resolve(true);
+                    };
+                    tx.onerror = function () {
+                        resolve(false);
+                    };
+                    tx.onabort = function () {
+                        resolve(false);
+                    };
+                } catch (error) {
+                    resolve(false);
+                }
+            });
+        });
+    }
+
+    function persistState() {
+        if (presetState.restoring) {
+            return;
+        }
+
+        const payload = createPersistedStatePayload();
+        writeStateToIndexedDb(payload);
+
+        const storage = getStorage();
+        if (storage) {
+            try {
+                storage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(payload));
+            } catch (error) {
+            }
+        }
+    }
+
+    function restoreState() {
+        presetState.restoring = true;
+
+        return readStateFromIndexedDb()
+            .then(function (payload) {
+                if (payload && Array.isArray(payload.data)) {
+                    applyPersistedState(payload);
+                    return;
+                }
+
+                const storage = getStorage();
+                if (storage) {
+                    try {
+                        const raw = storage.getItem(LEGACY_STORAGE_KEY);
+                        if (raw) {
+                            const legacyPayload = JSON.parse(raw);
+                            if (legacyPayload && Array.isArray(legacyPayload.data)) {
+                                applyPersistedState(legacyPayload);
+                                writeStateToIndexedDb(createPersistedStatePayload());
+                                return;
+                            }
+                        }
+                    } catch (error) {
+                    }
+                }
+
+                applyPersistedState({
+                    data: stripRemovedBuiltinPresets(defaultPresetData),
+                    currentIndex: 0,
+                    activeTab: 'preset'
+                });
+            })
+            .catch(function () {
+                applyPersistedState({
+                    data: stripRemovedBuiltinPresets(defaultPresetData),
+                    currentIndex: 0,
+                    activeTab: 'preset'
+                });
+            })
+            .finally(function () {
+                presetState.restoring = false;
+            });
     }
 
     function escapeHtml(value) {
@@ -405,13 +621,15 @@
     }
 
     function updateVolDisplays() {
+        const displayValue = presetState.data.length ? String(presetState.currentIndex + 1) : '--';
+
         document.querySelectorAll('#preset-app .preset-vol-num-display').forEach(function (node) {
-            node.textContent = String(presetState.currentIndex + 1);
+            node.textContent = displayValue;
         });
 
         const legacyVol = byId('preset-vol-num');
         if (legacyVol) {
-            legacyVol.textContent = String(presetState.currentIndex + 1);
+            legacyVol.textContent = displayValue;
         }
     }
 
@@ -457,7 +675,7 @@
 
         dots.innerHTML = presetState.data.map(function (_, index) {
             return `
-                <button type="button" class="preset-dot ${index === presetState.currentIndex ? 'active' : ''}" data-index="${index}" aria-label="Preset ${index + 1}"></button>
+                <button type="button" class="preset-dot ${index === presetState.currentIndex ? 'active' : ''}" data-index="${index}" aria-label="????"></button>
             `;
         }).join('');
 
@@ -540,6 +758,7 @@
         }
 
         presetState.currentIndex = index;
+        persistState();
         const listContent = byId('preset-list-content');
         const content = byId('preset-app-content');
 
@@ -574,6 +793,7 @@
 
         button.classList.toggle('active');
         item.active = button.classList.contains('active');
+        persistState();
 
         if (navigator.vibrate) {
             navigator.vibrate([10, 20]);
@@ -651,6 +871,7 @@
         }
 
         setItemContent(currentItem, zhValue);
+        persistState();
 
         closeEditor();
         renderPresetList(presetState.currentIndex);
@@ -678,6 +899,7 @@
                 }
 
                 presetState.data.push(importedPreset);
+                persistState();
                 setActiveTab('preset');
                 goToPreset(presetState.data.length - 1);
             } catch (error) {
@@ -777,6 +999,7 @@
         };
 
         getCurrentRegexEntries().unshift(entry);
+        persistState();
         renderRegexGrid();
 
         titleInput.value = '';
@@ -788,6 +1011,7 @@
 
     function setActiveTab(tabName) {
         presetState.activeTab = tabName;
+        persistState();
 
         document.querySelectorAll('#preset-app [data-tab-pane]').forEach(function (pane) {
             pane.classList.toggle('active', pane.dataset.tabPane === tabName);
@@ -900,6 +1124,8 @@
             return;
         }
 
+        presetState.initialized = true;
+
         document.querySelectorAll('#preset-app .preset-exit-btn').forEach(function (button) {
             button.addEventListener('click', closeApp);
         });
@@ -949,11 +1175,12 @@
         document.addEventListener('click', handleDocumentClick);
         document.addEventListener('keydown', handleKeydown);
 
-        renderPresetHeader();
-        renderPresetList(presetState.currentIndex);
-        renderRegexGrid();
-        setActiveTab(presetState.activeTab);
-        presetState.initialized = true;
+        restoreState().finally(function () {
+            renderPresetHeader();
+            renderPresetList(presetState.currentIndex);
+            renderRegexGrid();
+            setActiveTab(presetState.activeTab);
+        });
     }
 
     function getActivePresetPrompts() {
