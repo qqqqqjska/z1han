@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <title>iPhone Simulator</title>
@@ -8322,26 +8322,57 @@
 
             <div id="preset-app" class="app-screen hidden preset-app-screen">
                 <div class="preset-shell">
-                    <div class="preset-header">
-                        <div class="preset-brand-meta">
-                            <button type="button" class="preset-exit-btn" id="preset-exit-btn" aria-label="退出预设应用">Vol. <span class="preset-vol-num-display">1</span> — Config</button>
-                            <span>Vol. <span id="preset-vol-num">1</span> — Config</span>
-                            <div class="preset-header-actions">
-                                <span>SYSTEM</span>
-                                <button type="button" class="preset-action-icon" id="close-preset-app" aria-label="关闭预设应用">
-                                    <i class="ri-folder-add-line"></i>
-                                </button>
-                                <input type="file" id="preset-import-input" accept=".json" hidden>
+                    <div class="preset-stage">
+                        <section class="preset-tab-pane preset-pane active" data-tab-pane="preset">
+                            <div class="preset-header">
+                                <div class="preset-brand-meta">
+                                    <button type="button" class="preset-exit-btn" id="preset-exit-btn" aria-label="退出预设应用">Vol. <span class="preset-vol-num-display">1</span> — Config</button>
+                                    <span>Vol. <span id="preset-vol-num">1</span> — Config</span>
+                                    <div class="preset-header-actions">
+                                        <span>SYSTEM</span>
+                                        <button type="button" class="preset-action-icon" id="close-preset-app" aria-label="导入预设">
+                                            <i class="ri-folder-add-line"></i>
+                                        </button>
+                                        <input type="file" id="preset-import-input" accept=".json" hidden>
+                                    </div>
+                                </div>
+
+                                <div class="preset-carousel" id="preset-carousel"></div>
+                                <div class="preset-nav-dots" id="preset-dots"></div>
                             </div>
-                        </div>
 
-                        <div class="preset-carousel" id="preset-carousel"></div>
-                        <div class="preset-nav-dots" id="preset-dots"></div>
+                            <div class="preset-content" id="preset-app-content">
+                                <div class="preset-list-container" id="preset-list-content"></div>
+                            </div>
+                        </section>
+
+                        <section class="preset-tab-pane regex-pane" data-tab-pane="regex">
+                            <div class="regex-page-scroll">
+                                <header class="regex-workspace-header">
+                                    <div class="regex-title-block">
+                                        <button type="button" class="regex-home-btn" id="preset-regex-home" aria-label="返回主屏幕">Lexicon</button>
+                                        <p><i class="ri-node-tree"></i> Regular Expressions &amp; Templates</p>
+                                    </div>
+                                    <div class="regex-actions">
+                                        <button type="button" id="preset-regex-open-drawer"><i class="ri-add-line"></i> New</button>
+                                    </div>
+                                </header>
+
+                                <div class="regex-grid" id="preset-regex-grid"></div>
+                            </div>
+                        </section>
                     </div>
 
-                    <div class="preset-content" id="preset-app-content">
-                        <div class="preset-list-container" id="preset-list-content"></div>
-                    </div>
+                    <nav class="preset-bottom-bar" id="preset-bottom-bar">
+                        <button type="button" class="preset-tab-item active" data-tab="preset">
+                            <i class="ri-book-3-line"></i>
+                            <span>预设</span>
+                        </button>
+                        <button type="button" class="preset-tab-item" data-tab="regex">
+                            <i class="ri-braces-line"></i>
+                            <span>正则</span>
+                        </button>
+                    </nav>
 
                     <div class="preset-sheet-backdrop" id="preset-sheet-backdrop"></div>
 
@@ -8364,12 +8395,37 @@
                             <button type="button" class="preset-btn preset-btn-fill" id="preset-commit-btn">Commit</button>
                         </div>
                     </div>
+
+                    <div class="regex-drawer-overlay" id="preset-regex-overlay"></div>
+
+                    <div class="regex-drawer" id="preset-regex-drawer">
+                        <div class="regex-drawer-header">
+                            <h3>Compose</h3>
+                            <button type="button" class="regex-drawer-close" id="preset-regex-close-drawer"><i class="ri-close-line"></i></button>
+                        </div>
+
+                        <div class="regex-form-group">
+                            <label for="preset-regex-title">Title</label>
+                            <input type="text" id="preset-regex-title" placeholder="e.g. Find Emails">
+                        </div>
+
+                        <div class="regex-form-group">
+                            <label for="preset-regex-pattern">Expression</label>
+                            <input type="text" id="preset-regex-pattern" placeholder="/pattern/g">
+                        </div>
+
+                        <div class="regex-form-group">
+                            <label for="preset-regex-template">Template</label>
+                            <textarea id="preset-regex-template" placeholder="HTML string..."></textarea>
+                        </div>
+
+                        <button type="button" class="regex-submit-btn" id="preset-regex-add-entry">Append to Lexicon</button>
+                    </div>
                 </div>
             </div>
 
 </body>
 </html>
-
 
 
 

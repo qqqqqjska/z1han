@@ -32,7 +32,22 @@
                 ]
             }
         ],
+        regexEntries: [
+            {
+                title: 'Extract Links',
+                icon: 'ri-link',
+                pattern: '/https?:\\/\\/[^\\s]+/g',
+                template: '<a href="$&">$&</a>'
+            },
+            {
+                title: 'Highlight Tags',
+                icon: 'ri-hashtag',
+                pattern: '/#\\w+/g',
+                template: '<span class="tag">$&</span>'
+            }
+        ],
         currentIndex: 0,
+        activeTab: 'preset',
         editContext: null,
         initialized: false
     };
@@ -50,6 +65,17 @@
             .replace(/'/g, '&#39;');
     }
 
+    function updateVolDisplays() {
+        document.querySelectorAll('#preset-app .preset-vol-num-display').forEach(function (node) {
+            node.textContent = String(presetState.currentIndex + 1);
+        });
+
+        const legacyVol = byId('preset-vol-num');
+        if (legacyVol) {
+            legacyVol.textContent = String(presetState.currentIndex + 1);
+        }
+    }
+
     function closeDropdown() {
         const carousel = byId('preset-carousel');
         if (carousel) {
@@ -57,7 +83,7 @@
         }
     }
 
-    function renderHeader() {
+    function renderPresetHeader() {
         const carousel = byId('preset-carousel');
         const dots = byId('preset-dots');
         const currentPreset = presetState.data[presetState.currentIndex];
@@ -92,14 +118,7 @@
             <button type="button" class="preset-dot ${index === presetState.currentIndex ? 'active' : ''}" data-index="${index}" aria-label="Preset ${index + 1}"></button>
         `).join('');
 
-        const volNum = byId('preset-vol-num');
-        if (volNum) {
-            volNum.textContent = String(presetState.currentIndex + 1);
-        }
-
-        document.querySelectorAll('#preset-app .preset-vol-num-display').forEach(function (node) {
-            node.textContent = String(presetState.currentIndex + 1);
-        });
+        updateVolDisplays();
 
         const trigger = byId('preset-trigger-btn');
         if (trigger) {
@@ -109,22 +128,22 @@
             });
         }
 
-        carousel.querySelectorAll('.preset-option').forEach((button) => {
+        carousel.querySelectorAll('.preset-option').forEach(function (button) {
             button.addEventListener('click', function (event) {
                 event.stopPropagation();
                 closeDropdown();
-                goTo(Number(button.dataset.index));
+                goToPreset(Number(button.dataset.index));
             });
         });
 
-        dots.querySelectorAll('.preset-dot').forEach((button) => {
+        dots.querySelectorAll('.preset-dot').forEach(function (button) {
             button.addEventListener('click', function () {
-                goTo(Number(button.dataset.index));
+                goToPreset(Number(button.dataset.index));
             });
         });
     }
 
-    function renderList(index) {
+    function renderPresetList(index) {
         const listContent = byId('preset-list-content');
         const preset = presetState.data[index];
 
@@ -148,20 +167,20 @@
         void listContent.offsetWidth;
         listContent.classList.add('show');
 
-        listContent.querySelectorAll('.preset-item-content').forEach((button) => {
+        listContent.querySelectorAll('.preset-item-content').forEach(function (button) {
             button.addEventListener('click', function () {
                 openEditor(Number(button.dataset.index));
             });
         });
 
-        listContent.querySelectorAll('.preset-toggle').forEach((button) => {
+        listContent.querySelectorAll('.preset-toggle').forEach(function (button) {
             button.addEventListener('click', function () {
                 toggleItem(button, Number(button.dataset.index));
             });
         });
     }
 
-    function goTo(index) {
+    function goToPreset(index) {
         if (index === presetState.currentIndex || index < 0 || index >= presetState.data.length) {
             return;
         }
@@ -174,7 +193,7 @@
             content.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        renderHeader();
+        renderPresetHeader();
 
         if (navigator.vibrate) {
             navigator.vibrate(15);
@@ -185,7 +204,7 @@
         }
 
         setTimeout(function () {
-            renderList(index);
+            renderPresetList(index);
         }, 180);
     }
 
@@ -258,7 +277,7 @@
         if (zhValue) currentItem.zh = zhValue;
 
         closeEditor();
-        renderList(presetState.currentIndex);
+        renderPresetList(presetState.currentIndex);
     }
 
     function importData(event) {
@@ -274,7 +293,9 @@
                 if (parsed && parsed.title && Array.isArray(parsed.items)) {
                     parsed.id = parsed.id || String(presetState.data.length + 1).padStart(2, '0');
                     presetState.data.push(parsed);
-                    goTo(presetState.data.length - 1);
+                    setActiveTab('preset');
+                    renderPresetHeader();
+                    goToPreset(presetState.data.length - 1);
                 } else {
                     alert('Invalid preset format.');
                 }
@@ -287,6 +308,103 @@
         event.target.value = '';
     }
 
+    function regexCardMarkup(entry) {
+        return `
+            <article class="regex-card" style="animation: regexFadeInUp 0.45s ease both;">
+                <div class="regex-card-top">
+                    <div class="regex-card-title">${escapeHtml(entry.title)}</div>
+                    <div class="regex-card-icon"><i class="${escapeHtml(entry.icon || 'ri-function-line')}"></i></div>
+                </div>
+
+                <div class="regex-data-section">
+                    <div class="regex-data-label"><i class="ri-code-s-slash-line"></i> Pattern</div>
+                    <div class="regex-data-value">${escapeHtml(entry.pattern)}</div>
+                </div>
+
+                <div class="regex-card-divider"></div>
+
+                <div class="regex-data-section">
+                    <div class="regex-data-label"><i class="ri-html5-line"></i> Markup</div>
+                    <div class="regex-data-value">${escapeHtml(entry.template)}</div>
+                </div>
+            </article>
+        `;
+    }
+
+    function renderRegexGrid() {
+        const grid = byId('preset-regex-grid');
+        if (!grid) {
+            return;
+        }
+
+        grid.innerHTML = presetState.regexEntries.map(regexCardMarkup).join('');
+    }
+
+    function openRegexDrawer() {
+        const drawer = byId('preset-regex-drawer');
+        const overlay = byId('preset-regex-overlay');
+        if (drawer) drawer.classList.add('active');
+        if (overlay) overlay.classList.add('active');
+    }
+
+    function closeRegexDrawer() {
+        const drawer = byId('preset-regex-drawer');
+        const overlay = byId('preset-regex-overlay');
+        if (drawer) drawer.classList.remove('active');
+        if (overlay) overlay.classList.remove('active');
+    }
+
+    function addRegexEntry() {
+        const titleInput = byId('preset-regex-title');
+        const patternInput = byId('preset-regex-pattern');
+        const templateInput = byId('preset-regex-template');
+
+        if (!titleInput || !patternInput || !templateInput) {
+            return;
+        }
+
+        const entry = {
+            title: titleInput.value.trim() || 'Untitled',
+            icon: 'ri-function-line',
+            pattern: patternInput.value.trim() || '/.../g',
+            template: templateInput.value.trim() || '...'
+        };
+
+        presetState.regexEntries.unshift(entry);
+        renderRegexGrid();
+
+        titleInput.value = '';
+        patternInput.value = '';
+        templateInput.value = '';
+
+        closeRegexDrawer();
+    }
+
+    function setActiveTab(tabName) {
+        presetState.activeTab = tabName;
+
+        document.querySelectorAll('#preset-app [data-tab-pane]').forEach(function (pane) {
+            pane.classList.toggle('active', pane.dataset.tabPane === tabName);
+        });
+
+        document.querySelectorAll('#preset-app .preset-tab-item').forEach(function (button) {
+            button.classList.toggle('active', button.dataset.tab === tabName);
+        });
+
+        if (tabName !== 'preset') {
+            closeDropdown();
+            closeEditor();
+        }
+
+        if (tabName !== 'regex') {
+            closeRegexDrawer();
+        }
+
+        if (tabName === 'regex') {
+            renderRegexGrid();
+        }
+    }
+
     function openApp() {
         const screen = byId('preset-app');
         if (!screen) {
@@ -294,8 +412,10 @@
         }
 
         screen.classList.remove('hidden');
-        renderHeader();
-        renderList(presetState.currentIndex);
+        renderPresetHeader();
+        renderPresetList(presetState.currentIndex);
+        renderRegexGrid();
+        setActiveTab(presetState.activeTab);
     }
 
     function closeApp() {
@@ -306,6 +426,7 @@
 
         closeDropdown();
         closeEditor();
+        closeRegexDrawer();
         screen.classList.add('hidden');
     }
 
@@ -329,18 +450,37 @@
 
         if (event.key === 'Escape') {
             const sheet = byId('preset-editor-sheet');
+            const regexDrawer = byId('preset-regex-drawer');
+            const carousel = byId('preset-carousel');
+
             if (sheet && sheet.classList.contains('active')) {
                 closeEditor();
                 return;
             }
 
-            const carousel = byId('preset-carousel');
+            if (regexDrawer && regexDrawer.classList.contains('active')) {
+                closeRegexDrawer();
+                return;
+            }
+
             if (carousel && carousel.classList.contains('open')) {
                 closeDropdown();
                 return;
             }
 
             closeApp();
+        }
+    }
+
+    function bindImport(buttonId, inputId) {
+        const button = byId(buttonId);
+        const input = byId(inputId);
+
+        if (button && input) {
+            button.addEventListener('click', function () {
+                input.click();
+            });
+            input.addEventListener('change', importData);
         }
     }
 
@@ -354,47 +494,57 @@
             return;
         }
 
-        const closeButton = byId('preset-exit-btn');
-        const importButton = byId('close-preset-app');
-        const importInput = byId('preset-import-input');
+        document.querySelectorAll('#preset-app .preset-exit-btn').forEach(function (button) {
+            button.addEventListener('click', closeApp);
+        });
+
+        bindImport('close-preset-app', 'preset-import-input');
+
         const backdrop = byId('preset-sheet-backdrop');
         const discardButton = byId('preset-discard-btn');
         const commitButton = byId('preset-commit-btn');
+        const regexOpenButton = byId('preset-regex-open-drawer');
+        const regexHomeButton = byId('preset-regex-home');
+        const regexCloseButton = byId('preset-regex-close-drawer');
+        const regexOverlay = byId('preset-regex-overlay');
+        const regexAddButton = byId('preset-regex-add-entry');
 
-        if (closeButton) closeButton.addEventListener('click', closeApp);
-        if (importButton) {
-            importButton.setAttribute('aria-label', '导入预设');
-            importButton.setAttribute('title', '导入预设');
-            importButton.addEventListener('click', function () {
-                if (importInput) {
-                    importInput.click();
-                }
-            });
-        }
-        if (importInput) importInput.addEventListener('change', importData);
         if (backdrop) backdrop.addEventListener('click', closeEditor);
         if (discardButton) discardButton.addEventListener('click', closeEditor);
         if (commitButton) commitButton.addEventListener('click', saveEditor);
+        if (regexOpenButton) regexOpenButton.addEventListener('click', openRegexDrawer);
+        if (regexHomeButton) regexHomeButton.addEventListener('click', closeApp);
+        if (regexCloseButton) regexCloseButton.addEventListener('click', closeRegexDrawer);
+        if (regexOverlay) regexOverlay.addEventListener('click', closeRegexDrawer);
+        if (regexAddButton) regexAddButton.addEventListener('click', addRegexEntry);
+
+        document.querySelectorAll('#preset-app .preset-tab-item').forEach(function (button) {
+            button.addEventListener('click', function () {
+                setActiveTab(button.dataset.tab);
+            });
+        });
 
         document.addEventListener('click', handleDocumentClick);
         document.addEventListener('keydown', handleKeydown);
 
-        renderHeader();
-        renderList(presetState.currentIndex);
+        renderPresetHeader();
+        renderPresetList(presetState.currentIndex);
+        renderRegexGrid();
+        setActiveTab(presetState.activeTab);
         presetState.initialized = true;
     }
 
     function getActivePresetPrompts() {
         const currentPreset = presetState.data[presetState.currentIndex];
         if (!currentPreset || !currentPreset.items) return [];
-        return currentPreset.items.filter(item => item.active).map(item => item.zh);
+        return currentPreset.items.filter(function (item) { return item.active; }).map(function (item) { return item.zh; });
     }
 
     function getPresetContextString() {
         const activeItems = getActivePresetPrompts();
         if (activeItems.length === 0) return '';
         const currentPreset = presetState.data[presetState.currentIndex];
-        return `【当前启用的高级预设 (${currentPreset.title})】\n` + activeItems.map(zh => `- ${zh}`).join('\n');
+        return `【当前启用的高级预设 (${currentPreset.title})】\n` + activeItems.map(function (zh) { return `- ${zh}`; }).join('\n');
     }
 
     window.PresetApp = {
