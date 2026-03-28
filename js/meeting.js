@@ -278,7 +278,60 @@ function buildMeetingPresetIntegrationPrompt(meeting) {
         return `${index + 1}. ${label}${content ? `：${content}` : ''}`;
     });
 
-    return `【接入预设】\n本次见面接入预设《${selection.preset.title}》。请将以下已开启条目视为当前剧情创作的额外约束、偏好与表达方向，并自然融入正文：\n${lines.join('\n')}\n\n`;
+    return `${lines.join('\n')}\n\n`;
+}
+
+function sanitizeMeetingPresetMessageContent(content) {
+    return String(content || '')
+        .replace(/<!--([\s\S]*?)-->/g, ' ')
+        .replace(/\{\{[\s\S]*?\}\}/g, ' ')
+        .replace(/```[a-zA-Z0-9_-]*\n?/g, '')
+        .split(/\r?\n/)
+        .map(function (line) {
+            return line.trim();
+        })
+        .filter(Boolean)
+        .join('\n')
+        .trim();
+}
+
+function normalizeMeetingPresetMessageRole(item) {
+    const rawRole = String(item?.role || '').trim().toLowerCase();
+    if (rawRole === 'assistant' || rawRole === 'user' || rawRole === 'system') {
+        return rawRole;
+    }
+    return item?.systemPrompt ? 'system' : 'system';
+}
+
+function buildMeetingPresetMessages(meeting) {
+    const selection = getMeetingIntegrationPresetSelection(meeting);
+    if (!selection.preset || !selection.items.length) {
+        return [];
+    }
+
+    const mergedContent = selection.items.map(function (item, index) {
+        const cleanedContent = sanitizeMeetingPresetMessageContent(item.content || item.zh || '');
+        if (!cleanedContent) {
+            return '';
+        }
+
+        return `【预设条目 ${index + 1}｜${String(item.en || item.name || '未命名条目').trim()}】\n${cleanedContent}`;
+    }).filter(Boolean).join('\n\n');
+
+    if (!mergedContent) {
+        return [];
+    }
+
+    return [{
+        role: 'system',
+        content: [
+            `以下是本轮见面创作必须尽量遵循的高优先级预设规则，来源于接入预设《${selection.preset.title}》。`,
+            `如果其中包含写作指导、输出结构、状态栏、小剧场、摘要、分支、thinking、文风约束等要求，请尽量落实到最终输出中。`,
+            `若这些预设要求与默认的“只写普通下一段正文”冲突，以预设中的结构和写作要求优先；但最终仍需把全部内容放进 JSON.reply 字段。`,
+            '',
+            mergedContent
+        ].join('\n')
+    }];
 }
 
 function buildMeetingRegexIntegrationPrompt(meeting) {
@@ -650,7 +703,7 @@ function renderMeetingCards(meeting) {
                 <span>${roleLabel}</span>
                 ${msg.role === 'user' ? '<span style="display:block;width:24px;height:1px;background:#222;"></span>' : ''}
             </div>
-            <div class="meeting-card-content" style="font-size:16px;line-height:1.92;letter-spacing:.2px;color:${msg.role === 'user' ? '#666' : '#2c2c2c'};text-align:${msg.role === 'user' ? 'right' : 'justify'};font-style:${msg.role === 'user' ? 'italic' : 'normal'};">${formatMeetingStoryHtml(msg.text)}</div>
+            <div class="meeting-card-content" style="font-size:16px;line-height:1.92;letter-spacing:.2px;color:${msg.role === 'user' ? '#666' : '#2c2c2c'};text-align:${msg.role === 'user' ? 'right' : 'justify'};font-style:${msg.role === 'user' ? 'italic' : 'normal'};">${formatMeetingStoryHtml(msg.text, msg.role === 'ai' ? meeting : null)}</div>
             <div class="meeting-card-actions" style="position:absolute;top:0;${msg.role === 'user' ? 'left:0;padding-right:12px;' : 'right:0;padding-left:12px;'}display:flex;gap:16px;opacity:0;transition:opacity .25s;background:#fdfdfc;">
                 <img src="${editIconUrl}" class="meeting-action-icon" onclick="window.editMeetingMsg(${index})" title="编辑" style="width:15px;height:15px;object-fit:contain;opacity:.7;">
                 <img src="${deleteIconUrl}" class="meeting-action-icon danger" onclick="window.deleteMeetingMsg(${index})" title="删除" style="width:15px;height:15px;object-fit:contain;opacity:.7;">
@@ -756,8 +809,113 @@ function splitMeetingStoryParagraphs(text) {
     return paragraphs.length > 0 ? paragraphs : [normalized];
 }
 
-function formatMeetingStoryHtml(text) {
-    const paragraphs = splitMeetingStoryParagraphs(text);
+function extractMeetingRegexTemplateParts(template) {
+    const blocks = String(template || '').split(/\n\s*\n/).map(function (item) {
+        return String(item || '').trim();
+    }).filter(Boolean);
+    let replacement = '';
+    let trimStrings = [];
+    const modes = [];
+
+    blocks.forEach(function (block) {
+        if (!replacement && !/^Trim:/i.test(block) && !/^Mode:/i.test(block)) {
+            replacement = block;
+            return;
+        }
+
+        if (/^Trim:/i.test(block)) {
+            trimStrings = block.replace(/^Trim:\s*/i, '').split('|').map(function (item) {
+                return String(item || '').trim();
+            }).filter(Boolean);
+        }
+
+        if (/^Mode:/i.test(block)) {
+            block.replace(/^Mode:\s*/i, '').split(/[·|路]/).forEach(function (item) {
+                const value = String(item || '').trim().toLowerCase();
+                if (value) {
+                    modes.push(value);
+                }
+            });
+        }
+    });
+
+    return {
+        replacement: replacement,
+        trimStrings: trimStrings,
+        promptOnly: modes.includes('prompt'),
+        markdownOnly: modes.includes('markdown'),
+        disabled: modes.includes('disabled')
+    };
+}
+
+function isUnsafeMeetingRegexReplacement(replacement) {
+    const value = String(replacement || '').trim().toLowerCase();
+    if (!value) {
+        return false;
+    }
+
+    return value.includes('<!doctype')
+        || value.includes('<html')
+        || value.includes('<head')
+        || value.includes('<style')
+        || value.includes('<body')
+        || value.includes('```html')
+        || value.includes('```css');
+}
+
+function buildMeetingRenderRegex(pattern) {
+    const source = String(pattern || '').trim();
+    if (!source) {
+        return null;
+    }
+
+    const literalMatch = source.match(/^\/([\s\S]*)\/([a-z]*)$/i);
+    try {
+        if (literalMatch) {
+            return new RegExp(literalMatch[1], literalMatch[2]);
+        }
+        return new RegExp(source, 'g');
+    } catch (error) {
+        return null;
+    }
+}
+
+function applyMeetingRegexRendering(text, meeting) {
+    let output = String(text || '');
+    const rules = getMeetingIntegrationRegexRules(meeting);
+
+    rules.forEach(function (rule) {
+        const regex = buildMeetingRenderRegex(rule.pattern);
+        if (!regex) {
+            return;
+        }
+
+        const templateParts = extractMeetingRegexTemplateParts(rule.template);
+        if (templateParts.disabled || templateParts.promptOnly || templateParts.markdownOnly || isUnsafeMeetingRegexReplacement(templateParts.replacement)) {
+            return;
+        }
+
+        try {
+            if (templateParts.replacement) {
+                output = output.replace(regex, templateParts.replacement);
+            }
+        } catch (error) {
+        }
+
+        templateParts.trimStrings.forEach(function (trimText) {
+            if (!trimText) {
+                return;
+            }
+            output = output.split(trimText).join('');
+        });
+    });
+
+    return output;
+}
+
+function formatMeetingStoryHtml(text, meeting) {
+    const renderedText = applyMeetingRegexRendering(text, meeting);
+    const paragraphs = splitMeetingStoryParagraphs(renderedText);
     if (paragraphs.length === 0) return '';
     return paragraphs.map(paragraph => `<p style="margin:0 0 1.15em 0;">${escapeMeetingHtml(paragraph)}</p>`).join('');
 }
@@ -1179,6 +1337,7 @@ function constructMeetingPrompt(contactId, newUserInput) {
     const meetingId = window.iphoneSimState.currentMeetingId;
     const meetings = window.iphoneSimState.meetings[contactId];
     const currentMeeting = meetings.find(m => m.id === meetingId);
+    const hasPresetInstructions = buildMeetingPresetMessages(currentMeeting).length > 0;
     
     // 获取线上聊天背景摘要（不直接拼接聊天原文，避免串回消息语境）
     let chatContext = '';
@@ -1223,9 +1382,6 @@ function constructMeetingPrompt(contactId, newUserInput) {
         prompt += `【关系背景摘要】(仅作人物关系和熟悉度参考，不代表当前仍在线上聊天)\n${chatContext}\n\n`;
     }
 
-    prompt += buildMeetingPresetIntegrationPrompt(currentMeeting);
-    prompt += buildMeetingRegexIntegrationPrompt(currentMeeting);
-
     prompt += `【规则】\n`;
     prompt += `1. 这是一次线下见面的酒馆式 RP 共写，不是聊天软件对话。你不是${contact.name}本人，也不是在替他回复消息。\n`;
     prompt += `2. 用户当前输入默认应被视为“设定补充、剧情素材、情境假设、关系假设、动作草稿、氛围关键词、片段化灵感”，优先作为世界设定或剧情条件处理，而不是直接当成角色已经说出口的话。\n`;
@@ -1233,11 +1389,16 @@ function constructMeetingPrompt(contactId, newUserInput) {
     prompt += `4. 你的任务是把这些素材转化为“下一段剧情正文”，继续创作双方互动、场景氛围、心理活动、动作和环境变化，并优先表现“设定成立后会怎样”，而不是“用户说了这句话后对方怎么回”。\n`;
     prompt += `5. 除非用户输入里明确出现手机、发消息、聊天框、收到消息等设定，否则不要主动把用户输入解释成角色之间的线上消息；除非用户明确要求说出口，否则也不要主动把输入解释成当面对白。\n`;
     prompt += `6. 必须保持第三人称叙事和沉浸感，不要输出规则说明，不要分析用户，不要总结成提纲。\n`;
-    prompt += `7. 只返回 JSON，不要返回 Markdown，不要加代码块。\n`;
+    prompt += hasPresetInstructions
+        ? `7. 只返回 JSON；如果接入预设明确要求 Markdown、HTML、XML、代码块或特定标签结构，可以把这些内容写在 JSON.reply 字段内。\n`
+        : `7. 只返回 JSON，不要返回 Markdown，不要加代码块。\n`;
     prompt += `8. JSON 格式固定为 {"reply":"下一段剧情正文","suggestions":["建议1","建议2","建议3"]}。\n`;
-    prompt += `9. reply 表示你写出的下一段剧情，不是对用户文本的“回复消息”。\n`;
-    prompt += `10. suggestions 必须恰好 3 条，每条不超过 50 个汉字，且必须写成“用户下一步可以继续喂给你”的第三人称剧情片段，明确写出角色名。不要写成“你可以回复”“你可以说”“他回你”这种消息建议。顺序固定为：最自然延续剧情 / 推动剧情转折 / 推向 NSFW。\n`;
-    prompt += `11. reply 默认分成 2 到 4 段，每段 1 到 4 句；动作、心理、环境变化或关键转折尽量另起一段，避免整段文字挤成一坨。\n\n`;
+    prompt += `9. reply 表示你写出的本轮完整输出主体，不是对用户文本的“回复消息”。\n`;
+    prompt += `10. 如果接入预设里有正文格式、状态栏、摘要、小剧场、分支、thinking、角色表或其他结构要求，请把这些内容一并放入 reply 字段中输出。\n`;
+    prompt += `11. suggestions 必须恰好 3 条，每条不超过 50 个汉字，且必须写成“用户下一步可以继续喂给你”的第三人称剧情片段，明确写出角色名。不要写成“你可以回复”“你可以说”“他回你”这种消息建议。顺序固定为：最自然延续剧情 / 推动剧情转折 / 推向 NSFW。\n`;
+    prompt += hasPresetInstructions
+        ? `12. 当接入预设对输出结构、段落组织、格式标签、额外栏目有明确要求时，以接入预设要求优先；JSON 只是最外层包装。\n\n`
+        : `12. reply 默认分成 2 到 4 段，每段 1 到 4 句；动作、心理、环境变化或关键转折尽量另起一段，避免整段文字挤成一坨。\n\n`;
     
     prompt += `【剧情回顾】\n`;
     
@@ -1263,7 +1424,9 @@ function constructMeetingPrompt(contactId, newUserInput) {
         lengthInstruction = `\n【重要限制】\n请务必将剧情正文控制在 ${min} 到 ${max} 字之间。不要过短也不要过长。\n`;
     }
     
-    prompt += `\n请根据以上内容，像酒馆 RP 一样继续创作“下一段剧情正文”。默认把用户输入当成设定或素材，而不是已经对${contact.name}说出口的话。除非用户明确要求落地成台词，否则优先写“这个设定成立后，现场气氛、关系、动作与心理如何变化”。并按指定 JSON 格式返回剧情正文与 3 条可继续喂给你的剧情片段建议。`;
+    prompt += hasPresetInstructions
+        ? `\n请根据以上内容，像酒馆 RP 一样继续创作本轮见面内容。默认把用户输入当成设定或素材，而不是已经对${contact.name}说出口的话。除非用户明确要求落地成台词，否则优先写“这个设定成立后，现场气氛、关系、动作与心理如何变化”。如果接入预设要求输出额外结构、栏目或格式，请把这些内容一并写进 JSON.reply。最终按指定 JSON 格式返回 reply 与 3 条 suggestions。`
+        : `\n请根据以上内容，像酒馆 RP 一样继续创作“下一段剧情正文”。默认把用户输入当成设定或素材，而不是已经对${contact.name}说出口的话。除非用户明确要求落地成台词，否则优先写“这个设定成立后，现场气氛、关系、动作与心理如何变化”。并按指定 JSON 格式返回剧情正文与 3 条可继续喂给你的剧情片段建议。`;
     prompt += lengthInstruction; // 将字数限制放在最后，增强权重
     
     return prompt;
@@ -1577,6 +1740,10 @@ async function handleMeetingAI(type) {
         }
 
         const fullPrompt = constructMeetingPrompt(contactId, effectiveUserInput);
+        const presetMessages = buildMeetingPresetMessages(meeting);
+        const requestMessages = presetMessages.concat([
+            { role: 'user', content: fullPrompt }
+        ]);
         
         let fetchUrl = settings.url;
         if (!fetchUrl.endsWith('/chat/completions')) {
@@ -1589,7 +1756,10 @@ async function handleMeetingAI(type) {
             apiUrl: fetchUrl,
             model: settings.model,
             effectiveUserInput: effectiveUserInput,
-            prompt: fullPrompt
+            prompt: fullPrompt,
+            presetMessages: presetMessages,
+            requestMessages: requestMessages,
+            renderRegexRules: getMeetingIntegrationRegexRules(meeting)
         });
 
         const response = await fetch(fetchUrl, {
@@ -1600,9 +1770,7 @@ async function handleMeetingAI(type) {
             },
             body: JSON.stringify({
                 model: settings.model,
-                messages: [
-                    { role: 'user', content: fullPrompt }
-                ],
+                messages: requestMessages,
                 temperature: 0.7,
                 stream: false
             })
@@ -1625,7 +1793,7 @@ async function handleMeetingAI(type) {
         
         // 移除 loading 样式并显示内容
         contentEl.classList.remove('loading-dots');
-        contentEl.innerHTML = formatMeetingStoryHtml(finalTezt);
+        contentEl.innerHTML = formatMeetingStoryHtml(finalTezt, meeting);
         
         // 保存
         meeting.content.push({
