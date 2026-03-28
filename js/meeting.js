@@ -251,7 +251,17 @@ function getMeetingIntegrationRegexRules(meeting) {
                         categoryNames: [],
                         title: String(entry.title || '未命名正则'),
                         pattern: String(entry.pattern || ''),
-                        template: String(entry.template || '')
+                        template: String(entry.template || ''),
+                        replaceString: Object.prototype.hasOwnProperty.call(entry || {}, 'replaceString') ? String(entry.replaceString ?? '') : undefined,
+                        trimStrings: Array.isArray(entry?.trimStrings) ? entry.trimStrings.slice() : undefined,
+                        promptOnly: Boolean(entry?.promptOnly),
+                        markdownOnly: Boolean(entry?.markdownOnly),
+                        runOnEdit: Boolean(entry?.runOnEdit),
+                        substituteRegex: Boolean(entry?.substituteRegex),
+                        disabled: Boolean(entry?.disabled),
+                        placement: Array.isArray(entry?.placement) ? entry.placement.slice() : [],
+                        minDepth: entry?.minDepth,
+                        maxDepth: entry?.maxDepth
                     });
                 }
 
@@ -810,57 +820,52 @@ function splitMeetingStoryParagraphs(text) {
 }
 
 function extractMeetingRegexTemplateParts(template) {
-    const blocks = String(template || '').split(/\n\s*\n/).map(function (item) {
-        return String(item || '').trim();
-    }).filter(Boolean);
-    let replacement = '';
+    if (template && typeof template === 'object') {
+        const hasExplicitReplace = Object.prototype.hasOwnProperty.call(template, 'replaceString');
+        return {
+            replacement: String(template.replaceString ?? ''),
+            hasReplacement: hasExplicitReplace,
+            trimStrings: Array.isArray(template.trimStrings) ? template.trimStrings.map(function (item) {
+                return String(item || '').trim();
+            }).filter(Boolean) : [],
+            promptOnly: Boolean(template.promptOnly),
+            markdownOnly: Boolean(template.markdownOnly),
+            disabled: Boolean(template.disabled)
+        };
+    }
+
+    const source = String(template || '').replace(/\r\n/g, '\n');
+    let replacement = source;
     let trimStrings = [];
     const modes = [];
 
-    blocks.forEach(function (block) {
-        if (!replacement && !/^Trim:/i.test(block) && !/^Mode:/i.test(block)) {
-            replacement = block;
-            return;
-        }
+    const modeMatch = replacement.match(/\n{2,}Mode:\s*([^\n]+)\s*$/i);
+    if (modeMatch) {
+        replacement = replacement.slice(0, modeMatch.index);
+        modeMatch[1].split(/\s*(?:[·|]|路)\s*/).forEach(function (item) {
+            const value = String(item || '').trim().toLowerCase();
+            if (value) {
+                modes.push(value);
+            }
+        });
+    }
 
-        if (/^Trim:/i.test(block)) {
-            trimStrings = block.replace(/^Trim:\s*/i, '').split('|').map(function (item) {
-                return String(item || '').trim();
-            }).filter(Boolean);
-        }
-
-        if (/^Mode:/i.test(block)) {
-            block.replace(/^Mode:\s*/i, '').split(/[·|路]/).forEach(function (item) {
-                const value = String(item || '').trim().toLowerCase();
-                if (value) {
-                    modes.push(value);
-                }
-            });
-        }
-    });
+    const trimMatch = replacement.match(/\n{2,}Trim:\s*([^\n]+)\s*$/i);
+    if (trimMatch) {
+        replacement = replacement.slice(0, trimMatch.index);
+        trimStrings = trimMatch[1].split('|').map(function (item) {
+            return String(item || '').trim();
+        }).filter(Boolean);
+    }
 
     return {
-        replacement: replacement,
+        replacement: replacement.trim(),
+        hasReplacement: source.trim() === '' || replacement.trim() !== '' || trimStrings.length > 0 || modes.length > 0,
         trimStrings: trimStrings,
         promptOnly: modes.includes('prompt'),
         markdownOnly: modes.includes('markdown'),
         disabled: modes.includes('disabled')
     };
-}
-
-function isUnsafeMeetingRegexReplacement(replacement) {
-    const value = String(replacement || '').trim().toLowerCase();
-    if (!value) {
-        return false;
-    }
-
-    return value.includes('<!doctype')
-        || value.includes('<html')
-        || value.includes('<head')
-        || value.includes('<style')
-        || value.includes('<body')
-        || value.includes('```html')
-        || value.includes('```css');
 }
 
 function buildMeetingRenderRegex(pattern) {
@@ -880,9 +885,111 @@ function buildMeetingRenderRegex(pattern) {
     }
 }
 
-function applyMeetingRegexRendering(text, meeting) {
+function getMeetingRegexRulePlacements(rule) {
+    const placements = Array.isArray(rule?.placement) ? rule.placement.map(function (value) {
+        return Number(value);
+    }).filter(function (value) {
+        return Number.isFinite(value);
+    }) : [];
+
+    if (placements.length > 0) {
+        return placements;
+    }
+
+    const title = String(rule?.title || '').toLowerCase();
+    const pattern = String(rule?.pattern || '').toLowerCase();
+    const template = String(rule?.template || rule?.replaceString || '').toLowerCase();
+
+    if (title.includes('cot') || title.includes('thinking') || pattern.includes('<thinking>') || template.includes('<thinking>')) {
+        return [6];
+    }
+
+    return [2];
+}
+
+function getMeetingRenderRegexRules(meeting, placement) {
+    return getMeetingIntegrationRegexRules(meeting).filter(function (rule) {
+        const placements = getMeetingRegexRulePlacements(rule);
+        return placements.includes(Number(placement));
+    });
+}
+
+function expandMeetingReplacementTemplate(template, matchValue, captures) {
+    const source = String(template || '');
+    const groups = Array.isArray(captures) ? captures : [];
+    let output = '';
+
+    for (let index = 0; index < source.length; index += 1) {
+        const char = source[index];
+        if (char !== '$' || index >= source.length - 1) {
+            output += char;
+            continue;
+        }
+
+        const next = source[index + 1];
+
+        if (next === '$') {
+            output += '$';
+            index += 1;
+            continue;
+        }
+
+        if (next === '&') {
+            output += String(matchValue || '');
+            index += 1;
+            continue;
+        }
+
+        if (/\d/.test(next)) {
+            const firstIndex = Number(next);
+            const secondChar = index + 2 < source.length ? source[index + 2] : '';
+            const hasSecondDigit = /\d/.test(secondChar);
+            let captureIndex = Number.isFinite(firstIndex) ? firstIndex : NaN;
+            let consumedDigits = 1;
+
+            if (hasSecondDigit) {
+                const doubleIndex = Number(next + secondChar);
+                if (doubleIndex >= 1 && doubleIndex <= groups.length) {
+                    captureIndex = doubleIndex;
+                    consumedDigits = 2;
+                } else if (!(captureIndex >= 1 && captureIndex <= groups.length)) {
+                    captureIndex = NaN;
+                }
+            } else if (!(captureIndex >= 1 && captureIndex <= groups.length)) {
+                captureIndex = NaN;
+            }
+
+            if (Number.isFinite(captureIndex)) {
+                const captureValue = groups[captureIndex - 1];
+                output += captureValue == null ? '' : String(captureValue);
+                index += consumedDigits;
+                continue;
+            }
+        }
+
+        output += '$';
+    }
+
+    return output;
+}
+
+function applyMeetingReplacementTemplate(source, regex, template) {
+    const input = String(source || '');
+    const replacement = String(template || '');
+    return input.replace(regex, function () {
+        const args = Array.prototype.slice.call(arguments);
+        const matchValue = args[0];
+        const maybeGroups = args[args.length - 1];
+        const hasNamedGroups = maybeGroups && typeof maybeGroups === 'object';
+        const captureEndIndex = hasNamedGroups ? args.length - 3 : args.length - 2;
+        const captures = args.slice(1, captureEndIndex);
+        return expandMeetingReplacementTemplate(replacement, matchValue, captures);
+    });
+}
+
+function applyMeetingRegexRendering(text, meeting, placement) {
     let output = String(text || '');
-    const rules = getMeetingIntegrationRegexRules(meeting);
+    const rules = getMeetingRenderRegexRules(meeting, placement);
 
     rules.forEach(function (rule) {
         const regex = buildMeetingRenderRegex(rule.pattern);
@@ -890,14 +997,14 @@ function applyMeetingRegexRendering(text, meeting) {
             return;
         }
 
-        const templateParts = extractMeetingRegexTemplateParts(rule.template);
-        if (templateParts.disabled || templateParts.promptOnly || templateParts.markdownOnly || isUnsafeMeetingRegexReplacement(templateParts.replacement)) {
+        const templateParts = extractMeetingRegexTemplateParts(rule);
+        if (templateParts.disabled || templateParts.promptOnly) {
             return;
         }
 
         try {
-            if (templateParts.replacement) {
-                output = output.replace(regex, templateParts.replacement);
+            if (templateParts.hasReplacement) {
+                output = applyMeetingReplacementTemplate(output, regex, templateParts.replacement);
             }
         } catch (error) {
         }
@@ -913,11 +1020,199 @@ function applyMeetingRegexRendering(text, meeting) {
     return output;
 }
 
+function appendMeetingRenderedTextSegments(segments, text) {
+    const source = String(text || '');
+    if (!source.trim()) {
+        return;
+    }
+
+    const htmlDocRegex = /<!doctype\s+html[\s\S]*?<\/html>|<html[\s\S]*?<\/html>|<body[\s\S]*?<\/body>/gi;
+    let lastIndex = 0;
+    let match = null;
+
+    while ((match = htmlDocRegex.exec(source))) {
+        if (match.index > lastIndex) {
+            segments.push({ type: 'text', content: source.slice(lastIndex, match.index) });
+        }
+
+        segments.push({ type: 'htmlDoc', content: String(match[0] || '').trim() });
+        lastIndex = htmlDocRegex.lastIndex;
+    }
+
+    if (lastIndex < source.length) {
+        segments.push({ type: 'text', content: source.slice(lastIndex) });
+    }
+}
+
+function splitMeetingRenderedSegments(text) {
+    const source = String(text || '').replace(/\r\n/g, '\n');
+    const segments = [];
+    const htmlBlockRegex = /```html\s*([\s\S]*?)```/gi;
+    let lastIndex = 0;
+    let match = null;
+
+    while ((match = htmlBlockRegex.exec(source))) {
+        if (match.index > lastIndex) {
+            appendMeetingRenderedTextSegments(segments, source.slice(lastIndex, match.index));
+        }
+
+        segments.push({ type: 'htmlDoc', content: String(match[1] || '').trim() });
+        lastIndex = htmlBlockRegex.lastIndex;
+    }
+
+    if (lastIndex < source.length) {
+        appendMeetingRenderedTextSegments(segments, source.slice(lastIndex));
+    }
+
+    return segments.filter(function (segment) {
+        return String(segment.content || '').trim();
+    });
+}
+
+function buildMeetingHtmlFrame(docHtml) {
+    const source = String(docHtml || '').trim();
+    if (!source) {
+        return '';
+    }
+
+    const resizeScript = "try{var update=()=>{var d=this.contentWindow&&this.contentWindow.document;if(!d)return;var h=Math.max(d.body?d.body.scrollHeight:0,d.documentElement?d.documentElement.scrollHeight:0,320);this.style.height=h+'px';};update();setTimeout(update,60);setTimeout(update,240);setTimeout(update,800);setTimeout(update,1600);}catch(e){}";
+    return `<div style="margin:0 0 1.15em 0;"><iframe class="meeting-html-frame" scrolling="no" sandbox="allow-scripts allow-same-origin" onload="${escapeMeetingHtml(resizeScript)}" srcdoc="${escapeMeetingHtml(source)}" style="display:block;width:100%;min-height:320px;border:0;border-radius:20px;background:transparent;overflow:hidden;"></iframe></div>`;
+}
+
+function isMeetingHtmlDocument(text) {
+    return /^\s*(?:<!doctype\s+html\b|<html\b|<head\b|<body\b)/i.test(String(text || ''));
+}
+
+function shouldRenderMeetingHtmlFrame(text) {
+    const source = String(text || '').trim();
+    if (!source) {
+        return false;
+    }
+
+    if (isMeetingHtmlDocument(source)) {
+        return true;
+    }
+
+    return /^</.test(source) && /<(?:style|script)\b/i.test(source);
+}
+
+function wrapMeetingHtmlSnippet(text) {
+    const source = String(text || '').trim();
+    if (!source) {
+        return '';
+    }
+
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body style="margin:0;background:transparent;">${source}</body></html>`;
+}
+
+function containsMeetingRenderableHtml(text) {
+    return /<(?:div|details|summary|img|section|article|table|svg|ul|ol|li|p|blockquote|figure|pre|code|span|strong|em|h[1-6]|button|canvas|video|audio)\b/i.test(String(text || ''));
+}
+
+function stripMeetingWrapperLikeTags(text) {
+    return String(text || '').replace(/<\/?([a-zA-Z][\w:-]*)\b[^>]*>/g, function (match, tagName) {
+        const normalized = String(tagName || '').toLowerCase();
+        return /^(?:div|details|summary|img|section|article|table|svg|ul|ol|li|p|blockquote|figure|pre|code|span|strong|em|h[1-6]|button|canvas|video|audio|style|script|head|body|html|meta|link)$/i.test(normalized)
+            ? match
+            : '';
+    });
+}
+
+function cleanupMeetingRenderedText(text) {
+    return stripMeetingWrapperLikeTags(String(text || ''))
+        .replace(/<\/?thinking>/gi, '')
+        .replace(/<\/?reply>/gi, '')
+        .trim();
+}
+
+function formatMeetingTextSegment(text) {
+    const source = String(text || '').trim();
+    if (!source) {
+        return '';
+    }
+
+    if (isMeetingHtmlDocument(source)) {
+        return buildMeetingHtmlFrame(source);
+    }
+
+    if (shouldRenderMeetingHtmlFrame(source)) {
+        return buildMeetingHtmlFrame(wrapMeetingHtmlSnippet(source));
+    }
+
+    const cleaned = cleanupMeetingRenderedText(source);
+    if (!cleaned) {
+        return '';
+    }
+
+    if (containsMeetingRenderableHtml(cleaned)) {
+        return cleaned.replace(/\n{2,}/g, '<br><br>').replace(/\n/g, '<br>');
+    }
+
+    const paragraphs = splitMeetingStoryParagraphs(cleaned);
+    if (paragraphs.length === 0) {
+        return '';
+    }
+
+    return paragraphs.map(function (paragraph) {
+        return `<p style="margin:0 0 1.15em 0;">${escapeMeetingHtml(paragraph)}</p>`;
+    }).join('');
+}
+
+function splitMeetingReplySections(text) {
+    const source = String(text || '').replace(/\r\n/g, '\n');
+    const sections = [];
+    const thinkingRegex = /<thinking>[\s\S]*?<\/thinking>/gi;
+    let lastIndex = 0;
+    let match = null;
+
+    while ((match = thinkingRegex.exec(source))) {
+        if (match.index > lastIndex) {
+            sections.push({ type: 'body', content: source.slice(lastIndex, match.index) });
+        }
+
+        sections.push({ type: 'thinking', content: match[0] });
+        lastIndex = thinkingRegex.lastIndex;
+    }
+
+    if (lastIndex < source.length) {
+        sections.push({ type: 'body', content: source.slice(lastIndex) });
+    }
+
+    if (sections.length === 0) {
+        return [{ type: 'body', content: source }];
+    }
+
+    return sections.filter(function (section) {
+        return String(section.content || '').trim();
+    });
+}
+
+function renderMeetingFormattedContent(text) {
+    const segments = splitMeetingRenderedSegments(text);
+
+    if (segments.length === 0) {
+        return formatMeetingTextSegment(text);
+    }
+
+    return segments.map(function (segment) {
+        return segment.type === 'htmlDoc'
+            ? buildMeetingHtmlFrame(segment.content)
+            : formatMeetingTextSegment(segment.content);
+    }).join('');
+}
+
+function escapeMeetingRegExp(text) {
+    return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function formatMeetingStoryHtml(text, meeting) {
-    const renderedText = applyMeetingRegexRendering(text, meeting);
-    const paragraphs = splitMeetingStoryParagraphs(renderedText);
-    if (paragraphs.length === 0) return '';
-    return paragraphs.map(paragraph => `<p style="margin:0 0 1.15em 0;">${escapeMeetingHtml(paragraph)}</p>`).join('');
+    const sections = splitMeetingReplySections(text);
+
+    return sections.map(function (section) {
+        const placement = section.type === 'thinking' ? 6 : 2;
+        const renderedText = applyMeetingRegexRendering(section.content, meeting, placement);
+        return renderMeetingFormattedContent(renderedText);
+    }).join('');
 }
 
 function buildMeetingSuggestionFallbacks(meeting) {
@@ -952,11 +1247,134 @@ function normalizeMeetingSuggestions(rawSuggestions, meeting) {
     return normalized.slice(0, 3);
 }
 
+function stripMeetingResponseCodeFences(text) {
+    return String(text || '')
+        .trim()
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/\s*```$/, '')
+        .replace(/^json\s*(?=\{)/i, '')
+        .trim();
+}
+
+function decodeMeetingJsonLikeString(rawQuotedValue) {
+    const raw = String(rawQuotedValue || '');
+    if (!raw) {
+        return '';
+    }
+
+    try {
+        return JSON.parse(raw);
+    } catch (error) {
+        const inner = raw.replace(/^"|"$/g, '');
+        return inner
+            .replace(/\\u([0-9a-fA-F]{4})/g, function (_, code) {
+                return String.fromCharCode(parseInt(code, 16));
+            })
+            .replace(/\\n/g, '\n')
+            .replace(/\\r/g, '\r')
+            .replace(/\\t/g, '\t')
+            .replace(/\\b/g, '\b')
+            .replace(/\\f/g, '\f')
+            .replace(/\\\//g, '/')
+            .replace(/\\"/g, '"')
+            .replace(/\\\\/g, '\\');
+    }
+}
+
+function readMeetingJsonLikeQuotedString(text, startIndex) {
+    const source = String(text || '');
+    if (source[startIndex] !== '"') {
+        return null;
+    }
+
+    let index = startIndex + 1;
+    let escaped = false;
+
+    while (index < source.length) {
+        const char = source[index];
+        if (escaped) {
+            escaped = false;
+            index += 1;
+            continue;
+        }
+
+        if (char === '\\') {
+            escaped = true;
+            index += 1;
+            continue;
+        }
+
+        if (char === '"') {
+            const raw = source.slice(startIndex, index + 1);
+            return {
+                raw: raw,
+                value: decodeMeetingJsonLikeString(raw),
+                endIndex: index + 1
+            };
+        }
+
+        index += 1;
+    }
+
+    return null;
+}
+
+function extractMeetingJsonLikeStringField(text, fieldName) {
+    const source = String(text || '');
+    const keyRegex = new RegExp('"' + fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"\\s*:\\s*"', 'i');
+    const match = keyRegex.exec(source);
+    if (!match) {
+        return '';
+    }
+
+    const quoteIndex = match.index + match[0].length - 1;
+    const parsed = readMeetingJsonLikeQuotedString(source, quoteIndex);
+    return parsed ? parsed.value : '';
+}
+
+function extractMeetingJsonLikeSuggestions(text) {
+    const source = String(text || '');
+    const keyRegex = /"suggestions"\s*:\s*\[/i;
+    const match = keyRegex.exec(source);
+    if (!match) {
+        return [];
+    }
+
+    let index = match.index + match[0].length;
+    const results = [];
+
+    while (index < source.length) {
+        while (index < source.length && /\s|,/.test(source[index])) {
+            index += 1;
+        }
+
+        if (source[index] === ']') {
+            break;
+        }
+
+        if (source[index] !== '"') {
+            index += 1;
+            continue;
+        }
+
+        const parsed = readMeetingJsonLikeQuotedString(source, index);
+        if (!parsed) {
+            break;
+        }
+
+        results.push(parsed.value);
+        index = parsed.endIndex;
+    }
+
+    return results;
+}
+
 function parseMeetingAiResponse(rawText, meeting) {
     const trimmed = String(rawText || '').trim();
     if (!trimmed) return { reply: '', suggestions: buildMeetingSuggestionFallbacks(meeting) };
 
-    let content = trimmed.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '');
+    let content = stripMeetingResponseCodeFences(trimmed);
     try {
         const jsonStart = content.indexOf('{');
         const jsonEnd = content.lastIndexOf('}');
@@ -969,8 +1387,20 @@ function parseMeetingAiResponse(rawText, meeting) {
             suggestions: normalizeMeetingSuggestions(parsed.suggestions, meeting)
         };
     } catch (e) {
+        const extractedReply = extractMeetingJsonLikeStringField(content, 'reply')
+            || extractMeetingJsonLikeStringField(content, 'text')
+            || extractMeetingJsonLikeStringField(content, 'content');
+        const extractedSuggestions = extractMeetingJsonLikeSuggestions(content);
+
+        if (extractedReply) {
+            return {
+                reply: extractedReply.trim(),
+                suggestions: normalizeMeetingSuggestions(extractedSuggestions, meeting)
+            };
+        }
+
         return {
-            reply: trimmed,
+            reply: content || trimmed,
             suggestions: buildMeetingSuggestionFallbacks(meeting)
         };
     }
@@ -1788,6 +2218,18 @@ async function handleMeetingAI(type) {
         });
         const parsedResult = parseMeetingAiResponse(rawResponse, meeting);
         const finalTezt = parsedResult.reply;
+        logMeetingAiDebug('Parsed Response', {
+            contactId: contactId,
+            meetingId: meetingId,
+            parsedReplyPreview: String(finalTezt || '').slice(0, 1200),
+            parsedSuggestions: parsedResult.suggestions
+        });
+        logMeetingAiDebug('Render Response', {
+            contactId: contactId,
+            meetingId: meetingId,
+            thinkingRuleTitles: getMeetingRenderRegexRules(meeting, 6).map(function (rule) { return rule.title; }),
+            bodyRuleTitles: getMeetingRenderRegexRules(meeting, 2).map(function (rule) { return rule.title; })
+        });
         
         const contentEl = aiCard.querySelector('.meeting-card-content');
         

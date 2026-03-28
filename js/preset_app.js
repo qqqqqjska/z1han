@@ -359,20 +359,158 @@
             .replace(/'/g, '&#39;');
     }
 
+    function hasOwnRegexField(entry, key) {
+        return Boolean(entry) && Object.prototype.hasOwnProperty.call(entry, key);
+    }
+
+    function normalizeRegexStringList(list) {
+        if (!Array.isArray(list)) {
+            return [];
+        }
+
+        return list.map(function (value) {
+            return String(value ?? '').trim();
+        }).filter(Boolean);
+    }
+
+    function parseLegacyRegexTemplate(template) {
+        const source = String(template ?? '').replace(/\r\n/g, '\n');
+        let replacement = source;
+        let trimStrings = [];
+        const modes = [];
+
+        const modeMatch = replacement.match(/(?:^|\n{2,})Mode:\s*([^\n]+)\s*$/i);
+        if (modeMatch) {
+            replacement = replacement.slice(0, modeMatch.index);
+            modeMatch[1].split(/\s*(?:[\u00B7|]|\u8def)\s*/).forEach(function (item) {
+                const value = String(item || '').trim().toLowerCase();
+                if (value) {
+                    modes.push(value);
+                }
+            });
+        }
+
+        const trimMatch = replacement.match(/(?:^|\n{2,})Trim:\s*([^\n]+)\s*$/i);
+        if (trimMatch) {
+            replacement = replacement.slice(0, trimMatch.index);
+            trimStrings = trimMatch[1].split('|').map(function (item) {
+                return String(item || '').trim();
+            }).filter(Boolean);
+        }
+
+        return {
+            replacement: replacement.trim(),
+            trimStrings: trimStrings,
+            promptOnly: modes.includes('prompt'),
+            markdownOnly: modes.includes('markdown'),
+            runOnEdit: modes.includes('edit'),
+            disabled: modes.includes('disabled')
+        };
+    }
+
+    function buildRegexTemplateString(entry) {
+        const templateParts = [];
+        const replaceString = String(entry?.replaceString ?? '');
+        const trimStrings = normalizeRegexStringList(entry?.trimStrings);
+        const modes = [];
+
+        if (replaceString) {
+            templateParts.push(replaceString);
+        }
+
+        if (trimStrings.length) {
+            templateParts.push('Trim: ' + trimStrings.join(' | '));
+        }
+
+        if (entry?.promptOnly) {
+            modes.push('Prompt');
+        }
+
+        if (entry?.markdownOnly) {
+            modes.push('Markdown');
+        }
+
+        if (entry?.runOnEdit) {
+            modes.push('Edit');
+        }
+
+        if (entry?.disabled) {
+            modes.push('Disabled');
+        }
+
+        if (modes.length) {
+            templateParts.push('Mode: ' + modes.join(' | '));
+        }
+
+        return templateParts.join('\n\n') || '';
+    }
+
+    function normalizeRegexEntry(entry, index) {
+        const legacyTemplateMeta = parseLegacyRegexTemplate(entry?.template);
+        const disabled = hasOwnRegexField(entry, 'disabled')
+            ? Boolean(entry.disabled)
+            : hasOwnRegexField(entry, 'active')
+                ? !Boolean(entry.active)
+                : hasOwnRegexField(entry, 'enabled')
+                    ? !Boolean(entry.enabled)
+                    : Boolean(legacyTemplateMeta.disabled);
+        const replaceString = hasOwnRegexField(entry, 'replaceString')
+            ? String(entry?.replaceString ?? '')
+            : String(legacyTemplateMeta.replacement ?? '');
+        const trimStrings = hasOwnRegexField(entry, 'trimStrings')
+            ? normalizeRegexStringList(entry?.trimStrings)
+            : legacyTemplateMeta.trimStrings;
+        const promptOnly = hasOwnRegexField(entry, 'promptOnly')
+            ? Boolean(entry?.promptOnly)
+            : Boolean(legacyTemplateMeta.promptOnly);
+        const markdownOnly = hasOwnRegexField(entry, 'markdownOnly')
+            ? Boolean(entry?.markdownOnly)
+            : Boolean(legacyTemplateMeta.markdownOnly);
+        const runOnEdit = hasOwnRegexField(entry, 'runOnEdit')
+            ? Boolean(entry?.runOnEdit)
+            : Boolean(legacyTemplateMeta.runOnEdit);
+        const substituteRegex = Boolean(entry?.substituteRegex);
+        const placement = Array.isArray(entry?.placement) ? entry.placement.slice() : [];
+        const icon = entry?.icon || inferRegexIcon({
+            substituteRegex: substituteRegex,
+            promptOnly: promptOnly,
+            markdownOnly: markdownOnly
+        });
+
+        return {
+            id: String(entry?.id ?? entry?.identifier ?? buildRegexEntryId(index)),
+            title: String(entry?.title ?? entry?.scriptName ?? 'Untitled Regex'),
+            icon: icon,
+            pattern: String(entry?.pattern ?? entry?.findRegex ?? ''),
+            template: String(entry?.template ?? buildRegexTemplateString({
+                replaceString: replaceString,
+                trimStrings: trimStrings,
+                promptOnly: promptOnly,
+                markdownOnly: markdownOnly,
+                runOnEdit: runOnEdit,
+                disabled: disabled
+            })),
+            replaceString: replaceString,
+            trimStrings: trimStrings,
+            promptOnly: promptOnly,
+            markdownOnly: markdownOnly,
+            runOnEdit: runOnEdit,
+            substituteRegex: substituteRegex,
+            placement: placement,
+            minDepth: entry?.minDepth,
+            maxDepth: entry?.maxDepth,
+            disabled: disabled,
+            active: !disabled
+        };
+    }
+
     function cloneRegexEntries(entries) {
         if (!Array.isArray(entries)) {
             return [];
         }
 
         return entries.map(function (entry, index) {
-            return {
-                id: String(entry?.id ?? entry?.identifier ?? buildRegexEntryId(index)),
-                title: String(entry?.title ?? entry?.scriptName ?? 'Untitled Regex'),
-                icon: entry?.icon || 'ri-braces-line',
-                pattern: String(entry?.pattern ?? entry?.findRegex ?? ''),
-                template: String(entry?.template ?? entry?.replaceString ?? ''),
-                active: entry?.active ?? entry?.enabled ?? !entry?.disabled
-            };
+            return normalizeRegexEntry(entry, index);
         });
     }
 
@@ -581,14 +719,7 @@
         }
 
         return rawEntries.map(function (entry, index) {
-            return {
-                id: String(entry?.id ?? entry?.identifier ?? buildRegexEntryId(index)),
-                title: String(entry?.title ?? entry?.scriptName ?? `正则${index + 1}`),
-                icon: entry?.icon || inferRegexIcon(entry),
-                pattern: String(entry?.pattern ?? entry?.findRegex ?? ''),
-                template: String(entry?.template ?? entry?.replaceString ?? ''),
-                active: entry?.active ?? entry?.enabled ?? !entry?.disabled
-            };
+            return normalizeRegexEntry(entry, index);
         });
     }
 
@@ -598,49 +729,22 @@
         }
 
         return regexScripts.map(function (script, index) {
-            const templateParts = [];
-            const replaceString = String(script?.replaceString ?? '');
-            const trimStrings = Array.isArray(script?.trimStrings)
-                ? script.trimStrings.filter(function (value) { return value !== ''; })
-                : [];
-            const modes = [];
-
-            if (replaceString) {
-                templateParts.push(replaceString);
-            }
-
-            if (trimStrings.length) {
-                templateParts.push('Trim: ' + trimStrings.join(' | '));
-            }
-
-            if (script?.promptOnly) {
-                modes.push('Prompt');
-            }
-
-            if (script?.markdownOnly) {
-                modes.push('Markdown');
-            }
-
-            if (script?.runOnEdit) {
-                modes.push('Edit');
-            }
-
-            if (script?.disabled) {
-                modes.push('Disabled');
-            }
-
-            if (modes.length) {
-                templateParts.push('Mode: ' + modes.join(' · '));
-            }
-
-            return {
-                id: String(script?.id ?? script?.identifier ?? buildRegexEntryId(index)),
-                title: String(script?.scriptName ?? `正则${index + 1}`),
+            return normalizeRegexEntry({
+                id: script?.id ?? script?.identifier ?? buildRegexEntryId(index),
+                title: script?.scriptName,
                 icon: inferRegexIcon(script),
-                pattern: String(script?.findRegex ?? ''),
-                template: templateParts.join('\n\n') || '',
-                active: !script?.disabled
-            };
+                pattern: script?.findRegex ?? '',
+                replaceString: String(script?.replaceString ?? ''),
+                trimStrings: normalizeRegexStringList(script?.trimStrings),
+                promptOnly: Boolean(script?.promptOnly),
+                markdownOnly: Boolean(script?.markdownOnly),
+                runOnEdit: Boolean(script?.runOnEdit),
+                substituteRegex: Boolean(script?.substituteRegex),
+                placement: Array.isArray(script?.placement) ? script.placement.slice() : [],
+                minDepth: script?.minDepth,
+                maxDepth: script?.maxDepth,
+                disabled: Boolean(script?.disabled)
+            }, index);
         });
     }
 
