@@ -1244,6 +1244,79 @@ function cleanupMeetingRenderedText(text) {
         .trim();
 }
 
+function cleanupMeetingPromptBodyText(text) {
+    return String(text || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+        .replace(/<content\b[^>]*>/gi, '')
+        .replace(/<\/content>/gi, '')
+        .replace(/<reply\b[^>]*>/gi, '')
+        .replace(/<\/reply>/gi, '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(?:p|div|section|article|li|blockquote|pre|h[1-6])>/gi, '\n')
+        .replace(/<(?:li)\b[^>]*>/gi, '- ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n[ \t]+/g, '\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+function extractMeetingPromptBodyText(text) {
+    const source = String(text || '').trim();
+    if (!source) {
+        return '';
+    }
+
+    const taggedParts = [];
+    const contentRegex = /<content\b[^>]*>([\s\S]*?)<\/content>/gi;
+    let match = null;
+
+    while ((match = contentRegex.exec(source))) {
+        const bodyText = cleanupMeetingPromptBodyText(match[1]);
+        if (bodyText) {
+            taggedParts.push(bodyText);
+        }
+    }
+
+    if (taggedParts.length > 0) {
+        return taggedParts.join('\n\n').trim();
+    }
+
+    const sectionText = splitMeetingReplySections(source)
+        .filter(function (section) {
+            return section.type !== 'thinking';
+        })
+        .map(function (section) {
+            return cleanupMeetingPromptBodyText(section.content);
+        })
+        .filter(Boolean)
+        .join('\n\n')
+        .trim();
+
+    return sectionText || cleanupMeetingPromptBodyText(source);
+}
+
+function getMeetingPromptContextText(entry) {
+    if (!entry) {
+        return '';
+    }
+
+    if (entry.role === 'ai') {
+        const cached = String(entry.promptText || '').trim();
+        return cached || extractMeetingPromptBodyText(entry.text);
+    }
+
+    return String(entry.text || '').trim();
+}
+
 function formatMeetingTextSegment(text) {
     const source = String(text || '').trim();
     if (!source) {
@@ -1910,7 +1983,7 @@ function constructMeetingPrompt(contactId, newUserInput) {
     }
 
     // 基础设定
-    let prompt = `你现在不是联系人本人，而是一个酒馆式 RP 的旁白写手 / 共创剧情引擎。\n`;
+    let prompt = `你现在不是联系人本人，而是一个RP 的旁白写手 / 共创剧情引擎。\n`;
     prompt += `角色：${contact.name}。\n`;
     prompt += `联系人设：${contact.persona || '无特定人设'}。\n`;
     
@@ -1932,7 +2005,7 @@ function constructMeetingPrompt(contactId, newUserInput) {
     }
 
     prompt += `【规则】\n`;
-    prompt += `1. 这是一次线下见面的酒馆式 RP 共写，不是聊天软件对话。你不是${contact.name}本人，也不是在替他回复消息。\n`;
+    prompt += `1. 这是一次线下见面的RP 共写，不是聊天软件对话。你不是${contact.name}本人，也不是在替他回复消息。\n`;
     prompt += `2. 用户当前输入默认应被视为“设定补充、剧情素材、情境假设、关系假设、动作草稿、氛围关键词、片段化灵感”，优先作为世界设定或剧情条件处理，而不是直接当成角色已经说出口的话。\n`;
     prompt += `3. 只有当用户输入本身明确带有说话标记、引号、明确台词动作，或上下文清楚要求“某角色把这句话说出口”时，你才能把其中部分内容落地为角色对白；否则默认不要把整段输入直接写成‘你用气声说出口’、‘你对他说’、‘你发给他’之类行为。\n`;
     prompt += `4. 你的任务是把这些素材转化为“下一段剧情正文”，继续创作双方互动、场景氛围、心理活动、动作和环境变化，并优先表现“设定成立后会怎样”，而不是“用户说了这句话后对方怎么回”。\n`;
@@ -1957,7 +2030,10 @@ function constructMeetingPrompt(contactId, newUserInput) {
         if (card.role === 'user') {
             prompt += `【用户给出的剧情素材】${card.text}\n`;
         } else {
-            prompt += `【你写出的上一段正文】${card.text}\n`;
+            const promptBody = getMeetingPromptContextText(card);
+            if (promptBody) {
+                prompt += `【你写出的上一段正文】${promptBody}\n`;
+            }
         }
     });
 
@@ -1974,8 +2050,8 @@ function constructMeetingPrompt(contactId, newUserInput) {
     }
     
     prompt += hasPresetInstructions
-        ? `\n请根据以上内容，像酒馆 RP 一样继续创作本轮见面内容。默认把用户输入当成设定或素材，而不是已经对${contact.name}说出口的话。除非用户明确要求落地成台词，否则优先写“这个设定成立后，现场气氛、关系、动作与心理如何变化”。如果接入预设要求输出额外结构、栏目或格式，请把这些内容一并写进 JSON.reply。最终按指定 JSON 格式返回 reply 与 3 条 suggestions。`
-        : `\n请根据以上内容，像酒馆 RP 一样继续创作“下一段剧情正文”。默认把用户输入当成设定或素材，而不是已经对${contact.name}说出口的话。除非用户明确要求落地成台词，否则优先写“这个设定成立后，现场气氛、关系、动作与心理如何变化”。并按指定 JSON 格式返回剧情正文与 3 条可继续喂给你的剧情片段建议。`;
+        ? `\n请根据以上内容，像 RP 一样继续创作本轮见面内容。默认把用户输入当成设定或素材，而不是已经对${contact.name}说出口的话。除非用户明确要求落地成台词，否则优先写“这个设定成立后，现场气氛、关系、动作与心理如何变化”。如果接入预设要求输出额外结构、栏目或格式，请把这些内容一并写进 JSON.reply。最终按指定 JSON 格式返回 reply 与 3 条 suggestions。`
+        : `\n请根据以上内容，像 RP 一样继续创作“下一段剧情正文”。默认把用户输入当成设定或素材，而不是已经对${contact.name}说出口的话。除非用户明确要求落地成台词，否则优先写“这个设定成立后，现场气氛、关系、动作与心理如何变化”。并按指定 JSON 格式返回剧情正文与 3 条可继续喂给你的剧情片段建议。`;
     prompt += lengthInstruction; // 将字数限制放在最后，增强权重
     
     return prompt;
@@ -2265,7 +2341,7 @@ async function handleMeetingAI(type) {
     aiCard.innerHTML = `
         <div class="meeting-editorial-role-tag meeting-card-role-ai" style="font-family:-apple-system,sans-serif;font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#b0b0b0;display:flex;align-items:center;gap:10px;justify-content:flex-start;">
             <span style="display:block;width:24px;height:1px;background:#ddd;"></span>
-            <span>角色反应</span>
+            <span>CHARACTER</span>
         </div>
         <div class="meeting-card-content loading-dots" style="font-size:16px;line-height:1.92;letter-spacing:.2px;color:#2c2c2c;text-align:justify;">......</div>
         <div class="meeting-card-actions" style="position:absolute;top:0;right:0;padding-left:12px;display:flex;gap:16px;opacity:0;transition:opacity .25s;background:#fdfdfc;"></div>
@@ -2359,7 +2435,8 @@ async function handleMeetingAI(type) {
         // 保存
         meeting.content.push({
             role: 'ai',
-            text: finalTezt
+            text: finalTezt,
+            promptText: extractMeetingPromptBodyText(finalTezt)
         });
         meeting.suggestedActions = normalizeMeetingSuggestions(parsedResult.suggestions, meeting);
         saveConfig();
@@ -2676,7 +2753,13 @@ function setupMeetingListeners() {
 
             const meeting = window.iphoneSimState.meetings[window.iphoneSimState.currentChatContactId].find(m => m.id === window.iphoneSimState.currentMeetingId);
             if (meeting) {
-                meeting.content[currentEditingMeetingMsgIndex].text = newText;
+                const currentEntry = meeting.content[currentEditingMeetingMsgIndex];
+                currentEntry.text = newText;
+                if (currentEntry.role === 'ai') {
+                    currentEntry.promptText = extractMeetingPromptBodyText(newText);
+                } else if (Object.prototype.hasOwnProperty.call(currentEntry, 'promptText')) {
+                    delete currentEntry.promptText;
+                }
                 saveConfig();
                 renderMeetingCards(meeting);
                 document.getElementById('edit-meeting-msg-modal').classList.add('hidden');
