@@ -3,7 +3,7 @@
     // Discord Auth Config
     const DISCORD_CLIENT_ID = '1487795213609992324';
     const DISCORD_GUILD_ID = '1379304008157499423';
-    const DISCORD_REDIRECT_URI = 'https://qqqqqiska.github.io/z1han/';
+    const DISCORD_REDIRECT_URI = 'https://qqqqqjska.github.io/z1han/';
 
     const DEVICE_ID_KEY = 'device_id';
     const DEVICE_VERIFIED_KEY = 'device_verified';
