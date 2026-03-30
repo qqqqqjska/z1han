@@ -1300,6 +1300,21 @@
                 </div>
             </div>
 
+            <div id="add-contact-entry-modal" class="modal hidden">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>添加方式</h3>
+                        <button class="close-btn" id="close-add-contact-entry">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <button id="choose-add-contact-manual" class="ios-btn-block">手动添加</button>
+                        <button id="choose-add-contact-import" class="ios-btn-block secondary" style="margin-top: 10px;">导入文件</button>
+                        <div style="margin-top: 12px; color: #8e8e93; font-size: 13px; line-height: 1.6;">支持导入 JSON 与 PNG 角色卡；会自动把人设、世界书、正则同步到对应应用。</div>
+                    </div>
+                </div>
+            </div>
+            <input type="file" id="contact-import-file-input" accept=".json,.png,application/json,image/png" class="file-input-hidden">
+
             <!-- 批量导入表情包弹窗 -->
             <div id="import-sticker-modal" class="modal hidden">
                 <div class="modal-content">

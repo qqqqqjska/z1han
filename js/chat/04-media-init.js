@@ -3758,8 +3758,13 @@ function setupChatListeners() {
     updateWechatHeader('contacts');
 
     const addContactModal = document.getElementById('add-contact-modal');
+    const addContactEntryModal = document.getElementById('add-contact-entry-modal');
     const closeAddContactBtn = document.getElementById('close-add-contact');
+    const closeAddContactEntryBtn = document.getElementById('close-add-contact-entry');
     const saveContactBtn = document.getElementById('save-contact-btn');
+    const chooseAddContactManualBtn = document.getElementById('choose-add-contact-manual');
+    const chooseAddContactImportBtn = document.getElementById('choose-add-contact-import');
+    const contactImportFileInput = document.getElementById('contact-import-file-input');
 
     const contactAvatarPreview = document.getElementById('contact-avatar-preview');
     const contactAvatarUpload = document.getElementById('contact-avatar-upload');
@@ -3780,7 +3785,29 @@ function setupChatListeners() {
     }
 
     if (closeAddContactBtn) closeAddContactBtn.addEventListener('click', () => addContactModal.classList.add('hidden'));
+    if (closeAddContactEntryBtn) closeAddContactEntryBtn.addEventListener('click', () => {
+        if (typeof window.closeAddContactModeChooser === 'function') {
+            window.closeAddContactModeChooser();
+        } else if (addContactEntryModal) {
+            addContactEntryModal.classList.add('hidden');
+        }
+    });
     if (saveContactBtn) saveContactBtn.addEventListener('click', handleSaveContact);
+    if (chooseAddContactManualBtn) chooseAddContactManualBtn.addEventListener('click', () => {
+        if (typeof window.openManualAddContactModal === 'function') {
+            window.openManualAddContactModal();
+        } else if (addContactModal) {
+            addContactModal.classList.remove('hidden');
+        }
+    });
+    if (chooseAddContactImportBtn) chooseAddContactImportBtn.addEventListener('click', () => {
+        if (typeof window.triggerImportContactFilePicker === 'function') {
+            window.triggerImportContactFilePicker();
+        } else if (contactImportFileInput) {
+            contactImportFileInput.click();
+        }
+    });
+    if (contactImportFileInput) contactImportFileInput.addEventListener('change', handleImportContactFileSelection);
 
     const backToContactsBtn = document.getElementById('back-to-contacts');
     if (backToContactsBtn) backToContactsBtn.addEventListener('click', () => {
@@ -4592,7 +4619,13 @@ function updateWechatHeader(tab) {
             const addBtn = document.createElement('div');
             addBtn.className = 'wechat-icon-btn';
             addBtn.innerHTML = '<i class="fas fa-plus-circle"></i>';
-            addBtn.onclick = () => document.getElementById('add-contact-modal').classList.remove('hidden');
+            addBtn.onclick = () => {
+                if (typeof window.openAddContactModeChooser === 'function') {
+                    window.openAddContactModeChooser();
+                } else {
+                    document.getElementById('add-contact-modal').classList.remove('hidden');
+                }
+            };
             right.appendChild(addBtn);
         }
 
@@ -4603,7 +4636,13 @@ function updateWechatHeader(tab) {
         if (addBtnCustom) {
             const newBtn = addBtnCustom.cloneNode(true);
             addBtnCustom.parentNode.replaceChild(newBtn, addBtnCustom);
-            newBtn.addEventListener('click', () => document.getElementById('add-contact-modal').classList.remove('hidden'));
+            newBtn.addEventListener('click', () => {
+                if (typeof window.openAddContactModeChooser === 'function') {
+                    window.openAddContactModeChooser();
+                } else {
+                    document.getElementById('add-contact-modal').classList.remove('hidden');
+                }
+            });
         }
 
         const backBtnCustom = document.getElementById('contacts-back-btn');
