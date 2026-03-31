@@ -1183,6 +1183,7 @@ function createBaseContactPayload({ name, remark = '', persona = '', avatar = ''
         thoughtPetSize: 88,
         thoughtPetPosition: { xRatio: 0.86, yRatio: 0.72 },
         linkedWbCategories: [],
+        meetingLinkedWbCategories: [],
         linkedStickerCategories: []
     };
 }
