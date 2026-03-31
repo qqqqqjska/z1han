@@ -3656,6 +3656,16 @@ function handleSaveChatSettings() {
         }));
     }
 
+    if (typeof window.persistFireBuddySettings === 'function') {
+        promises.push(
+            Promise.resolve()
+                .then(() => window.persistFireBuddySettings())
+                .catch(err => {
+                    console.error('保存小火人设置失败', err);
+                })
+        );
+    }
+
     Promise.all(promises).then(() => {
         saveConfig();
         setChatSettingsFloatingSaveState(true);
