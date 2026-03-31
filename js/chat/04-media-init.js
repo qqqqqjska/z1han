@@ -1,4 +1,4 @@
-function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type = 'text', targetContactId = null) {
+﻿function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type = 'text', targetContactId = null) {
     return new Promise(resolve => {
         const contactId = targetContactId || window.iphoneSimState.currentChatContactId;
         if (!contactId) {
@@ -172,12 +172,31 @@ function handleChatPhotoUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
 
-    compressImage(file, 800, 0.7).then(base64 => {
+    const fallbackToBase64 = () => compressImage(file, 800, 0.7).then(base64 => {
         sendMessage(base64, true, 'image');
-        document.getElementById('chat-more-panel').classList.add('hidden');
-    }).catch(err => {
-        console.error('图片压缩失败', err);
     });
+
+    Promise.resolve()
+        .then(async () => {
+            if (typeof window.compressImageToBlob !== 'function' || typeof window.saveChatMediaBlob !== 'function') {
+                return fallbackToBase64();
+            }
+
+            const blob = await window.compressImageToBlob(file, 1280, 0.72);
+            const mediaRef = await window.saveChatMediaBlob(blob, {
+                type: blob.type || file.type || 'image/jpeg',
+                name: file.name || ''
+            });
+            sendMessage(mediaRef, true, 'image');
+            return null;
+        })
+        .catch(() => fallbackToBase64())
+        .then(() => {
+            document.getElementById('chat-more-panel').classList.add('hidden');
+        })
+        .catch(err => {
+            console.error('图片压缩失败', err);
+        });
     e.target.value = '';
 }
 
@@ -4989,12 +5008,14 @@ function getLastAiBlockJson(contactId) {
         } else if (msg.type === 'image' || msg.type === 'virtual_image') {
             const rawImageContent = String(msg.content || '').trim();
             const fallbackVirtualImageUrl = String((window.iphoneSimState && window.iphoneSimState.defaultVirtualImageUrl) || '').trim();
+            const isStoredLocalImage = typeof window.isChatMediaReference === 'function' && window.isChatMediaReference(rawImageContent);
             const useRawImageUrl = msg.type === 'image'
                 && /^https?:\/\//i.test(rawImageContent)
+                && !isStoredLocalImage
                 && (!fallbackVirtualImageUrl || rawImageContent !== fallbackVirtualImageUrl);
             const normalizedImageContent = useRawImageUrl
                 ? rawImageContent
-                : (msg.description || rawImageContent || '[图片]');
+                : (msg.description || (isStoredLocalImage ? '[图片]' : rawImageContent) || '[图片]');
             const item = { type: "image", content: normalizedImageContent };
             if (msg.novelaiPrompt) item.novelaiPrompt = msg.novelaiPrompt;
             if (msg.novelaiNegativePrompt) item.novelaiNegativePrompt = msg.novelaiNegativePrompt;
@@ -5139,4 +5160,3 @@ if (window.appInitFunctions) {
         if (window.startForumAutoPostScheduler) window.startForumAutoPostScheduler();
     });
 }
-

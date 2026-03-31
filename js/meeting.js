@@ -1655,25 +1655,6 @@ function getMeetingStyleSelectedWorldbookIds() {
     );
 }
 
-function updateMeetingStyleWorldbookTip() {
-    const tip = document.getElementById('meeting-worldbook-tip');
-    if (!tip) {
-        return;
-    }
-
-    const selectedIds = new Set(getMeetingStyleSelectedWorldbookIds());
-    if (!selectedIds.size) {
-        tip.textContent = '仅见面模式生效，不影响线上聊天；当前未关联世界书';
-        return;
-    }
-
-    const activeEntryCount = (Array.isArray(window.iphoneSimState?.worldbook) ? window.iphoneSimState.worldbook : []).filter(entry => {
-        return selectedIds.has(Number(entry?.categoryId)) && entry?.enabled !== false;
-    }).length;
-
-    tip.textContent = `仅见面模式生效，不影响线上聊天；已关联 ${selectedIds.size} 个分类，见面时会发送 ${activeEntryCount} 条已开启条目`;
-}
-
 function renderMeetingStyleWorldbookList(selectedIds) {
     const container = document.getElementById('meeting-worldbook-list');
     if (!container) {
@@ -1681,35 +1662,21 @@ function renderMeetingStyleWorldbookList(selectedIds) {
     }
 
     const categories = getMeetingWorldbookCategories();
-    const worldbookEntries = Array.isArray(window.iphoneSimState?.worldbook) ? window.iphoneSimState.worldbook : [];
     const selectedIdSet = new Set(normalizeMeetingLinkedWorldbookIds(selectedIds));
 
     if (!categories.length) {
-        container.innerHTML = '<div style="font-size:13px;line-height:1.6;color:#8e8e93;text-align:center;">暂无世界书分类，请先去世界书应用中创建</div>';
-        updateMeetingStyleWorldbookTip();
+        container.innerHTML = '<div style="font-size:13px;line-height:1.6;color:#8e8e93;text-align:center;">暂无世界书分类</div>';
         return;
     }
 
     container.innerHTML = categories.map(category => {
-        const categoryEntries = worldbookEntries.filter(entry => Number(entry?.categoryId) === Number(category.id));
-        const enabledCount = categoryEntries.filter(entry => entry?.enabled !== false).length;
-        const totalCount = categoryEntries.length;
         return `
             <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;">
                 <input type="checkbox" class="meeting-worldbook-checkbox" data-id="${escapeMeetingHtml(category.id)}" ${selectedIdSet.has(Number(category.id)) ? 'checked' : ''} style="margin-top:2px;">
-                <span style="display:flex;flex-direction:column;gap:4px;min-width:0;">
-                    <span style="font-size:15px;font-weight:600;color:#111;line-height:1.35;word-break:break-all;">${escapeMeetingHtml(category.name || '未命名世界书')}</span>
-                    <span style="font-size:12px;color:#8e8e93;line-height:1.45;">已开启 ${enabledCount} 条 / 共 ${totalCount} 条</span>
-                </span>
+                <span style="font-size:15px;font-weight:600;color:#111;line-height:1.35;word-break:break-all;">${escapeMeetingHtml(category.name || '未命名世界书')}</span>
             </label>
         `;
     }).join('');
-
-    container.querySelectorAll('.meeting-worldbook-checkbox').forEach(checkbox => {
-        checkbox.addEventListener('change', updateMeetingStyleWorldbookTip);
-    });
-
-    updateMeetingStyleWorldbookTip();
 }
 
 function getMeetingLinkedWorldbookEntries(contact) {
