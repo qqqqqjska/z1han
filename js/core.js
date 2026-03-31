@@ -1432,6 +1432,9 @@ async function loadConfig() {
             if (!state.chatWallpapers) state.chatWallpapers = [];
             if (!state.contacts) state.contacts = [];
             if (!state.chatHistory) state.chatHistory = {};
+            if (typeof window.ensureContactBilingualTranslationFields === 'function') {
+                state.contacts.forEach(contact => window.ensureContactBilingualTranslationFields(contact));
+            }
             if (!state.worldbook) state.worldbook = [];
             if (!state.userPersonas) state.userPersonas = [];
             if (!state.moments) state.moments = [];
