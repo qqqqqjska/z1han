@@ -1824,10 +1824,7 @@ async function generateMeetingSummary(contactId, meeting, injectIntoChat = false
             channel: 'meeting',
             source: injectIntoChat ? 'meeting_sync' : 'meeting_summary',
             rangeLabel: meeting && meeting.title ? meeting.title : '见面剧情',
-            detailModeHint: '当前是见面总结，重点写线下关键动作、情绪变化、承诺或分歧以及后续动作。',
             summaryPromptMode: 'manual',
-            rangeLabel: meeting && meeting.title ? meeting.title : '见面剧情',
-            detailModeHint: '',
             totalMessageCount,
             sourceMessageCount: totalMessageCount,
             rangeOverride: Object.assign({}, lengthRange, { maxTokens: 1100 }),
@@ -1837,17 +1834,28 @@ async function generateMeetingSummary(contactId, meeting, injectIntoChat = false
         if (!summary) throw new Error('empty summary');
     } catch (error) {
         console.error('见面总结API请求失败:', error);
-        const rawRecord = meetingMessages
-            .slice(0, 14)
-            .map(msg => `${msg.role === 'user' ? userName : contactLabel}: ${msg.content}`)
-            .join('；');
-        summary = rawRecord ? `【见面原始记录】${rawRecord}` : '';
+        summary = typeof buildDetailedSummaryFallbackParagraph === 'function'
+            ? buildDetailedSummaryFallbackParagraph(contact, meetingMessages, lengthRange, userName, '', {
+                channel: 'meeting',
+                rangeLabel: meeting && meeting.title ? meeting.title : '见面剧情',
+                totalMessageCount
+            })
+            : `${userName}与${contactLabel}在线下见面中围绕本次剧情进行了交流，并形成了后续可延续的话题。`;
         if (!summary) {
             showNotification('见面总结失败', 2000, 'error');
             return;
         }
-        showNotification('AI总结失败，已使用原始记录兜底', 2000, 'warning');
+        showNotification('AI总结失败，已使用纪要式兜底', 2000, 'warning');
     }
+
+    if (typeof ensureDetailedSummaryText === 'function') {
+        summary = ensureDetailedSummaryText(summary, contact, meetingMessages, lengthRange, userName, {
+            channel: 'meeting',
+            rangeLabel: meeting && meeting.title ? meeting.title : '见面剧情',
+            totalMessageCount
+        });
+    }
+    summary = String(summary || '').trim();
 
     if (false) {
     const now = new Date();
@@ -1964,7 +1972,11 @@ async function generateMeetingSummary(contactId, meeting, injectIntoChat = false
             contactId: contact.id,
             content: `【见面回忆】(${meeting.title}) ${summary}`,
             time: Date.now(),
-            range: '见面剧情'
+            range: '见面剧情',
+            source: injectIntoChat ? 'meeting_sync' : 'meeting_summary',
+            memoryTags: injectIntoChat ? ['short_term', 'long_term'] : ['long_term'],
+            importance: injectIntoChat ? 0.88 : 0.82,
+            confidence: 0.92
         });
 
         // 2. 如果需要同步到聊天 (Inject into chat history)
@@ -1978,7 +1990,9 @@ async function generateMeetingSummary(contactId, meeting, injectIntoChat = false
                 time: Date.now(),
                 role: 'system',
                 content: `[系统事件]: 用户刚刚结束了与你的线下见面（${meeting.title}）。\n见面剧情摘要：${summary}。\n请注意：你们刚刚分开，回到了线上聊天状态。请根据见面的情况，自然地继续话题，或者对见面进行回味/吐槽/关心。`,
-                type: 'system_event' // 特殊类型，不直接显示给用户，但包含在上下文
+                type: 'system_event', // 特殊类型，不直接显示给用户
+                includeInAiContext: true,
+                systemEventKind: 'meeting_sync'
             };
             
             window.iphoneSimState.chatHistory[contactId].push(systemMsg);
@@ -1994,11 +2008,9 @@ async function generateMeetingSummary(contactId, meeting, injectIntoChat = false
         saveConfig();
         
         console.log('见面剧情同步完成:', summary.substring(0, 20) + '...');
-        if (!document.querySelector('.notification-banner:not(.hidden)')) {
-             showNotification(injectIntoChat ? '已同步见面剧情' : '见面总结完成', 2000, 'success');
-        }
+        showNotification(injectIntoChat ? '已同步见面剧情' : '见面总结完成', 2000, 'success');
     } else {
-        showNotification('未生成有效内容', 2000);
+        showNotification('未生成有效内容', 2000, 'error');
     }
 }
 
