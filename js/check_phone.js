@@ -1,4 +1,4 @@
-﻿﻿// 查手机功能模块 (Phone Check App)
+﻿// 查手机功能模块 (Phone Check App)
 
 // 配置常量
 const PHONE_GRID_ROWS = 6;
@@ -714,7 +714,7 @@ function openPhoneNotesApp() {
     screen.classList.remove('hidden');
 }
 
-const PHONE_FILES_TEMPLATE_VERSION = 'v2';
+const PHONE_FILES_TEMPLATE_VERSION = 'v3';
 const PHONE_FILES_V1_STYLE_TEXT = `
 #phone-files,
 #phone-files-content {
@@ -786,6 +786,17 @@ const PHONE_FILES_V1_STYLE_TEXT = `
     box-shadow: -10px 0 20px rgba(0,0,0,0.05);
 }
 #phone-files-content .view-detail.active {
+    transform: translateX(0);
+}
+#phone-files-content .view-detail.bg {
+    transform: translateX(-30%);
+}
+#phone-files-content .view-folder {
+    transform: translateX(100%);
+    z-index: 8;
+    box-shadow: -10px 0 20px rgba(0,0,0,0.05);
+}
+#phone-files-content .view-folder.active {
     transform: translateX(0);
 }
 #phone-files-content .header {
@@ -915,15 +926,7 @@ const PHONE_FILES_V1_STYLE_TEXT = `
 #phone-files-content .list-item:active {
     background: #E5E5EA;
 }
-#phone-files-content .list-item:not(:last-child)::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 54px;
-    right: 0;
-    height: 0.5px;
-    background: var(--ios-separator);
-}
+
 #phone-files-content .list-icon {
     width: 24px;
     font-size: 24px;
@@ -1094,6 +1097,10 @@ const PHONE_FILES_V1_STYLE_TEXT = `
     border-radius: 16px;
     background: rgba(255,255,255,0.92);
     box-shadow: 0 10px 24px rgba(0,0,0,0.05);
+    cursor: pointer;
+}
+#phone-files-content .hidden-folder-card:active {
+    opacity: 0.72;
 }
 #phone-files-content .hidden-folder-icon {
     width: 48px;
@@ -1135,6 +1142,11 @@ const PHONE_FILES_V1_STYLE_TEXT = `
     margin-top: 4px;
     font-size: 13px;
     color: var(--ios-text-secondary);
+}
+#phone-files-content .hidden-folder-chevron {
+    color: #C7C7CC;
+    font-size: 22px;
+    flex-shrink: 0;
 }
 `;
 
@@ -1180,6 +1192,19 @@ const PHONE_FILES_V1_TEMPLATE_HTML = `
             </div>
             <div class="detail-content" id="phone-files-detail-content"></div>
         </div>
+        <div class="view view-folder" id="phone-files-folder-view">
+            <div class="header" id="phone-files-folder-header">
+                <div class="nav-bar">
+                    <div class="nav-btn" data-action="back-to-files-detail"><i class="ri-arrow-left-s-line" style="font-size:24px; vertical-align:middle; margin-left:-8px;"></i> <span id="phone-files-folder-back-label">隐藏文件夹</span></div>
+                    <div class="nav-title" id="phone-files-folder-small-title">文件夹</div>
+                    <div class="nav-btn circle" style="opacity:0; pointer-events:none;"><i class="ri-more-fill"></i></div>
+                </div>
+                <div class="large-title-container">
+                    <div class="large-title" id="phone-files-folder-big-title">文件夹</div>
+                </div>
+            </div>
+            <div class="detail-content" id="phone-files-folder-content"></div>
+        </div>
     </div>
 </div>`;
 
@@ -1216,9 +1241,50 @@ const PHONE_FILES_SAMPLE_FILES = {
     favorites: ['灵感板.jpg', '收藏配色.png', '论文摘录.pdf', '常用模板.docx', '旅行计划.pdf', '配乐片段.m4a']
 };
 const PHONE_FILES_SAMPLE_HIDDEN_FOLDERS = [
-    { name: '_cache', type: 'folder', time: '2026-03-29 00:43', locked: false, file_count: 4, summary: '看起来像普通缓存目录', related_to_user: false, hidden_tension: '' },
-    { name: 'archive2', type: 'folder', time: '2026-03-30 22:17', locked: true, file_count: 7, summary: '低调命名的归档目录', related_to_user: false, hidden_tension: '' },
-    { name: 'private_save', type: 'folder', time: '2026-03-31 18:26', locked: true, file_count: 5, summary: '像是刻意留着不想删的内容', related_to_user: true, hidden_tension: '' }
+    {
+        name: '_cache',
+        type: 'folder',
+        time: '2026-03-29 00:43',
+        locked: false,
+        file_count: 4,
+        summary: '看起来像普通缓存目录',
+        related_to_user: false,
+        hidden_tension: '',
+        items: [
+            { name: '图层缓存_03.png', type: 'image', size: '3.2 MB', time: '2026-03-29 00:40', source: '相册整理', summary: '像是临时缓存图。', related_to_user: false, hidden_tension: '' },
+            { name: '导出草图_v2.pdf', type: 'pdf', size: '1.1 MB', time: '2026-03-28 23:18', source: '手动创建', summary: '像是改过几轮的文件。', related_to_user: false, hidden_tension: '' },
+            { name: '截图整理_0328.zip', type: 'zip', size: '8.4 MB', time: '2026-03-28 22:44', source: '手动压缩', summary: '看起来像一包临时截图。', related_to_user: false, hidden_tension: '' },
+            { name: '记录一下.jpg', type: 'image', size: '2.6 MB', time: '2026-03-28 21:15', source: '微信保存', summary: '像是随手存下来的图片。', related_to_user: false, hidden_tension: '' }
+        ]
+    },
+    {
+        name: 'archive2',
+        type: 'folder',
+        time: '2026-03-30 22:17',
+        locked: true,
+        file_count: 7,
+        summary: '低调命名的归档目录',
+        related_to_user: false,
+        hidden_tension: '',
+        items: [
+            { name: '整理后删.zip', type: 'zip', size: '18.2 MB', time: '2026-03-30 22:11', source: '手动压缩', summary: '像是特地归档的资料。', related_to_user: false, hidden_tension: '' },
+            { name: '备份_不要同步.pdf', type: 'pdf', size: '2.1 MB', time: '2026-03-30 21:56', source: '备忘录导出', summary: '像是刻意留底。', related_to_user: false, hidden_tension: '' }
+        ]
+    },
+    {
+        name: 'private_save',
+        type: 'folder',
+        time: '2026-03-31 18:26',
+        locked: true,
+        file_count: 5,
+        summary: '像是刻意留着不想删的内容',
+        related_to_user: true,
+        hidden_tension: '',
+        items: [
+            { name: '先留着再看.mp4', type: 'video', size: '62.3 MB', time: '2026-03-31 18:22', source: '浏览器下载', summary: '像是留着之后再看的东西。', related_to_user: false, hidden_tension: '' },
+            { name: '解释稿_v2.docx', type: 'docx', size: '288 KB', time: '2026-03-31 17:48', source: '手动创建', summary: '像是准备过又没发出去的说明。', related_to_user: true, hidden_tension: '' }
+        ]
+    }
 ];
 const PHONE_FILES_DATA_SECTION_ORDER = ['recent_opened', 'downloads', 'archives', 'scans', 'hidden_folders', 'favorite_files'];
 const PHONE_FILES_UI_KEY_TO_DATA_KEY = {
@@ -1341,6 +1407,43 @@ function phoneFilesInferTypeFromName(name) {
     return 'file';
 }
 
+function normalizePhoneFilesFileItem(item, index, fallbackName = '') {
+    const source = item && typeof item === 'object' ? item : {};
+    const name = phoneFilesNormalizeText(source.name || source.filename || source.title, fallbackName || `文件${index + 1}`);
+    return {
+        name,
+        type: phoneFilesNormalizeText(source.type, phoneFilesInferTypeFromName(name)),
+        size: phoneFilesNormalizeText(source.size, '1.8 MB'),
+        time: phoneFilesNormalizeText(source.time || source.updated_at, '2026-04-01 22:13'),
+        source: phoneFilesNormalizeText(source.source, '手动创建'),
+        summary: phoneFilesNormalizeText(source.summary, '看起来像一份普通文件。'),
+        related_to_user: phoneFilesNormalizeBoolean(source.related_to_user, false),
+        hidden_tension: phoneFilesNormalizeText(source.hidden_tension, '')
+    };
+}
+
+function phoneFilesBuildFallbackFolderItems(folderName, count = 4) {
+    const baseNames = ['先留着.pdf', '记录一下.jpg', '导出备份(1).zip', '说清楚之前别删.txt', '临时保存_0329.pdf', '截图整理.zip', '扫描文件_0328.pdf', '解释稿_v2.docx'];
+    const normalizedCount = Math.max(1, Math.min(8, Number(count) || 4));
+    let seed = 0;
+    for (const ch of String(folderName || 'folder')) seed += ch.charCodeAt(0);
+    const items = [];
+    for (let i = 0; i < normalizedCount; i += 1) {
+        const name = baseNames[(seed + i) % baseNames.length];
+        items.push(normalizePhoneFilesFileItem({
+            name,
+            type: phoneFilesInferTypeFromName(name),
+            size: `${1 + ((seed + i) % 8)}.${(seed + i) % 10} MB`,
+            time: `2026-03-${String(31 - (i % 6)).padStart(2, '0')} ${String(12 + (i % 8)).padStart(2, '0')}:1${i % 6}`,
+            source: i % 3 === 0 ? '浏览器下载' : (i % 3 === 1 ? '微信保存' : '手动创建'),
+            summary: '像是被放进文件夹里单独留着的文件。',
+            related_to_user: i === 0,
+            hidden_tension: ''
+        }, i, name));
+    }
+    return phoneFilesSortByTime(items);
+}
+
 function normalizePhoneFilesEntry(sectionKey, item, index) {
     const source = item && typeof item === 'object' ? item : {};
     const meta = PHONE_FILES_SECTION_META[sectionKey] || { cnTitle: '文件' };
@@ -1349,28 +1452,27 @@ function normalizePhoneFilesEntry(sectionKey, item, index) {
     const relatedToUser = phoneFilesNormalizeBoolean(source.related_to_user, false);
 
     if (sectionKey === 'hidden_folders') {
+        const normalizedItems = Array.isArray(source.items)
+            ? source.items.map((child, childIndex) => normalizePhoneFilesFileItem(child, childIndex, `文件${childIndex + 1}`))
+            : [];
+        const fallbackItems = normalizedItems.length
+            ? normalizedItems
+            : phoneFilesBuildFallbackFolderItems(name, phoneFilesNormalizeNumber(source.file_count, 4));
+        const sortedItems = phoneFilesSortByTime(fallbackItems);
         return {
             name,
             type: 'folder',
             time: phoneFilesNormalizeText(source.time || source.updated_at, '2026-04-01 22:13'),
             locked: phoneFilesNormalizeBoolean(source.locked, false),
-            file_count: phoneFilesNormalizeNumber(source.file_count, 0),
+            file_count: sortedItems.length || phoneFilesNormalizeNumber(source.file_count, 0),
             summary: phoneFilesNormalizeText(source.summary, '看起来像一个被刻意放低存在感的目录。'),
             related_to_user: relatedToUser,
-            hidden_tension: phoneFilesNormalizeText(source.hidden_tension, '')
+            hidden_tension: phoneFilesNormalizeText(source.hidden_tension, ''),
+            items: sortedItems
         };
     }
 
-    return {
-        name,
-        type: phoneFilesNormalizeText(source.type, phoneFilesInferTypeFromName(name)),
-        size: phoneFilesNormalizeText(source.size, '1.8 MB'),
-        time: phoneFilesNormalizeText(source.time || source.updated_at, '2026-04-01 22:13'),
-        source: phoneFilesNormalizeText(source.source, '手动创建'),
-        summary: phoneFilesNormalizeText(source.summary, '看起来像一份普通文件。'),
-        related_to_user: relatedToUser,
-        hidden_tension: phoneFilesNormalizeText(source.hidden_tension, '')
-    };
+    return normalizePhoneFilesFileItem(source, index, defaultName);
 }
 
 function normalizePhoneFilesData(raw) {
@@ -1466,7 +1568,9 @@ function phoneFilesGetRuntime(container) {
     if (!container.__phoneFilesRuntime) {
         container.__phoneFilesRuntime = {
             currentKey: null,
-            currentView: 'main'
+            currentView: 'main',
+            currentFolderIndex: null,
+            currentFolderName: ''
         };
     }
     return container.__phoneFilesRuntime;
@@ -1562,8 +1666,8 @@ function phoneFilesBuildFileGridHtml(files) {
 function phoneFilesBuildHiddenFoldersHtml(folders) {
     return `
         <div class="hidden-folder-list">
-            ${folders.map(folder => `
-                <div class="hidden-folder-card">
+            ${folders.map((folder, index) => `
+                <div class="hidden-folder-card" data-folder-index="${index}">
                     <div class="hidden-folder-icon"><i class="ri-folder-5-fill"></i></div>
                     <div class="hidden-folder-main">
                         <div class="hidden-folder-name-row">
@@ -1572,6 +1676,7 @@ function phoneFilesBuildHiddenFoldersHtml(folders) {
                         </div>
                         <div class="hidden-folder-count">${phoneFilesEscapeHtml(String(folder.file_count || 0))} 个项目</div>
                     </div>
+                    <i class="ri-arrow-right-s-line hidden-folder-chevron"></i>
                 </div>
             `).join('')}
         </div>
@@ -1624,20 +1729,78 @@ function phoneFilesSetDetailGenerateVisible(container, visible) {
     if (!visible) phoneFilesHideMenus(container);
 }
 
-function phoneFilesRenderEmptyState(container, message) {
-    const detailContent = container.querySelector('#phone-files-detail-content');
-    if (!detailContent) return;
-    detailContent.innerHTML = `<div class="files-empty">${phoneFilesEscapeHtml(message || '这里还没有内容')}</div>`;
+function phoneFilesRenderEmptyState(container, message, contentId = 'phone-files-detail-content') {
+    const content = container.querySelector(`#${contentId}`);
+    if (!content) return;
+    content.innerHTML = `<div class="files-empty">${phoneFilesEscapeHtml(message || '这里还没有内容')}</div>`;
+}
+
+function phoneFilesGetFolderItems(folder) {
+    if (!folder || !Array.isArray(folder.items) || !folder.items.length) {
+        return phoneFilesBuildFallbackFolderItems(folder && folder.name, folder && folder.file_count);
+    }
+    return phoneFilesSortByTime(folder.items);
+}
+
+function phoneFilesRenderFolderDetail(container, folderIndex) {
+    const runtime = phoneFilesGetRuntime(container);
+    const folderContent = container.querySelector('#phone-files-folder-content');
+    const smallTitle = container.querySelector('#phone-files-folder-small-title');
+    const bigTitle = container.querySelector('#phone-files-folder-big-title');
+    const backLabel = container.querySelector('#phone-files-folder-back-label');
+    if (!folderContent) return;
+
+    const contact = getActivePhoneFilesContact();
+    const folders = phoneFilesGetSectionItems(contact && contact.id, 'hidden');
+    const folder = folders[folderIndex];
+    if (!folder) {
+        phoneFilesRenderEmptyState(container, '这个文件夹不存在了。', 'phone-files-folder-content');
+        return;
+    }
+
+    runtime.currentFolderIndex = folderIndex;
+    runtime.currentFolderName = folder.name || '';
+    if (smallTitle) smallTitle.textContent = folder.name || '文件夹';
+    if (bigTitle) bigTitle.textContent = folder.name || '文件夹';
+    if (backLabel) backLabel.textContent = '隐藏文件夹';
+
+    if (folder.locked) {
+        folderContent.innerHTML = `
+            <div class="status-page">
+                <i class="ri-lock-fill status-icon"></i>
+                <div class="status-title">此文件夹已锁定</div>
+                <div class="status-desc">需要验证 Face ID 或触控 ID 才能查看此文件夹中的内容。</div>
+                <div class="auth-btn">查看内容</div>
+            </div>
+        `;
+        return;
+    }
+
+    const folderItems = phoneFilesGetFolderItems(folder);
+    if (!folderItems.length) {
+        phoneFilesRenderEmptyState(container, '文件夹里还没有内容。', 'phone-files-folder-content');
+        return;
+    }
+
+    folderContent.innerHTML = phoneFilesBuildFileGridHtml(folderItems);
 }
 
 function phoneFilesRenderDetail(container, itemKey) {
+    const runtime = phoneFilesGetRuntime(container);
     const meta = phoneFilesGetItemMeta(itemKey);
     const smallTitle = container.querySelector('#phone-files-small-title');
     const bigTitle = container.querySelector('#phone-files-big-title');
     const detailContent = container.querySelector('#phone-files-detail-content');
+    const folderView = container.querySelector('#phone-files-folder-view');
+    const detailView = container.querySelector('#phone-files-detail-view');
     if (smallTitle) smallTitle.textContent = meta.label;
     if (bigTitle) bigTitle.innerHTML = `${phoneFilesEscapeHtml(meta.label)} <span class="large-title-en">${phoneFilesEscapeHtml(meta.en)}</span>`;
     if (!detailContent) return;
+
+    runtime.currentFolderIndex = null;
+    runtime.currentFolderName = '';
+    if (detailView) detailView.classList.remove('bg');
+    if (folderView) folderView.classList.remove('active');
 
     if (meta.key === 'encrypted' || meta.secure) {
         phoneFilesSetDetailGenerateVisible(container, false);
@@ -1672,11 +1835,29 @@ function phoneFilesShowMain(container) {
     const runtime = phoneFilesGetRuntime(container);
     const mainView = container.querySelector('#phone-files-main-view');
     const detailView = container.querySelector('#phone-files-detail-view');
+    const folderView = container.querySelector('#phone-files-folder-view');
     if (mainView) mainView.classList.remove('bg');
-    if (detailView) detailView.classList.remove('active');
+    if (detailView) {
+        detailView.classList.remove('active');
+        detailView.classList.remove('bg');
+    }
+    if (folderView) folderView.classList.remove('active');
     runtime.currentView = 'main';
     runtime.currentKey = null;
+    runtime.currentFolderIndex = null;
+    runtime.currentFolderName = '';
     phoneFilesHideMenus(container);
+}
+
+function phoneFilesShowDetail(container) {
+    const runtime = phoneFilesGetRuntime(container);
+    const detailView = container.querySelector('#phone-files-detail-view');
+    const folderView = container.querySelector('#phone-files-folder-view');
+    if (detailView) detailView.classList.remove('bg');
+    if (folderView) folderView.classList.remove('active');
+    runtime.currentView = 'detail';
+    runtime.currentFolderIndex = null;
+    runtime.currentFolderName = '';
 }
 
 function phoneFilesOpenDetail(container, itemKey) {
@@ -1684,15 +1865,35 @@ function phoneFilesOpenDetail(container, itemKey) {
     const mainView = container.querySelector('#phone-files-main-view');
     const detailView = container.querySelector('#phone-files-detail-view');
     const detailHeader = container.querySelector('#phone-files-detail-header');
+    const folderView = container.querySelector('#phone-files-folder-view');
     phoneFilesRenderDetail(container, itemKey);
     if (mainView) mainView.classList.add('bg');
     if (detailView) {
         detailView.classList.add('active');
+        detailView.classList.remove('bg');
         detailView.scrollTop = 0;
     }
+    if (folderView) folderView.classList.remove('active');
     if (detailHeader) detailHeader.classList.remove('scrolled');
     runtime.currentView = 'detail';
     runtime.currentKey = itemKey;
+    runtime.currentFolderIndex = null;
+    runtime.currentFolderName = '';
+}
+
+function phoneFilesOpenFolder(container, folderIndex) {
+    const runtime = phoneFilesGetRuntime(container);
+    const detailView = container.querySelector('#phone-files-detail-view');
+    const folderView = container.querySelector('#phone-files-folder-view');
+    const folderHeader = container.querySelector('#phone-files-folder-header');
+    phoneFilesRenderFolderDetail(container, folderIndex);
+    if (detailView) detailView.classList.add('bg');
+    if (folderView) {
+        folderView.classList.add('active');
+        folderView.scrollTop = 0;
+    }
+    if (folderHeader) folderHeader.classList.remove('scrolled');
+    runtime.currentView = 'folder';
 }
 
 function bindPhoneFilesV1Interactions(container) {
@@ -1702,14 +1903,19 @@ function bindPhoneFilesV1Interactions(container) {
     const runtime = phoneFilesGetRuntime(container);
     const mainView = container.querySelector('#phone-files-main-view');
     const detailView = container.querySelector('#phone-files-detail-view');
+    const folderView = container.querySelector('#phone-files-folder-view');
     const mainHeader = container.querySelector('#phone-files-main-header');
     const detailHeader = container.querySelector('#phone-files-detail-header');
+    const folderHeader = container.querySelector('#phone-files-folder-header');
 
     if (mainView && mainHeader) {
         mainView.addEventListener('scroll', () => phoneFilesUpdateHeaderScroll(mainView, mainHeader));
     }
     if (detailView && detailHeader) {
         detailView.addEventListener('scroll', () => phoneFilesUpdateHeaderScroll(detailView, detailHeader));
+    }
+    if (folderView && folderHeader) {
+        folderView.addEventListener('scroll', () => phoneFilesUpdateHeaderScroll(folderView, folderHeader));
     }
 
     container.addEventListener('click', event => {
@@ -1730,6 +1936,13 @@ function bindPhoneFilesV1Interactions(container) {
         if (backBtn) {
             event.preventDefault();
             phoneFilesShowMain(container);
+            return;
+        }
+
+        const backToDetailBtn = target.closest('[data-action="back-to-files-detail"]');
+        if (backToDetailBtn) {
+            event.preventDefault();
+            phoneFilesShowDetail(container);
             return;
         }
 
@@ -1770,6 +1983,13 @@ function bindPhoneFilesV1Interactions(container) {
             return;
         }
 
+        const folderCard = target.closest('.hidden-folder-card[data-folder-index]');
+        if (folderCard && runtime.currentKey === 'hidden') {
+            event.preventDefault();
+            phoneFilesOpenFolder(container, Number(folderCard.dataset.folderIndex));
+            return;
+        }
+
         const item = target.closest('.list-item[data-item-key]');
         if (item) {
             event.preventDefault();
@@ -1781,6 +2001,8 @@ function bindPhoneFilesV1Interactions(container) {
     container.__resetPhoneFilesView = () => {
         runtime.currentView = 'main';
         runtime.currentKey = null;
+        runtime.currentFolderIndex = null;
+        runtime.currentFolderName = '';
         phoneFilesRenderMainSections(container);
         phoneFilesShowMain(container);
         if (mainView) {
@@ -1789,8 +2011,12 @@ function bindPhoneFilesV1Interactions(container) {
         if (detailView) {
             detailView.scrollTop = 0;
         }
+        if (folderView) {
+            folderView.scrollTop = 0;
+        }
         if (mainHeader) mainHeader.classList.remove('scrolled');
         if (detailHeader) detailHeader.classList.remove('scrolled');
+        if (folderHeader) folderHeader.classList.remove('scrolled');
     };
 
     container.dataset.phoneFilesBound = 'true';
@@ -1959,6 +2185,9 @@ ${recentChatContext || '暂无最近聊天记录'}
 - summary
 - related_to_user
 - hidden_tension
+- items（数组，3 到 8 条，字段与普通文件条目一致）
+
+其中 hidden_folders 中每个文件夹都需要生成内部文件 items，file_count 要和 items 数量一致。
 
 【返回格式】
 必须返回纯 JSON 对象：
@@ -2032,9 +2261,11 @@ ${recentChatContext || '暂无最近聊天记录'}
 2. 不要直接命名成“秘密”“不能看”这类太假的名字。
 3. 可以部分上锁，部分不上锁。
 4. 可以有 1 到 2 个目录与私人资源有关，但命名必须低调，不能露骨。
+5. 每个文件夹都要带一个 items 数组，里面生成 3 到 8 个文件，供用户点进去查看。
+6. file_count 要和 items 数量一致。
 
 【返回格式】
-返回纯 JSON 数组，字段为：name、type、time、locked、file_count、summary、related_to_user、hidden_tension。`,
+返回纯 JSON 数组，字段为：name、type、time、locked、file_count、summary、related_to_user、hidden_tension、items。items 里每一项字段为：name、type、size、time、source、summary、related_to_user、hidden_tension。`,
     files_favorites: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
 
 【任务】
