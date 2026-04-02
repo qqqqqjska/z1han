@@ -4821,8 +4821,14 @@ const PHONE_NOTES_EXTRA_STYLE_TEXT = `
 #note-page {
     z-index: 3;
     transform: translateX(100%);
-    background-color: var(--bg-color);
+    background-color: #ffffff;
     box-shadow: -5px 0 15px rgba(0,0,0,0.05);
+}
+#detail-page {
+    padding-top: 0;
+}
+#detail-page .detail-header {
+    padding-top: calc(var(--safe-area-top) + 10px);
 }
 #note-page.nav-in {
     transform: translateX(0);
@@ -4846,6 +4852,66 @@ const PHONE_NOTES_EXTRA_STYLE_TEXT = `
 .notes-icon-btn i {
     font-size: 24px;
     pointer-events: none;
+}
+#note-page .detail-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    padding: 12px 14px 4px;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-bottom: none;
+}
+#note-page .back-btn {
+    width: 44px;
+    height: 44px;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.94);
+    border: 1px solid rgba(255,255,255,0.92);
+    box-shadow: 0 12px 28px rgba(0,0,0,0.08);
+    color: #202127;
+    flex-shrink: 0;
+}
+#note-page .back-btn span {
+    display: none;
+}
+#note-page .back-btn i {
+    margin-right: 0;
+    font-size: 24px;
+}
+#note-page .notes-generate-wrap {
+    min-height: 44px;
+    padding: 0 10px 0 14px;
+    gap: 11px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.94);
+    border: 1px solid rgba(255,255,255,0.92);
+    box-shadow: 0 12px 28px rgba(0,0,0,0.08);
+}
+#note-page .note-page-share-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    color: #202127;
+    pointer-events: none;
+}
+#note-page .note-page-share-ghost i {
+    font-size: 22px;
+}
+#note-page .notes-note-generate-btn {
+    width: 32px;
+    height: 32px;
+    color: #202127;
+}
+#note-page .notes-note-generate-btn i {
+    font-size: 18px;
+}
+#note-page .notes-generate-menu {
+    top: calc(100% + 10px);
+    border-radius: 18px;
 }
 .notes-icon-btn:disabled {
     opacity: 0.5;
@@ -5084,6 +5150,99 @@ const PHONE_NOTES_EXTRA_STYLE_TEXT = `
     font-size: 14px;
     line-height: 1.6;
 }
+#note-page .note-page-body {
+    position: relative;
+    padding: 18px 28px 150px;
+}
+#note-page .note-detail-card {
+    background: transparent;
+    border-radius: 0;
+    padding: 8px 0 0;
+    box-shadow: none;
+}
+#note-page .note-detail-title {
+    font-size: 34px;
+    line-height: 1.08;
+    letter-spacing: -0.8px;
+    margin-bottom: 14px;
+    color: #35363d;
+}
+#note-page .note-detail-meta {
+    gap: 6px 10px;
+    font-size: 12px;
+    color: #b8b8be;
+    margin-bottom: 18px;
+}
+#note-page .note-detail-content,
+#note-page .note-detail-hint,
+#note-page .todo-text {
+    font-size: 18px;
+    line-height: 1.68;
+    color: #4d4e56;
+}
+#note-page .todo-list {
+    gap: 16px;
+}
+#note-page .todo-item {
+    align-items: flex-start;
+    gap: 14px;
+}
+#note-page .todo-check {
+    width: 26px;
+    height: 26px;
+    margin-top: 2px;
+}
+#note-page .locked-placeholder {
+    padding: 34px 22px;
+    background: #f7f7fa;
+    border: 1px solid rgba(60,60,67,0.08);
+    box-shadow: none;
+}
+#note-page .note-secondary-block {
+    margin-top: 24px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(60,60,67,0.08);
+}
+#note-page .note-page-toolbar {
+    position: absolute;
+    left: 24px;
+    bottom: 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 24px;
+    height: 54px;
+    padding: 0 24px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.94);
+    border: 1px solid rgba(255,255,255,0.92);
+    box-shadow: 0 14px 32px rgba(0,0,0,0.08);
+    pointer-events: none;
+    z-index: 12;
+}
+#note-page .note-page-toolbar i {
+    font-size: 23px;
+    color: #17181c;
+}
+#note-page .note-page-compose-ghost {
+    position: absolute;
+    right: 24px;
+    bottom: 24px;
+    width: 54px;
+    height: 54px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.94);
+    border: 1px solid rgba(255,255,255,0.92);
+    box-shadow: 0 14px 32px rgba(0,0,0,0.08);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 12;
+}
+#note-page .note-page-compose-ghost i {
+    font-size: 23px;
+    color: #17181c;
+}
 .note-secondary-block {
     margin-top: 18px;
     padding-top: 16px;
@@ -5171,6 +5330,7 @@ const PHONE_NOTES_APP_TEMPLATE_HTML = `<div id="app">
                 <span>列表</span>
             </div>
             <div class="notes-generate-wrap">
+                <span class="note-page-share-ghost" aria-hidden="true"><i class="ri-upload-2-line"></i></span>
                 <button type="button" class="notes-icon-btn notes-note-generate-btn" aria-label="生成当前分区">
                     <i class="ri-more-fill"></i>
                 </button>
@@ -5181,6 +5341,14 @@ const PHONE_NOTES_APP_TEMPLATE_HTML = `<div id="app">
             </div>
         </div>
         <div class="note-page-body" id="note-detail-container"></div>
+        <div class="note-page-toolbar" aria-hidden="true">
+            <i class="ri-list-check-2"></i>
+            <i class="ri-attachment-line"></i>
+            <i class="ri-mark-pen-line"></i>
+        </div>
+        <div class="note-page-compose-ghost" aria-hidden="true">
+            <i class="ri-edit-box-line"></i>
+        </div>
     </div>
 </div>`;
 
@@ -5351,8 +5519,7 @@ JSON 结构如下：
       "title": "标题",
       "content": "正文",
       "time": "今天 22:11",
-      "related_to_user": true,
-      "hidden_tension": "像想起什么但没有说透"
+      "related_to_user": true
     }
   ]
 }`,
@@ -5520,7 +5687,6 @@ JSON 结构如下：
 3. 至少 2 条和用户有关，但不要全部围绕用户。
 4. 气质要像“没有明确越界内容，但能感觉到最近心里有事”。
 5. 不要写得太戏剧化，不要明确出轨、违法、极端反转。
-6. hidden_tension 要像一句克制的潜台词。
 
 【返回格式】
 返回纯 JSON 数组：
@@ -5529,8 +5695,7 @@ JSON 结构如下：
     "title": "标题",
     "content": "正文",
     "time": "今天 22:11",
-    "related_to_user": true,
-    "hidden_tension": "像想起什么但没有说透"
+    "related_to_user": true
   }
 ]`
 };
@@ -5615,8 +5780,7 @@ function normalizePhoneNotesEntry(sectionKey, item, index) {
             content,
             time: phoneNotesNormalizeText(source.time || source.updated_at, '今天 22:11'),
             mood: phoneNotesNormalizeText(source.mood, ''),
-            related_to_user: relatedToUser,
-            hidden_tension: phoneNotesNormalizeText(source.hidden_tension, '像心里留了一小截没说完的话')
+            related_to_user: relatedToUser
         };
     }
 
@@ -5790,7 +5954,6 @@ function phoneNotesBuildListCardHtml(sectionKey, note) {
         : phoneNotesBuildTagHtml(note.tags, 'note-card-tags');
 
     if (sectionKey === 'todo_lists') {
-        const { completed, total } = phoneNotesBuildTodoProgress(note.items);
         return `
             <div class="note-card-header">
                 <div class="note-title">${phoneNotesEscapeHtml(note.title)}</div>
@@ -5799,9 +5962,6 @@ function phoneNotesBuildListCardHtml(sectionKey, note) {
             <div class="note-preview-row">
                 <span class="note-inline-time">${phoneNotesEscapeHtml(time)}</span>
                 <div class="note-preview">${phoneNotesEscapeHtml(note.preview || '待办清单')}</div>
-            </div>
-            <div class="note-card-meta">
-                <span class="note-card-meta-right">已完成 ${completed}/${total}</span>
             </div>
         `;
     }
@@ -6005,31 +6165,9 @@ function phoneNotesRenderNoteDetail(container, sectionKey, noteIndex) {
             </div>
         `;
     } else if (sectionKey === 'ramblings') {
-        bodyHtml = `
-            <div class="note-detail-content">${phoneNotesEscapeHtml(note.content)}</div>
-            <div class="note-secondary-block">
-                <div class="note-secondary-label">Hidden tension</div>
-                <div class="note-detail-hint">${phoneNotesEscapeHtml(note.hidden_tension)}</div>
-            </div>
-        `;
+        bodyHtml = `<div class="note-detail-content">${phoneNotesEscapeHtml(note.content)}</div>`;
     } else {
         bodyHtml = `<div class="note-detail-content">${phoneNotesEscapeHtml(note.content || note.preview || '')}</div>`;
-        if (sectionKey === 'drafts' && note.unfinished) {
-            bodyHtml += `
-                <div class="note-secondary-block">
-                    <div class="note-secondary-label">状态</div>
-                    <div class="note-detail-hint">这是一条没发出去、也没写完的草稿。</div>
-                </div>
-            `;
-        }
-        if (sectionKey === 'deleted_notes' && note.deleted_at) {
-            bodyHtml += `
-                <div class="note-secondary-block">
-                    <div class="note-secondary-label">删除时间</div>
-                    <div class="note-detail-hint">${phoneNotesEscapeHtml(note.deleted_at)}</div>
-                </div>
-            `;
-        }
     }
 
     detailContainer.innerHTML = `
