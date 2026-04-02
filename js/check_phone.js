@@ -1,4 +1,4 @@
-﻿// 查手机功能模块 (Phone Check App)
+// 查手机功能模块 (Phone Check App)
 
 // 配置常量
 const PHONE_GRID_ROWS = 6;
@@ -714,7 +714,7 @@ function openPhoneNotesApp() {
     screen.classList.remove('hidden');
 }
 
-const PHONE_FILES_TEMPLATE_VERSION = 'v3';
+const PHONE_FILES_TEMPLATE_VERSION = 'v4';
 const PHONE_FILES_V1_STYLE_TEXT = `
 #phone-files,
 #phone-files-content {
@@ -797,6 +797,17 @@ const PHONE_FILES_V1_STYLE_TEXT = `
     box-shadow: -10px 0 20px rgba(0,0,0,0.05);
 }
 #phone-files-content .view-folder.active {
+    transform: translateX(0);
+}
+#phone-files-content .view-folder.bg {
+    transform: translateX(-30%);
+}
+#phone-files-content .view-file {
+    transform: translateX(100%);
+    z-index: 11;
+    box-shadow: -10px 0 20px rgba(0,0,0,0.05);
+}
+#phone-files-content .view-file.active {
     transform: translateX(0);
 }
 #phone-files-content .header {
@@ -990,6 +1001,58 @@ const PHONE_FILES_V1_STYLE_TEXT = `
     -webkit-box-orient: vertical;
     overflow: hidden;
     word-break: break-all;
+}
+#phone-files-content .file-detail-card {
+    margin-top: 16px;
+    background: rgba(255,255,255,0.96);
+    border-radius: 22px;
+    padding: 20px 18px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.05);
+}
+#phone-files-content .file-detail-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(0,122,255,0.1);
+    color: var(--ios-blue);
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+#phone-files-content .file-detail-name {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.2;
+    word-break: break-word;
+}
+#phone-files-content .file-detail-meta {
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--ios-text-secondary);
+}
+#phone-files-content .file-detail-summary {
+    margin-top: 16px;
+    font-size: 15px;
+    line-height: 1.7;
+    color: #3a3a3c;
+}
+#phone-files-content .file-detail-section-title {
+    margin-top: 18px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    color: var(--ios-text-secondary);
+    text-transform: uppercase;
+}
+#phone-files-content .file-detail-content {
+    font-size: 15px;
+    line-height: 1.8;
+    color: var(--ios-text);
+    white-space: normal;
+    word-break: break-word;
 }
 #phone-files-content .status-page {
     display: flex;
@@ -1205,6 +1268,19 @@ const PHONE_FILES_V1_TEMPLATE_HTML = `
             </div>
             <div class="detail-content" id="phone-files-folder-content"></div>
         </div>
+        <div class="view view-file" id="phone-files-file-view">
+            <div class="header" id="phone-files-file-header">
+                <div class="nav-bar">
+                    <div class="nav-btn" data-action="back-to-files-file-prev"><i class="ri-arrow-left-s-line" style="font-size:24px; vertical-align:middle; margin-left:-8px;"></i> <span id="phone-files-file-back-label">目录</span></div>
+                    <div class="nav-title" id="phone-files-file-small-title">文件</div>
+                    <div class="nav-btn circle" style="opacity:0; pointer-events:none;"><i class="ri-more-fill"></i></div>
+                </div>
+                <div class="large-title-container">
+                    <div class="large-title" id="phone-files-file-big-title">文件</div>
+                </div>
+            </div>
+            <div class="detail-content" id="phone-files-file-content"></div>
+        </div>
     </div>
 </div>`;
 
@@ -1370,6 +1446,49 @@ function phoneFilesNormalizeNumber(value, fallback = 0) {
     return matched ? Number(matched[0]) : fallback;
 }
 
+function phoneFilesGetTypeDisplayName(type) {
+    const normalized = phoneFilesNormalizeText(type, '').toLowerCase();
+    if (normalized.includes('pdf')) return 'PDF';
+    if (normalized.includes('doc') || normalized.includes('word')) return '文档';
+    if (normalized.includes('sheet') || normalized.includes('xls') || normalized.includes('csv')) return '表格';
+    if (normalized.includes('image') || normalized.includes('jpg') || normalized.includes('png')) return '图片';
+    if (normalized.includes('zip') || normalized.includes('rar') || normalized.includes('archive')) return '压缩包';
+    if (normalized.includes('scan')) return '扫描件';
+    if (normalized.includes('video')) return '视频';
+    if (normalized.includes('audio')) return '音频';
+    if (normalized.includes('text')) return '文本';
+    if (normalized.includes('export') || normalized.includes('note')) return '导出文件';
+    return '文件';
+}
+
+function phoneFilesBuildFallbackFileContent(file) {
+    const source = file && typeof file === 'object' ? file : {};
+    const name = phoneFilesNormalizeText(source.name || source.filename || source.title, '未命名文件');
+    const typeLabel = phoneFilesGetTypeDisplayName(source.type || phoneFilesInferTypeFromName(name));
+    const summary = phoneFilesNormalizeText(source.summary, '这份文件里留着一些没有删掉的内容。');
+    const sourceLabel = phoneFilesNormalizeText(source.source, '手动创建');
+    const timeLabel = phoneFilesNormalizeText(source.time || source.updated_at, '2026-04-01 22:13');
+    const lines = [summary, '', `文件名：${name}`, `类型：${typeLabel}`, `来源：${sourceLabel}`, `时间：${timeLabel}`];
+
+    if (typeLabel === '压缩包') {
+        lines.push('内容备注：里面是整理过的几份文件和截图，先压在一起，暂时没删。');
+    } else if (typeLabel === '扫描件') {
+        lines.push('内容备注：扫描页里是一些需要留底的文字和零散记录。');
+    } else if (typeLabel === '图片') {
+        lines.push('内容备注：这张图被单独存下来，像是之后还要回看。');
+    } else if (typeLabel === '视频') {
+        lines.push('内容备注：这是一个被单独留存的视频文件。');
+    } else {
+        lines.push('内容备注：先留着，后面可能还会再翻出来看。');
+    }
+
+    return lines.join('\n');
+}
+
+function phoneFilesFormatMultilineText(value) {
+    return phoneFilesEscapeHtml(value || '').replace(/\r?\n/g, '<br>');
+}
+
 function phoneFilesResolveDataKey(sectionKey) {
     if (!sectionKey) return null;
     if (PHONE_FILES_SECTION_META[sectionKey]) return sectionKey;
@@ -1410,13 +1529,19 @@ function phoneFilesInferTypeFromName(name) {
 function normalizePhoneFilesFileItem(item, index, fallbackName = '') {
     const source = item && typeof item === 'object' ? item : {};
     const name = phoneFilesNormalizeText(source.name || source.filename || source.title, fallbackName || `文件${index + 1}`);
+    const type = phoneFilesNormalizeText(source.type, phoneFilesInferTypeFromName(name));
+    const size = phoneFilesNormalizeText(source.size, '1.8 MB');
+    const time = phoneFilesNormalizeText(source.time || source.updated_at, '2026-04-01 22:13');
+    const sourceLabel = phoneFilesNormalizeText(source.source, '手动创建');
+    const summary = phoneFilesNormalizeText(source.summary, '看起来像一份普通文件。');
     return {
         name,
-        type: phoneFilesNormalizeText(source.type, phoneFilesInferTypeFromName(name)),
-        size: phoneFilesNormalizeText(source.size, '1.8 MB'),
-        time: phoneFilesNormalizeText(source.time || source.updated_at, '2026-04-01 22:13'),
-        source: phoneFilesNormalizeText(source.source, '手动创建'),
-        summary: phoneFilesNormalizeText(source.summary, '看起来像一份普通文件。'),
+        type,
+        size,
+        time,
+        source: sourceLabel,
+        summary,
+        content: phoneFilesNormalizeText(source.content, phoneFilesBuildFallbackFileContent({ name, type, size, time, source: sourceLabel, summary })),
         related_to_user: phoneFilesNormalizeBoolean(source.related_to_user, false),
         hidden_tension: phoneFilesNormalizeText(source.hidden_tension, '')
     };
@@ -1570,7 +1695,9 @@ function phoneFilesGetRuntime(container) {
             currentKey: null,
             currentView: 'main',
             currentFolderIndex: null,
-            currentFolderName: ''
+            currentFolderName: '',
+            currentFileIndex: null,
+            currentFileSource: null
         };
     }
     return container.__phoneFilesRuntime;
@@ -1649,10 +1776,10 @@ function phoneFilesGetSectionItems(contactId, itemKey) {
 function phoneFilesBuildFileGridHtml(files) {
     return `
         <div class="file-grid">
-            ${files.map(file => {
+            ${files.map((file, index) => {
                 const visual = phoneFilesInferVisual(file);
                 return `
-                    <div class="file-box">
+                    <div class="file-box" data-file-index="${index}">
                         <div class="file-box-icon" style="color:${visual.color}"><i class="${visual.icon}"></i></div>
                         <div class="file-box-name">${phoneFilesEscapeHtml(file.name || file.filename || '')}</div>
                     </div>
@@ -1727,6 +1854,71 @@ function phoneFilesSetDetailGenerateVisible(container, visible) {
     if (!wrap) return;
     wrap.classList.toggle('is-hidden', !visible);
     if (!visible) phoneFilesHideMenus(container);
+}
+
+
+function phoneFilesBuildFileDetailHtml(file) {
+    const typeLabel = phoneFilesGetTypeDisplayName(file && file.type);
+    const metaParts = [typeLabel];
+    if (file && file.size) metaParts.push(file.size);
+    if (file && file.source) metaParts.push(file.source);
+    if (file && file.time) metaParts.push(file.time);
+    
+    let contentHtml = file && file.content ? file.content : '';
+    // 如果包含HTML标签，则不进行转义，直接使用；否则使用默认的换行处理
+    if (!contentHtml.includes('<div') && !contentHtml.includes('<p') && !contentHtml.includes('<span') && !contentHtml.includes('<ul') && !contentHtml.includes('<table')) {
+        contentHtml = phoneFilesFormatMultilineText(contentHtml);
+    }
+    
+    return `
+        <div class="file-detail-card">
+            <div class="file-detail-pill">${phoneFilesEscapeHtml(typeLabel)}</div>
+            <div class="file-detail-name">${phoneFilesEscapeHtml(file && file.name ? file.name : '文件')}</div>
+            <div class="file-detail-meta">${phoneFilesEscapeHtml(metaParts.join(' · '))}</div>
+            ${file && file.summary ? `<div class="file-detail-summary">${phoneFilesEscapeHtml(file.summary)}</div>` : ''}
+            <div class="file-detail-section-title">内容</div>
+            <div class="file-detail-content" style="background:#f9f9fb; padding:15px; border-radius:12px; margin-top:10px;">${contentHtml}</div>
+        </div>
+        <div style="height: 40px"></div>
+    `;
+}
+
+function phoneFilesGetCurrentFileCollection(container, source = 'section') {
+    const runtime = phoneFilesGetRuntime(container);
+    const contact = getActivePhoneFilesContact();
+    if (source === 'folder') {
+        const folders = phoneFilesGetSectionItems(contact && contact.id, 'hidden');
+        const folder = folders[runtime.currentFolderIndex];
+        return phoneFilesGetFolderItems(folder);
+    }
+    return phoneFilesGetSectionItems(contact && contact.id, runtime.currentKey);
+}
+
+function phoneFilesRenderFileDetail(container, fileIndex, source = 'section') {
+    const runtime = phoneFilesGetRuntime(container);
+    const fileContent = container.querySelector('#phone-files-file-content');
+    const smallTitle = container.querySelector('#phone-files-file-small-title');
+    const bigTitle = container.querySelector('#phone-files-file-big-title');
+    const backLabel = container.querySelector('#phone-files-file-back-label');
+    if (!fileContent) return;
+
+    const files = phoneFilesGetCurrentFileCollection(container, source);
+    const file = files[fileIndex];
+    if (!file) {
+        phoneFilesRenderEmptyState(container, '这个文件不存在了。', 'phone-files-file-content');
+        return;
+    }
+
+    runtime.currentFileIndex = fileIndex;
+    runtime.currentFileSource = source;
+    if (smallTitle) smallTitle.textContent = file.name || '文件';
+    if (bigTitle) bigTitle.textContent = file.name || '文件';
+    if (backLabel) {
+        backLabel.textContent = source === 'folder'
+            ? (runtime.currentFolderName || '文件夹')
+            : ((phoneFilesGetItemMeta(runtime.currentKey || 'recent').label) || '目录');
+    }
+    fileContent.innerHTML = phoneFilesBuildFileDetailHtml(file);
 }
 
 function phoneFilesRenderEmptyState(container, message, contentId = 'phone-files-detail-content') {
@@ -2143,7 +2335,8 @@ ${recentChatContext || '暂无最近聊天记录'}
 7. 每个条目都要给出一句 hidden_tension，说明这个文件为什么容易让人多想。
 8. 允许少量“私人资源 / 成人向 / 限制级”条目，但只能通过模糊文件名、来源、收藏/隐藏痕迹暗示，不要露骨，不要占多数。
 9. 不要涉及未成年人、偷拍、暴力血腥、违法内容。
-10. 输出严格为 JSON，不要附加解释。`,
+10. 【重要要求】：必须为每个文件生成具体的 \`content\` 字段。为了让用户点击查看时感觉有意思，\`content\` 必须使用HTML代码排版（如包含 <div>, <b>, <ul>, <p>, <span style='color:xx'>, <table> 等），根据文件类型模拟真实的票据、便签、聊天记录文本、证明材料等排版。视频和图片类型可以用带背景色的div来精美地描述画面内容。
+11. 输出严格为 JSON，不要附加解释。`,
     files_all: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
 
 【任务】
@@ -2173,6 +2366,7 @@ ${recentChatContext || '暂无最近聊天记录'}
 - time
 - source
 - summary
+- content (必须是包含HTML标签的具体内容)
 - related_to_user
 - hidden_tension
 
@@ -2211,7 +2405,7 @@ ${recentChatContext || '暂无最近聊天记录'}
 4. 可以包含少量私人资源相关记录，但命名必须自然、非露骨。
 
 【返回格式】
-返回纯 JSON 数组，字段为：name、type、size、time、source、summary、related_to_user、hidden_tension。`,
+返回纯 JSON 数组，字段为：name、type、size、time、source、summary、content(HTML格式)、related_to_user、hidden_tension。`,
     files_downloads: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
 
 【任务】
@@ -2224,7 +2418,7 @@ ${recentChatContext || '暂无最近聊天记录'}
 4. 私人资源条目必须非露骨，只通过命名、来源、保存行为暗示。
 
 【返回格式】
-返回纯 JSON 数组，字段为：name、type、size、time、source、summary、related_to_user、hidden_tension。`,
+返回纯 JSON 数组，字段为：name、type、size、time、source、summary、content(HTML格式)、related_to_user、hidden_tension。`,
     files_archives: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
 
 【任务】
@@ -2237,7 +2431,7 @@ ${recentChatContext || '暂无最近聊天记录'}
 4. 可以少量加入私人资源压缩包，但要低调命名、非露骨。
 
 【返回格式】
-返回纯 JSON 数组，字段为：name、type、size、time、source、summary、related_to_user、hidden_tension。`,
+返回纯 JSON 数组，字段为：name、type、size、time、source、summary、content(HTML格式)、related_to_user、hidden_tension。`,
     files_scans: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
 
 【任务】
@@ -2250,7 +2444,7 @@ ${recentChatContext || '暂无最近聊天记录'}
 4. 一部分和用户有关，但要间接表达。
 
 【返回格式】
-返回纯 JSON 数组，字段为：name、type、size、time、source、summary、related_to_user、hidden_tension。`,
+返回纯 JSON 数组，字段为：name、type、size、time、source、summary、content(HTML格式)、related_to_user、hidden_tension。`,
     files_hidden: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
 
 【任务】
@@ -2265,7 +2459,7 @@ ${recentChatContext || '暂无最近聊天记录'}
 6. file_count 要和 items 数量一致。
 
 【返回格式】
-返回纯 JSON 数组，字段为：name、type、time、locked、file_count、summary、related_to_user、hidden_tension、items。items 里每一项字段为：name、type、size、time、source、summary、related_to_user、hidden_tension。`,
+返回纯 JSON 数组，字段为：name、type、time、locked、file_count、summary、related_to_user、hidden_tension、items。items 里每一项字段为：name、type、size、time、source、summary、content(HTML格式)、related_to_user、hidden_tension。`,
     files_favorites: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
 
 【任务】
@@ -2277,7 +2471,7 @@ ${recentChatContext || '暂无最近聊天记录'}
 3. 可以出现 1 到 2 个被反复保留的私人资源文件，但要保持非露骨、真实、低调。
 
 【返回格式】
-返回纯 JSON 数组，字段为：name、type、size、time、source、summary、related_to_user、hidden_tension。`
+返回纯 JSON 数组，字段为：name、type、size、time、source、summary、content(HTML格式)、related_to_user、hidden_tension。`
 };
 
 function buildPhoneFilesSystemPrompt(contact, type) {
@@ -8308,6 +8502,5 @@ function openPhoneNotesApp() {
     content.scrollTop = 0;
     screen.classList.remove('hidden');
 }
-
 
 
