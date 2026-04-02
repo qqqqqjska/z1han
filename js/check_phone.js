@@ -401,7 +401,7 @@ function initPhoneGrid() {
         }
 
         /* 修复查手机内App底部漏出问题 - 其他应用 (白底) */
-        #phone-weibo, #phone-icity, #phone-browser, #phone-notes {
+        #phone-weibo, #phone-icity, #phone-browser, #phone-notes, #phone-files {
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
@@ -469,6 +469,8 @@ function initPhoneGrid() {
                 }
             } else if (appId === 'phone-notes') {
                 openPhoneNotesApp();
+            } else if (appId === 'phone-files') {
+                openPhoneFilesApp();
             } else if (appId === 'phone-browser') {
                 document.getElementById('phone-browser').classList.remove('hidden');
                 if (currentCheckPhoneContactId) {
@@ -498,7 +500,7 @@ function openPhoneCheckContactModal() {
 
 // 处理查手机-微信朋友圈背景上传
 
-const PHONE_NOTES_V1_STYLE_TEXT = ":root {\n            --bg-color: #f2f2f7;\n            --card-bg: #ffffff;\n            --text-main: #000000;\n            --text-secondary: #8a8a8e;\n            --accent: #d0a331; /* iOS Notes classic yellow/gold */\n            --divider: rgba(60, 60, 67, 0.1);\n            --safe-area-top: 44px;\n        }\n\n        * {\n            box-sizing: border-box;\n            margin: 0;\n            padding: 0;\n            -webkit-tap-highlight-color: transparent;\n        }\n\n        body {\n            font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"Helvetica Neue\", Arial, sans-serif;\n            background-color: var(--bg-color);\n            color: var(--text-main);\n            overflow: hidden;\n            user-select: none;\n        }\n\n        #app {\n            position: relative;\n            width: 100vw;\n            height: 100vh;\n            overflow: hidden;\n            perspective: 1000px;\n        }\n\n        .page {\n            position: absolute;\n            top: 0;\n            left: 0;\n            width: 100%;\n            height: 100%;\n            background-color: var(--bg-color);\n            transition: transform 0.4s cubic-bezier(0.36, 0.66, 0.04, 1), opacity 0.4s ease;\n            overflow-y: auto;\n            overflow-x: hidden;\n            padding-top: var(--safe-area-top);\n        }\n\n        /* Page Transitions */\n        #main-page {\n            z-index: 1;\n            transform: translateX(0);\n        }\n        #main-page.nav-out {\n            transform: translateX(-30%);\n            opacity: 0;\n        }\n\n        #detail-page {\n            z-index: 2;\n            transform: translateX(100%);\n            background-color: var(--bg-color);\n            box-shadow: -5px 0 15px rgba(0,0,0,0.05);\n        }\n        #detail-page.nav-in {\n            transform: translateX(0);\n        }\n\n        /* Header */\n        header {\n            padding: 10px 20px;\n            display: flex;\n            justify-content: space-between;\n            align-items: flex-end;\n            margin-bottom: 20px;\n        }\n\n        .header-title {\n            font-size: 34px;\n            font-weight: 700;\n            letter-spacing: -0.5px;\n        }\n\n        .header-subtitle {\n            font-size: 12px;\n            color: var(--text-secondary);\n            text-transform: uppercase;\n            letter-spacing: 1px;\n            margin-top: 4px;\n        }\n\n        .header-actions i {\n            font-size: 24px;\n            color: var(--accent);\n            cursor: pointer;\n            transition: opacity 0.2s;\n        }\n        .header-actions i:active {\n            opacity: 0.5;\n        }\n\n        /* Search Bar */\n        .search-container {\n            padding: 0 20px;\n            margin-bottom: 24px;\n        }\n        .search-bar {\n            background-color: rgba(118, 118, 128, 0.12);\n            border-radius: 10px;\n            padding: 8px 12px;\n            display: flex;\n            align-items: center;\n            gap: 8px;\n            transition: transform 0.2s;\n        }\n        .search-bar i {\n            color: var(--text-secondary);\n            font-size: 18px;\n        }\n        .search-bar input {\n            border: none;\n            background: transparent;\n            font-size: 17px;\n            width: 100%;\n            outline: none;\n            color: var(--text-main);\n        }\n        .search-bar input::placeholder {\n            color: var(--text-secondary);\n        }\n\n        /* Folders */\n        .folder-group {\n            background-color: var(--card-bg);\n            border-radius: 12px;\n            margin: 0 20px 24px;\n            overflow: hidden;\n        }\n\n        .folder-item {\n            display: flex;\n            align-items: center;\n            padding: 12px 16px;\n            background-color: var(--card-bg);\n            transition: background-color 0.2s;\n            cursor: pointer;\n            position: relative;\n        }\n\n        .folder-item:active {\n            background-color: rgba(0,0,0,0.05);\n        }\n\n        .folder-item:not(:last-child)::after {\n            content: '';\n            position: absolute;\n            bottom: 0;\n            left: 52px;\n            right: 0;\n            height: 1px;\n            background-color: var(--divider);\n        }\n\n        .folder-icon {\n            width: 30px;\n            height: 30px;\n            border-radius: 8px;\n            display: flex;\n            justify-content: center;\n            align-items: center;\n            margin-right: 14px;\n            font-size: 18px;\n            color: #fff;\n        }\n\n        .icon-pinned { background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%); }\n        .icon-locked { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }\n        .icon-todo { background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%); color: #000; }\n        .icon-drafts { background: linear-gradient(135deg, #fccb90 0%, #d57eeb 100%); }\n        .icon-ramblings { background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%); color: #000;}\n        .icon-deleted { background: var(--text-secondary); }\n\n        .folder-info {\n            flex: 1;\n        }\n\n        .folder-name {\n            font-size: 17px;\n            font-weight: 500;\n        }\n        .folder-en {\n            font-size: 11px;\n            color: var(--text-secondary);\n            margin-top: 2px;\n            letter-spacing: 0.5px;\n        }\n\n        .folder-count {\n            font-size: 16px;\n            color: var(--text-secondary);\n            margin-right: 8px;\n        }\n\n        .folder-arrow {\n            color: #c7c7cc;\n            font-size: 20px;\n        }\n\n        /* Detail Page */\n        .detail-header {\n            display: flex;\n            align-items: center;\n            padding: 10px 20px;\n            justify-content: space-between;\n            background: rgba(242, 242, 247, 0.8);\n            backdrop-filter: blur(20px);\n            -webkit-backdrop-filter: blur(20px);\n            position: sticky;\n            top: 0;\n            z-index: 10;\n            border-bottom: 1px solid var(--divider);\n        }\n\n        .back-btn {\n            color: var(--accent);\n            display: flex;\n            align-items: center;\n            font-size: 17px;\n            cursor: pointer;\n            transition: opacity 0.2s;\n        }\n        .back-btn i {\n            font-size: 24px;\n            margin-right: -4px;\n        }\n        .back-btn:active {\n            opacity: 0.5;\n        }\n\n        .detail-title {\n            font-size: 30px;\n            font-weight: 700;\n            padding: 20px;\n            margin-top: 10px;\n        }\n        .detail-subtitle {\n            font-size: 13px;\n            color: var(--text-secondary);\n            padding: 0 20px;\n            margin-top: -10px;\n            margin-bottom: 20px;\n            text-transform: uppercase;\n            letter-spacing: 1px;\n        }\n\n        .notes-list {\n            padding: 0 20px;\n        }\n\n        .note-card {\n            background-color: var(--card-bg);\n            border-radius: 12px;\n            padding: 16px;\n            margin-bottom: 16px;\n            box-shadow: 0 2px 8px rgba(0,0,0,0.02);\n            transition: transform 0.2s, box-shadow 0.2s;\n            cursor: pointer;\n        }\n        .note-card:active {\n            transform: scale(0.97);\n            box-shadow: 0 1px 4px rgba(0,0,0,0.02);\n        }\n\n        .note-title {\n            font-size: 17px;\n            font-weight: 600;\n            margin-bottom: 6px;\n            white-space: nowrap;\n            overflow: hidden;\n            text-overflow: ellipsis;\n        }\n        \n        .note-preview {\n            font-size: 15px;\n            color: var(--text-secondary);\n            display: -webkit-box;\n            -webkit-line-clamp: 2;\n            -webkit-box-orient: vertical;\n            overflow: hidden;\n            line-height: 1.4;\n        }\n\n        .note-meta {\n            display: flex;\n            justify-content: space-between;\n            align-items: center;\n            margin-top: 12px;\n            font-size: 12px;\n            color: #aeaeb2;\n        }\n\n        /* Float Add Button */\n        .fab {\n            position: fixed;\n            bottom: 30px;\n            right: 30px;\n            width: 50px;\n            height: 50px;\n            border-radius: 25px;\n            background-color: var(--accent);\n            color: white;\n            display: flex;\n            justify-content: center;\n            align-items: center;\n            font-size: 24px;\n            box-shadow: 0 4px 12px rgba(208, 163, 49, 0.4);\n            cursor: pointer;\n            transition: transform 0.2s;\n            z-index: 100;\n        }\n        .fab:active {\n            transform: scale(0.9);\n        }\n\n        /* Glass Decoration */\n        .glass-blob {\n            position: absolute;\n            width: 200px;\n            height: 200px;\n            border-radius: 50%;\n            background: linear-gradient(135deg, rgba(208,163,49,0.1), rgba(255,255,255,0));\n            top: -50px;\n            right: -50px;\n            filter: blur(30px);\n            z-index: 0;\n            pointer-events: none;\n        }\n\n@keyframes slideUp {\n        to {\n            opacity: 1;\n            transform: translateY(0);\n        }\n    }";
+const PHONE_NOTES_V1_STYLE_TEXT = ":root {\n            --bg-color: #f2f2f7;\n            --card-bg: #ffffff;\n            --text-main: #000000;\n            --text-secondary: #8a8a8e;\n            --accent: #d0a331; /* iOS Notes classic yellow/gold */\n            --divider: rgba(60, 60, 67, 0.1);\n            --safe-area-top: 44px;\n        }\n\n        * {\n            box-sizing: border-box;\n            margin: 0;\n            padding: 0;\n            -webkit-tap-highlight-color: transparent;\n        }\n\n        body {\n            font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"Helvetica Neue\", Arial, sans-serif;\n            background-color: var(--bg-color);\n            color: var(--text-main);\n            overflow: hidden;\n            user-select: none;\n        }\n\n        #app {\n            position: relative;\n            width: 100vw;\n            height: 100vh;\n            overflow: hidden;\n            perspective: 1000px;\n        }\n\n        .page {\n            position: absolute;\n            top: 0;\n            left: 0;\n            width: 100%;\n            height: 100%;\n            background-color: var(--bg-color);\n            transition: transform 0.4s cubic-bezier(0.36, 0.66, 0.04, 1), opacity 0.4s ease;\n            overflow-y: auto;\n            overflow-x: hidden;\n            padding-top: var(--safe-area-top);\n        }\n\n        /* Page Transitions */\n        #main-page {\n            z-index: 1;\n            transform: translateX(0);\n        }\n        #main-page.nav-out {\n            transform: translateX(-30%);\n            opacity: 0;\n        }\n\n        #detail-page {\n            z-index: 2;\n            transform: translateX(100%);\n            background-color: var(--bg-color);\n            box-shadow: -5px 0 15px rgba(0,0,0,0.05);\n        }\n        #detail-page.nav-in {\n            transform: translateX(0);\n        }\n\n        /* Header */\n        header {\n            padding: 10px 20px;\n            display: flex;\n            justify-content: space-between;\n            align-items: flex-end;\n            margin-bottom: 20px;\n        }\n\n        .header-title {\n            font-size: 34px;\n            font-weight: 700;\n            letter-spacing: -0.5px;\n        }\n\n        .header-subtitle {\n            font-size: 12px;\n            color: var(--text-secondary);\n            text-transform: uppercase;\n            letter-spacing: 1px;\n            margin-top: 4px;\n        }\n\n        .header-actions i {\n            font-size: 24px;\n            color: var(--accent);\n            cursor: pointer;\n            transition: opacity 0.2s;\n        }\n        .header-actions i:active {\n            opacity: 0.5;\n        }\n\n        /* Search Bar */\n        .search-container {\n            padding: 0 20px;\n            margin-bottom: 24px;\n        }\n        .search-bar {\n            background-color: rgba(118, 118, 128, 0.12);\n            border-radius: 10px;\n            padding: 8px 12px;\n            display: flex;\n            align-items: center;\n            gap: 8px;\n            transition: transform 0.2s;\n        }\n        .search-bar i {\n            color: var(--text-secondary);\n            font-size: 18px;\n        }\n        .search-bar input {\n            border: none;\n            background: transparent;\n            font-size: 17px;\n            width: 100%;\n            outline: none;\n            color: var(--text-main);\n        }\n        .search-bar input::placeholder {\n            color: var(--text-secondary);\n        }\n\n        /* Folders */\n        .folder-group {\n            background-color: var(--card-bg);\n            border-radius: 12px;\n            margin: 0 20px 24px;\n            overflow: hidden;\n        }\n\n        .folder-item {\n            display: flex;\n            align-items: center;\n            padding: 12px 16px;\n            background-color: var(--card-bg);\n            transition: background-color 0.2s;\n            cursor: pointer;\n            position: relative;\n        }\n\n        .folder-item:active {\n            background-color: rgba(0,0,0,0.05);\n        }\n\n        .folder-item:not(:last-child)::after {\n            content: '';\n            position: absolute;\n            bottom: 0;\n            left: 52px;\n            right: 0;\n            height: 1px;\n            background-color: var(--divider);\n        }\n\n        .folder-icon {\n            width: 30px;\n            height: 30px;\n            border-radius: 8px;\n            display: flex;\n            justify-content: center;\n            align-items: center;\n            margin-right: 14px;\n            font-size: 18px;\n            color: #fff;\n        }\n\n        .icon-pinned { background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%); }\n        .icon-locked { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }\n        .icon-todo { background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%); color: #fff; }\n        .icon-drafts { background: linear-gradient(135deg, #fccb90 0%, #d57eeb 100%); }\n        .icon-ramblings { background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%); color: #fff;}\n        .icon-deleted { background: var(--text-secondary); }\n\n        .folder-info {\n            flex: 1;\n        }\n\n        .folder-name {\n            font-size: 17px;\n            font-weight: 500;\n        }\n        .folder-en {\n            font-size: 11px;\n            color: var(--text-secondary);\n            margin-top: 2px;\n            letter-spacing: 0.5px;\n        }\n\n        .folder-count {\n            font-size: 16px;\n            color: var(--text-secondary);\n            margin-right: 8px;\n        }\n\n        .folder-arrow {\n            color: #c7c7cc;\n            font-size: 20px;\n        }\n\n        /* Detail Page */\n        .detail-header {\n            display: flex;\n            align-items: center;\n            padding: 10px 20px;\n            justify-content: space-between;\n            background: rgba(242, 242, 247, 0.8);\n            backdrop-filter: blur(20px);\n            -webkit-backdrop-filter: blur(20px);\n            position: sticky;\n            top: 0;\n            z-index: 10;\n            border-bottom: 1px solid var(--divider);\n        }\n\n        .back-btn {\n            color: var(--accent);\n            display: flex;\n            align-items: center;\n            font-size: 17px;\n            cursor: pointer;\n            transition: opacity 0.2s;\n        }\n        .back-btn i {\n            font-size: 24px;\n            margin-right: -4px;\n        }\n        .back-btn:active {\n            opacity: 0.5;\n        }\n\n        .detail-title {\n            font-size: 30px;\n            font-weight: 700;\n            padding: 20px;\n            margin-top: 10px;\n        }\n        .detail-subtitle {\n            font-size: 13px;\n            color: var(--text-secondary);\n            padding: 0 20px;\n            margin-top: -10px;\n            margin-bottom: 20px;\n            text-transform: uppercase;\n            letter-spacing: 1px;\n        }\n\n        .notes-list {\n            padding: 0 20px;\n        }\n\n        .note-card {\n            background-color: var(--card-bg);\n            border-radius: 12px;\n            padding: 16px;\n            margin-bottom: 16px;\n            box-shadow: 0 2px 8px rgba(0,0,0,0.02);\n            transition: transform 0.2s, box-shadow 0.2s;\n            cursor: pointer;\n        }\n        .note-card:active {\n            transform: scale(0.97);\n            box-shadow: 0 1px 4px rgba(0,0,0,0.02);\n        }\n\n        .note-title {\n            font-size: 17px;\n            font-weight: 600;\n            margin-bottom: 6px;\n            white-space: nowrap;\n            overflow: hidden;\n            text-overflow: ellipsis;\n        }\n        \n        .note-preview {\n            font-size: 15px;\n            color: var(--text-secondary);\n            display: -webkit-box;\n            -webkit-line-clamp: 2;\n            -webkit-box-orient: vertical;\n            overflow: hidden;\n            line-height: 1.4;\n        }\n\n        .note-meta {\n            display: flex;\n            justify-content: space-between;\n            align-items: center;\n            margin-top: 12px;\n            font-size: 12px;\n            color: #aeaeb2;\n        }\n\n        /* Float Add Button */\n        .fab {\n            position: fixed;\n            bottom: 30px;\n            right: 30px;\n            width: 50px;\n            height: 50px;\n            border-radius: 25px;\n            background-color: var(--accent);\n            color: white;\n            display: flex;\n            justify-content: center;\n            align-items: center;\n            font-size: 24px;\n            box-shadow: 0 4px 12px rgba(208, 163, 49, 0.4);\n            cursor: pointer;\n            transition: transform 0.2s;\n            z-index: 100;\n        }\n        .fab:active {\n            transform: scale(0.9);\n        }\n\n        /* Glass Decoration */\n        .glass-blob {\n            position: absolute;\n            width: 200px;\n            height: 200px;\n            border-radius: 50%;\n            background: linear-gradient(135deg, rgba(208,163,49,0.1), rgba(255,255,255,0));\n            top: -50px;\n            right: -50px;\n            filter: blur(30px);\n            z-index: 0;\n            pointer-events: none;\n        }\n\n@keyframes slideUp {\n        to {\n            opacity: 1;\n            transform: translateY(0);\n        }\n    }";
 
 const PHONE_NOTES_V1_TEMPLATE_HTML = "<div id=\"app\">\n    <!-- Main Page -->\n    <div id=\"main-page\" class=\"page active\">\n        <div class=\"glass-blob\"></div>\n        <header>\n            <div>\n                <div class=\"header-title\">备忘录</div>\n                <div class=\"header-subtitle\">iCloud Notes</div>\n            </div>\n            <div class=\"header-actions\">\n                <i class=\"ri-more-2-fill\"></i>\n            </div>\n        </header>\n\n        <div class=\"search-container\">\n            <div class=\"search-bar\">\n                <i class=\"ri-search-line\"></i>\n                <input type=\"text\" placeholder=\"搜索 / Search\">\n            </div>\n        </div>\n\n        <div class=\"folder-group\">\n            <div class=\"folder-item\" onclick=\"openFolder('Pinned', '置顶便签')\">\n                <div class=\"folder-icon icon-pinned\"><i class=\"ri-pushpin-2-fill\"></i></div>\n                <div class=\"folder-info\">\n                    <div class=\"folder-name\">置顶便签</div>\n                    <div class=\"folder-en\">PINNED NOTES</div>\n                </div>\n                <div class=\"folder-count\">3</div>\n                <i class=\"ri-arrow-right-s-line folder-arrow\"></i>\n            </div>\n            <div class=\"folder-item\" onclick=\"openFolder('Locked', '锁定笔记')\">\n                <div class=\"folder-icon icon-locked\"><i class=\"ri-lock-2-fill\"></i></div>\n                <div class=\"folder-info\">\n                    <div class=\"folder-name\">锁定笔记</div>\n                    <div class=\"folder-en\">LOCKED</div>\n                </div>\n                <div class=\"folder-count\">1</div>\n                <i class=\"ri-arrow-right-s-line folder-arrow\"></i>\n            </div>\n            <div class=\"folder-item\" onclick=\"openFolder('Tasks', '待办清单')\">\n                <div class=\"folder-icon icon-todo\"><i class=\"ri-checkbox-circle-fill\"></i></div>\n                <div class=\"folder-info\">\n                    <div class=\"folder-name\">待办清单</div>\n                    <div class=\"folder-en\">TO-DO LIST</div>\n                </div>\n                <div class=\"folder-count\">5</div>\n                <i class=\"ri-arrow-right-s-line folder-arrow\"></i>\n            </div>\n        </div>\n\n        <div class=\"folder-group\">\n            <div class=\"folder-item\" onclick=\"openFolder('Drafts', '草稿')\">\n                <div class=\"folder-icon icon-drafts\"><i class=\"ri-draft-fill\"></i></div>\n                <div class=\"folder-info\">\n                    <div class=\"folder-name\">草稿</div>\n                    <div class=\"folder-en\">DRAFTS</div>\n                </div>\n                <div class=\"folder-count\">12</div>\n                <i class=\"ri-arrow-right-s-line folder-arrow\"></i>\n            </div>\n            <div class=\"folder-item\" onclick=\"openFolder('Ramblings', '碎碎念')\">\n                <div class=\"folder-icon icon-ramblings\"><i class=\"ri-bubble-chart-fill\"></i></div>\n                <div class=\"folder-info\">\n                    <div class=\"folder-name\">碎碎念</div>\n                    <div class=\"folder-en\">RAMBLINGS</div>\n                </div>\n                <div class=\"folder-count\">42</div>\n                <i class=\"ri-arrow-right-s-line folder-arrow\"></i>\n            </div>\n        </div>\n\n        <div class=\"folder-group\">\n            <div class=\"folder-item\" onclick=\"openFolder('Deleted', '已删除')\">\n                <div class=\"folder-icon icon-deleted\"><i class=\"ri-delete-bin-7-fill\"></i></div>\n                <div class=\"folder-info\">\n                    <div class=\"folder-name\">已删除</div>\n                    <div class=\"folder-en\">RECENTLY DELETED</div>\n                </div>\n                <div class=\"folder-count\">8</div>\n                <i class=\"ri-arrow-right-s-line folder-arrow\"></i>\n            </div>\n        </div>\n        \n        <div class=\"fab\">\n            <i class=\"ri-add-line\"></i>\n        </div>\n    </div>\n\n    <!-- Detail Page -->\n    <div id=\"detail-page\" class=\"page\">\n        <div class=\"detail-header\">\n            <div class=\"back-btn\" onclick=\"goBack()\">\n                <i class=\"ri-arrow-left-s-line\"></i>\n                <span>文件夹</span>\n            </div>\n            <i class=\"ri-more-2-fill\" style=\"color: var(--accent); font-size: 24px;\"></i>\n        </div>\n        \n        <div class=\"detail-title\" id=\"dt-title\">文件夹</div>\n        <div class=\"detail-subtitle\" id=\"dt-subtitle\">FOLDER</div>\n\n        <div class=\"notes-list\" id=\"notes-container\">\n            <!-- Notes injected via JS -->\n        </div>\n\n        <div class=\"fab\">\n            <i class=\"ri-edit-box-line\"></i>\n        </div>\n    </div>\n</div>";
 
@@ -709,6 +711,640 @@ function openPhoneNotesApp() {
 
     ensurePhoneNotesV1Styles();
     content.scrollTop = 0;
+    screen.classList.remove('hidden');
+}
+
+const PHONE_FILES_TEMPLATE_VERSION = 'v1';
+const PHONE_FILES_V1_STYLE_TEXT = `
+#phone-files,
+#phone-files-content {
+    background: #F2F2F7;
+}
+#phone-files-content {
+    --ios-bg: #F2F2F7;
+    --ios-list-bg: #FFFFFF;
+    --ios-text: #000000;
+    --ios-text-secondary: #8E8E93;
+    --ios-blue: #007AFF;
+    --ios-separator: rgba(60, 60, 67, 0.29);
+    --ios-gray-bg: rgba(118, 118, 128, 0.12);
+    --header-blur: rgba(242, 242, 247, 0.85);
+    --icon-recent: #007AFF;
+    --icon-scan: #34C759;
+    --icon-download: #5856D6;
+    --icon-zip: #FFCC00;
+    --icon-hidden: #8E8E93;
+    --icon-fav: #FF2D55;
+    --icon-lock: #FF9500;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", sans-serif;
+    color: var(--ios-text);
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+#phone-files-content,
+#phone-files-content * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+#phone-files-content .phone-files-app {
+    width: 100%;
+    height: 100%;
+    background: var(--ios-bg);
+    position: relative;
+    overflow: hidden;
+}
+#phone-files-content .view-stack {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+#phone-files-content .view {
+    position: absolute;
+    inset: 0;
+    background: var(--ios-bg);
+    transition: transform 0.4s cubic-bezier(0.36, 0.66, 0.04, 1);
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 1;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+#phone-files-content .view::-webkit-scrollbar {
+    display: none;
+}
+#phone-files-content .view-main {
+    transform: translateX(0);
+    z-index: 1;
+}
+#phone-files-content .view-main.bg {
+    transform: translateX(-30%);
+}
+#phone-files-content .view-detail {
+    transform: translateX(100%);
+    z-index: 5;
+    box-shadow: -10px 0 20px rgba(0,0,0,0.05);
+}
+#phone-files-content .view-detail.active {
+    transform: translateX(0);
+}
+#phone-files-content .header {
+    position: sticky;
+    top: 0;
+    background: var(--header-blur);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    z-index: 10;
+    padding-bottom: 8px;
+    border-bottom: 0.5px solid transparent;
+    transition: border-bottom 0.2s;
+}
+#phone-files-content .header.scrolled {
+    border-bottom: 0.5px solid var(--ios-separator);
+}
+#phone-files-content .nav-bar {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    margin-top: max(40px, env(safe-area-inset-top));
+    font-size: 17px;
+}
+#phone-files-content .nav-btn {
+    color: var(--ios-blue);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+#phone-files-content .nav-btn.circle {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--ios-gray-bg);
+    justify-content: center;
+}
+#phone-files-content .nav-title {
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+#phone-files-content .header.scrolled .nav-title {
+    opacity: 1;
+}
+#phone-files-content .large-title-container {
+    padding: 4px 16px 8px;
+    transition: transform 0.2s, opacity 0.2s, height 0.2s, padding 0.2s;
+}
+#phone-files-content .header.scrolled .large-title-container {
+    transform: translateY(-10px);
+    opacity: 0;
+    pointer-events: none;
+    height: 0;
+    padding: 0 16px;
+}
+#phone-files-content .large-title {
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+#phone-files-content .large-title-en {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--ios-text-secondary);
+    vertical-align: middle;
+}
+#phone-files-content .search-container {
+    padding: 0 16px;
+    margin-top: 4px;
+}
+#phone-files-content .header.scrolled .search-container {
+    display: none;
+}
+#phone-files-content .search-bar {
+    background: var(--ios-gray-bg);
+    border-radius: 10px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    color: var(--ios-text-secondary);
+}
+#phone-files-content .search-bar i {
+    font-size: 17px;
+    margin-right: 6px;
+}
+#phone-files-content .search-bar input {
+    border: none;
+    background: transparent;
+    font-size: 17px;
+    width: 100%;
+    outline: none;
+    color: var(--ios-text);
+}
+#phone-files-content .search-bar input::placeholder {
+    color: var(--ios-text-secondary);
+}
+#phone-files-content .files-main-content {
+    padding-bottom: max(36px, env(safe-area-inset-bottom));
+}
+#phone-files-content .list-section {
+    margin: 16px 16px 24px;
+}
+#phone-files-content .list-header {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 10px 16px;
+    color: var(--ios-text);
+}
+#phone-files-content .list-block {
+    background: var(--ios-list-bg);
+    border-radius: 10px;
+    overflow: hidden;
+}
+#phone-files-content .list-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    min-height: 44px;
+    position: relative;
+    cursor: pointer;
+    background: var(--ios-list-bg);
+}
+#phone-files-content .list-item:active {
+    background: #E5E5EA;
+}
+#phone-files-content .list-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 54px;
+    right: 0;
+    height: 0.5px;
+    background: var(--ios-separator);
+}
+#phone-files-content .list-icon {
+    width: 24px;
+    font-size: 24px;
+    margin-right: 14px;
+    display: flex;
+    justify-content: center;
+}
+#phone-files-content .list-text {
+    flex: 1;
+    font-size: 17px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+#phone-files-content .list-value {
+    color: var(--ios-text-secondary);
+    display: flex;
+    align-items: center;
+    font-size: 17px;
+}
+#phone-files-content .list-value .chevron {
+    font-size: 20px;
+    color: #C7C7CC;
+    margin-left: 6px;
+}
+#phone-files-content .detail-content {
+    padding: 0 16px max(36px, env(safe-area-inset-bottom));
+}
+#phone-files-content .file-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px 12px;
+    margin-top: 16px;
+}
+#phone-files-content .file-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    cursor: pointer;
+}
+#phone-files-content .file-box:active {
+    opacity: 0.7;
+}
+#phone-files-content .file-box-icon {
+    width: 70px;
+    height: 70px;
+    background: #fff;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    margin-bottom: 6px;
+}
+#phone-files-content .file-box-name {
+    font-size: 12px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-all;
+}
+#phone-files-content .status-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 60vh;
+    text-align: center;
+    padding: 40px;
+}
+#phone-files-content .status-icon {
+    font-size: 60px;
+    color: var(--ios-text-secondary);
+    margin-bottom: 16px;
+}
+#phone-files-content .status-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+#phone-files-content .status-desc {
+    font-size: 15px;
+    color: var(--ios-text-secondary);
+    line-height: 1.35;
+}
+#phone-files-content .auth-btn {
+    color: var(--ios-blue);
+    font-size: 17px;
+    margin-top: 20px;
+    cursor: pointer;
+}
+#phone-files-content .auth-btn:active {
+    opacity: 0.5;
+}
+`;
+
+const PHONE_FILES_V1_TEMPLATE_HTML = `
+<div class="phone-files-app">
+    <div class="view-stack">
+        <div class="view view-main" id="phone-files-main-view">
+            <div class="header" id="phone-files-main-header">
+                <div class="nav-bar">
+                    <div class="nav-btn" data-action="close-files-app"><i class="ri-arrow-left-s-line" style="font-size:24px; vertical-align:middle; margin-left:-8px;"></i> 文件夹</div>
+                    <div class="nav-title">浏览</div>
+                    <div class="nav-btn circle"><i class="ri-more-fill"></i></div>
+                </div>
+                <div class="large-title-container">
+                    <div class="large-title">浏览 <span class="large-title-en">Browse</span></div>
+                </div>
+                <div class="search-container">
+                    <div class="search-bar">
+                        <i class="ri-search-line"></i>
+                        <input type="text" placeholder="搜索" readonly>
+                        <i class="ri-mic-fill" style="color: var(--ios-text-secondary); margin-right:0; margin-left:auto;"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="files-main-content" id="phone-files-main-sections"></div>
+        </div>
+        <div class="view view-detail" id="phone-files-detail-view">
+            <div class="header" id="phone-files-detail-header">
+                <div class="nav-bar">
+                    <div class="nav-btn" data-action="back-to-files-main"><i class="ri-arrow-left-s-line" style="font-size:24px; vertical-align:middle; margin-left:-8px;"></i> 浏览</div>
+                    <div class="nav-title" id="phone-files-small-title">目录</div>
+                    <div class="nav-btn circle"><i class="ri-more-fill"></i></div>
+                </div>
+                <div class="large-title-container">
+                    <div class="large-title" id="phone-files-big-title">目录</div>
+                </div>
+            </div>
+            <div class="detail-content" id="phone-files-detail-content"></div>
+        </div>
+    </div>
+</div>`;
+
+const PHONE_FILES_BROWSE_SECTIONS = [
+    {
+        title: '位置',
+        items: [
+            { key: 'recent', label: '最近打开', en: 'Recent', icon: 'ri-time-line', color: 'var(--icon-recent)' },
+            { key: 'downloads', label: '下载文件', en: 'Downloads', icon: 'ri-download-cloud-line', color: 'var(--icon-download)' }
+        ]
+    },
+    {
+        title: '分类',
+        items: [
+            { key: 'archives', label: '压缩包', en: 'Archives', icon: 'ri-file-zip-line', color: 'var(--icon-zip)' },
+            { key: 'scans', label: '扫描件', en: 'Scans', icon: 'ri-scan-line', color: 'var(--icon-scan)' },
+            { key: 'favorites', label: '收藏文件', en: 'Favorites', icon: 'ri-heart-fill', color: 'var(--icon-fav)' }
+        ]
+    },
+    {
+        title: '安全与隐私',
+        items: [
+            { key: 'hidden', label: '隐藏文件夹', en: 'Hidden', icon: 'ri-eye-off-line', color: 'var(--icon-hidden)', secure: true },
+            { key: 'encrypted', label: '加密文档', en: 'Encrypted', icon: 'ri-shield-keyhole-fill', color: 'var(--icon-lock)', secure: true }
+        ]
+    }
+];
+
+const PHONE_FILES_SAMPLE_FILES = {
+    recent: ['项目清单.pdf', '会议纪要.docx', '封面草图.png', '报价单.xlsx', '合同扫描件.pdf', '旅行照片.jpg', '演示稿.key', '素材打包.zip', '采访录音.m4a'],
+    downloads: ['安装包.zip', '课程资料.pdf', '需求说明.docx', '样张图片.png', '字幕文件.srt', '表格模板.xlsx', '视频素材.mov', '导出文档.pdf', '清单.txt'],
+    archives: ['旧资料_01.zip', '源文件备份.zip', '发票归档.zip', '照片合集.zip', '聊天记录.zip', '导出压缩包.zip'],
+    scans: ['身份证扫描.pdf', '合同扫描.pdf', '发票扫描.jpg', '签字页.pdf', '收据扫描.jpg', '证件照片.png'],
+    favorites: ['灵感板.jpg', '收藏配色.png', '论文摘录.pdf', '常用模板.docx', '旅行计划.pdf', '配乐片段.m4a']
+};
+
+function phoneFilesEscapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function phoneFilesEnsureShell() {
+    let screen = document.getElementById('phone-files');
+    if (screen) return screen;
+
+    const host = document.getElementById('phone-notes')?.parentNode || document.body;
+    screen = document.createElement('div');
+    screen.id = 'phone-files';
+    screen.className = 'sub-screen hidden';
+    screen.style.cssText = 'z-index: 200; background-color: #f2f2f7; overflow: hidden;';
+    screen.innerHTML = '<div id="phone-files-content" style="width: 100%; height: 100%; overflow: hidden; background: #f2f2f7;"></div>';
+    host.appendChild(screen);
+    return screen;
+}
+
+function phoneFilesGetRuntime(container) {
+    if (!container.__phoneFilesRuntime) {
+        container.__phoneFilesRuntime = {
+            currentKey: null,
+            currentView: 'main'
+        };
+    }
+    return container.__phoneFilesRuntime;
+}
+
+function phoneFilesGetItemMeta(itemKey) {
+    for (const section of PHONE_FILES_BROWSE_SECTIONS) {
+        const found = section.items.find(item => item.key === itemKey);
+        if (found) return found;
+    }
+    return PHONE_FILES_BROWSE_SECTIONS[0].items[0];
+}
+
+function phoneFilesInferVisual(filename) {
+    const lower = String(filename || '').toLowerCase();
+    if (lower.endsWith('.pdf')) return { icon: 'ri-file-pdf-line', color: '#FF3B30' };
+    if (lower.endsWith('.doc') || lower.endsWith('.docx')) return { icon: 'ri-file-word-line', color: '#007AFF' };
+    if (lower.endsWith('.xls') || lower.endsWith('.xlsx') || lower.endsWith('.csv')) return { icon: 'ri-file-excel-line', color: '#34C759' };
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.heic')) return { icon: 'ri-image-line', color: '#5856D6' };
+    if (lower.endsWith('.zip') || lower.endsWith('.rar') || lower.endsWith('.7z')) return { icon: 'ri-file-zip-line', color: '#FFCC00' };
+    if (lower.endsWith('.mov') || lower.endsWith('.mp4')) return { icon: 'ri-video-line', color: '#FF9500' };
+    if (lower.endsWith('.m4a') || lower.endsWith('.mp3')) return { icon: 'ri-music-2-line', color: '#AF52DE' };
+    if (lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.key') || lower.endsWith('.pages')) return { icon: 'ri-file-text-line', color: '#8E8E93' };
+    return { icon: 'ri-file-line', color: '#8E8E93' };
+}
+
+function phoneFilesBuildSampleFiles(itemKey) {
+    const names = PHONE_FILES_SAMPLE_FILES[itemKey] || PHONE_FILES_SAMPLE_FILES.recent;
+    return names.map(filename => ({
+        filename,
+        ...phoneFilesInferVisual(filename)
+    }));
+}
+
+function phoneFilesRenderMainSections(container) {
+    const sectionsEl = container.querySelector('#phone-files-main-sections');
+    if (!sectionsEl) return;
+    sectionsEl.innerHTML = PHONE_FILES_BROWSE_SECTIONS.map(section => `
+        <div class="list-section">
+            <div class="list-header">${phoneFilesEscapeHtml(section.title)}</div>
+            <div class="list-block">
+                ${section.items.map(item => `
+                    <div class="list-item" data-item-key="${phoneFilesEscapeHtml(item.key)}">
+                        <div class="list-icon" style="color: ${item.color}"><i class="${item.icon}"></i></div>
+                        <div class="list-text">
+                            <span>${phoneFilesEscapeHtml(item.label)}</span>
+                            <div class="list-value">${item.secure ? '<i class="ri-lock-fill" style="font-size: 14px;"></i>' : ''}<i class="ri-arrow-right-s-line chevron"></i></div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `).join('');
+}
+
+function phoneFilesUpdateHeaderScroll(scrollEl, headerEl) {
+    if (!scrollEl || !headerEl) return;
+    headerEl.classList.toggle('scrolled', scrollEl.scrollTop > 20);
+}
+
+function phoneFilesRenderDetail(container, itemKey) {
+    const meta = phoneFilesGetItemMeta(itemKey);
+    const smallTitle = container.querySelector('#phone-files-small-title');
+    const bigTitle = container.querySelector('#phone-files-big-title');
+    const detailContent = container.querySelector('#phone-files-detail-content');
+    if (smallTitle) smallTitle.textContent = meta.label;
+    if (bigTitle) bigTitle.innerHTML = `${phoneFilesEscapeHtml(meta.label)} <span class="large-title-en">${phoneFilesEscapeHtml(meta.en)}</span>`;
+    if (!detailContent) return;
+
+    if (meta.secure) {
+        detailContent.innerHTML = `
+            <div class="status-page">
+                <i class="ri-lock-fill status-icon"></i>
+                <div class="status-title">此文件夹已锁定</div>
+                <div class="status-desc">需要验证 Face ID 或触控 ID 才能查看此文件夹中的内容。</div>
+                <div class="auth-btn">查看内容</div>
+            </div>
+        `;
+        return;
+    }
+
+    const files = phoneFilesBuildSampleFiles(itemKey);
+    detailContent.innerHTML = `
+        <div class="file-grid">
+            ${files.map(file => `
+                <div class="file-box">
+                    <div class="file-box-icon" style="color:${file.color}"><i class="${file.icon}"></i></div>
+                    <div class="file-box-name">${phoneFilesEscapeHtml(file.filename)}</div>
+                </div>
+            `).join('')}
+        </div>
+        <div style="height: 40px"></div>
+    `;
+}
+
+function phoneFilesShowMain(container) {
+    const runtime = phoneFilesGetRuntime(container);
+    const mainView = container.querySelector('#phone-files-main-view');
+    const detailView = container.querySelector('#phone-files-detail-view');
+    if (mainView) mainView.classList.remove('bg');
+    if (detailView) detailView.classList.remove('active');
+    runtime.currentView = 'main';
+    runtime.currentKey = null;
+}
+
+function phoneFilesOpenDetail(container, itemKey) {
+    const runtime = phoneFilesGetRuntime(container);
+    const mainView = container.querySelector('#phone-files-main-view');
+    const detailView = container.querySelector('#phone-files-detail-view');
+    const detailHeader = container.querySelector('#phone-files-detail-header');
+    phoneFilesRenderDetail(container, itemKey);
+    if (mainView) mainView.classList.add('bg');
+    if (detailView) {
+        detailView.classList.add('active');
+        detailView.scrollTop = 0;
+    }
+    if (detailHeader) detailHeader.classList.remove('scrolled');
+    runtime.currentView = 'detail';
+    runtime.currentKey = itemKey;
+}
+
+function bindPhoneFilesV1Interactions(container) {
+    if (!container || container.dataset.phoneFilesBound === 'true') return;
+
+    const screen = document.getElementById('phone-files');
+    const mainView = container.querySelector('#phone-files-main-view');
+    const detailView = container.querySelector('#phone-files-detail-view');
+    const mainHeader = container.querySelector('#phone-files-main-header');
+    const detailHeader = container.querySelector('#phone-files-detail-header');
+
+    if (mainView && mainHeader) {
+        mainView.addEventListener('scroll', () => phoneFilesUpdateHeaderScroll(mainView, mainHeader));
+    }
+    if (detailView && detailHeader) {
+        detailView.addEventListener('scroll', () => phoneFilesUpdateHeaderScroll(detailView, detailHeader));
+    }
+
+    container.addEventListener('click', event => {
+        const target = event.target;
+
+        const closeBtn = target.closest('[data-action="close-files-app"]');
+        if (closeBtn) {
+            event.preventDefault();
+            if (screen) screen.classList.add('hidden');
+            phoneFilesShowMain(container);
+            return;
+        }
+
+        const backBtn = target.closest('[data-action="back-to-files-main"]');
+        if (backBtn) {
+            event.preventDefault();
+            phoneFilesShowMain(container);
+            return;
+        }
+
+        const item = target.closest('.list-item[data-item-key]');
+        if (item) {
+            event.preventDefault();
+            phoneFilesOpenDetail(container, item.dataset.itemKey);
+        }
+    });
+
+    container.__resetPhoneFilesView = () => {
+        const runtime = phoneFilesGetRuntime(container);
+        runtime.currentView = 'main';
+        runtime.currentKey = null;
+        phoneFilesShowMain(container);
+        if (mainView) {
+            mainView.scrollTop = 0;
+        }
+        if (detailView) {
+            detailView.scrollTop = 0;
+        }
+        if (mainHeader) mainHeader.classList.remove('scrolled');
+        if (detailHeader) detailHeader.classList.remove('scrolled');
+    };
+
+    container.dataset.phoneFilesBound = 'true';
+}
+
+function ensurePhoneFilesV1Styles() {
+    let styleEl = document.getElementById('phone-files-v1-style');
+    if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'phone-files-v1-style';
+        document.head.appendChild(styleEl);
+    }
+    if (styleEl.textContent !== PHONE_FILES_V1_STYLE_TEXT) {
+        styleEl.textContent = PHONE_FILES_V1_STYLE_TEXT;
+    }
+}
+
+function ensurePhoneFilesV1Content() {
+    const screen = phoneFilesEnsureShell();
+    const container = screen.querySelector('#phone-files-content');
+    if (!container) return null;
+
+    container.style.background = '#F2F2F7';
+    container.style.height = '100%';
+    container.style.overflow = 'hidden';
+
+    if (container.dataset.phoneFilesTemplateVersion !== PHONE_FILES_TEMPLATE_VERSION) {
+        container.innerHTML = PHONE_FILES_V1_TEMPLATE_HTML;
+        container.dataset.phoneFilesTemplateVersion = PHONE_FILES_TEMPLATE_VERSION;
+        delete container.dataset.phoneFilesBound;
+        delete container.__phoneFilesRuntime;
+    }
+
+    phoneFilesRenderMainSections(container);
+    bindPhoneFilesV1Interactions(container);
+    return container;
+}
+
+function openPhoneFilesApp() {
+    const screen = phoneFilesEnsureShell();
+    const content = ensurePhoneFilesV1Content();
+    if (!screen || !content) return;
+
+    ensurePhoneFilesV1Styles();
+    if (typeof content.__resetPhoneFilesView === 'function') {
+        content.__resetPhoneFilesView();
+    }
     screen.classList.remove('hidden');
 }
 
@@ -4747,7 +5383,7 @@ window.handleXianyuPurchase = handleXianyuPurchase;
 window.notifyContactAboutGift = notifyContactAboutGift;
 window.notifyContactAboutGift = notifyContactAboutGift;
 
-const PHONE_NOTES_TEMPLATE_VERSION = 'ai-v3';
+const PHONE_NOTES_TEMPLATE_VERSION = 'ai-v4';
 const PHONE_NOTES_SECTION_ORDER = ['pinned_notes', 'locked_notes', 'todo_lists', 'drafts', 'ramblings', 'deleted_notes'];
 const PHONE_NOTES_SECTION_GROUPS = [
     ['pinned_notes', 'locked_notes', 'todo_lists'],
@@ -5243,6 +5879,121 @@ const PHONE_NOTES_EXTRA_STYLE_TEXT = `
     font-size: 23px;
     color: #17181c;
 }
+#notes-lock-modal {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+#notes-lock-modal.hidden {
+    display: none;
+}
+.notes-lock-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(12, 12, 18, 0.18);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+.notes-lock-card {
+    position: relative;
+    width: 100%;
+    max-width: 360px;
+    padding: 24px 22px 20px;
+    border-radius: 26px;
+    background: rgba(255,255,255,0.96);
+    border: 1px solid rgba(255,255,255,0.92);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.14);
+}
+.notes-lock-badge {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(102,126,234,0.16), rgba(118,75,162,0.16));
+    color: #6f63d8;
+    margin-bottom: 14px;
+}
+.notes-lock-badge i {
+    font-size: 24px;
+}
+.notes-lock-title {
+    font-size: 24px;
+    line-height: 1.15;
+    font-weight: 700;
+    color: #2b2c34;
+    letter-spacing: -0.4px;
+}
+.notes-lock-note-title {
+    margin-top: 6px;
+    color: #8f8f97;
+    font-size: 13px;
+}
+.notes-lock-question {
+    margin-top: 18px;
+    padding: 16px 16px 15px;
+    border-radius: 18px;
+    background: rgba(118,118,128,0.08);
+    color: #44454d;
+    font-size: 16px;
+    line-height: 1.6;
+}
+.notes-lock-input {
+    width: 100%;
+    height: 48px;
+    margin-top: 16px;
+    border: 1px solid rgba(60,60,67,0.12);
+    border-radius: 16px;
+    background: #fff;
+    padding: 0 16px;
+    outline: none;
+    font-size: 16px;
+    color: #2b2c34;
+}
+.notes-lock-input:focus {
+    border-color: rgba(208,163,49,0.45);
+    box-shadow: 0 0 0 4px rgba(208,163,49,0.12);
+}
+.notes-lock-helper {
+    margin-top: 10px;
+    color: #9a9aa1;
+    font-size: 12px;
+    line-height: 1.5;
+}
+.notes-lock-error {
+    margin-top: 10px;
+    min-height: 20px;
+    color: #d24a43;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.notes-lock-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 18px;
+}
+.notes-lock-btn {
+    flex: 1;
+    height: 44px;
+    border: none;
+    border-radius: 16px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.notes-lock-btn.is-secondary {
+    background: rgba(118,118,128,0.1);
+    color: #4d4e56;
+}
+.notes-lock-btn.is-primary {
+    background: var(--accent);
+    color: #fff;
+}
 .note-secondary-block {
     margin-top: 18px;
     padding-top: 16px;
@@ -5350,6 +6101,22 @@ const PHONE_NOTES_APP_TEMPLATE_HTML = `<div id="app">
             <i class="ri-edit-box-line"></i>
         </div>
     </div>
+    <div id="notes-lock-modal" class="hidden" aria-hidden="true">
+        <div class="notes-lock-backdrop" data-action="close-lock-modal"></div>
+        <div class="notes-lock-card" role="dialog" aria-modal="true" aria-labelledby="notes-lock-title">
+            <div class="notes-lock-badge"><i class="ri-question-answer-line"></i></div>
+            <div class="notes-lock-title" id="notes-lock-title">回答问题</div>
+            <div class="notes-lock-note-title" id="notes-lock-note-title"></div>
+            <div class="notes-lock-question" id="notes-lock-question"></div>
+            <input type="text" id="notes-lock-answer-input" class="notes-lock-input" placeholder="输入答案" autocomplete="off" spellcheck="false">
+            <div class="notes-lock-helper">答案会比较短，通常是日期、称呼、地点或一个名词。</div>
+            <div class="notes-lock-error" id="notes-lock-error"></div>
+            <div class="notes-lock-actions">
+                <button type="button" class="notes-lock-btn is-secondary" data-action="close-lock-modal">取消</button>
+                <button type="button" class="notes-lock-btn is-primary" data-action="submit-lock-answer">查看内容</button>
+            </div>
+        </div>
+    </div>
 </div>`;
 
 const PHONE_NOTES_PROMPT_TEMPLATES = {
@@ -5424,7 +6191,8 @@ ${recentChatContext || '暂无最近聊天记录'}
 
 【内容要求】
 - 置顶便签更偏日常、重要事项、近期反复提醒
-- 锁定笔记更偏情绪、秘密、不能公开的想法
+- 锁定笔记更偏情绪、秘密、不能公开的想法，并且每条都要附带一个解锁问题和标准答案
+- lock_answer 必须简短，优先使用日期、地点、昵称、称呼、学校名、餐厅名这类短答案，不要写成长句
 - 已删除内容更像一时冲动写下后又删掉的东西
 - 待办清单要有真实执行感，包含勾选状态
 - 草稿要明显带“没写完 / 不敢发 / 想发又删”的感觉
@@ -5473,7 +6241,9 @@ JSON 结构如下：
       "content": "正文",
       "updated_at": "昨天 23:48",
       "is_locked": true,
-      "lock_hint": "面容ID",
+      "lock_hint": "回答问题",
+      "lock_question": "问题",
+      "lock_answer": "3月18日",
       "tags": ["私密", "情绪"],
       "related_to_user": true
     }
@@ -5565,6 +6335,9 @@ JSON 结构如下：
 3. 至少 1 条与用户有关，但要克制、自然。
 4. 可以写得更碎片化、更私人。
 5. 不要写成长篇日记。
+6. 每条都要同时生成一个用于解锁的问题和标准答案。
+7. lock_answer 必须是短答案，适合日期、地点、昵称、称呼、学校名、餐厅名这类 2-8 个字左右的内容，不要写成长句。
+8. 问题要自然，像这个人真的会拿来锁住这条笔记，而不是谜语或脑筋急转弯。
 
 【返回格式】
 返回纯 JSON 数组：
@@ -5575,7 +6348,9 @@ JSON 结构如下：
     "content": "正文",
     "updated_at": "昨天 23:48",
     "is_locked": true,
-    "lock_hint": "面容ID",
+    "lock_hint": "回答问题",
+    "lock_question": "问题",
+    "lock_answer": "乌冬面",
     "tags": ["私密", "情绪"],
     "related_to_user": true
   }
@@ -5800,7 +6575,9 @@ function normalizePhoneNotesEntry(sectionKey, item, index) {
         return {
             ...base,
             is_locked: true,
-            lock_hint: phoneNotesNormalizeText(source.lock_hint, '面容 ID')
+            lock_hint: phoneNotesNormalizeText(source.lock_hint, '回答问题'),
+            lock_question: phoneNotesNormalizeText(source.lock_question || source.unlock_question || source.question, ''),
+            lock_answer: phoneNotesNormalizeText(source.lock_answer || source.unlock_answer || source.answer, '')
         };
     }
 
@@ -5911,10 +6688,111 @@ function phoneNotesGetRuntime(container) {
             currentView: 'main',
             currentSectionKey: null,
             currentNoteIndex: null,
-            searchTerm: ''
+            searchTerm: '',
+            unlockedNoteKey: null,
+            unlockModalSectionKey: null,
+            unlockModalNoteIndex: null
         };
     }
     return container.__phoneNotesRuntime;
+}
+
+function phoneNotesBuildRuntimeNoteKey(sectionKey, noteIndex) {
+    return `${sectionKey}::${noteIndex}`;
+}
+
+function phoneNotesNormalizeLockAnswer(value) {
+    const text = phoneNotesNormalizeText(value, '');
+    if (!text) return '';
+    return text.normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+}
+
+function phoneNotesHasLockChallenge(note) {
+    return !!(note && phoneNotesNormalizeText(note.lock_question, '') && phoneNotesNormalizeText(note.lock_answer, ''));
+}
+
+function phoneNotesCloseLockModal(container) {
+    const runtime = phoneNotesGetRuntime(container);
+    const modal = container.querySelector('#notes-lock-modal');
+    const input = container.querySelector('#notes-lock-answer-input');
+    const error = container.querySelector('#notes-lock-error');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+    if (input) input.value = '';
+    if (error) error.textContent = '';
+    runtime.unlockModalSectionKey = null;
+    runtime.unlockModalNoteIndex = null;
+}
+
+function phoneNotesOpenLockModal(container, noteIndex) {
+    const runtime = phoneNotesGetRuntime(container);
+    const sectionKey = runtime.currentSectionKey;
+    const contact = getActivePhoneNotesContact();
+    const notes = getPhoneNotesData(contact && contact.id)[sectionKey] || [];
+    const note = notes[noteIndex];
+    if (!note) return;
+
+    if (!phoneNotesHasLockChallenge(note)) {
+        runtime.unlockedNoteKey = phoneNotesBuildRuntimeNoteKey(sectionKey, noteIndex);
+        phoneNotesRenderNoteDetail(container, sectionKey, noteIndex);
+        phoneNotesShowNotePage(container);
+        return;
+    }
+
+    const modal = container.querySelector('#notes-lock-modal');
+    const noteTitle = container.querySelector('#notes-lock-note-title');
+    const question = container.querySelector('#notes-lock-question');
+    const input = container.querySelector('#notes-lock-answer-input');
+    const error = container.querySelector('#notes-lock-error');
+    if (!modal || !noteTitle || !question || !input || !error) return;
+
+    runtime.unlockModalSectionKey = sectionKey;
+    runtime.unlockModalNoteIndex = noteIndex;
+    noteTitle.textContent = note.title || '锁定笔记';
+    question.textContent = note.lock_question;
+    input.value = '';
+    error.textContent = '';
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    setTimeout(() => input.focus(), 0);
+}
+
+function phoneNotesSubmitLockAnswer(container) {
+    const runtime = phoneNotesGetRuntime(container);
+    const sectionKey = runtime.unlockModalSectionKey;
+    const noteIndex = runtime.unlockModalNoteIndex;
+    const contact = getActivePhoneNotesContact();
+    const input = container.querySelector('#notes-lock-answer-input');
+    const error = container.querySelector('#notes-lock-error');
+    if (!sectionKey || noteIndex == null || !input || !error) return;
+
+    const note = (getPhoneNotesData(contact && contact.id)[sectionKey] || [])[noteIndex];
+    if (!note) {
+        phoneNotesCloseLockModal(container);
+        return;
+    }
+
+    const typedAnswer = phoneNotesNormalizeLockAnswer(input.value);
+    const expectedAnswer = phoneNotesNormalizeLockAnswer(note.lock_answer);
+    if (!typedAnswer) {
+        error.textContent = '先输入答案。';
+        input.focus();
+        return;
+    }
+
+    if (!expectedAnswer || typedAnswer !== expectedAnswer) {
+        error.textContent = '答案不对，再想想。';
+        input.focus();
+        input.select();
+        return;
+    }
+
+    runtime.unlockedNoteKey = phoneNotesBuildRuntimeNoteKey(sectionKey, noteIndex);
+    phoneNotesCloseLockModal(container);
+    phoneNotesRenderNoteDetail(container, sectionKey, noteIndex);
+    phoneNotesShowNotePage(container);
 }
 
 function phoneNotesResolveSectionKey(primaryValue, secondaryValue) {
@@ -6044,6 +6922,8 @@ function phoneNotesShowMainPage(container) {
     if (notePage) notePage.classList.remove('nav-in');
     runtime.currentView = 'main';
     runtime.currentNoteIndex = null;
+    runtime.unlockedNoteKey = null;
+    phoneNotesCloseLockModal(container);
     phoneNotesHideMenus(container);
 }
 
@@ -6061,6 +6941,8 @@ function phoneNotesShowSectionPage(container) {
     if (notePage) notePage.classList.remove('nav-in');
     runtime.currentView = 'section';
     runtime.currentNoteIndex = null;
+    runtime.unlockedNoteKey = null;
+    phoneNotesCloseLockModal(container);
     phoneNotesHideMenus(container);
 }
 
@@ -6128,7 +7010,6 @@ function phoneNotesBuildDetailMeta(sectionKey, note) {
     const metaBits = [];
     metaBits.push(`<span>${phoneNotesEscapeHtml(phoneNotesGetDisplayTime(sectionKey, note))}</span>`);
     if (sectionKey === 'deleted_notes' && note.deleted_at) metaBits.push(`<span>删除于 ${phoneNotesEscapeHtml(note.deleted_at)}</span>`);
-    if (sectionKey === 'locked_notes' && note.lock_hint) metaBits.push(`<span>${phoneNotesEscapeHtml(note.lock_hint)}</span>`);
     return metaBits.join('');
 }
 
@@ -6143,16 +7024,19 @@ function phoneNotesRenderNoteDetail(container, sectionKey, noteIndex) {
 
     runtime.currentSectionKey = sectionKey;
     runtime.currentNoteIndex = noteIndex;
+    const isUnlockedLockedNote = sectionKey === 'locked_notes' && runtime.unlockedNoteKey === phoneNotesBuildRuntimeNoteKey(sectionKey, noteIndex);
     let bodyHtml = '';
 
     if (sectionKey === 'locked_notes') {
-        bodyHtml = `
-            <div class="locked-placeholder">
-                <i class="ri-lock-fill"></i>
-                <div class="note-title">这条笔记已锁定</div>
-                <div class="note-detail-hint">正文不会在查手机视图里直接展示。当前需要通过 ${phoneNotesEscapeHtml(note.lock_hint || '面容 ID')} 才能查看完整内容。</div>
-            </div>
-        `;
+        bodyHtml = isUnlockedLockedNote || !phoneNotesHasLockChallenge(note)
+            ? `<div class="note-detail-content">${phoneNotesEscapeHtml(note.content || note.preview || '')}</div>`
+            : `
+                <div class="locked-placeholder">
+                    <i class="ri-lock-fill"></i>
+                    <div class="note-title">这条笔记已锁定</div>
+                    <div class="note-detail-hint">请先回答问题，再查看完整内容。</div>
+                </div>
+            `;
     } else if (sectionKey === 'todo_lists') {
         bodyHtml = `
             <div class="todo-list">
@@ -6187,6 +7071,12 @@ function phoneNotesOpenSection(container, sectionKey) {
 function phoneNotesOpenNote(container, noteIndex) {
     const runtime = phoneNotesGetRuntime(container);
     if (!runtime.currentSectionKey && runtime.currentSectionKey !== '') return;
+    if (runtime.currentSectionKey === 'locked_notes') {
+        runtime.unlockedNoteKey = null;
+        phoneNotesOpenLockModal(container, noteIndex);
+        return;
+    }
+    runtime.unlockedNoteKey = null;
     phoneNotesRenderNoteDetail(container, runtime.currentSectionKey, noteIndex);
     phoneNotesShowNotePage(container);
 }
@@ -6253,6 +7143,7 @@ function bindPhoneNotesV1Interactions(container) {
 
     const closeScreen = () => {
         phoneNotesHideMenus(container);
+        phoneNotesCloseLockModal(container);
         if (screen) screen.classList.add('hidden');
     };
 
@@ -6329,6 +7220,20 @@ function bindPhoneNotesV1Interactions(container) {
             return;
         }
 
+        const closeLockModal = target.closest('[data-action="close-lock-modal"]');
+        if (closeLockModal) {
+            event.preventDefault();
+            phoneNotesCloseLockModal(container);
+            return;
+        }
+
+        const submitLockAnswer = target.closest('[data-action="submit-lock-answer"]');
+        if (submitLockAnswer) {
+            event.preventDefault();
+            phoneNotesSubmitLockAnswer(container);
+            return;
+        }
+
         const backToMain = target.closest('[data-action="back-to-main"]');
         if (backToMain) {
             event.preventDefault();
@@ -6350,11 +7255,23 @@ function bindPhoneNotesV1Interactions(container) {
         });
     }
 
+    const lockAnswerInput = container.querySelector('#notes-lock-answer-input');
+    if (lockAnswerInput) {
+        lockAnswerInput.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                phoneNotesSubmitLockAnswer(container);
+            }
+        });
+    }
+
     container.__resetPhoneNotesView = () => {
         runtime.currentView = 'main';
         runtime.currentSectionKey = null;
         runtime.currentNoteIndex = null;
+        runtime.unlockedNoteKey = null;
         phoneNotesHideMenus(container);
+        phoneNotesCloseLockModal(container);
         if (searchInput) searchInput.value = runtime.searchTerm || '';
         phoneNotesRenderMainPage(container, currentCheckPhoneContactId);
         phoneNotesShowMainPage(container);
@@ -6408,5 +7325,6 @@ function openPhoneNotesApp() {
     content.scrollTop = 0;
     screen.classList.remove('hidden');
 }
+
 
 
