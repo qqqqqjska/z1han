@@ -714,7 +714,7 @@ function openPhoneNotesApp() {
     screen.classList.remove('hidden');
 }
 
-const PHONE_FILES_TEMPLATE_VERSION = 'v1';
+const PHONE_FILES_TEMPLATE_VERSION = 'v2';
 const PHONE_FILES_V1_STYLE_TEXT = `
 #phone-files,
 #phone-files-content {
@@ -1021,6 +1021,121 @@ const PHONE_FILES_V1_STYLE_TEXT = `
 #phone-files-content .auth-btn:active {
     opacity: 0.5;
 }
+#phone-files-content button.nav-btn {
+    border: none;
+    background: transparent;
+    font: inherit;
+    padding: 0;
+}
+#phone-files-content .phone-files-generate-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+#phone-files-content .phone-files-generate-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 148px;
+    background: rgba(255,255,255,0.96);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(60,60,67,0.1);
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+    overflow: hidden;
+    z-index: 20;
+}
+#phone-files-content .phone-files-generate-menu.hidden {
+    display: none;
+}
+#phone-files-content .phone-files-generate-menu button {
+    width: 100%;
+    border: none;
+    background: transparent;
+    text-align: left;
+    font-size: 14px;
+    color: var(--ios-text);
+    padding: 12px 14px;
+    cursor: pointer;
+}
+#phone-files-content .phone-files-generate-menu button + button {
+    border-top: 0.5px solid var(--ios-separator);
+}
+#phone-files-content .phone-files-generate-menu button:active {
+    background: rgba(0,0,0,0.05);
+}
+#phone-files-content .phone-files-generate-wrap.is-hidden {
+    display: none;
+}
+#phone-files-content .files-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--ios-text-secondary);
+    font-size: 15px;
+    text-align: center;
+    line-height: 1.5;
+    min-height: 42vh;
+    padding: 32px 20px;
+}
+#phone-files-content .hidden-folder-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 16px;
+}
+#phone-files-content .hidden-folder-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: rgba(255,255,255,0.92);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.05);
+}
+#phone-files-content .hidden-folder-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: rgba(0,122,255,0.12);
+    color: #007AFF;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    flex-shrink: 0;
+}
+#phone-files-content .hidden-folder-main {
+    min-width: 0;
+    flex: 1;
+}
+#phone-files-content .hidden-folder-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+#phone-files-content .hidden-folder-name {
+    min-width: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ios-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#phone-files-content .hidden-folder-lock {
+    flex-shrink: 0;
+    color: var(--icon-lock);
+    font-size: 15px;
+}
+#phone-files-content .hidden-folder-count {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--ios-text-secondary);
+}
 `;
 
 const PHONE_FILES_V1_TEMPLATE_HTML = `
@@ -1031,7 +1146,7 @@ const PHONE_FILES_V1_TEMPLATE_HTML = `
                 <div class="nav-bar">
                     <div class="nav-btn" data-action="close-files-app"><i class="ri-arrow-left-s-line" style="font-size:24px; vertical-align:middle; margin-left:-8px;"></i> 文件夹</div>
                     <div class="nav-title">浏览</div>
-                    <div class="nav-btn circle"><i class="ri-more-fill"></i></div>
+                    <button type="button" class="nav-btn circle phone-files-main-generate-btn" aria-label="生成文件内容"><i class="ri-more-fill"></i></button>
                 </div>
                 <div class="large-title-container">
                     <div class="large-title">浏览 <span class="large-title-en">Browse</span></div>
@@ -1051,7 +1166,13 @@ const PHONE_FILES_V1_TEMPLATE_HTML = `
                 <div class="nav-bar">
                     <div class="nav-btn" data-action="back-to-files-main"><i class="ri-arrow-left-s-line" style="font-size:24px; vertical-align:middle; margin-left:-8px;"></i> 浏览</div>
                     <div class="nav-title" id="phone-files-small-title">目录</div>
-                    <div class="nav-btn circle"><i class="ri-more-fill"></i></div>
+                    <div class="phone-files-generate-wrap" id="phone-files-detail-generate-wrap">
+                        <button type="button" class="nav-btn circle phone-files-detail-generate-btn" aria-label="生成当前分区"><i class="ri-more-fill"></i></button>
+                        <div class="phone-files-generate-menu hidden" data-role="files-detail-generate-menu">
+                            <button type="button" data-mode="replace">覆盖当前分区</button>
+                            <button type="button" data-mode="merge">新增合并</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="large-title-container">
                     <div class="large-title" id="phone-files-big-title">目录</div>
@@ -1081,7 +1202,7 @@ const PHONE_FILES_BROWSE_SECTIONS = [
     {
         title: '安全与隐私',
         items: [
-            { key: 'hidden', label: '隐藏文件夹', en: 'Hidden', icon: 'ri-eye-off-line', color: 'var(--icon-hidden)', secure: true },
+            { key: 'hidden', label: '隐藏文件夹', en: 'Hidden', icon: 'ri-eye-off-line', color: 'var(--icon-hidden)' },
             { key: 'encrypted', label: '加密文档', en: 'Encrypted', icon: 'ri-shield-keyhole-fill', color: 'var(--icon-lock)', secure: true }
         ]
     }
@@ -1094,6 +1215,38 @@ const PHONE_FILES_SAMPLE_FILES = {
     scans: ['身份证扫描.pdf', '合同扫描.pdf', '发票扫描.jpg', '签字页.pdf', '收据扫描.jpg', '证件照片.png'],
     favorites: ['灵感板.jpg', '收藏配色.png', '论文摘录.pdf', '常用模板.docx', '旅行计划.pdf', '配乐片段.m4a']
 };
+const PHONE_FILES_SAMPLE_HIDDEN_FOLDERS = [
+    { name: '_cache', type: 'folder', time: '2026-03-29 00:43', locked: false, file_count: 4, summary: '看起来像普通缓存目录', related_to_user: false, hidden_tension: '' },
+    { name: 'archive2', type: 'folder', time: '2026-03-30 22:17', locked: true, file_count: 7, summary: '低调命名的归档目录', related_to_user: false, hidden_tension: '' },
+    { name: 'private_save', type: 'folder', time: '2026-03-31 18:26', locked: true, file_count: 5, summary: '像是刻意留着不想删的内容', related_to_user: true, hidden_tension: '' }
+];
+const PHONE_FILES_DATA_SECTION_ORDER = ['recent_opened', 'downloads', 'archives', 'scans', 'hidden_folders', 'favorite_files'];
+const PHONE_FILES_UI_KEY_TO_DATA_KEY = {
+    recent: 'recent_opened',
+    downloads: 'downloads',
+    archives: 'archives',
+    scans: 'scans',
+    hidden: 'hidden_folders',
+    favorites: 'favorite_files'
+};
+const PHONE_FILES_DATA_KEY_TO_UI_KEY = Object.fromEntries(Object.entries(PHONE_FILES_UI_KEY_TO_DATA_KEY).map(([uiKey, dataKey]) => [dataKey, uiKey]));
+const PHONE_FILES_SECTION_META = {
+    recent_opened: { key: 'recent_opened', uiKey: 'recent', cnTitle: '最近打开', enTitle: 'Recent' },
+    downloads: { key: 'downloads', uiKey: 'downloads', cnTitle: '下载文件', enTitle: 'Downloads' },
+    archives: { key: 'archives', uiKey: 'archives', cnTitle: '压缩包', enTitle: 'Archives' },
+    scans: { key: 'scans', uiKey: 'scans', cnTitle: '扫描件', enTitle: 'Scans' },
+    hidden_folders: { key: 'hidden_folders', uiKey: 'hidden', cnTitle: '隐藏文件夹', enTitle: 'Hidden' },
+    favorite_files: { key: 'favorite_files', uiKey: 'favorites', cnTitle: '收藏文件', enTitle: 'Favorites' }
+};
+const PHONE_FILES_SECTION_AI_TYPE_MAP = {
+    recent_opened: 'files_recent',
+    downloads: 'files_downloads',
+    archives: 'files_archives',
+    scans: 'files_scans',
+    hidden_folders: 'files_hidden',
+    favorite_files: 'files_favorites'
+};
+const PHONE_FILES_AI_TYPE_SECTION_MAP = Object.fromEntries(Object.entries(PHONE_FILES_SECTION_AI_TYPE_MAP).map(([sectionKey, aiType]) => [aiType, sectionKey]));
 
 function phoneFilesEscapeHtml(value) {
     return String(value == null ? '' : value)
@@ -1118,6 +1271,197 @@ function phoneFilesEnsureShell() {
     return screen;
 }
 
+function createEmptyPhoneFilesData() {
+    return {
+        recent_opened: [],
+        downloads: [],
+        archives: [],
+        scans: [],
+        hidden_folders: [],
+        favorite_files: []
+    };
+}
+
+function phoneFilesNormalizeText(value, fallback = '') {
+    const text = value == null ? '' : String(value).trim();
+    return text || fallback;
+}
+
+function phoneFilesNormalizeBoolean(value, fallback = false) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (['true', '1', 'yes', 'y'].includes(normalized)) return true;
+        if (['false', '0', 'no', 'n'].includes(normalized)) return false;
+    }
+    return fallback;
+}
+
+function phoneFilesNormalizeNumber(value, fallback = 0) {
+    const num = Number(value);
+    if (Number.isFinite(num)) return num;
+    const matched = String(value == null ? '' : value).match(/\d+/);
+    return matched ? Number(matched[0]) : fallback;
+}
+
+function phoneFilesResolveDataKey(sectionKey) {
+    if (!sectionKey) return null;
+    if (PHONE_FILES_SECTION_META[sectionKey]) return sectionKey;
+    return PHONE_FILES_UI_KEY_TO_DATA_KEY[sectionKey] || null;
+}
+
+function getPhoneFilesContactById(contactId) {
+    const state = window.iphoneSimState || {};
+    const contacts = Array.isArray(state.contacts) ? state.contacts : [];
+    return contacts.find(contact => contact.id === contactId) || null;
+}
+
+function getActivePhoneFilesContact() {
+    return currentCheckPhoneContactId ? getPhoneFilesContactById(currentCheckPhoneContactId) : null;
+}
+
+function getPhoneFilesStoreBucket(contactId) {
+    const state = window.iphoneSimState || {};
+    if (!state.phoneContent) state.phoneContent = {};
+    if (!state.phoneContent[contactId]) state.phoneContent[contactId] = {};
+    return state.phoneContent[contactId];
+}
+
+function phoneFilesInferTypeFromName(name) {
+    const lower = String(name || '').toLowerCase();
+    if (lower.endsWith('.pdf')) return 'pdf';
+    if (lower.endsWith('.doc') || lower.endsWith('.docx')) return 'docx';
+    if (lower.endsWith('.xls') || lower.endsWith('.xlsx') || lower.endsWith('.csv')) return 'sheet';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.heic') || lower.endsWith('.gif')) return 'image';
+    if (lower.endsWith('.zip') || lower.endsWith('.rar') || lower.endsWith('.7z')) return 'zip';
+    if (lower.endsWith('.mov') || lower.endsWith('.mp4') || lower.endsWith('.mkv')) return 'video';
+    if (lower.endsWith('.m4a') || lower.endsWith('.mp3') || lower.endsWith('.wav')) return 'audio';
+    if (lower.endsWith('.txt') || lower.endsWith('.md')) return 'text';
+    if (lower.endsWith('.noteexport') || lower.includes('导出')) return 'export';
+    return 'file';
+}
+
+function normalizePhoneFilesEntry(sectionKey, item, index) {
+    const source = item && typeof item === 'object' ? item : {};
+    const meta = PHONE_FILES_SECTION_META[sectionKey] || { cnTitle: '文件' };
+    const defaultName = sectionKey === 'hidden_folders' ? `目录_${index + 1}` : `${meta.cnTitle}${index + 1}`;
+    const name = phoneFilesNormalizeText(source.name || source.filename || source.title, defaultName);
+    const relatedToUser = phoneFilesNormalizeBoolean(source.related_to_user, false);
+
+    if (sectionKey === 'hidden_folders') {
+        return {
+            name,
+            type: 'folder',
+            time: phoneFilesNormalizeText(source.time || source.updated_at, '2026-04-01 22:13'),
+            locked: phoneFilesNormalizeBoolean(source.locked, false),
+            file_count: phoneFilesNormalizeNumber(source.file_count, 0),
+            summary: phoneFilesNormalizeText(source.summary, '看起来像一个被刻意放低存在感的目录。'),
+            related_to_user: relatedToUser,
+            hidden_tension: phoneFilesNormalizeText(source.hidden_tension, '')
+        };
+    }
+
+    return {
+        name,
+        type: phoneFilesNormalizeText(source.type, phoneFilesInferTypeFromName(name)),
+        size: phoneFilesNormalizeText(source.size, '1.8 MB'),
+        time: phoneFilesNormalizeText(source.time || source.updated_at, '2026-04-01 22:13'),
+        source: phoneFilesNormalizeText(source.source, '手动创建'),
+        summary: phoneFilesNormalizeText(source.summary, '看起来像一份普通文件。'),
+        related_to_user: relatedToUser,
+        hidden_tension: phoneFilesNormalizeText(source.hidden_tension, '')
+    };
+}
+
+function normalizePhoneFilesData(raw) {
+    const source = raw && typeof raw === 'object' ? raw : {};
+    const normalized = createEmptyPhoneFilesData();
+    PHONE_FILES_DATA_SECTION_ORDER.forEach(sectionKey => {
+        const list = Array.isArray(source[sectionKey]) ? source[sectionKey] : [];
+        normalized[sectionKey] = list.map((item, index) => normalizePhoneFilesEntry(sectionKey, item, index));
+    });
+    return normalized;
+}
+
+function normalizePhoneFilesAiPayload(type, raw) {
+    if (type === 'files_all') {
+        if (raw && typeof raw === 'object' && raw.filesData && typeof raw.filesData === 'object') {
+            return normalizePhoneFilesData(raw.filesData);
+        }
+        return normalizePhoneFilesData(raw);
+    }
+    const sectionKey = PHONE_FILES_AI_TYPE_SECTION_MAP[type];
+    if (!sectionKey) return raw;
+    let payload = raw;
+    if (!Array.isArray(payload) && payload && typeof payload === 'object') {
+        if (Array.isArray(payload[sectionKey])) {
+            payload = payload[sectionKey];
+        } else {
+            const firstArrayKey = Object.keys(payload).find(key => Array.isArray(payload[key]));
+            if (firstArrayKey) payload = payload[firstArrayKey];
+        }
+    }
+    if (!Array.isArray(payload)) return [];
+    return payload.map((item, index) => normalizePhoneFilesEntry(sectionKey, item, index));
+}
+
+function getPhoneFilesSectionKeyByAiType(type) {
+    return PHONE_FILES_AI_TYPE_SECTION_MAP[type] || null;
+}
+
+function getPhoneFilesAiTypeBySectionKey(sectionKey) {
+    const dataKey = phoneFilesResolveDataKey(sectionKey);
+    return dataKey ? (PHONE_FILES_SECTION_AI_TYPE_MAP[dataKey] || null) : null;
+}
+
+function getPhoneFilesData(contactId) {
+    if (!contactId) return createEmptyPhoneFilesData();
+    const bucket = getPhoneFilesStoreBucket(contactId);
+    bucket.filesData = normalizePhoneFilesData(bucket.filesData);
+    return bucket.filesData;
+}
+
+function setPhoneFilesData(contactId, filesData) {
+    const bucket = getPhoneFilesStoreBucket(contactId);
+    bucket.filesData = normalizePhoneFilesData(filesData);
+    return bucket.filesData;
+}
+
+function phoneFilesParseTimeValue(value) {
+    const text = phoneFilesNormalizeText(value, '');
+    if (!text) return null;
+
+    const isoLike = text.replace(/\//g, '-').replace(/\.(?=\d)/g, '-').replace(' ', 'T');
+    const isoTs = Date.parse(isoLike);
+    if (!Number.isNaN(isoTs)) return isoTs;
+
+    const relativeMatch = text.match(/^(今天|昨天)\s*(\d{1,2}):(\d{2})$/);
+    if (relativeMatch) {
+        const date = new Date();
+        if (relativeMatch[1] === '昨天') {
+            date.setDate(date.getDate() - 1);
+        }
+        date.setHours(Number(relativeMatch[2]), Number(relativeMatch[3]), 0, 0);
+        return date.getTime();
+    }
+
+    return null;
+}
+
+function phoneFilesSortByTime(list) {
+    return (Array.isArray(list) ? list : [])
+        .map((item, index) => ({ item, index, ts: phoneFilesParseTimeValue(item && item.time) }))
+        .sort((a, b) => {
+            const aHas = Number.isFinite(a.ts);
+            const bHas = Number.isFinite(b.ts);
+            if (aHas && bHas) return b.ts - a.ts;
+            if (aHas) return -1;
+            if (bHas) return 1;
+            return a.index - b.index;
+        })
+        .map(entry => entry.item);
+}
+
 function phoneFilesGetRuntime(container) {
     if (!container.__phoneFilesRuntime) {
         container.__phoneFilesRuntime = {
@@ -1136,25 +1480,103 @@ function phoneFilesGetItemMeta(itemKey) {
     return PHONE_FILES_BROWSE_SECTIONS[0].items[0];
 }
 
-function phoneFilesInferVisual(filename) {
-    const lower = String(filename || '').toLowerCase();
-    if (lower.endsWith('.pdf')) return { icon: 'ri-file-pdf-line', color: '#FF3B30' };
-    if (lower.endsWith('.doc') || lower.endsWith('.docx')) return { icon: 'ri-file-word-line', color: '#007AFF' };
-    if (lower.endsWith('.xls') || lower.endsWith('.xlsx') || lower.endsWith('.csv')) return { icon: 'ri-file-excel-line', color: '#34C759' };
-    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.heic')) return { icon: 'ri-image-line', color: '#5856D6' };
-    if (lower.endsWith('.zip') || lower.endsWith('.rar') || lower.endsWith('.7z')) return { icon: 'ri-file-zip-line', color: '#FFCC00' };
-    if (lower.endsWith('.mov') || lower.endsWith('.mp4')) return { icon: 'ri-video-line', color: '#FF9500' };
-    if (lower.endsWith('.m4a') || lower.endsWith('.mp3')) return { icon: 'ri-music-2-line', color: '#AF52DE' };
-    if (lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.key') || lower.endsWith('.pages')) return { icon: 'ri-file-text-line', color: '#8E8E93' };
+function phoneFilesInferVisual(entryOrName) {
+    const name = typeof entryOrName === 'string'
+        ? entryOrName
+        : phoneFilesNormalizeText(entryOrName && (entryOrName.name || entryOrName.filename), '');
+    const type = phoneFilesNormalizeText(
+        typeof entryOrName === 'object' && entryOrName ? entryOrName.type : '',
+        phoneFilesInferTypeFromName(name)
+    ).toLowerCase();
+
+    if (type === 'folder') return { icon: 'ri-folder-5-fill', color: '#007AFF' };
+    if (type.includes('pdf')) return { icon: 'ri-file-pdf-line', color: '#FF3B30' };
+    if (type.includes('doc') || type.includes('word')) return { icon: 'ri-file-word-line', color: '#007AFF' };
+    if (type.includes('sheet') || type.includes('xls') || type.includes('csv')) return { icon: 'ri-file-excel-line', color: '#34C759' };
+    if (type.includes('image') || type.includes('jpg') || type.includes('png')) return { icon: 'ri-image-line', color: '#5856D6' };
+    if (type.includes('zip') || type.includes('rar') || type.includes('archive')) return { icon: 'ri-file-zip-line', color: '#FFCC00' };
+    if (type.includes('scan')) return { icon: 'ri-file-paper-2-line', color: '#34C759' };
+    if (type.includes('export') || type.includes('note')) return { icon: 'ri-sticky-note-line', color: '#FF9500' };
+    if (type.includes('video')) return { icon: 'ri-video-line', color: '#FF9500' };
+    if (type.includes('audio')) return { icon: 'ri-music-2-line', color: '#AF52DE' };
+    if (type.includes('text')) return { icon: 'ri-file-text-line', color: '#8E8E93' };
+
+    const inferred = phoneFilesInferTypeFromName(name);
+    if (inferred && inferred !== type) {
+        return phoneFilesInferVisual({ name, type: inferred });
+    }
     return { icon: 'ri-file-line', color: '#8E8E93' };
 }
 
 function phoneFilesBuildSampleFiles(itemKey) {
-    const names = PHONE_FILES_SAMPLE_FILES[itemKey] || PHONE_FILES_SAMPLE_FILES.recent;
-    return names.map(filename => ({
-        filename,
-        ...phoneFilesInferVisual(filename)
-    }));
+    if (itemKey === 'hidden') {
+        return phoneFilesSortByTime(PHONE_FILES_SAMPLE_HIDDEN_FOLDERS.map((item, index) => normalizePhoneFilesEntry('hidden_folders', item, index)));
+    }
+
+    const dataKey = phoneFilesResolveDataKey(itemKey) || 'recent_opened';
+    const sampleKey = itemKey in PHONE_FILES_SAMPLE_FILES ? itemKey : 'recent';
+    const names = PHONE_FILES_SAMPLE_FILES[sampleKey] || PHONE_FILES_SAMPLE_FILES.recent;
+    const sampleItems = names.map((name, index) => normalizePhoneFilesEntry(dataKey, {
+        name,
+        type: phoneFilesInferTypeFromName(name),
+        size: `${Math.max(1, (index % 5) + 1)}.${(index * 3) % 10} MB`,
+        time: `2026-04-${String(Math.max(1, 9 - index)).padStart(2, '0')} ${String(10 + (index % 8)).padStart(2, '0')}:1${index % 6}`,
+        source: '手动创建',
+        summary: '看起来像一份普通文件。',
+        related_to_user: false,
+        hidden_tension: ''
+    }, index));
+    return phoneFilesSortByTime(sampleItems);
+}
+
+function phoneFilesGetSectionItems(contactId, itemKey) {
+    const dataKey = phoneFilesResolveDataKey(itemKey);
+    if (!dataKey) return [];
+    if (!contactId) return phoneFilesBuildSampleFiles(itemKey);
+    const bucket = getPhoneFilesStoreBucket(contactId);
+    const hasStoredFilesData = !!bucket.filesData;
+    const filesData = getPhoneFilesData(contactId);
+    const generatedItems = Array.isArray(filesData[dataKey]) ? filesData[dataKey] : [];
+    if (generatedItems.length) return phoneFilesSortByTime(generatedItems);
+    if (hasStoredFilesData) return [];
+    return phoneFilesBuildSampleFiles(itemKey);
+}
+
+function phoneFilesBuildFileGridHtml(files) {
+    return `
+        <div class="file-grid">
+            ${files.map(file => {
+                const visual = phoneFilesInferVisual(file);
+                return `
+                    <div class="file-box">
+                        <div class="file-box-icon" style="color:${visual.color}"><i class="${visual.icon}"></i></div>
+                        <div class="file-box-name">${phoneFilesEscapeHtml(file.name || file.filename || '')}</div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+        <div style="height: 40px"></div>
+    `;
+}
+
+function phoneFilesBuildHiddenFoldersHtml(folders) {
+    return `
+        <div class="hidden-folder-list">
+            ${folders.map(folder => `
+                <div class="hidden-folder-card">
+                    <div class="hidden-folder-icon"><i class="ri-folder-5-fill"></i></div>
+                    <div class="hidden-folder-main">
+                        <div class="hidden-folder-name-row">
+                            <div class="hidden-folder-name">${phoneFilesEscapeHtml(folder.name)}</div>
+                            ${folder.locked ? '<i class="ri-lock-fill hidden-folder-lock"></i>' : ''}
+                        </div>
+                        <div class="hidden-folder-count">${phoneFilesEscapeHtml(String(folder.file_count || 0))} 个项目</div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+        <div style="height: 40px"></div>
+    `;
 }
 
 function phoneFilesRenderMainSections(container) {
@@ -1183,6 +1605,31 @@ function phoneFilesUpdateHeaderScroll(scrollEl, headerEl) {
     headerEl.classList.toggle('scrolled', scrollEl.scrollTop > 20);
 }
 
+function phoneFilesHideMenus(container) {
+    container.querySelectorAll('.phone-files-generate-menu').forEach(menu => menu.classList.add('hidden'));
+}
+
+function phoneFilesToggleMenu(container, menuRole) {
+    const targetMenu = container.querySelector(`[data-role="${menuRole}"]`);
+    if (!targetMenu) return;
+    const shouldShow = targetMenu.classList.contains('hidden');
+    phoneFilesHideMenus(container);
+    if (shouldShow) targetMenu.classList.remove('hidden');
+}
+
+function phoneFilesSetDetailGenerateVisible(container, visible) {
+    const wrap = container.querySelector('#phone-files-detail-generate-wrap');
+    if (!wrap) return;
+    wrap.classList.toggle('is-hidden', !visible);
+    if (!visible) phoneFilesHideMenus(container);
+}
+
+function phoneFilesRenderEmptyState(container, message) {
+    const detailContent = container.querySelector('#phone-files-detail-content');
+    if (!detailContent) return;
+    detailContent.innerHTML = `<div class="files-empty">${phoneFilesEscapeHtml(message || '这里还没有内容')}</div>`;
+}
+
 function phoneFilesRenderDetail(container, itemKey) {
     const meta = phoneFilesGetItemMeta(itemKey);
     const smallTitle = container.querySelector('#phone-files-small-title');
@@ -1192,7 +1639,8 @@ function phoneFilesRenderDetail(container, itemKey) {
     if (bigTitle) bigTitle.innerHTML = `${phoneFilesEscapeHtml(meta.label)} <span class="large-title-en">${phoneFilesEscapeHtml(meta.en)}</span>`;
     if (!detailContent) return;
 
-    if (meta.secure) {
+    if (meta.key === 'encrypted' || meta.secure) {
+        phoneFilesSetDetailGenerateVisible(container, false);
         detailContent.innerHTML = `
             <div class="status-page">
                 <i class="ri-lock-fill status-icon"></i>
@@ -1204,18 +1652,20 @@ function phoneFilesRenderDetail(container, itemKey) {
         return;
     }
 
-    const files = phoneFilesBuildSampleFiles(itemKey);
-    detailContent.innerHTML = `
-        <div class="file-grid">
-            ${files.map(file => `
-                <div class="file-box">
-                    <div class="file-box-icon" style="color:${file.color}"><i class="${file.icon}"></i></div>
-                    <div class="file-box-name">${phoneFilesEscapeHtml(file.filename)}</div>
-                </div>
-            `).join('')}
-        </div>
-        <div style="height: 40px"></div>
-    `;
+    const contact = getActivePhoneFilesContact();
+    const files = phoneFilesGetSectionItems(contact && contact.id, itemKey);
+    phoneFilesSetDetailGenerateVisible(container, true);
+    if (!files.length) {
+        phoneFilesRenderEmptyState(container, '还没有文件，点击右上角按钮试试生成。');
+        return;
+    }
+
+    if (itemKey === 'hidden') {
+        detailContent.innerHTML = phoneFilesBuildHiddenFoldersHtml(files);
+        return;
+    }
+
+    detailContent.innerHTML = phoneFilesBuildFileGridHtml(files);
 }
 
 function phoneFilesShowMain(container) {
@@ -1226,6 +1676,7 @@ function phoneFilesShowMain(container) {
     if (detailView) detailView.classList.remove('active');
     runtime.currentView = 'main';
     runtime.currentKey = null;
+    phoneFilesHideMenus(container);
 }
 
 function phoneFilesOpenDetail(container, itemKey) {
@@ -1248,6 +1699,7 @@ function bindPhoneFilesV1Interactions(container) {
     if (!container || container.dataset.phoneFilesBound === 'true') return;
 
     const screen = document.getElementById('phone-files');
+    const runtime = phoneFilesGetRuntime(container);
     const mainView = container.querySelector('#phone-files-main-view');
     const detailView = container.querySelector('#phone-files-detail-view');
     const mainHeader = container.querySelector('#phone-files-main-header');
@@ -1262,6 +1714,9 @@ function bindPhoneFilesV1Interactions(container) {
 
     container.addEventListener('click', event => {
         const target = event.target;
+        if (!target.closest('.phone-files-generate-wrap')) {
+            phoneFilesHideMenus(container);
+        }
 
         const closeBtn = target.closest('[data-action="close-files-app"]');
         if (closeBtn) {
@@ -1278,17 +1733,55 @@ function bindPhoneFilesV1Interactions(container) {
             return;
         }
 
+        const mainGenerateBtn = target.closest('.phone-files-main-generate-btn');
+        if (mainGenerateBtn) {
+            event.preventDefault();
+            const contact = getActivePhoneFilesContact();
+            if (!contact) {
+                alert('请先选择联系人');
+                return;
+            }
+            generatePhoneFilesAll(contact, mainGenerateBtn);
+            return;
+        }
+
+        const detailGenerateBtn = target.closest('.phone-files-detail-generate-btn');
+        if (detailGenerateBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            phoneFilesToggleMenu(container, 'files-detail-generate-menu');
+            return;
+        }
+
+        const menuAction = target.closest('.phone-files-generate-menu [data-mode]');
+        if (menuAction) {
+            event.preventDefault();
+            event.stopPropagation();
+            const contact = getActivePhoneFilesContact();
+            if (!contact) {
+                alert('请先选择联系人');
+                return;
+            }
+            const mode = menuAction.dataset.mode;
+            const menu = menuAction.closest('.phone-files-generate-menu');
+            const triggerBtn = menu && menu.previousElementSibling;
+            phoneFilesHideMenus(container);
+            generatePhoneFilesSection(contact, runtime.currentKey, mode, triggerBtn);
+            return;
+        }
+
         const item = target.closest('.list-item[data-item-key]');
         if (item) {
             event.preventDefault();
             phoneFilesOpenDetail(container, item.dataset.itemKey);
+            return;
         }
     });
 
     container.__resetPhoneFilesView = () => {
-        const runtime = phoneFilesGetRuntime(container);
         runtime.currentView = 'main';
         runtime.currentKey = null;
+        phoneFilesRenderMainSections(container);
         phoneFilesShowMain(container);
         if (mainView) {
             mainView.scrollTop = 0;
@@ -1346,6 +1839,227 @@ function openPhoneFilesApp() {
         content.__resetPhoneFilesView();
     }
     screen.classList.remove('hidden');
+}
+
+function refreshPhoneFilesApp(contactId, options = {}) {
+    const container = document.getElementById('phone-files-content');
+    if (!container) return;
+    phoneFilesRenderMainSections(container);
+    if (currentCheckPhoneContactId !== contactId) return;
+
+    if (options.scope === 'section' && options.sectionKey) {
+        const dataKey = phoneFilesResolveDataKey(options.sectionKey);
+        const uiKey = PHONE_FILES_DATA_KEY_TO_UI_KEY[dataKey] || options.sectionKey;
+        if (uiKey) {
+            phoneFilesOpenDetail(container, uiKey);
+            return;
+        }
+    }
+
+    phoneFilesShowMain(container);
+}
+
+window.refreshPhoneFilesApp = refreshPhoneFilesApp;
+
+async function generatePhoneFilesAll(contact, btn) {
+    if (!contact || !btn) return;
+    const originalContent = btn.innerHTML;
+    btn.disabled = true;
+    btn.classList.add('generating-pulse');
+    window.__phoneFilesGenerationContext = {
+        contactId: contact.id,
+        scope: 'all'
+    };
+    const systemPrompt = buildPhoneFilesSystemPrompt(contact, 'files_all');
+    await callAiGeneration(contact, systemPrompt, 'files_all', btn, originalContent);
+}
+
+async function generatePhoneFilesSection(contact, sectionKey, mode, btn) {
+    if (!contact || !sectionKey || !btn) return;
+    const aiType = getPhoneFilesAiTypeBySectionKey(sectionKey);
+    if (!aiType) return;
+    const originalContent = btn.innerHTML;
+    btn.disabled = true;
+    btn.classList.add('generating-pulse');
+    window.__phoneFilesGenerationContext = {
+        contactId: contact.id,
+        scope: 'section',
+        sectionKey: phoneFilesResolveDataKey(sectionKey),
+        mode: mode === 'merge' ? 'merge' : 'replace'
+    };
+    const systemPrompt = buildPhoneFilesSystemPrompt(contact, aiType);
+    await callAiGeneration(contact, systemPrompt, aiType, btn, originalContent);
+}
+
+const PHONE_FILES_PROMPT_TEMPLATES = {
+    COMMON_CONTEXT: ({ contact, userName, recentChatContext }) => `请你扮演“手机文件应用内容生成器”，为角色【${contact.name}】生成“文件 App”里的私人内容。
+
+【角色设定】
+姓名：${contact.name}
+人设：${contact.persona || '无'}
+
+【用户信息】
+用户昵称：${userName}
+
+【与用户最近聊天上下文】
+${recentChatContext || '暂无最近聊天记录'}
+
+【生成目标】
+这些内容应该像真实手机文件系统里会出现的文件和文件夹，而不是小说情节。重点不是直接给出结论，而是通过文件名、最近打开记录、下载记录、压缩包、扫描件、隐藏文件夹、收藏文件等细节，让人产生“这个东西不该翻到”“这里面像是有事”的感觉。
+
+【整体要求】
+1. 所有内容都必须像真实手机里会存在的文件，命名自然，不要太戏剧化，不要直接写成结论式名字。
+2. 文件名要真实、有生活感，可以包含 PDF、Word、图片截图压缩包、备忘录导出文件、扫描件、加密文档、临时命名文件、含糊但让人想点开的命名。
+3. 整体要有“查岗张力”，但不能全部都是重锤，应该是正常文件和微妙文件混合，真实感优先。
+4. 至少 30%—40% 的内容要和“用户”有关，或者能让人联想到与用户的关系状态，但必须间接表达。
+5. 文件来源要自然，比如：微信保存、浏览器下载、备忘录导出、扫描生成、相册整理、手动新建。
+6. 时间分布要真实：最近打开更近，下载和收藏可以跨越更长时间。
+7. 每个条目都要给出一句 hidden_tension，说明这个文件为什么容易让人多想。
+8. 允许少量“私人资源 / 成人向 / 限制级”条目，但只能通过模糊文件名、来源、收藏/隐藏痕迹暗示，不要露骨，不要占多数。
+9. 不要涉及未成年人、偷拍、暴力血腥、违法内容。
+10. 输出严格为 JSON，不要附加解释。`,
+    files_all: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
+
+【任务】
+请生成完整的文件 App 数据，包含以下 6 个模块：
+- recent_opened：最近打开文件，6 到 10 条
+- downloads：下载文件，6 到 10 条
+- archives：压缩包文件，4 到 6 条
+- scans：扫描件，4 到 6 条
+- hidden_folders：隐藏文件夹，3 到 5 条
+- favorite_files：收藏文件，4 到 6 条
+
+【额外约束】
+1. recent_opened 要体现“最近刚点开过”的感觉。
+2. downloads 要让人觉得“为什么要下载这个”。
+3. archives 要让人产生“为什么要特地压缩这个”的感觉。
+4. scans 要有一点正式感、整理感、存档感。
+5. hidden_folders 命名要低调、含糊、像故意不起眼，不要做成黑客感。
+6. favorite_files 要体现“舍不得删”或“后面还会再看”。
+7. 少量私人资源内容可以分布在 recent_opened、downloads、archives、hidden_folders、favorite_files 中，但只占小部分，正常文件仍是多数。
+8. hidden_tension 必须生成，但不要在文本里直接下结论。
+
+【字段要求】
+普通文件条目字段：
+- name
+- type
+- size
+- time
+- source
+- summary
+- related_to_user
+- hidden_tension
+
+隐藏文件夹条目字段：
+- name
+- type
+- time
+- locked
+- file_count
+- summary
+- related_to_user
+- hidden_tension
+
+【返回格式】
+必须返回纯 JSON 对象：
+{
+  "recent_opened": [],
+  "downloads": [],
+  "archives": [],
+  "scans": [],
+  "hidden_folders": [],
+  "favorite_files": []
+}`,
+    files_recent: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
+
+【任务】
+只生成 recent_opened 数组，6 到 10 条。
+
+【要求】
+1. 时间必须比较近，像最近 1 到 5 天内打开过。
+2. 文件类型自然混合：pdf、docx、jpg、png、txt、note-export、zip、video、audio 等。
+3. 至少 2 到 3 条带有关系张力，但不要写成直接实锤。
+4. 可以包含少量私人资源相关记录，但命名必须自然、非露骨。
+
+【返回格式】
+返回纯 JSON 数组，字段为：name、type、size、time、source、summary、related_to_user、hidden_tension。`,
+    files_downloads: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
+
+【任务】
+只生成 downloads 数组，6 到 10 条。
+
+【要求】
+1. 来源自然，如：浏览器、微信、聊天、备忘录导出、手动保存。
+2. 文件命名要真实，像手机里常见下载内容。
+3. 可以混合普通资料、截图、导出文字、PDF、图片合集、临时存档，以及少量私人资源下载记录。
+4. 私人资源条目必须非露骨，只通过命名、来源、保存行为暗示。
+
+【返回格式】
+返回纯 JSON 数组，字段为：name、type、size、time、source、summary、related_to_user、hidden_tension。`,
+    files_archives: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
+
+【任务】
+只生成 archives 数组，4 到 6 条。
+
+【要求】
+1. 压缩包命名必须真实，像手机用户会自己取的名字。
+2. 可以包含截图合集压缩包、导出备份压缩包、聊天记录相关备份、图片整理包、临时归档包。
+3. 至少 2 条应具备“想删又没删”或“想藏起来”的感觉。
+4. 可以少量加入私人资源压缩包，但要低调命名、非露骨。
+
+【返回格式】
+返回纯 JSON 数组，字段为：name、type、size、time、source、summary、related_to_user、hidden_tension。`,
+    files_scans: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
+
+【任务】
+只生成 scans 数组，4 到 6 条。
+
+【要求】
+1. 文件类型统一偏向 pdf / scan。
+2. 命名要像扫描 App 自动生成后又被轻微修改过。
+3. 可以包括手写页扫描、便签扫描、打印页扫描、解释材料、整理材料、确认材料。
+4. 一部分和用户有关，但要间接表达。
+
+【返回格式】
+返回纯 JSON 数组，字段为：name、type、size、time、source、summary、related_to_user、hidden_tension。`,
+    files_hidden: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
+
+【任务】
+只生成 hidden_folders 数组，3 到 5 条。
+
+【要求】
+1. 文件夹命名要低调、含糊、像故意不起眼，例如 _cache、temp_new、archive2、已整理、misc、private_save 这种气质，但不要机械照抄。
+2. 不要直接命名成“秘密”“不能看”这类太假的名字。
+3. 可以部分上锁，部分不上锁。
+4. 可以有 1 到 2 个目录与私人资源有关，但命名必须低调，不能露骨。
+
+【返回格式】
+返回纯 JSON 数组，字段为：name、type、time、locked、file_count、summary、related_to_user、hidden_tension。`,
+    files_favorites: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
+
+【任务】
+只生成 favorite_files 数组，4 到 6 条。
+
+【要求】
+1. 文件类型自然混合：pdf、图片、导出笔记、文档、压缩包、视频或音频。
+2. 至少 2 条要让人感觉“舍不得删”“留着以后解释/回看”“和用户有关但不想明说”。
+3. 可以出现 1 到 2 个被反复保留的私人资源文件，但要保持非露骨、真实、低调。
+
+【返回格式】
+返回纯 JSON 数组，字段为：name、type、size、time、source、summary、related_to_user、hidden_tension。`
+};
+
+function buildPhoneFilesSystemPrompt(contact, type) {
+    const state = window.iphoneSimState || {};
+    const recentChatContext = buildPhoneWechatRecentChatContext(contact) || '暂无最近聊天记录';
+    const userName = phoneFilesNormalizeText(state.userProfile && state.userProfile.name, '用户');
+    const COMMON_CONTEXT = PHONE_FILES_PROMPT_TEMPLATES.COMMON_CONTEXT({
+        contact,
+        userName,
+        recentChatContext
+    });
+    const builder = PHONE_FILES_PROMPT_TEMPLATES[type] || PHONE_FILES_PROMPT_TEMPLATES.files_all;
+    return builder({ COMMON_CONTEXT, contact, userName, recentChatContext });
 }
 
 function handlePhoneWechatBgUpload(e) {
@@ -2537,6 +3251,11 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
             result = result.chats;
         }
         
+        const filesSectionKey = getPhoneFilesSectionKeyByAiType(type);
+        if (type === 'files_all' || filesSectionKey) {
+            result = normalizePhoneFilesAiPayload(type, result);
+        }
+
         const notesSectionKey = getPhoneNotesSectionKeyByAiType(type);
         if (type === 'notes_all' || notesSectionKey) {
             result = normalizePhoneNotesAiPayload(type, result);
@@ -2592,6 +3311,36 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
                 window.refreshPhoneNotesApp(contact.id, { scope: 'section', sectionKey: notesSectionKey, mode: mergeMode ? 'merge' : 'replace' });
             }
             const sectionMeta = PHONE_NOTES_SECTION_META[notesSectionKey] || { cnTitle: notesSectionKey };
+            if (window.showChatToast) window.showChatToast(sectionMeta.cnTitle + '已更新');
+            else alert(sectionMeta.cnTitle + '已更新');
+        } else if (type === 'files_all') {
+            const normalizedFilesData = normalizePhoneFilesData(result);
+            const totalFilesCount = PHONE_FILES_DATA_SECTION_ORDER.reduce((sum, sectionKey) => sum + (normalizedFilesData[sectionKey] || []).length, 0);
+            if (!totalFilesCount) {
+                throw new Error('文件应用生成结果为空');
+            }
+            setPhoneFilesData(contact.id, normalizedFilesData);
+            if (window.refreshPhoneFilesApp) {
+                window.refreshPhoneFilesApp(contact.id, { scope: 'all' });
+            }
+            if (window.showChatToast) window.showChatToast('已为 ' + contact.name + ' 生成文件内容');
+            else alert('已为 ' + contact.name + ' 生成文件内容');
+        } else if (filesSectionKey) {
+            const generatedItems = Array.isArray(result) ? result : normalizePhoneFilesAiPayload(type, result);
+            if (!generatedItems.length) {
+                throw new Error('文件分区生成结果为空：' + filesSectionKey);
+            }
+            const currentFilesData = normalizePhoneFilesData(getPhoneFilesData(contact.id));
+            const generationContext = window.__phoneFilesGenerationContext || {};
+            const mergeMode = generationContext.mode === 'merge';
+            currentFilesData[filesSectionKey] = mergeMode
+                ? [...generatedItems, ...(currentFilesData[filesSectionKey] || [])]
+                : generatedItems;
+            setPhoneFilesData(contact.id, currentFilesData);
+            if (window.refreshPhoneFilesApp) {
+                window.refreshPhoneFilesApp(contact.id, { scope: 'section', sectionKey: filesSectionKey, mode: mergeMode ? 'merge' : 'replace' });
+            }
+            const sectionMeta = PHONE_FILES_SECTION_META[filesSectionKey] || { cnTitle: filesSectionKey };
             if (window.showChatToast) window.showChatToast(sectionMeta.cnTitle + '已更新');
             else alert(sectionMeta.cnTitle + '已更新');
         } else if (type === 'browser' && Array.isArray(result)) {
@@ -2732,6 +3481,9 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
         }
         if (type.indexOf('notes_') === 0) {
             window.__phoneNotesGenerationContext = null;
+        }
+        if (type.indexOf('files_') === 0) {
+            window.__phoneFilesGenerationContext = null;
         }
     }
 }
