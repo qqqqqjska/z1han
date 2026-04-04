@@ -1,4 +1,4 @@
-// 查手机功能模块 (Phone Check App)
+﻿// 查手机功能模块 (Phone Check App)
 
 // 配置常量
 const PHONE_GRID_ROWS = 6;
@@ -401,7 +401,7 @@ function initPhoneGrid() {
         }
 
         /* 修复查手机内App底部漏出问题 - 其他应用 (白底) */
-        #phone-weibo, #phone-icity, #phone-browser, #phone-notes, #phone-files {
+        #phone-weibo, #phone-icity, #phone-browser, #phone-notes, #phone-files, #phone-health {
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
@@ -471,6 +471,8 @@ function initPhoneGrid() {
                 openPhoneNotesApp();
             } else if (appId === 'phone-files') {
                 openPhoneFilesApp();
+            } else if (appId === 'phone-health') {
+                if (window.openPhoneHealthApp) window.openPhoneHealthApp(currentCheckPhoneContactId);
             } else if (appId === 'phone-browser') {
                 document.getElementById('phone-browser').classList.remove('hidden');
                 if (currentCheckPhoneContactId) {
@@ -827,8 +829,10 @@ const PHONE_FILES_V1_STYLE_TEXT = `
 #phone-files-content .nav-bar {
     height: 44px;
     display: flex;
+    position: relative;
     align-items: center;
     justify-content: space-between;
+    gap: 10px;
     padding: 0 16px;
     margin-top: max(40px, env(safe-area-inset-top));
     font-size: 17px;
@@ -839,6 +843,16 @@ const PHONE_FILES_V1_STYLE_TEXT = `
     display: inline-flex;
     align-items: center;
     gap: 2px;
+    min-width: 0;
+    max-width: calc(50% - 34px);
+    flex-shrink: 1;
+    white-space: nowrap;
+}
+#phone-files-content .nav-btn span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 #phone-files-content .nav-btn.circle {
     width: 30px;
@@ -846,11 +860,21 @@ const PHONE_FILES_V1_STYLE_TEXT = `
     border-radius: 50%;
     background: var(--ios-gray-bg);
     justify-content: center;
+    flex-shrink: 0;
 }
 #phone-files-content .nav-title {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    max-width: calc(100% - 132px);
     font-weight: 600;
     opacity: 0;
     transition: opacity 0.2s;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
 }
 #phone-files-content .header.scrolled .nav-title {
     opacity: 1;
@@ -870,6 +894,13 @@ const PHONE_FILES_V1_STYLE_TEXT = `
     font-size: 34px;
     font-weight: 700;
     letter-spacing: 0.3px;
+    line-height: 1.12;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+#phone-files-content #phone-files-file-big-title {
+    font-size: clamp(28px, 7vw, 34px);
+    letter-spacing: -0.02em;
 }
 #phone-files-content .large-title-en {
     font-size: 14px;
@@ -1002,6 +1033,17 @@ const PHONE_FILES_V1_STYLE_TEXT = `
     overflow: hidden;
     word-break: break-all;
 }
+#phone-files-content .file-box-hint {
+    margin-top: 4px;
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--ios-text-secondary);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
 #phone-files-content .file-detail-card {
     margin-top: 16px;
     background: rgba(255,255,255,0.96);
@@ -1053,6 +1095,77 @@ const PHONE_FILES_V1_STYLE_TEXT = `
     color: var(--ios-text);
     white-space: normal;
     word-break: break-word;
+}
+#phone-files-content .file-detail-content p,
+#phone-files-content .file-detail-content ul,
+#phone-files-content .file-detail-content ol,
+#phone-files-content .file-detail-content blockquote,
+#phone-files-content .file-detail-content table,
+#phone-files-content .file-detail-content pre {
+    margin: 0;
+}
+#phone-files-content .file-html-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+#phone-files-content .file-html-card {
+    background: #fff;
+    border: 1px solid rgba(15,23,42,0.06);
+    border-radius: 16px;
+    padding: 14px;
+    box-shadow: 0 6px 18px rgba(15,23,42,0.04);
+}
+#phone-files-content .file-html-card p + p,
+#phone-files-content .file-html-card p + blockquote,
+#phone-files-content .file-html-card ul + blockquote,
+#phone-files-content .file-html-card table + p {
+    margin-top: 10px;
+}
+#phone-files-content .file-html-card ul,
+#phone-files-content .file-html-card ol {
+    padding-left: 18px;
+    line-height: 1.7;
+}
+#phone-files-content .file-html-card blockquote {
+    padding: 10px 12px;
+    border-left: 3px solid rgba(0,122,255,0.3);
+    background: rgba(0,122,255,0.06);
+    border-radius: 12px;
+    color: #334155;
+}
+#phone-files-content .file-html-card table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    line-height: 1.6;
+}
+#phone-files-content .file-html-card th,
+#phone-files-content .file-html-card td {
+    text-align: left;
+    padding: 10px 8px;
+    border-bottom: 1px solid rgba(15,23,42,0.08);
+    vertical-align: top;
+}
+#phone-files-content .file-html-card th {
+    width: 84px;
+    color: var(--ios-text-secondary);
+    font-weight: 600;
+}
+#phone-files-content .file-html-note {
+    padding: 14px 15px;
+    border-radius: 16px;
+    background: rgba(255,149,0,0.1);
+    color: #7C4A03;
+    line-height: 1.7;
+}
+#phone-files-content .file-visual-stage {
+    min-height: 160px;
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    align-items: flex-end;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
 }
 #phone-files-content .status-page {
     display: flex;
@@ -1372,6 +1485,20 @@ const PHONE_FILES_UI_KEY_TO_DATA_KEY = {
     favorites: 'favorite_files'
 };
 const PHONE_FILES_DATA_KEY_TO_UI_KEY = Object.fromEntries(Object.entries(PHONE_FILES_UI_KEY_TO_DATA_KEY).map(([uiKey, dataKey]) => [dataKey, uiKey]));
+const PHONE_FILES_ALLOWED_HTML_TAGS = new Set([
+    'div', 'section', 'article', 'header', 'footer', 'p', 'span', 'b', 'strong', 'i', 'em', 'u', 'small',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tfoot',
+    'tr', 'td', 'th', 'blockquote', 'pre', 'code'
+]);
+const PHONE_FILES_ALLOWED_STYLE_PROPS = new Set([
+    'color', 'background', 'background-color', 'background-image', 'padding', 'padding-top', 'padding-right',
+    'padding-bottom', 'padding-left', 'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+    'border', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-radius', 'box-shadow',
+    'font-size', 'font-weight', 'font-style', 'line-height', 'letter-spacing', 'text-align', 'text-transform',
+    'display', 'flex', 'flex-direction', 'justify-content', 'align-items', 'gap', 'grid-template-columns',
+    'place-items', 'width', 'min-width', 'max-width', 'height', 'min-height', 'max-height', 'aspect-ratio',
+    'opacity', 'overflow', 'white-space'
+]);
 const PHONE_FILES_SECTION_META = {
     recent_opened: { key: 'recent_opened', uiKey: 'recent', cnTitle: '最近打开', enTitle: 'Recent' },
     downloads: { key: 'downloads', uiKey: 'downloads', cnTitle: '下载文件', enTitle: 'Downloads' },
@@ -1467,26 +1594,250 @@ function phoneFilesBuildFallbackFileContent(file) {
     const typeLabel = phoneFilesGetTypeDisplayName(source.type || phoneFilesInferTypeFromName(name));
     const summary = phoneFilesNormalizeText(source.summary, '这份文件里留着一些没有删掉的内容。');
     const sourceLabel = phoneFilesNormalizeText(source.source, '手动创建');
+    const sizeLabel = phoneFilesNormalizeText(source.size, '—');
     const timeLabel = phoneFilesNormalizeText(source.time || source.updated_at, '2026-04-01 22:13');
-    const lines = [summary, '', `文件名：${name}`, `类型：${typeLabel}`, `来源：${sourceLabel}`, `时间：${timeLabel}`];
+    const tension = phoneFilesNormalizeText(source.hidden_tension, '留在这里，本身就说明它还没被真正放下。');
+    const escapedName = phoneFilesEscapeHtml(name);
+    const escapedSummary = phoneFilesEscapeHtml(summary);
+    const escapedTension = phoneFilesEscapeHtml(tension);
+    const escapedSource = phoneFilesEscapeHtml(sourceLabel);
+    const escapedSize = phoneFilesEscapeHtml(sizeLabel);
+    const escapedTime = phoneFilesEscapeHtml(timeLabel);
+    const escapedType = phoneFilesEscapeHtml(typeLabel);
+    const fileStem = phoneFilesEscapeHtml(name.replace(/\.[^.]+$/, '') || name);
+
+    let previewBlock = `
+        <div class="file-html-card">
+            <div style="font-size:12px; font-weight:600; color:#8E8E93; text-transform:uppercase; letter-spacing:.4px;">文档摘要</div>
+            <p>${escapedSummary}</p>
+            <blockquote>${escapedTension}</blockquote>
+        </div>
+    `;
 
     if (typeLabel === '压缩包') {
-        lines.push('内容备注：里面是整理过的几份文件和截图，先压在一起，暂时没删。');
-    } else if (typeLabel === '扫描件') {
-        lines.push('内容备注：扫描页里是一些需要留底的文字和零散记录。');
+        previewBlock = `
+            <div class="file-html-card">
+                <div style="font-size:12px; font-weight:600; color:#8E8E93; text-transform:uppercase; letter-spacing:.4px;">压缩包预览</div>
+                <ul>
+                    <li>${fileStem}_截图整理.png</li>
+                    <li>${fileStem}_说明.pdf</li>
+                    <li>${fileStem}_备份副本.txt</li>
+                </ul>
+                <blockquote>${escapedTension}</blockquote>
+            </div>
+        `;
+    } else if (typeLabel === '表格') {
+        previewBlock = `
+            <div class="file-html-card">
+                <div style="font-size:12px; font-weight:600; color:#8E8E93; text-transform:uppercase; letter-spacing:.4px;">表格片段</div>
+                <table>
+                    <thead>
+                        <tr><th>项目</th><th>状态</th><th>备注</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>最近整理</td><td>已保存</td><td>${escapedSummary}</td></tr>
+                        <tr><td>相关备注</td><td>待确认</td><td>${escapedTension}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
     } else if (typeLabel === '图片') {
-        lines.push('内容备注：这张图被单独存下来，像是之后还要回看。');
+        previewBlock = `
+            <div class="file-html-card">
+                <div class="file-visual-stage" style="background:linear-gradient(145deg, #7B61FF, #4CC9F0); color:#fff;">
+                    <div>
+                        <div style="font-size:12px; opacity:.82; letter-spacing:.4px; text-transform:uppercase;">图片内容描述</div>
+                        <div style="margin-top:8px; font-size:18px; font-weight:700; line-height:1.45;">${escapedSummary}</div>
+                    </div>
+                </div>
+                <p>${escapedTension}</p>
+            </div>
+        `;
     } else if (typeLabel === '视频') {
-        lines.push('内容备注：这是一个被单独留存的视频文件。');
-    } else {
-        lines.push('内容备注：先留着，后面可能还会再翻出来看。');
+        previewBlock = `
+            <div class="file-html-card">
+                <div class="file-visual-stage" style="background:linear-gradient(145deg, #111827, #334155); color:#fff;">
+                    <div>
+                        <div style="font-size:12px; opacity:.75; text-transform:uppercase; letter-spacing:.4px;">视频预览</div>
+                        <div style="margin-top:8px; font-size:18px; font-weight:700;">${escapedSummary}</div>
+                        <div style="margin-top:10px; font-size:13px; opacity:.82;">像是被单独保存下来，后面还会再点开。</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else if (typeLabel === '音频') {
+        previewBlock = `
+            <div class="file-html-card">
+                <div style="font-size:12px; font-weight:600; color:#8E8E93; text-transform:uppercase; letter-spacing:.4px;">音频备注</div>
+                <div style="display:flex; gap:4px; align-items:flex-end; height:40px; margin:14px 0 12px;">
+                    <span style="display:block; width:6px; height:12px; background:#AF52DE; border-radius:999px;"></span>
+                    <span style="display:block; width:6px; height:28px; background:#AF52DE; border-radius:999px;"></span>
+                    <span style="display:block; width:6px; height:18px; background:#AF52DE; border-radius:999px;"></span>
+                    <span style="display:block; width:6px; height:34px; background:#AF52DE; border-radius:999px;"></span>
+                    <span style="display:block; width:6px; height:22px; background:#AF52DE; border-radius:999px;"></span>
+                    <span style="display:block; width:6px; height:14px; background:#AF52DE; border-radius:999px;"></span>
+                </div>
+                <p>${escapedSummary}</p>
+                <blockquote>${escapedTension}</blockquote>
+            </div>
+        `;
+    } else if (typeLabel === '扫描件') {
+        previewBlock = `
+            <div class="file-html-card">
+                <div style="font-size:12px; font-weight:600; color:#8E8E93; text-transform:uppercase; letter-spacing:.4px;">扫描页摘录</div>
+                <p>${escapedSummary}</p>
+                <div style="margin-top:12px; padding:12px; border-radius:14px; background:#F6F7FB; border:1px dashed rgba(0,0,0,0.08); color:#4B5563; line-height:1.7;">扫描件看起来像被特意留档的材料，字里行间没有明说，但会让人想继续翻下去。</div>
+            </div>
+        `;
     }
 
-    return lines.join('\n');
+    return `
+        <div class="file-html-shell">
+            <div class="file-html-card" style="background:linear-gradient(145deg, rgba(0,122,255,0.12), rgba(94,92,230,0.08)); border-color:rgba(0,122,255,0.12);">
+                <div style="font-size:12px; font-weight:700; color:#4F46E5; text-transform:uppercase; letter-spacing:.5px;">${escapedType}</div>
+                <div style="margin-top:8px; font-size:20px; font-weight:700; line-height:1.35; color:#111827;">${escapedName}</div>
+                <div style="margin-top:10px; color:#374151; line-height:1.75;">${escapedSummary}</div>
+            </div>
+            ${previewBlock}
+            <div class="file-html-card">
+                <div style="font-size:12px; font-weight:600; color:#8E8E93; text-transform:uppercase; letter-spacing:.4px; margin-bottom:10px;">文件信息</div>
+                <table>
+                    <tbody>
+                        <tr><th>文件名</th><td>${escapedName}</td></tr>
+                        <tr><th>类型</th><td>${escapedType}</td></tr>
+                        <tr><th>来源</th><td>${escapedSource}</td></tr>
+                        <tr><th>大小</th><td>${escapedSize}</td></tr>
+                        <tr><th>时间</th><td>${escapedTime}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="file-html-note">
+                <strong style="display:block; margin-bottom:6px; color:#1F2937;">查看备注</strong>
+                ${escapedTension}
+            </div>
+        </div>
+    `;
 }
 
 function phoneFilesFormatMultilineText(value) {
     return phoneFilesEscapeHtml(value || '').replace(/\r?\n/g, '<br>');
+}
+
+function phoneFilesLooksLikeHtml(value) {
+    return /<\s*[a-z][^>]*>/i.test(String(value == null ? '' : value));
+}
+
+function phoneFilesSanitizeStyle(styleText) {
+    return String(styleText == null ? '' : styleText)
+        .split(';')
+        .map(chunk => chunk.trim())
+        .filter(Boolean)
+        .map(rule => {
+            const dividerIndex = rule.indexOf(':');
+            if (dividerIndex === -1) return '';
+            const property = rule.slice(0, dividerIndex).trim().toLowerCase();
+            const value = rule.slice(dividerIndex + 1).trim();
+            if (!PHONE_FILES_ALLOWED_STYLE_PROPS.has(property)) return '';
+            if (!value || /(javascript:|expression\s*\(|url\s*\()/i.test(value)) return '';
+            return `${property}: ${value}`;
+        })
+        .filter(Boolean)
+        .join('; ');
+}
+
+function phoneFilesSanitizeClassName(classText) {
+    return String(classText == null ? '' : classText)
+        .split(/\s+/)
+        .map(name => name.trim())
+        .filter(name => /^file-[a-z0-9_-]+$/i.test(name) || /^phone-files-[a-z0-9_-]+$/i.test(name))
+        .join(' ');
+}
+
+function phoneFilesSanitizeHtml(html) {
+    const template = document.createElement('template');
+    template.innerHTML = String(html == null ? '' : html);
+    const dropTags = new Set(['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta', 'form', 'input', 'button', 'textarea', 'select', 'option', 'svg', 'math']);
+
+    const sanitizeNode = node => {
+        if (node.nodeType === Node.TEXT_NODE) {
+            return document.createTextNode(node.textContent || '');
+        }
+
+        if (node.nodeType !== Node.ELEMENT_NODE) {
+            return document.createDocumentFragment();
+        }
+
+        const tag = String(node.tagName || '').toLowerCase();
+        if (dropTags.has(tag)) {
+            return document.createDocumentFragment();
+        }
+
+        if (!PHONE_FILES_ALLOWED_HTML_TAGS.has(tag)) {
+            const fragment = document.createDocumentFragment();
+            Array.from(node.childNodes).forEach(child => fragment.appendChild(sanitizeNode(child)));
+            return fragment;
+        }
+
+        const cleanEl = document.createElement(tag);
+        Array.from(node.attributes || []).forEach(attr => {
+            const attrName = String(attr.name || '').toLowerCase();
+            const attrValue = String(attr.value || '');
+            if (!attrName || attrName.startsWith('on')) return;
+
+            if (attrName === 'style') {
+                const safeStyle = phoneFilesSanitizeStyle(attrValue);
+                if (safeStyle) cleanEl.setAttribute('style', safeStyle);
+                return;
+            }
+
+            if (attrName === 'class') {
+                const safeClass = phoneFilesSanitizeClassName(attrValue);
+                if (safeClass) cleanEl.setAttribute('class', safeClass);
+                return;
+            }
+
+            if (attrName === 'colspan' || attrName === 'rowspan') {
+                const safeSpan = Math.max(1, phoneFilesNormalizeNumber(attrValue, 1));
+                cleanEl.setAttribute(attrName, String(safeSpan));
+                return;
+            }
+
+            if (attrName === 'title' || attrName === 'aria-label') {
+                cleanEl.setAttribute(attrName, attrValue);
+            }
+        });
+
+        Array.from(node.childNodes).forEach(child => cleanEl.appendChild(sanitizeNode(child)));
+        return cleanEl;
+    };
+
+    const wrapper = document.createElement('div');
+    Array.from(template.content.childNodes).forEach(child => wrapper.appendChild(sanitizeNode(child)));
+    return wrapper.innerHTML.trim();
+}
+
+function phoneFilesBuildPlainTextContentHtml(content, file) {
+    const text = phoneFilesNormalizeText(content, phoneFilesNormalizeText(file && file.summary, '这份文件里没有留下更多文字。'));
+    return `
+        <div class="file-html-shell">
+            <div class="file-html-card">
+                <div style="font-size:12px; font-weight:600; color:#8E8E93; text-transform:uppercase; letter-spacing:.4px;">内容摘录</div>
+                <div style="margin-top:12px; line-height:1.85; color:#1F2937;">${phoneFilesFormatMultilineText(text)}</div>
+            </div>
+        </div>
+    `;
+}
+
+function phoneFilesResolveContentHtml(file) {
+    const rawContent = phoneFilesNormalizeText(file && file.content, '');
+    if (!rawContent) {
+        return phoneFilesBuildFallbackFileContent(file);
+    }
+    if (phoneFilesLooksLikeHtml(rawContent)) {
+        const sanitizedHtml = phoneFilesSanitizeHtml(rawContent);
+        return sanitizedHtml || phoneFilesBuildFallbackFileContent(file);
+    }
+    return phoneFilesBuildPlainTextContentHtml(rawContent, file);
 }
 
 function phoneFilesResolveDataKey(sectionKey) {
@@ -1773,15 +2124,17 @@ function phoneFilesGetSectionItems(contactId, itemKey) {
     return phoneFilesBuildSampleFiles(itemKey);
 }
 
-function phoneFilesBuildFileGridHtml(files) {
+function phoneFilesBuildFileGridHtml(files, source = 'section') {
     return `
         <div class="file-grid">
             ${files.map((file, index) => {
                 const visual = phoneFilesInferVisual(file);
+                const hint = phoneFilesNormalizeText(file && file.summary, `${phoneFilesGetTypeDisplayName(file && file.type)} · ${phoneFilesNormalizeText(file && file.time, '刚刚')}`);
                 return `
-                    <div class="file-box" data-file-index="${index}">
+                    <div class="file-box" data-file-index="${index}" data-file-source="${phoneFilesEscapeHtml(source)}">
                         <div class="file-box-icon" style="color:${visual.color}"><i class="${visual.icon}"></i></div>
                         <div class="file-box-name">${phoneFilesEscapeHtml(file.name || file.filename || '')}</div>
+                        <div class="file-box-hint">${phoneFilesEscapeHtml(hint)}</div>
                     </div>
                 `;
             }).join('')}
@@ -1863,12 +2216,7 @@ function phoneFilesBuildFileDetailHtml(file) {
     if (file && file.size) metaParts.push(file.size);
     if (file && file.source) metaParts.push(file.source);
     if (file && file.time) metaParts.push(file.time);
-    
-    let contentHtml = file && file.content ? file.content : '';
-    // 如果包含HTML标签，则不进行转义，直接使用；否则使用默认的换行处理
-    if (!contentHtml.includes('<div') && !contentHtml.includes('<p') && !contentHtml.includes('<span') && !contentHtml.includes('<ul') && !contentHtml.includes('<table')) {
-        contentHtml = phoneFilesFormatMultilineText(contentHtml);
-    }
+    const contentHtml = phoneFilesResolveContentHtml(file);
     
     return `
         <div class="file-detail-card">
@@ -1974,7 +2322,7 @@ function phoneFilesRenderFolderDetail(container, folderIndex) {
         return;
     }
 
-    folderContent.innerHTML = phoneFilesBuildFileGridHtml(folderItems);
+    folderContent.innerHTML = phoneFilesBuildFileGridHtml(folderItems, 'folder');
 }
 
 function phoneFilesRenderDetail(container, itemKey) {
@@ -2020,7 +2368,7 @@ function phoneFilesRenderDetail(container, itemKey) {
         return;
     }
 
-    detailContent.innerHTML = phoneFilesBuildFileGridHtml(files);
+    detailContent.innerHTML = phoneFilesBuildFileGridHtml(files, 'section');
 }
 
 function phoneFilesShowMain(container) {
@@ -2028,16 +2376,21 @@ function phoneFilesShowMain(container) {
     const mainView = container.querySelector('#phone-files-main-view');
     const detailView = container.querySelector('#phone-files-detail-view');
     const folderView = container.querySelector('#phone-files-folder-view');
+    const fileView = container.querySelector('#phone-files-file-view');
     if (mainView) mainView.classList.remove('bg');
     if (detailView) {
         detailView.classList.remove('active');
         detailView.classList.remove('bg');
     }
     if (folderView) folderView.classList.remove('active');
+    if (folderView) folderView.classList.remove('bg');
+    if (fileView) fileView.classList.remove('active');
     runtime.currentView = 'main';
     runtime.currentKey = null;
     runtime.currentFolderIndex = null;
     runtime.currentFolderName = '';
+    runtime.currentFileIndex = null;
+    runtime.currentFileSource = null;
     phoneFilesHideMenus(container);
 }
 
@@ -2045,11 +2398,16 @@ function phoneFilesShowDetail(container) {
     const runtime = phoneFilesGetRuntime(container);
     const detailView = container.querySelector('#phone-files-detail-view');
     const folderView = container.querySelector('#phone-files-folder-view');
+    const fileView = container.querySelector('#phone-files-file-view');
     if (detailView) detailView.classList.remove('bg');
     if (folderView) folderView.classList.remove('active');
+    if (folderView) folderView.classList.remove('bg');
+    if (fileView) fileView.classList.remove('active');
     runtime.currentView = 'detail';
     runtime.currentFolderIndex = null;
     runtime.currentFolderName = '';
+    runtime.currentFileIndex = null;
+    runtime.currentFileSource = null;
 }
 
 function phoneFilesOpenDetail(container, itemKey) {
@@ -2058,6 +2416,7 @@ function phoneFilesOpenDetail(container, itemKey) {
     const detailView = container.querySelector('#phone-files-detail-view');
     const detailHeader = container.querySelector('#phone-files-detail-header');
     const folderView = container.querySelector('#phone-files-folder-view');
+    const fileView = container.querySelector('#phone-files-file-view');
     phoneFilesRenderDetail(container, itemKey);
     if (mainView) mainView.classList.add('bg');
     if (detailView) {
@@ -2066,11 +2425,15 @@ function phoneFilesOpenDetail(container, itemKey) {
         detailView.scrollTop = 0;
     }
     if (folderView) folderView.classList.remove('active');
+    if (folderView) folderView.classList.remove('bg');
+    if (fileView) fileView.classList.remove('active');
     if (detailHeader) detailHeader.classList.remove('scrolled');
     runtime.currentView = 'detail';
     runtime.currentKey = itemKey;
     runtime.currentFolderIndex = null;
     runtime.currentFolderName = '';
+    runtime.currentFileIndex = null;
+    runtime.currentFileSource = null;
 }
 
 function phoneFilesOpenFolder(container, folderIndex) {
@@ -2078,14 +2441,62 @@ function phoneFilesOpenFolder(container, folderIndex) {
     const detailView = container.querySelector('#phone-files-detail-view');
     const folderView = container.querySelector('#phone-files-folder-view');
     const folderHeader = container.querySelector('#phone-files-folder-header');
+    const fileView = container.querySelector('#phone-files-file-view');
     phoneFilesRenderFolderDetail(container, folderIndex);
     if (detailView) detailView.classList.add('bg');
     if (folderView) {
         folderView.classList.add('active');
+        folderView.classList.remove('bg');
         folderView.scrollTop = 0;
     }
+    if (fileView) fileView.classList.remove('active');
     if (folderHeader) folderHeader.classList.remove('scrolled');
     runtime.currentView = 'folder';
+    runtime.currentFileIndex = null;
+    runtime.currentFileSource = null;
+}
+
+function phoneFilesOpenFile(container, fileIndex, source = 'section') {
+    const runtime = phoneFilesGetRuntime(container);
+    const detailView = container.querySelector('#phone-files-detail-view');
+    const folderView = container.querySelector('#phone-files-folder-view');
+    const fileView = container.querySelector('#phone-files-file-view');
+    const fileHeader = container.querySelector('#phone-files-file-header');
+
+    phoneFilesRenderFileDetail(container, fileIndex, source);
+
+    if (source === 'folder') {
+        if (folderView) folderView.classList.add('bg');
+    } else if (detailView) {
+        detailView.classList.add('bg');
+    }
+
+    if (fileView) {
+        fileView.classList.add('active');
+        fileView.scrollTop = 0;
+    }
+    if (fileHeader) fileHeader.classList.remove('scrolled');
+    runtime.currentView = 'file';
+}
+
+function phoneFilesCloseFile(container) {
+    const runtime = phoneFilesGetRuntime(container);
+    const detailView = container.querySelector('#phone-files-detail-view');
+    const folderView = container.querySelector('#phone-files-folder-view');
+    const fileView = container.querySelector('#phone-files-file-view');
+
+    if (fileView) fileView.classList.remove('active');
+
+    if (runtime.currentFileSource === 'folder') {
+        if (folderView) folderView.classList.remove('bg');
+        runtime.currentView = 'folder';
+    } else {
+        if (detailView) detailView.classList.remove('bg');
+        runtime.currentView = 'detail';
+    }
+
+    runtime.currentFileIndex = null;
+    runtime.currentFileSource = null;
 }
 
 function bindPhoneFilesV1Interactions(container) {
@@ -2096,9 +2507,11 @@ function bindPhoneFilesV1Interactions(container) {
     const mainView = container.querySelector('#phone-files-main-view');
     const detailView = container.querySelector('#phone-files-detail-view');
     const folderView = container.querySelector('#phone-files-folder-view');
+    const fileView = container.querySelector('#phone-files-file-view');
     const mainHeader = container.querySelector('#phone-files-main-header');
     const detailHeader = container.querySelector('#phone-files-detail-header');
     const folderHeader = container.querySelector('#phone-files-folder-header');
+    const fileHeader = container.querySelector('#phone-files-file-header');
 
     if (mainView && mainHeader) {
         mainView.addEventListener('scroll', () => phoneFilesUpdateHeaderScroll(mainView, mainHeader));
@@ -2108,6 +2521,9 @@ function bindPhoneFilesV1Interactions(container) {
     }
     if (folderView && folderHeader) {
         folderView.addEventListener('scroll', () => phoneFilesUpdateHeaderScroll(folderView, folderHeader));
+    }
+    if (fileView && fileHeader) {
+        fileView.addEventListener('scroll', () => phoneFilesUpdateHeaderScroll(fileView, fileHeader));
     }
 
     container.addEventListener('click', event => {
@@ -2135,6 +2551,13 @@ function bindPhoneFilesV1Interactions(container) {
         if (backToDetailBtn) {
             event.preventDefault();
             phoneFilesShowDetail(container);
+            return;
+        }
+
+        const backToFilePrevBtn = target.closest('[data-action="back-to-files-file-prev"]');
+        if (backToFilePrevBtn) {
+            event.preventDefault();
+            phoneFilesCloseFile(container);
             return;
         }
 
@@ -2182,6 +2605,14 @@ function bindPhoneFilesV1Interactions(container) {
             return;
         }
 
+        const fileBox = target.closest('.file-box[data-file-index]');
+        if (fileBox) {
+            event.preventDefault();
+            const source = fileBox.dataset.fileSource === 'folder' ? 'folder' : 'section';
+            phoneFilesOpenFile(container, Number(fileBox.dataset.fileIndex), source);
+            return;
+        }
+
         const item = target.closest('.list-item[data-item-key]');
         if (item) {
             event.preventDefault();
@@ -2206,9 +2637,13 @@ function bindPhoneFilesV1Interactions(container) {
         if (folderView) {
             folderView.scrollTop = 0;
         }
+        if (fileView) {
+            fileView.scrollTop = 0;
+        }
         if (mainHeader) mainHeader.classList.remove('scrolled');
         if (detailHeader) detailHeader.classList.remove('scrolled');
         if (folderHeader) folderHeader.classList.remove('scrolled');
+        if (fileHeader) fileHeader.classList.remove('scrolled');
     };
 
     container.dataset.phoneFilesBound = 'true';
@@ -2335,8 +2770,10 @@ ${recentChatContext || '暂无最近聊天记录'}
 7. 每个条目都要给出一句 hidden_tension，说明这个文件为什么容易让人多想。
 8. 允许少量“私人资源 / 成人向 / 限制级”条目，但只能通过模糊文件名、来源、收藏/隐藏痕迹暗示，不要露骨，不要占多数。
 9. 不要涉及未成年人、偷拍、暴力血腥、违法内容。
-10. 【重要要求】：必须为每个文件生成具体的 \`content\` 字段。为了让用户点击查看时感觉有意思，\`content\` 必须使用HTML代码排版（如包含 <div>, <b>, <ul>, <p>, <span style='color:xx'>, <table> 等），根据文件类型模拟真实的票据、便签、聊天记录文本、证明材料等排版。视频和图片类型可以用带背景色的div来精美地描述画面内容。
-11. 输出严格为 JSON，不要附加解释。`,
+10. 【重要要求】：必须为每个文件生成具体的 \`content\` 字段，不能只写一两句纯文本。
+11. \`content\` 必须使用 HTML 小模块排版，建议使用 1 到 3 个信息卡片组合（如 <div>, <b>, <ul>, <p>, <span style='color:xx'>, <table> 等），根据文件类型模拟真实的票据、便签、聊天记录文本、证明材料、下载清单、扫描摘录等排版。
+12. 图片和视频类型不要只写“这是一张图片/视频”，而要用有背景色或渐变的 div 模拟预览画面，并补一小段说明文字；表格类文件尽量使用 table；压缩包尽量列出内部文件名片段。
+13. 输出严格为 JSON，不要附加解释。`,
     files_all: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
 
 【任务】
@@ -3351,6 +3788,8 @@ async function handlePhoneAppGenerate(appType) {
         await generatePhoneBrowserHistory(contact);
     } else if (appType === 'xianyu') {
         await generatePhoneXianyuAll(contact);
+    } else if (appType === 'health') {
+        await generatePhoneHealthAll(contact);
     } else {
         alert(`正在生成 ${contact.name} 的 ${appType} 内容...\n(功能开发中)`);
     }
@@ -3464,6 +3903,120 @@ ${recentMessages.join('\n')}
 }
 
 // 检查AI API配置
+function buildPhoneHealthSystemPrompt(contact) {
+    const state = window.iphoneSimState || {};
+    const userName = String(state.userProfile && state.userProfile.name ? state.userProfile.name : '用户').trim() || '用户';
+    const persona = String(contact && contact.persona ? contact.persona : '无').trim() || '无';
+    const recentChatContext = buildPhoneWechatRecentChatContext(contact) || '暂无最近聊天记录可供参考。';
+
+    return `请你扮演“手机健康/睡眠应用内容生成器”，为角色【${contact.name}】生成一组用于“翻手机”剧情展示的虚构健康数据。注意：这些数据不是设备真实采集，而是为了剧情展示服务的健康应用内容，因此必须同时具备真实感、生活感和克制的情绪张力。
+
+【角色信息】
+- 角色姓名：${contact.name}
+- 角色人设：${persona}
+- 用户显示名：${userName}
+
+${recentChatContext}
+
+【总体目标】
+让这些内容看起来像 iPhone 健康 / 睡眠 / 习惯追踪类 App 中留下的正常记录。表面上普通，但连起来看会让人觉得最近状态有点乱，比如连续熬夜、情绪波动、某天步数异常高、深夜私密记录增加、作息和肠胃节律被打乱等。
+
+【严格要求】
+1. 输出内容必须像真实手机健康记录，不要写成小说、独白或医疗报告。
+2. 正常记录与异常记录要混合，不能全部健康，也不能全部有剧情味。
+3. 只生成以下 6 个模块，不要输出 fitness_plan 和 health_insights：sleep_records、mood_records、step_records、cycle_records、self_relief_records、bathroom_records。
+4. 至少 30%-40% 的记录可以和“用户”有间接关联，但只能通过数据和简短描述侧面体现，不能直接下结论。
+5. 张力要来自数据组合后的感觉，不要把每条都写得很刻意。
+6. cycle_records 只有当角色设定明显适用于“会有经期”的人物时才生成；若不适用，直接返回空数组 []。
+7. self_relief_records 必须克制表达，只能作为压力、失眠、情绪管理相关的私密记录来处理，禁止露骨描写。
+8. bathroom_records 要像习惯追踪，不要恶心夸张。
+9. 时间分布主要集中在最近 7 到 30 天内。
+10. 输出必须严格为 JSON 对象，不要附加任何解释、注释或 Markdown。
+
+【返回结构】
+{
+  "sleep_records": [],
+  "mood_records": [],
+  "step_records": [],
+  "cycle_records": [],
+  "self_relief_records": [],
+  "bathroom_records": []
+}
+
+【字段要求】
+sleep_records 每条包含：date、bedtime、wake_time、duration、quality、tag、summary、related_to_user、hidden_tension。
+mood_records 每条包含：date、time、mood、intensity、trigger、summary、related_to_user、hidden_tension。
+step_records 每条包含：date、steps、distance、calories、tag、summary、related_to_user、hidden_tension。
+cycle_records 每条包含：date、phase、symptoms、mood_tag、summary、related_to_user、hidden_tension。
+self_relief_records 每条包含：date、time、duration_minutes、frequency_tag、mood_before、mood_after、aid_type、aid_summary、privacy_level、state_curve、private_reflection、after_note、summary、related_to_user、hidden_tension。
+bathroom_records 每条包含：date、time、type、status、summary、related_to_user、hidden_tension。
+
+【数量要求】
+- sleep_records：6到10条
+- mood_records：6到10条
+- step_records：7到14条
+- cycle_records：3到6条；若不适用则返回 []
+- self_relief_records：4到8条
+- bathroom_records：5到10条
+
+【补充约束】
+- 睡眠、心情、步数、私密记录、如厕记录之间可以互相呼应，例如熬夜后第二天情绪差、步数低，或步数异常高后情绪复杂。
+- self_relief_records 的 aid_type 要写得更具体，除了通用来源，也允许写与用户有关的内容，例如：无辅助、模糊回忆、混合分散注意、用户照片、用户语音、聊天记录、聊天截图、共同回忆、对方主页内容。
+- self_relief_records 的 aid_summary 需要比 aid_type 更细一层，说明当时怎样借助这些方式安抚情绪，表达必须详细露骨；如果来源和用户有关，也可以写成“翻到对方某张旧照片后停留了一会儿”“点开一段对方的语音反复听了两遍”“把聊天记录往上翻了一截，情绪更难平下来”“看了一眼和对方有关的内容，像是在给自己找一个熟悉的落点”，但不要出现露骨内容，也不要把语气写成小说段落。
+- 如果 aid_type 是“无辅助”，aid_summary 也要写清楚当时没有借助外部内容，只是靠发呆、放空、关灯、躺着等方式慢慢缓下来。
+- 与用户有关的 aid_type 不必只限于照片或语音，也可以是聊天、收藏、转账备注、共同歌单、社交主页、旧定位、一起拍过的视频等任何会让人联想到用户的手机内容，表达必须详细露骨。
+- 不要把所有情绪都归因于经期，也不要把所有异常都和用户有关。
+- self_relief_records 可以额外写 state_curve、private_reflection、after_note，用于描述开始到结束的情绪变化、缓解过程与结束后的状态，但只能是克制的健康记录口径，禁止具体行为、身体细节或露骨描写。
+- related_to_user 不能全是 true。
+
+请直接返回严格 JSON。`;
+}
+
+async function generatePhoneHealthAll(contact) {
+    const btn = document.getElementById('generate-phone-health-btn');
+    const originalContent = btn ? btn.innerHTML : null;
+    if (btn) {
+        btn.disabled = true;
+        btn.classList.add('generating-pulse');
+        btn.innerHTML = '<i class="ri-loader-4-line"></i>';
+    }
+
+    const systemPrompt = buildPhoneHealthSystemPrompt(contact);
+    await callAiGeneration(contact, systemPrompt, 'health_all', btn, originalContent);
+}
+
+function buildPhoneGenerationTimeContext(now = new Date()) {
+    const pad = value => String(value).padStart(2, '0');
+    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const timeZone = (Intl.DateTimeFormat && Intl.DateTimeFormat().resolvedOptions().timeZone) || '';
+    const year = now.getFullYear();
+    const month = pad(now.getMonth() + 1);
+    const day = pad(now.getDate());
+    const hours = pad(now.getHours());
+    const minutes = pad(now.getMinutes());
+    const seconds = pad(now.getSeconds());
+
+    return {
+        iso: now.toISOString(),
+        localDate: `${year}-${month}-${day}`,
+        localTime: `${hours}:${minutes}:${seconds}`,
+        localDateTime: `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`,
+        weekday: weekdays[now.getDay()],
+        timeZone
+    };
+}
+
+function buildPhoneGenerationTimeInstruction(now = new Date()) {
+    const context = buildPhoneGenerationTimeContext(now);
+    const zoneText = context.timeZone ? `（${context.timeZone}）` : '';
+    return `【时间基准】
+- 用户点击“生成”按钮时的当前本地时间是：${context.localDateTime} ${context.weekday}${zoneText}
+- 你生成的所有日期、时间、星期、月份，以及“今天 / 昨天 / 明天 / 本周 / 上周 / 近7天 / 近30天 / 30天前”等相对时间，都必须严格以这个时间为唯一基准。
+- 不要自行假设别的月份或年份，也不要生成与当前基准矛盾的时间表达；例如当前基准在 3 月，就不能出现“30天前是 6 月”这种错误。
+- 如果同时出现绝对日期和相对时间，它们必须彼此一致。
+- 如果任务没有特别要求，请优先生成与当前基准时间接近且前后自洽的时间分布。`;
+}
+
 function validateAiSettings(settings) {
     const errors = [];
     
@@ -3493,6 +4046,9 @@ function validateAiSettings(settings) {
 async function callAiGeneration(contact, systemPrompt, type, btn, originalContent = null) {
     const settings = window.iphoneSimState.aiSettings.url ? window.iphoneSimState.aiSettings : window.iphoneSimState.aiSettings2;
     const settingsSource = window.iphoneSimState.aiSettings.url ? 'aiSettings' : 'aiSettings2';
+    const generationNow = new Date();
+    const generationTimeContext = buildPhoneGenerationTimeContext(generationNow);
+    const finalSystemPrompt = `${systemPrompt}\n\n${buildPhoneGenerationTimeInstruction(generationNow)}`;
     
     // 验证AI设置
     const configErrors = validateAiSettings(settings);
@@ -3513,6 +4069,7 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
         console.log('=== 开始AI生成流程 ===');
         console.log('联系人:', contact.name, 'ID:', contact.id);
         console.log('生成类型:', type);
+        console.log('生成基准时间:', generationTimeContext.localDateTime, generationTimeContext.weekday, generationTimeContext.timeZone || '');
         console.log('按钮元素:', btn);
         
         let fetchUrl = settings.url;
@@ -3547,8 +4104,8 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
             body: JSON.stringify({
                 model: settings.model,
                 messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: '开始生成' }
+                    { role: 'system', content: finalSystemPrompt },
+                    { role: 'user', content: `开始生成，并严格以 ${generationTimeContext.localDateTime} ${generationTimeContext.weekday} 为时间基准。` }
                 ],
                 temperature: requestTemperature
             }),
@@ -3686,6 +4243,10 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
             result = normalizePhoneNotesAiPayload(type, result);
         }
 
+        if (type === 'health_all' && window.normalizePhoneHealthData) {
+            result = window.normalizePhoneHealthData(result);
+        }
+
         if (type === 'moments' && Array.isArray(result)) {
             console.log('处理moments类型，数组长度:', result.length);
             window.iphoneSimState.phoneContent[contact.id].wechatMoments = result;
@@ -3768,6 +4329,25 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
             const sectionMeta = PHONE_FILES_SECTION_META[filesSectionKey] || { cnTitle: filesSectionKey };
             if (window.showChatToast) window.showChatToast(sectionMeta.cnTitle + '已更新');
             else alert(sectionMeta.cnTitle + '已更新');
+        } else if (type === 'health_all') {
+            const normalizedHealthData = window.normalizePhoneHealthData ? window.normalizePhoneHealthData(result) : result;
+            const healthRecordCount = normalizedHealthData
+                ? ['sleep_records', 'mood_records', 'step_records', 'self_relief_records', 'bathroom_records', 'cycle_records']
+                    .reduce((sum, key) => sum + (Array.isArray(normalizedHealthData[key]) ? normalizedHealthData[key].length : 0), 0)
+                : 0;
+            if (!healthRecordCount) {
+                throw new Error('健康应用生成结果为空');
+            }
+            if (window.setPhoneHealthData) {
+                window.setPhoneHealthData(contact.id, normalizedHealthData);
+            } else {
+                window.iphoneSimState.phoneContent[contact.id].healthData = normalizedHealthData;
+            }
+            if (window.refreshPhoneHealthApp) {
+                window.refreshPhoneHealthApp(contact.id);
+            }
+            if (window.showChatToast) window.showChatToast('已为 ' + contact.name + ' 生成健康内容');
+            else alert('已为 ' + contact.name + ' 生成健康内容');
         } else if (type === 'browser' && Array.isArray(result)) {
             window.iphoneSimState.phoneContent[contact.id].browserHistory = result;
             renderPhoneBrowser(contact.id);
@@ -7626,7 +8206,7 @@ JSON 结构如下：
     notes_ramblings: ({ COMMON_CONTEXT }) => `${COMMON_CONTEXT}
 
 【任务】
-只生成【碎碎念 ramblings】6-10 条。
+只生成【碎碎念 ramblings】6-10 条。0
 
 【要求】
 1. 每条都要短、碎、像临时记在手机里的念头，不要写成长篇。
