@@ -791,6 +791,7 @@ window.appInitFunctions = [];
 let currentEditingChatMsgId = null;
 
 const knownApps = {
+    'messages-app': { name: 'Messages', icon: 'fas fa-comment-dots', color: '#34C759' },
     'wechat-app': { name: 'WeChat', icon: 'fab fa-weixin', color: '#07C160' },
     'worldbook-app': { name: 'Worldbook', icon: 'fas fa-globe', color: '#007AFF' },
     'settings-app': { name: 'Settings', icon: 'fas fa-cog', color: '#8E8E93' },

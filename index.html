@@ -53,6 +53,7 @@
     <link rel="stylesheet" href="css/chat_settings_editorial.css">
     <link rel="stylesheet" href="css/chat_oracle_quick_replies.css">
     <link rel="stylesheet" href="css/preset_app.css">
+    <link rel="stylesheet" href="css/messages_app.css">
 </head>
 <body>
     <div class="screen-container" id="screen-container">
@@ -5232,6 +5233,84 @@
         <div id="phone-notes-content" style="width: 100%; height: 100%; overflow-y: auto; background: #f2f2f7;"></div>
     </div>
 
+    <!-- 查手机 - 短信 -->
+    <div id="phone-messages" class="sub-screen hidden messages-app-screen" style="z-index: 200;">
+        <div class="messages-app-shell">
+            <section class="messages-view messages-list-view" aria-label="查手机短信列表页面">
+                <div class="messages-list-header">
+                    <div class="messages-list-topbar">
+                        <button class="messages-edit-pill" type="button">编辑</button>
+                        <button id="phone-messages-compact-back" class="messages-compact-title" type="button" aria-label="&#x8FD4;&#x56DE;&#x67E5;&#x624B;&#x673A;&#x4E3B;&#x5C4F;&#x5E55;">&#x4FE1;&#x606F;</button>
+                        <button id="phone-messages-generate-btn" class="messages-list-menu-btn" type="button" aria-label="生成短信内容">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                    </div>
+
+                    <button id="phone-messages-home-back" class="messages-large-title messages-title-back" type="button" aria-label="返回查手机主屏幕">
+                        信息
+                    </button>
+                </div>
+
+                <div class="messages-list-scroll" id="phone-messages-thread-list"></div>
+
+                <div class="messages-list-bottom-bar">
+                    <label class="messages-bottom-search" for="phone-messages-search-input">
+                        <i class="fas fa-search"></i>
+                        <input id="phone-messages-search-input" type="text" placeholder="搜索">
+                    </label>
+                    <button class="messages-bottom-compose-btn" id="phone-messages-compose-btn" type="button" aria-label="新建消息">
+                        <img src="https://i.postimg.cc/3wtXMDHd/wu-biao-ti127-20260405215314.png" alt="新建消息图标">
+                    </button>
+                </div>
+            </section>
+
+            <section class="messages-view messages-chat-view" aria-label="查手机短信聊天页面">
+                <div class="messages-chat-header">
+                    <div class="messages-chat-header-inner">
+                        <button id="phone-messages-chat-back" class="messages-chat-back" type="button" aria-label="返回短信列表">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="m15 18-6-6 6-6"></path>
+                            </svg>
+                        </button>
+
+                        <div class="messages-chat-pill">
+                            <div id="phone-messages-chat-avatar" class="messages-chat-avatar"></div>
+                            <div id="phone-messages-chat-name" class="messages-chat-name"></div>
+                        </div>
+
+                        <button class="messages-chat-video" type="button" aria-label="视频通话">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M23 7l-7 5 7 5V7z"></path>
+                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="messages-chat-scroll" id="phone-messages-chat-scroll"></div>
+
+                <div class="messages-input-bar">
+                    <button id="phone-messages-plus-btn" class="messages-plus-btn" type="button" aria-label="更多功能">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 5v14m-7-7h14"></path>
+                        </svg>
+                    </button>
+
+                    <div class="messages-compose-shell">
+                        <input id="phone-messages-compose-input" type="text" placeholder="iMessage">
+                        <button id="phone-messages-mic-btn" class="messages-mic-btn" type="button" aria-label="语音输入">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                <line x1="12" y1="19" x2="12" y2="22"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
     <!-- 查手机 - 微信 -->
     <div id="phone-wechat" class="sub-screen hidden" style="z-index: 200;">
         <div class="app-header" id="phone-wechat-header" style="background: transparent; border: none; position: absolute; top: 0; left: 0; width: 100%; z-index: 10; padding-left: 20px; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; height: auto; padding-top: max(47px, env(safe-area-inset-top)); justify-content: space-between;">
@@ -8074,6 +8153,86 @@
         </div>
     </div>
 
+    <div id="messages-app" class="app-screen hidden messages-app-screen">
+        <button id="close-messages-app" class="messages-app-close" type="button" aria-label="关闭信息应用">
+            <i class="fas fa-times"></i>
+        </button>
+
+        <div class="messages-app-shell">
+            <section class="messages-view messages-list-view" aria-label="信息列表页面">
+                <div class="messages-list-header">
+                    <div class="messages-list-topbar">
+                        <button class="messages-edit-pill" type="button">&#x7F16;&#x8F91;</button>
+                        <button class="messages-list-menu-btn" type="button" aria-label="筛选菜单">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                    </div>
+
+                    <button id="messages-home-back" class="messages-large-title messages-title-back" type="button" aria-label="返回桌面">
+                        &#x4FE1;&#x606F;
+                    </button>
+                </div>
+
+                <div class="messages-list-scroll" id="messages-thread-list"></div>
+
+                <div class="messages-list-bottom-bar">
+                    <label class="messages-bottom-search" for="messages-search-input">
+                        <i class="fas fa-search"></i>
+                        <input id="messages-search-input" type="text" placeholder="&#x641C;&#x7D22;">
+                    </label>
+                    <button class="messages-bottom-compose-btn" id="messages-compose-btn" type="button" aria-label="新建消息">
+                        <img src="https://i.postimg.cc/3wtXMDHd/wu-biao-ti127-20260405215314.png" alt="新建消息图标">
+                    </button>
+                </div>
+            </section>
+
+            <section class="messages-view messages-chat-view" aria-label="信息聊天页面">
+                <div class="messages-chat-header">
+                    <div class="messages-chat-header-inner">
+                        <button id="messages-chat-back" class="messages-chat-back" type="button" aria-label="返回信息列表">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="m15 18-6-6 6-6"></path>
+                            </svg>
+                        </button>
+
+                        <div class="messages-chat-pill">
+                            <div id="messages-chat-avatar" class="messages-chat-avatar"></div>
+                            <div id="messages-chat-name" class="messages-chat-name"></div>
+                        </div>
+
+                        <button class="messages-chat-video" type="button" aria-label="视频通话">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M23 7l-7 5 7 5V7z"></path>
+                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="messages-chat-scroll" id="messages-chat-scroll"></div>
+
+                <div class="messages-input-bar">
+                    <button id="messages-plus-btn" class="messages-plus-btn" type="button" aria-label="更多功能">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 5v14m-7-7h14"></path>
+                        </svg>
+                    </button>
+
+                    <div class="messages-compose-shell">
+                        <input id="messages-compose-input" type="text" placeholder="iMessage">
+                        <button id="messages-mic-btn" class="messages-mic-btn" type="button" aria-label="语音输入">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                <line x1="12" y1="19" x2="12" y2="22"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
     <!-- 音频元素 -->
     <audio id="bg-music" loop></audio>
 
@@ -8119,6 +8278,8 @@
     <script src="js/screen_share.js"></script>
     <script src="js/changelog.js"></script>
     <script src="js/whisper_challenge.js"></script>
+    <script src="js/messages_app.js"></script>
+    <script src="js/phone_messages_app.js"></script>
 <!-- 在 index.html 中找到 <!-- 编辑记忆弹窗 --> 附近，添加以下代码 -->
 
             <!-- 编辑消息弹窗 -->

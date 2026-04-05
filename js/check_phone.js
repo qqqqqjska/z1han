@@ -4,6 +4,15 @@
 const PHONE_GRID_ROWS = 6;
 const PHONE_GRID_COLS = 4;
 const PHONE_SLOTS_PER_PAGE = PHONE_GRID_ROWS * PHONE_GRID_COLS;
+const PHONE_DOCK_APP_IDS = ['phone-messages', 'phone-health', 'phone-browser', 'phone-notes'];
+const PHONE_DOCK_APPS = [
+    { appId: 'phone-messages', name: '短信', iconClass: 'fas fa-comment-alt', color: '#34C759', type: 'app' },
+    { appId: 'phone-health', name: '健康', iconClass: 'fas fa-heartbeat', color: '#FF2D55', type: 'app' },
+    { appId: 'phone-browser', name: '浏览器', iconClass: 'fab fa-safari', color: '#007AFF', type: 'app' },
+    { appId: 'phone-notes', name: '备忘录', iconClass: 'fas fa-sticky-note', color: '#FFD60A', type: 'app' }
+];
+const PHONE_THEME_APP = { appId: 'phone-theme', name: '美化', iconClass: 'fas fa-paint-brush', color: '#5856D6', type: 'app' };
+const PHONE_THEME_TEMPLATE_VERSION = '2026-04-04-v1';
 
 // 状态变量
 let isPhoneEditMode = false;
@@ -16,6 +25,8 @@ let phonePagesWrapper;
 let phonePagesContainer;
 let phonePageIndicators;
 let phoneLibraryModal;
+let phoneDockBar;
+let phoneDockContainer;
 
 // 缓存 DOM 元素
 let phoneItemElementMap = new Map();
@@ -38,6 +49,682 @@ let phoneTouchDraggedItem = null;
 
 // 查手机当前联系人
 let currentCheckPhoneContactId = null;
+
+function phoneIsDockApp(item) {
+    return !!(item && item.appId && PHONE_DOCK_APP_IDS.includes(item.appId));
+}
+
+function getPhoneGridItems() {
+    return phoneScreenData.filter(item => !phoneIsDockApp(item));
+}
+
+function getPhoneDockItems() {
+    return PHONE_DOCK_APPS.map(dockApp => {
+        const existing = phoneScreenData.find(item => item.appId === dockApp.appId) || {};
+        return { ...dockApp, ...existing };
+    });
+}
+
+function createEmptyPhoneThemeData() {
+    return {
+        wallpapers: [],
+        currentWallpaper: null,
+        icons: {},
+        iconColors: {},
+        appNames: {}
+    };
+}
+
+function normalizePhoneThemeData(themeData) {
+    const source = themeData && typeof themeData === 'object' ? themeData : {};
+    const normalized = createEmptyPhoneThemeData();
+
+    normalized.wallpapers = Array.isArray(source.wallpapers)
+        ? source.wallpapers
+            .map((wallpaper, index) => {
+                if (!wallpaper || typeof wallpaper !== 'object' || !wallpaper.data) return null;
+                const id = wallpaper.id != null ? wallpaper.id : `phone-theme-wallpaper-${Date.now()}-${index}`;
+                return { id, data: String(wallpaper.data) };
+            })
+            .filter(Boolean)
+        : [];
+
+    normalized.currentWallpaper = source.currentWallpaper != null ? source.currentWallpaper : null;
+    if (!normalized.wallpapers.some(wallpaper => wallpaper.id === normalized.currentWallpaper)) {
+        normalized.currentWallpaper = null;
+    }
+
+    normalized.icons = source.icons && typeof source.icons === 'object' ? { ...source.icons } : {};
+    normalized.iconColors = source.iconColors && typeof source.iconColors === 'object' ? { ...source.iconColors } : {};
+    normalized.appNames = source.appNames && typeof source.appNames === 'object' ? { ...source.appNames } : {};
+
+    return normalized;
+}
+
+function getPhoneThemeStore(contactId) {
+    if (!contactId) return createEmptyPhoneThemeData();
+    const state = window.iphoneSimState || {};
+    if (!state.phoneContent) state.phoneContent = {};
+    if (!state.phoneContent[contactId]) state.phoneContent[contactId] = {};
+    state.phoneContent[contactId].phoneTheme = normalizePhoneThemeData(state.phoneContent[contactId].phoneTheme);
+    return state.phoneContent[contactId].phoneTheme;
+}
+
+function getCurrentPhoneThemeStore() {
+    return currentCheckPhoneContactId ? getPhoneThemeStore(currentCheckPhoneContactId) : createEmptyPhoneThemeData();
+}
+
+function persistPhoneThemeState() {
+    if (window.saveConfig) window.saveConfig();
+    else if (typeof saveConfig === 'function') saveConfig();
+}
+
+function getPhoneThemeAppCatalog() {
+    const apps = [];
+    const seen = new Set();
+    const pushApp = (item) => {
+        if (!item || item.type !== 'app' || !item.appId || seen.has(item.appId)) return;
+        seen.add(item.appId);
+        apps.push({
+            appId: item.appId,
+            name: item.name || '应用',
+            iconClass: item.iconClass || 'fas fa-mobile-alt',
+            color: item.color || '#8E8E93',
+            dock: !!item.dock
+        });
+    };
+
+    getPhoneGridItems()
+        .slice()
+        .sort((a, b) => (a.index || 0) - (b.index || 0))
+        .forEach(pushApp);
+
+    getPhoneDockItems().forEach(pushApp);
+    return apps;
+}
+
+function getPhoneThemeAppInfo(appId) {
+    return getPhoneThemeAppCatalog().find(app => app.appId === appId)
+        || { appId, name: '应用', iconClass: 'fas fa-mobile-alt', color: '#8E8E93' };
+}
+
+function createPhoneAppElement(item, draggable) {
+    const div = document.createElement('div');
+    div.classList.add('draggable-item');
+    div.setAttribute('draggable', draggable);
+
+    const themeStore = getCurrentPhoneThemeStore();
+    const finalColor = (themeStore.iconColors && themeStore.iconColors[item.appId]) || item.color || '#fff';
+    const customIcon = themeStore.icons && themeStore.icons[item.appId];
+    const displayName = (themeStore.appNames && themeStore.appNames[item.appId]) || item.name || '应用';
+
+    const iconContent = customIcon
+        ? `<img src="${customIcon}" style="width:100%; height:100%; object-fit:cover; border-radius:14px;">`
+        : `<i class="${item.iconClass}" style="color: ${finalColor === '#fff' || finalColor === '#ffffff' ? '#000' : '#fff'};"></i>`;
+
+    div.innerHTML = `
+        <div class="app-icon-img" style="background-color: ${finalColor}; overflow: hidden;">
+            ${iconContent}
+        </div>
+        <span class="app-name" title="${phoneFilesEscapeHtml(displayName)}">${phoneFilesEscapeHtml(displayName)}</span>
+    `;
+
+    div.addEventListener('click', () => {
+        if (!isPhoneEditMode && item.appId) {
+            if (window.handleAppClick) {
+                window.handleAppClick(item.appId, item.name || displayName);
+            } else {
+                const appScreen = document.getElementById(item.appId);
+                if (appScreen) appScreen.classList.remove('hidden');
+            }
+        }
+    });
+
+    return div;
+}
+
+function applyPhoneWallpaper() {
+    const app = document.getElementById('phone-app');
+    const mainContent = app ? app.querySelector('.main-content') : null;
+    if (!mainContent) return;
+
+    const themeStore = getCurrentPhoneThemeStore();
+    const wallpaper = themeStore.wallpapers.find(item => item.id === themeStore.currentWallpaper);
+
+    if (wallpaper && wallpaper.data) {
+        const wallpaperUrl = String(wallpaper.data).replace(/"/g, '\\"');
+        mainContent.style.backgroundColor = '#111';
+        mainContent.style.backgroundImage = `url("${wallpaperUrl}")`;
+        mainContent.style.backgroundSize = 'cover';
+        mainContent.style.backgroundPosition = 'center';
+        mainContent.style.backgroundRepeat = 'no-repeat';
+    } else {
+        mainContent.style.backgroundColor = '#f2f2f7';
+        mainContent.style.backgroundImage = '';
+        mainContent.style.backgroundSize = '';
+        mainContent.style.backgroundPosition = '';
+        mainContent.style.backgroundRepeat = '';
+    }
+}
+
+function applyPhoneIcons() {
+    if (Array.isArray(phoneScreenData)) {
+        phoneScreenData.forEach(item => {
+            if (item && item.type === 'app' && item._internalId) {
+                const element = phoneItemElementMap.get(item._internalId);
+                if (element && element.parentNode) element.parentNode.removeChild(element);
+                phoneItemElementMap.delete(item._internalId);
+            }
+        });
+    }
+    renderPhoneItems();
+}
+
+function compactPhoneGridItems(items) {
+    const sorted = [...items].sort((a, b) => (a.index || 0) - (b.index || 0));
+    const placed = [];
+
+    sorted.forEach(item => {
+        let targetIndex = 0;
+        const size = item.size || '1x1';
+        const maxSearch = 200;
+        while (targetIndex < maxSearch) {
+            const slots = window.getOccupiedSlots ? window.getOccupiedSlots(targetIndex, size) : [targetIndex];
+            if (!slots) {
+                targetIndex += 1;
+                continue;
+            }
+            const collision = placed.some(existing => {
+                if (window.isCollision) return window.isCollision(existing, slots);
+                return slots.includes(existing.index);
+            });
+            if (!collision) {
+                item.index = targetIndex;
+                placed.push(item);
+                return;
+            }
+            targetIndex += 1;
+        }
+    });
+}
+
+function normalizePhoneDockLayout() {
+    phoneScreenData.forEach(item => {
+        if (phoneIsDockApp(item)) item.dock = true;
+        else delete item.dock;
+    });
+    compactPhoneGridItems(getPhoneGridItems());
+}
+
+function ensurePhoneDockShell() {
+    const app = document.getElementById('phone-app');
+    const mainContent = app ? app.querySelector('.main-content') : null;
+    if (!mainContent) return null;
+
+    phoneDockBar = document.getElementById('phone-dock-bar');
+    if (!phoneDockBar) {
+        phoneDockBar = document.createElement('div');
+        phoneDockBar.id = 'phone-dock-bar';
+        phoneDockBar.className = 'dock-bar';
+        phoneDockBar.innerHTML = '<div id="phone-dock-container" class="dock-container"></div>';
+        const toolbar = document.getElementById('phone-edit-mode-toolbar');
+        if (toolbar && toolbar.parentNode === mainContent) mainContent.insertBefore(phoneDockBar, toolbar);
+        else mainContent.appendChild(phoneDockBar);
+    }
+
+    phoneDockContainer = document.getElementById('phone-dock-container');
+    return phoneDockBar;
+}
+
+function createPhoneDockElement(item) {
+    const div = document.createElement('div');
+    div.className = 'app-item dock-item phone-dock-item';
+    div.dataset.appId = item.appId || '';
+
+    const themeStore = getCurrentPhoneThemeStore();
+    let finalColor = item.color || '#fff';
+    if (themeStore.iconColors && themeStore.iconColors[item.appId]) {
+        finalColor = themeStore.iconColors[item.appId];
+    }
+
+    let iconContent = `<i class="${item.iconClass}" style="color: ${finalColor === '#fff' || finalColor === '#ffffff' ? '#000' : '#fff'};"></i>`;
+    if (themeStore.icons && themeStore.icons[item.appId]) {
+        iconContent = `<img src="${themeStore.icons[item.appId]}" style="width:100%;height:100%;object-fit:cover;border-radius:18px;">`;
+    }
+
+    let displayName = item.name || '';
+    if (themeStore.appNames && themeStore.appNames[item.appId]) {
+        displayName = themeStore.appNames[item.appId];
+    }
+
+    div.innerHTML = `
+        <div class="app-icon" style="background-color:${finalColor};overflow:hidden;">
+            ${iconContent}
+        </div>
+        <span class="app-label">${phoneFilesEscapeHtml(displayName)}</span>
+    `;
+
+    div.addEventListener('click', () => {
+        if (isPhoneEditMode || !item.appId) return;
+        if (window.handleAppClick) window.handleAppClick(item.appId, item.name || displayName);
+    });
+
+    return div;
+}
+
+function renderPhoneDock() {
+    ensurePhoneDockShell();
+    if (!phoneDockBar || !phoneDockContainer) return;
+
+    phoneDockBar.classList.toggle('hidden', isPhoneEditMode);
+    if (phonePageIndicators) {
+        phonePageIndicators.style.bottom = isPhoneEditMode ? '40px' : '118px';
+    }
+
+    phoneDockContainer.innerHTML = '';
+    getPhoneDockItems().forEach(item => {
+        phoneDockContainer.appendChild(createPhoneDockElement(item));
+    });
+}
+
+const PHONE_THEME_TEMPLATE_HTML = `
+    <header class="theme-nav-header">
+        <button class="theme-nav-btn" id="phone-theme-back-btn"><i class="fas fa-arrow-left"></i></button>
+        <div class="theme-nav-title">查手机美化</div>
+        <button class="theme-nav-btn" style="visibility: hidden;"><i class="fas fa-ellipsis-h"></i></button>
+    </header>
+
+    <div class="app-body" style="padding: 0; background: transparent; overflow-y: auto;">
+        <section class="theme-hero-section">
+            <h1 class="theme-hero-title">Style This<br>Phone.</h1>
+            <p class="theme-hero-subtitle">只美化查手机里的桌面：支持壁纸和应用图标，不会影响外面的主屏幕。</p>
+        </section>
+
+        <main class="theme-gallery-container" style="padding-bottom: 120px;">
+            <div class="theme-gallery-item theme-item-tall" id="open-phone-theme-wallpaper">
+                <div class="theme-decor-circle"></div>
+                <div class="theme-category-tag">Visuals</div>
+                <i class="fas fa-image theme-item-icon"></i>
+                <h3 class="theme-item-title">壁纸设置</h3>
+                <p class="theme-item-desc">上传或切换这台手机主屏幕使用的壁纸。</p>
+                <div class="theme-item-arrow"><i class="fas fa-arrow-right"></i></div>
+            </div>
+
+            <div class="theme-gallery-item theme-item-large" id="open-phone-theme-icons">
+                <div class="theme-typographic-decor">I</div>
+                <i class="fas fa-shapes theme-item-icon"></i>
+                <div class="theme-item-content">
+                    <div class="theme-category-tag">Icons</div>
+                    <h3 class="theme-item-title">应用图标</h3>
+                    <p class="theme-item-desc">修改主屏与 Dock 中应用的图标、底色和显示名称。</p>
+                </div>
+                <div class="theme-item-arrow"><i class="fas fa-arrow-right"></i></div>
+            </div>
+        </main>
+    </div>
+
+    <div id="phone-theme-wallpaper-screen" class="theme-sub-page-overlay hidden">
+        <div class="theme-sub-page-container">
+            <div class="theme-sub-page-header">
+                <h2 class="theme-sub-page-title">壁纸设置</h2>
+                <button class="theme-close-sub-page" id="close-phone-theme-wallpaper"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="theme-sub-page-content">
+                <div class="theme-form-group">
+                    <label class="theme-form-label">当前壁纸</label>
+                    <div style="display:flex; gap:10px; margin-bottom:16px;">
+                        <label class="theme-action-btn" style="flex:1; justify-content:center; background:#000; color:#fff; cursor:pointer;">
+                            <i class="fas fa-image"></i> 上传壁纸
+                            <input type="file" id="phone-theme-wallpaper-upload" accept="image/*" class="file-input-hidden">
+                        </label>
+                        <button class="theme-action-btn" id="phone-theme-reset-wallpaper" style="flex:1; justify-content:center; background:#ffebee; color:#d32f2f;">恢复默认</button>
+                    </div>
+                    <span class="theme-form-hint">只会作用在查手机主屏，不会影响外层桌面。</span>
+                </div>
+
+                <div class="theme-form-group">
+                    <label class="theme-form-label">壁纸图库</label>
+                    <span class="theme-form-hint" style="margin-bottom:12px;">点击切换；右上角可删除已上传壁纸。</span>
+                    <div id="phone-theme-wallpaper-gallery" class="gallery-scroll" style="display:flex; gap:16px; overflow-x:auto; padding-bottom:12px; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; background:transparent; padding-left:0; padding-right:0;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="phone-theme-icons-screen" class="theme-sub-page-overlay hidden">
+        <div class="theme-sub-page-container">
+            <div class="theme-sub-page-header">
+                <h2 class="theme-sub-page-title">应用图标</h2>
+                <button class="theme-close-sub-page" id="close-phone-theme-icons"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="theme-sub-page-content">
+                <div class="theme-form-group">
+                    <label class="theme-form-label">自定义图标</label>
+                    <span class="theme-form-hint" style="margin-bottom:12px;">支持桌面图标、Dock 图标和显示名称，修改后会立即同步到查手机主屏。</span>
+                    <div class="ios-list-group" id="phone-theme-icon-setting-list" style="background:transparent; box-shadow:none; padding:0;"></div>
+                </div>
+
+                <div style="margin-top:24px;">
+                    <button class="theme-action-btn" id="phone-theme-reset-icons" style="width:100%; justify-content:center; background:#ffebee; color:#d32f2f;">重置所有自定义图标</button>
+                </div>
+            </div>
+        </div>
+    </div>
+`;
+
+function phoneThemeEnsureShell() {
+    let screen = document.getElementById('phone-theme-app');
+    if (!screen) {
+        const host = document.getElementById('phone-notes')?.parentNode || document.body;
+        screen = document.createElement('div');
+        screen.id = 'phone-theme-app';
+        screen.className = 'sub-screen hidden';
+        host.appendChild(screen);
+    }
+
+    screen.style.cssText = `
+        z-index: 220;
+        background-color: #f5f5f7;
+        overflow-y: auto;
+        --theme-bg-color: #f5f5f7;
+        --theme-surface-color: #ffffff;
+        --theme-text-primary: #1d1d1f;
+        --theme-text-secondary: #86868b;
+        --theme-accent-color: #000000;
+        --theme-border-color: rgba(0,0,0,0.08);
+        --theme-shadow-sm: 0 4px 20px rgba(0,0,0,0.04);
+        --theme-shadow-md: 0 10px 30px rgba(0,0,0,0.08);
+        --theme-shadow-hover: 0 20px 40px rgba(0,0,0,0.12);
+        --theme-radius-lg: 24px;
+        --theme-radius-md: 16px;
+        --theme-radius-sm: 10px;
+        --theme-transition-bounce: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        --theme-transition-smooth: cubic-bezier(0.25, 0.1, 0.25, 1);
+        color: #1d1d1f;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    `;
+
+    if (screen.dataset.templateVersion !== PHONE_THEME_TEMPLATE_VERSION) {
+        screen.innerHTML = PHONE_THEME_TEMPLATE_HTML;
+        screen.dataset.templateVersion = PHONE_THEME_TEMPLATE_VERSION;
+        delete screen.dataset.bound;
+    }
+
+    bindPhoneThemeInteractions(screen);
+    return screen;
+}
+
+function closePhoneThemeApp() {
+    const screen = document.getElementById('phone-theme-app');
+    if (!screen) return;
+    screen.classList.add('hidden');
+    const wallpaperScreen = screen.querySelector('#phone-theme-wallpaper-screen');
+    const iconsScreen = screen.querySelector('#phone-theme-icons-screen');
+    if (wallpaperScreen) wallpaperScreen.classList.add('hidden');
+    if (iconsScreen) iconsScreen.classList.add('hidden');
+}
+
+function bindPhoneThemeInteractions(screen) {
+    if (!screen || screen.dataset.bound === 'true') return;
+
+    const backBtn = screen.querySelector('#phone-theme-back-btn');
+    const openWallpaperBtn = screen.querySelector('#open-phone-theme-wallpaper');
+    const openIconsBtn = screen.querySelector('#open-phone-theme-icons');
+    const wallpaperScreen = screen.querySelector('#phone-theme-wallpaper-screen');
+    const iconsScreen = screen.querySelector('#phone-theme-icons-screen');
+    const closeWallpaperBtn = screen.querySelector('#close-phone-theme-wallpaper');
+    const closeIconsBtn = screen.querySelector('#close-phone-theme-icons');
+    const wallpaperUpload = screen.querySelector('#phone-theme-wallpaper-upload');
+    const resetWallpaperBtn = screen.querySelector('#phone-theme-reset-wallpaper');
+    const resetIconsBtn = screen.querySelector('#phone-theme-reset-icons');
+
+    if (backBtn) backBtn.addEventListener('click', closePhoneThemeApp);
+    if (openWallpaperBtn && wallpaperScreen) openWallpaperBtn.addEventListener('click', () => wallpaperScreen.classList.remove('hidden'));
+    if (openIconsBtn && iconsScreen) openIconsBtn.addEventListener('click', () => iconsScreen.classList.remove('hidden'));
+    if (closeWallpaperBtn && wallpaperScreen) closeWallpaperBtn.addEventListener('click', () => wallpaperScreen.classList.add('hidden'));
+    if (closeIconsBtn && iconsScreen) closeIconsBtn.addEventListener('click', () => iconsScreen.classList.add('hidden'));
+    if (wallpaperUpload) wallpaperUpload.addEventListener('change', handlePhoneThemeWallpaperUpload);
+
+    if (resetWallpaperBtn) {
+        resetWallpaperBtn.addEventListener('click', () => {
+            const themeStore = getCurrentPhoneThemeStore();
+            themeStore.currentWallpaper = null;
+            applyPhoneWallpaper();
+            persistPhoneThemeState();
+            renderPhoneThemeWallpaperGallery();
+        });
+    }
+
+    if (resetIconsBtn) {
+        resetIconsBtn.addEventListener('click', () => {
+            if (!confirm('确定要重置查手机里所有自定义图标吗？')) return;
+            const themeStore = getCurrentPhoneThemeStore();
+            themeStore.icons = {};
+            themeStore.iconColors = {};
+            themeStore.appNames = {};
+            applyPhoneIcons();
+            persistPhoneThemeState();
+            renderPhoneThemeIconSettings();
+        });
+    }
+
+    screen.dataset.bound = 'true';
+}
+
+function renderPhoneThemeWallpaperGallery() {
+    const gallery = document.getElementById('phone-theme-wallpaper-gallery');
+    if (!gallery) return;
+
+    const themeStore = getCurrentPhoneThemeStore();
+    gallery.innerHTML = '';
+
+    const defaultItem = document.createElement('div');
+    defaultItem.className = `gallery-item ${themeStore.currentWallpaper == null ? 'selected' : ''}`;
+    defaultItem.innerHTML = `
+        <div style="width:100%; height:100%; display:flex; align-items:flex-end; padding:10px; background:linear-gradient(160deg, #c7ceda 0%, #eef2f7 55%, #f9fbff 100%); color:#1d1d1f; font-size:12px; font-weight:600;">
+            默认
+        </div>
+    `;
+    defaultItem.addEventListener('click', () => {
+        themeStore.currentWallpaper = null;
+        applyPhoneWallpaper();
+        persistPhoneThemeState();
+        renderPhoneThemeWallpaperGallery();
+    });
+    gallery.appendChild(defaultItem);
+
+    themeStore.wallpapers.forEach(wallpaper => {
+        const item = document.createElement('div');
+        item.className = `gallery-item ${themeStore.currentWallpaper === wallpaper.id ? 'selected' : ''}`;
+        item.innerHTML = `
+            <img src="${wallpaper.data}" alt="Wallpaper">
+            <button type="button" class="delete-wp-btn" aria-label="删除壁纸">&times;</button>
+        `;
+
+        item.addEventListener('click', (event) => {
+            if (event.target.closest('.delete-wp-btn')) {
+                event.preventDefault();
+                event.stopPropagation();
+                const nextWallpapers = themeStore.wallpapers.filter(item => item.id !== wallpaper.id);
+                themeStore.wallpapers = nextWallpapers;
+                if (themeStore.currentWallpaper === wallpaper.id) {
+                    themeStore.currentWallpaper = null;
+                    applyPhoneWallpaper();
+                }
+                persistPhoneThemeState();
+                renderPhoneThemeWallpaperGallery();
+                return;
+            }
+
+            themeStore.currentWallpaper = wallpaper.id;
+            applyPhoneWallpaper();
+            persistPhoneThemeState();
+            renderPhoneThemeWallpaperGallery();
+        });
+
+        gallery.appendChild(item);
+    });
+}
+
+function handlePhoneThemeWallpaperUpload(event) {
+    const input = event.target;
+    const file = input && input.files ? input.files[0] : null;
+    if (!file) return;
+
+    compressImage(file, 1024, 0.7).then(base64 => {
+        const themeStore = getCurrentPhoneThemeStore();
+        const wallpaper = {
+            id: Date.now(),
+            data: base64
+        };
+        themeStore.wallpapers.push(wallpaper);
+        themeStore.currentWallpaper = wallpaper.id;
+        applyPhoneWallpaper();
+        persistPhoneThemeState();
+        renderPhoneThemeWallpaperGallery();
+    }).catch(error => {
+        console.error('查手机壁纸压缩失败', error);
+    }).finally(() => {
+        if (input) input.value = '';
+    });
+}
+
+function resetPhoneThemeAppCustomization(appId) {
+    const themeStore = getCurrentPhoneThemeStore();
+    delete themeStore.icons[appId];
+    delete themeStore.iconColors[appId];
+    delete themeStore.appNames[appId];
+    applyPhoneIcons();
+    persistPhoneThemeState();
+    renderPhoneThemeIconSettings();
+}
+
+function handlePhoneThemeAppNameChange(event, appId) {
+    const input = event.target;
+    const name = input ? String(input.value || '').trim() : '';
+    const themeStore = getCurrentPhoneThemeStore();
+
+    if (name) themeStore.appNames[appId] = name;
+    else delete themeStore.appNames[appId];
+
+    applyPhoneIcons();
+    persistPhoneThemeState();
+    renderPhoneThemeIconSettings();
+}
+
+function handlePhoneThemeIconUpload(event, appId) {
+    const input = event.target;
+    const file = input && input.files ? input.files[0] : null;
+    if (!file) return;
+
+    compressImage(file, 300, 0.7).then(base64 => {
+        const themeStore = getCurrentPhoneThemeStore();
+        themeStore.icons[appId] = base64;
+        applyPhoneIcons();
+        persistPhoneThemeState();
+        renderPhoneThemeIconSettings();
+    }).catch(error => {
+        console.error('查手机图标压缩失败', error);
+    }).finally(() => {
+        if (input) input.value = '';
+    });
+}
+
+function handlePhoneThemeIconColorChange(event, appId) {
+    const input = event.target;
+    const color = input ? input.value : '';
+    const themeStore = getCurrentPhoneThemeStore();
+
+    if (color) themeStore.iconColors[appId] = color;
+    else delete themeStore.iconColors[appId];
+
+    const preview = document.getElementById(`phone-theme-preview-${appId}`);
+    if (preview) {
+        preview.style.backgroundColor = color || '#f2f2f7';
+        const icon = preview.querySelector('i');
+        if (icon) icon.style.color = color === '#ffffff' || color === '#fff' ? '#000' : '#fff';
+    }
+
+    applyPhoneIcons();
+    persistPhoneThemeState();
+}
+
+function renderPhoneThemeIconSettings() {
+    const list = document.getElementById('phone-theme-icon-setting-list');
+    if (!list) return;
+
+    const themeStore = getCurrentPhoneThemeStore();
+    const apps = getPhoneThemeAppCatalog();
+    list.innerHTML = '';
+
+    if (!apps.length) {
+        list.innerHTML = '<div class="list-item" style="justify-content:center; color:#8e8e93;">当前没有可美化的应用</div>';
+        return;
+    }
+
+    apps.forEach(appInfo => {
+        const currentIcon = themeStore.icons[appInfo.appId];
+        const currentColor = themeStore.iconColors[appInfo.appId] || appInfo.color;
+        const currentName = themeStore.appNames[appInfo.appId] || appInfo.name;
+        const hasCustomization = !!(themeStore.icons[appInfo.appId] || themeStore.iconColors[appInfo.appId] || themeStore.appNames[appInfo.appId]);
+        const safeAppId = phoneFilesEscapeHtml(appInfo.appId);
+        const safeCurrentName = phoneFilesEscapeHtml(currentName);
+        const safeDefaultName = phoneFilesEscapeHtml(appInfo.name);
+        const badgeText = appInfo.dock ? 'Dock 应用' : '桌面应用';
+
+        const item = document.createElement('div');
+        item.className = 'list-item';
+
+        const previewContent = currentIcon
+            ? `<img src="${currentIcon}" style="width:100%; height:100%; object-fit:cover;">`
+            : `<i class="${appInfo.iconClass}" style="color:${currentColor === '#ffffff' || currentColor === '#fff' ? '#000' : '#fff'}"></i>`;
+
+        item.innerHTML = `
+            <div class="icon-row">
+                <div class="icon-preview-small" id="phone-theme-preview-${safeAppId}" style="background-color:${currentColor};">
+                    ${previewContent}
+                </div>
+                <div class="icon-info" style="display:flex; flex-direction:column; align-items:flex-start; gap:6px;">
+                    <input type="text" class="app-name-input" value="${safeCurrentName}" data-id="${safeAppId}" placeholder="${safeDefaultName}" style="border:none; background:transparent; font-size:16px; width:100%; font-weight:500; padding:0;">
+                    <div style="font-size:12px; color:#8e8e93;">${badgeText}</div>
+                    <div class="color-picker-row" style="display:flex; align-items:center; gap:6px;">
+                        <span style="font-size:12px; color:#888;">底色</span>
+                        <input type="color" class="color-picker-input" value="${currentColor}" data-id="${safeAppId}" style="width:30px; height:20px; padding:0; border:none; background:none;">
+                    </div>
+                </div>
+                <div class="icon-actions">
+                    <input type="file" id="phone-theme-upload-${safeAppId}" accept="image/*" class="file-input-hidden">
+                    <label for="phone-theme-upload-${safeAppId}" class="ios-btn">更换</label>
+                    ${hasCustomization ? `<button type="button" class="ios-btn-small danger" data-action="reset-app" data-id="${safeAppId}">还原</button>` : ''}
+                </div>
+            </div>
+        `;
+
+        const uploadInput = item.querySelector('input[type="file"]');
+        const colorInput = item.querySelector('input[type="color"]');
+        const nameInput = item.querySelector('.app-name-input');
+        const resetBtn = item.querySelector('[data-action="reset-app"]');
+
+        if (uploadInput) uploadInput.addEventListener('change', (event) => handlePhoneThemeIconUpload(event, appInfo.appId));
+        if (colorInput) colorInput.addEventListener('input', (event) => handlePhoneThemeIconColorChange(event, appInfo.appId));
+        if (nameInput) nameInput.addEventListener('change', (event) => handlePhoneThemeAppNameChange(event, appInfo.appId));
+        if (resetBtn) resetBtn.addEventListener('click', () => resetPhoneThemeAppCustomization(appInfo.appId));
+
+        list.appendChild(item);
+    });
+}
+
+function openPhoneThemeApp() {
+    if (!currentCheckPhoneContactId) return;
+    const screen = phoneThemeEnsureShell();
+    if (!screen) return;
+
+    renderPhoneThemeWallpaperGallery();
+    renderPhoneThemeIconSettings();
+    applyPhoneWallpaper();
+    screen.scrollTop = 0;
+    screen.classList.remove('hidden');
+}
 
 // 改进的JSON提取函数
 function extractValidJson(content) {
@@ -299,6 +986,7 @@ function initPhoneGrid() {
     phonePagesContainer = document.getElementById('phone-pages-container');
     phonePageIndicators = document.getElementById('phone-page-indicators');
     phoneLibraryModal = document.getElementById('phone-widget-library-modal');
+    ensurePhoneDockShell();
 
     // 初始化全局状态
     if (!window.iphoneSimState.phoneLayouts) window.iphoneSimState.phoneLayouts = {};
@@ -376,7 +1064,21 @@ function initPhoneGrid() {
 
         /* 查手机-主屏幕图标下移 */
         #phone-app .home-screen-grid {
-            padding-top: 160px !important;
+            padding-top: 92px !important;
+            padding-bottom: 170px !important;
+        }
+
+        #phone-app .dock-bar {
+            z-index: 120 !important;
+            bottom: max(34px, env(safe-area-inset-bottom)) !important;
+        }
+
+        #phone-app .dock-container {
+            max-width: 340px !important;
+        }
+
+        #phone-app .phone-dock-item .app-icon {
+            overflow: hidden !important;
         }
 
         /* 强制修复查手机页面布局 (覆盖所有潜在偏移) */
@@ -471,6 +1173,15 @@ function initPhoneGrid() {
                 openPhoneNotesApp();
             } else if (appId === 'phone-files') {
                 openPhoneFilesApp();
+            } else if (appId === 'phone-theme') {
+                openPhoneThemeApp();
+            } else if (appId === 'phone-messages') {
+                if (window.PhoneMessagesApp && typeof window.PhoneMessagesApp.open === 'function') {
+                    window.PhoneMessagesApp.open(currentCheckPhoneContactId);
+                } else {
+                    const phoneMessagesScreen = document.getElementById('phone-messages');
+                    if (phoneMessagesScreen) phoneMessagesScreen.classList.remove('hidden');
+                }
             } else if (appId === 'phone-health') {
                 if (window.openPhoneHealthApp) window.openPhoneHealthApp(currentCheckPhoneContactId);
             } else if (appId === 'phone-browser') {
@@ -2997,6 +3708,7 @@ function enterPhoneCheck(contactId) {
     calculateTotalPhonePages();
     renderPhonePages();
     renderPhoneItems();
+    applyPhoneWallpaper();
 
     // 加载并设置朋友圈背景
     const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
@@ -3023,7 +3735,7 @@ function enterPhoneCheck(contactId) {
 
 function calculateTotalPhonePages() {
     let maxIndex = -1;
-    phoneScreenData.forEach(item => {
+    getPhoneGridItems().forEach(item => {
         if (item.index > maxIndex) maxIndex = item.index;
     });
     const neededPages = Math.floor(maxIndex / PHONE_SLOTS_PER_PAGE) + 1;
@@ -3041,11 +3753,13 @@ function loadPhoneLayout(contactId) {
         phoneScreenData = JSON.parse(JSON.stringify(layout)); // Deep copy
         // 补丁：确保必有的应用存在
         const requiredApps = [
+            { appId: 'phone-browser', name: '浏览器', iconClass: 'fab fa-safari', color: '#007AFF', type: 'app' },
             { appId: 'phone-xianyu', name: '闲鱼', iconClass: 'fas fa-fish', color: '#FFDA44', type: 'app' },
             { appId: 'phone-notes', name: '备忘录', iconClass: 'fas fa-sticky-note', color: '#FFD60A', type: 'app' },
             { appId: 'phone-messages', name: '短信', iconClass: 'fas fa-comment-alt', color: '#34C759', type: 'app' },
             { appId: 'phone-delivery', name: '外卖', iconClass: 'fas fa-utensils', color: '#FF9500', type: 'app' },
             { appId: 'phone-files', name: '文件', iconClass: 'fas fa-folder-open', color: '#007AFF', type: 'app' },
+            { ...PHONE_THEME_APP },
             { appId: 'phone-health', name: '健康', iconClass: 'fas fa-heartbeat', color: '#FF2D55', type: 'app' },
             { appId: 'phone-parcel', name: '快递', iconClass: 'fas fa-box', color: '#8E8E93', type: 'app' }
         ];
@@ -3061,10 +3775,10 @@ function loadPhoneLayout(contactId) {
                     if (window.getOccupiedSlots && window.isCollision) {
                         const slots = window.getOccupiedSlots(i, '1x1');
                         if (slots) {
-                            occupied = phoneScreenData.some(existing => window.isCollision(existing, slots));
+                            occupied = getPhoneGridItems().some(existing => window.isCollision(existing, slots));
                         }
                     } else {
-                        occupied = phoneScreenData.some(item => item.index === i);
+                        occupied = getPhoneGridItems().some(item => item.index === i);
                     }
                     
                     if (!occupied) {
@@ -3096,10 +3810,13 @@ function loadPhoneLayout(contactId) {
             { index: 7, type: 'app', name: '外卖', iconClass: 'fas fa-utensils', color: '#FF9500', appId: 'phone-delivery' },
             { index: 8, type: 'app', name: '文件', iconClass: 'fas fa-folder-open', color: '#007AFF', appId: 'phone-files' },
             { index: 9, type: 'app', name: '健康', iconClass: 'fas fa-heartbeat', color: '#FF2D55', appId: 'phone-health' },
-            { index: 10, type: 'app', name: '快递', iconClass: 'fas fa-box', color: '#8E8E93', appId: 'phone-parcel' }
+            { index: 10, type: 'app', name: '快递', iconClass: 'fas fa-box', color: '#8E8E93', appId: 'phone-parcel' },
+            { index: 11, type: 'app', name: '美化', iconClass: 'fas fa-paint-brush', color: '#5856D6', appId: 'phone-theme' }
         ];
     }
     
+    normalizePhoneDockLayout();
+
     // 确保有内部 ID
     phoneScreenData.forEach(item => {
         if (!item._internalId) item._internalId = Math.random().toString(36).substr(2, 9);
@@ -3165,8 +3882,11 @@ function updatePhoneIndicators() {
 }
 
 function renderPhoneItems() {
+    const gridItems = getPhoneGridItems();
+    applyPhoneWallpaper();
+
     phoneItemElementMap.forEach((el, id) => {
-        if (!phoneScreenData.some(i => i._internalId === id)) {
+        if (!gridItems.some(i => i._internalId === id)) {
             if (el.parentNode) el.parentNode.removeChild(el);
             phoneItemElementMap.delete(id);
         }
@@ -3193,7 +3913,7 @@ function renderPhoneItems() {
     });
 
     let coveredIndices = [];
-    phoneScreenData.forEach(item => {
+    gridItems.forEach(item => {
         if (item.size && item.size !== '1x1') {
             const occupied = window.getOccupiedSlots(item.index, item.size);
             if (occupied) {
@@ -3208,7 +3928,7 @@ function renderPhoneItems() {
         if (slots[id]) slots[id].style.display = 'none';
     });
 
-    phoneScreenData.forEach(item => {
+    gridItems.forEach(item => {
         const slot = slots[item.index];
         if (!slot) return;
 
@@ -3218,8 +3938,8 @@ function renderPhoneItems() {
         if (!el) {
             if (item.type === 'custom-json-widget' && window.createCustomJsonWidget) {
                 el = window.createCustomJsonWidget(item, canDrag);
-            } else if (item.type === 'app' && window.createAppElement) {
-                el = window.createAppElement(item, canDrag);
+            } else if (item.type === 'app') {
+                el = createPhoneAppElement(item, canDrag);
             }
 
             if (el) {
@@ -3253,9 +3973,12 @@ function renderPhoneItems() {
             }
         }
     });
+
+    renderPhoneDock();
 }
 
 function addPhoneDeleteButton(slot, item) {
+    if (!item || item.type === 'app') return;
     const btn = document.createElement('div');
     btn.className = 'delete-btn';
     btn.onclick = (e) => {
@@ -3328,7 +4051,7 @@ function handlePhoneDragEnd(e, item) {
 function reorderPhoneItems(draggedItem, targetIndex) {
     let newSlots = window.getOccupiedSlots(targetIndex, draggedItem.size || '1x1');
     if (!newSlots) return;
-    let victims = phoneScreenData.filter(i => i !== draggedItem && window.isCollision(i, newSlots));
+    let victims = getPhoneGridItems().filter(i => i !== draggedItem && window.isCollision(i, newSlots));
     if (victims.length === 0) {
         draggedItem.index = targetIndex;
         return;
@@ -3347,7 +4070,7 @@ function shiftPhoneItem(item, newIndex) {
         return shiftPhoneItem(item, newIndex + 1);
     }
     item.index = newIndex;
-    let victims = phoneScreenData.filter(i => i !== item && window.isCollision(i, newSlots));
+    let victims = getPhoneGridItems().filter(i => i !== item && window.isCollision(i, newSlots));
     victims.forEach(v => shiftPhoneItem(v, v.index + 1));
 }
 
@@ -3552,7 +4275,7 @@ function addToPhoneScreen(widgetTemplate) {
     for (let i = 0; i < maxSlots; i++) {
         let slots = window.getOccupiedSlots(i, newItem.size || '1x1');
         if (slots) {
-            let collision = phoneScreenData.some(existing => window.isCollision(existing, slots));
+            let collision = getPhoneGridItems().some(existing => window.isCollision(existing, slots));
             if (!collision) {
                 freeIndex = i;
                 break;
@@ -3591,6 +4314,7 @@ function setupPhoneListeners() {
     }
     if (closeAppBtn) {
         closeAppBtn.addEventListener('click', () => {
+            closePhoneThemeApp();
             document.getElementById('phone-app').classList.add('hidden');
         });
     }
@@ -3784,6 +4508,8 @@ async function handlePhoneAppGenerate(appType) {
         // 但用户点击生成，通常意味着强制生成。
         // 读取内容逻辑移到打开应用时，这里只负责生成。
         await generatePhoneWechatMoments(contact);
+    } else if (appType === 'messages') {
+        await generatePhoneMessagesAll(contact);
     } else if (appType === 'browser') {
         await generatePhoneBrowserHistory(contact);
     } else if (appType === 'xianyu') {
@@ -3895,11 +4621,286 @@ function buildPhoneWechatRecentChatContext(contact) {
 ${recentMessages.join('\n')}
 
 【使用方式】
-- 可以让部分与其他人的聊天、朋友圈文案或评论，间接体现这些近况。
-- 例如：若近期和用户吵架、冷战、准备见面、答应哄用户、准备礼物、为了用户拒绝邀约，可以自然映射到和其他NPC的聊天里。
-- 可以少量出现对“用户/对象/她/他”的间接提及，但不要生成与用户本人的直接微信会话。
+- 可以让部分与其他人的聊天、其他应用内容、状态文案或系统痕迹，间接体现这些近况。
+- 例如：若近期和用户吵架、冷战、准备见面、答应哄用户、准备礼物、为了用户拒绝邀约，可以自然映射到其他内容里。
+- 可以少量出现对“用户/对象/她/他”的间接提及，但不要直接改写成与用户本人的正面聊天窗口。
 - 相关性要自然克制，不要每条都围绕用户展开，约20%-40%的内容受到影响即可。
 - 不要照抄聊天原句，请改写后再融入内容。`;
+}
+
+const PHONE_MESSAGES_DATA_KEYS = [
+    'verification_codes',
+    'delivery_notifications',
+    'food_delivery_notifications',
+    'unknown_numbers',
+    'carrier_messages',
+    'bank_alerts',
+    'deleted_threads'
+];
+
+function normalizePhoneMessagesString(value) {
+    return String(value == null ? '' : value).trim();
+}
+
+function normalizePhoneMessagesBoolean(value) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value > 0;
+    const text = normalizePhoneMessagesString(value).toLowerCase();
+    return text === 'true' || text === '1' || text === 'yes';
+}
+
+function normalizePhoneMessagesCount(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num < 0) return 0;
+    return Math.floor(num);
+}
+
+function normalizePhoneMessagesIdentity(value) {
+    return normalizePhoneMessagesString(value)
+        .toLowerCase()
+        .replace(/[\s（）()【】\[\]{}<>《》「」『』'"`~!@#$%^&*_+=|\\/:;,.?-]/g, '');
+}
+
+function getForbiddenPhoneMessageCounterparties(contact) {
+    const state = window.iphoneSimState || {};
+    const userName = normalizePhoneMessagesString(state.userProfile && state.userProfile.name ? state.userProfile.name : '用户');
+    const labels = ['用户', '玩家', '{{user}}', '我'];
+    if (userName) labels.push(userName);
+    if (contact && contact.name) labels.push(contact.name);
+    return Array.from(new Set(labels.map(normalizePhoneMessagesIdentity).filter(Boolean)));
+}
+
+function isForbiddenPhoneConversationThread(sender, remark, contact) {
+    const forbidden = getForbiddenPhoneMessageCounterparties(contact);
+    const senderKey = normalizePhoneMessagesIdentity(sender);
+    const remarkKey = normalizePhoneMessagesIdentity(remark);
+    if (!forbidden.length) return false;
+
+    return forbidden.includes(senderKey) || forbidden.includes(remarkKey);
+}
+
+function isPhoneMessagesRomanceAllowed(contact) {
+    const persona = normalizePhoneMessagesString(contact && contact.persona ? contact.persona : '');
+    if (!persona) return false;
+
+    return /(暧昧|恋爱|感情经历|感情复杂|多线|海王|花心|渣|对象|前任|现任|追求者|追求中|喜欢多人|约会|秘密恋情|地下恋|桃花|恋人|男朋友|女朋友|伴侣|情史)/.test(persona);
+}
+
+function containsPhoneMessagesFlirtyContent(value) {
+    const text = normalizePhoneMessagesString(value);
+    if (!text) return false;
+
+    return /(想你|想见你|昨晚想你|昨晚梦到你|喜欢你|我喜欢你|想抱你|抱抱|亲亲|亲你|吻你|宝贝|宝宝|老婆|老公|乖一点|想和你待在一起|想和你在一起|今晚陪你|昨晚陪你|下次还来你家|到你家楼下|别让他知道|别告诉别人|只给你看|还想你|想你了|你最好看|和你睡|等你来抱|今晚来吗|要不要见一面|有点想你|想你想得睡不着|想跟你单独待会|下次单独见|别删我|别不理我)/.test(text);
+}
+
+function normalizePhoneMessagesEntry(item, sourceType = '', contact = null) {
+    if (!item || typeof item !== 'object') return null;
+
+    const sender = normalizePhoneMessagesString(item.sender);
+    const content = normalizePhoneMessagesString(item.content || item.preview || item.last_preview);
+    if (!sender || !content) return null;
+    const remark = normalizePhoneMessagesString(item.remark);
+    if (isForbiddenPhoneConversationThread(sender, remark, contact)) return null;
+    const romanceAllowed = isPhoneMessagesRomanceAllowed(contact);
+    if (!romanceAllowed && containsPhoneMessagesFlirtyContent(content)) return null;
+
+    const ownerReply = normalizePhoneMessagesString(item.owner_reply);
+    const sanitizedOwnerReply = !romanceAllowed && containsPhoneMessagesFlirtyContent(ownerReply) ? '' : ownerReply;
+
+    return {
+        sender,
+        remark,
+        time: normalizePhoneMessagesString(item.time),
+        content,
+        unread: normalizePhoneMessagesBoolean(item.unread),
+        source_type: normalizePhoneMessagesString(item.source_type) || sourceType,
+        related_to_user: normalizePhoneMessagesBoolean(item.related_to_user),
+        hidden_tension: normalizePhoneMessagesString(item.hidden_tension),
+        owner_reply: sanitizedOwnerReply,
+        owner_reply_time: sanitizedOwnerReply ? normalizePhoneMessagesString(item.owner_reply_time) : ''
+    };
+}
+
+function normalizePhoneDeletedThreadEntry(item, contact = null) {
+    if (!item || typeof item !== 'object') return null;
+
+    const sender = normalizePhoneMessagesString(item.sender);
+    const lastPreview = normalizePhoneMessagesString(item.last_preview);
+    if (!sender || !lastPreview) return null;
+    const remark = normalizePhoneMessagesString(item.remark);
+    if (isForbiddenPhoneConversationThread(sender, remark, contact)) return null;
+    const romanceAllowed = isPhoneMessagesRomanceAllowed(contact);
+    if (!romanceAllowed && containsPhoneMessagesFlirtyContent(lastPreview)) return null;
+
+    const ownerReply = normalizePhoneMessagesString(item.owner_reply);
+    const sanitizedOwnerReply = !romanceAllowed && containsPhoneMessagesFlirtyContent(ownerReply) ? '' : ownerReply;
+
+    return {
+        sender,
+        remark,
+        last_time: normalizePhoneMessagesString(item.last_time),
+        last_preview: lastPreview,
+        unread_count: normalizePhoneMessagesCount(item.unread_count),
+        deleted_at: normalizePhoneMessagesString(item.deleted_at),
+        related_to_user: normalizePhoneMessagesBoolean(item.related_to_user),
+        hidden_tension: normalizePhoneMessagesString(item.hidden_tension),
+        owner_reply: sanitizedOwnerReply,
+        owner_reply_time: sanitizedOwnerReply ? normalizePhoneMessagesString(item.owner_reply_time) : ''
+    };
+}
+
+function normalizePhoneMessagesAiPayload(raw, generatedAt = '', contact = null) {
+    const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    const normalized = {
+        verification_codes: [],
+        delivery_notifications: [],
+        food_delivery_notifications: [],
+        unknown_numbers: [],
+        carrier_messages: [],
+        bank_alerts: [],
+        deleted_threads: [],
+        generated_at: normalizePhoneMessagesString(source.generated_at) || generatedAt || buildPhoneGenerationTimeContext(new Date()).localDateTime
+    };
+
+    normalized.verification_codes = Array.isArray(source.verification_codes)
+        ? source.verification_codes.map((item) => normalizePhoneMessagesEntry(item, '验证码', contact)).filter(Boolean)
+        : [];
+    normalized.delivery_notifications = Array.isArray(source.delivery_notifications)
+        ? source.delivery_notifications.map((item) => normalizePhoneMessagesEntry(item, '快递', contact)).filter(Boolean)
+        : [];
+    normalized.food_delivery_notifications = Array.isArray(source.food_delivery_notifications)
+        ? source.food_delivery_notifications.map((item) => normalizePhoneMessagesEntry(item, '外卖', contact)).filter(Boolean)
+        : [];
+    normalized.unknown_numbers = Array.isArray(source.unknown_numbers)
+        ? source.unknown_numbers.map((item) => normalizePhoneMessagesEntry(item, '陌生号码', contact)).filter(Boolean)
+        : [];
+    normalized.carrier_messages = Array.isArray(source.carrier_messages)
+        ? source.carrier_messages.map((item) => normalizePhoneMessagesEntry(item, '运营商', contact)).filter(Boolean)
+        : [];
+    normalized.bank_alerts = Array.isArray(source.bank_alerts)
+        ? source.bank_alerts.map((item) => normalizePhoneMessagesEntry(item, '银行', contact)).filter(Boolean)
+        : [];
+    normalized.deleted_threads = Array.isArray(source.deleted_threads)
+        ? source.deleted_threads.map((item) => normalizePhoneDeletedThreadEntry(item, contact)).filter(Boolean)
+        : [];
+
+    return normalized;
+}
+
+window.normalizePhoneMessagesAiPayload = normalizePhoneMessagesAiPayload;
+
+function buildPhoneMessagesSystemPrompt(contact) {
+    const state = window.iphoneSimState || {};
+    const userName = String(state.userProfile && state.userProfile.name ? state.userProfile.name : '用户').trim() || '用户';
+    const persona = String(contact && contact.persona ? contact.persona : '无').trim() || '无';
+    const recentChatContext = buildPhoneWechatRecentChatContext(contact) || '暂无最近聊天记录可供参考。';
+    const romanceAllowed = isPhoneMessagesRomanceAllowed(contact);
+    const romanceRule = romanceAllowed
+        ? '15. Since this persona explicitly includes romance or ambiguous relationship traits, a small amount of subtle third-party flirtation is allowed, but it must stay restrained, low-frequency, and consistent with the persona.'
+        : '15. Since this persona does not explicitly include romance or ambiguous relationship traits, do not generate flirtation, suggestive intimacy, pet names, romantic invitations, or messages that imply a romantic relationship with third parties; if subtle tension is needed, create it only through timing, remarks, unread states, and deletion traces, not through flirtatious content.';
+
+    return `请你扮演“手机短信 / 信息应用内容生成器”，生成一组用于剧情展示的虚构短信内容。
+
+【角色信息】
+- 角色姓名：${contact.name}
+- 角色人设：${persona}
+
+${recentChatContext}
+
+【核心风格】
+- 这不是微信式熟人聊天，而是更像系统短信、通知短信、陌生号码短信、已删除会话等内容。
+- 整体必须有很强的“手机系统痕迹”和“真实生活记录感”，让人一眼觉得这就是手机里真的会收到的短信。
+- 重点来源：验证码、快递、外卖、银行、运营商、陌生号码、已删除会话。
+- 正常内容占大多数，微妙内容只占一部分，真实感优先。
+
+【总体要求】
+1. 所有内容都必须像真实短信，不要写成小说对话，不要太像微信聊天。
+2. 文风偏系统、模板化、通知化、生活化，语言简短。
+3. 张力重点来自：半夜验证码、某个备注奇怪的号码、连续几条未读通知、某些短信时间点异常、某个已删除会话留下的痕迹。
+4. 不要直接写出明确结论，不要写成“证据”，而要通过时间、备注、未读状态、删除行为制造联想空间。
+5. 至少 30% 的内容要能和“用户”产生间接关系，但不能写成直接实锤。
+6. 银行卡号、手机号、订单号、验证码等要做部分脱敏或虚构，不要使用真实敏感信息。
+7. 短信正文尽量短，像系统模板或真实通知预览，不要长段抒情。
+8. 不同来源语气必须区分：
+   - 验证码：标准模板、时效提醒
+   - 快递：物流节点、取件码、派送提醒
+   - 外卖：接单、出餐、送达、骑手联系
+   - 银行：消费提醒、验证码、账单提醒
+   - 运营商：套餐流量、欠费、活动通知
+   - 陌生号码：短促、含糊、容易让人误会
+9. 部分线程需要包含“联系人本人”的短信回复；这些回复必须符合【${contact.name}】的人设、近期状态和说话习惯。
+10. 我方回复不要平均分布到所有系统通知里，应主要出现在：陌生号码、外卖/骑手、快递沟通、已删除会话这几类里；验证码、运营商、银行这几类大多不需要回复。
+11. 我方回复必须像真实短信，简短克制，不要写成长对话；整体仍以“对方发来内容”为主，少部分线程出现 1 到 2 句我方回复即可。
+12. 绝对禁止生成【${userName}】与【${contact.name}】之间的直接短信对话。
+13. sender、remark 都不能是【${userName}】、用户、玩家、{{user}}、我，或任何明显代表用户本人的称呼。
+14. owner_reply 只允许表示【${contact.name}】回复第三方号码、平台、骑手、快递员、陌生联系人，不允许是在回复用户本人。
+${romanceRule}
+
+【输出模块】
+- verification_codes：6到10条
+- delivery_notifications：5到8条
+- food_delivery_notifications：4到7条
+- unknown_numbers：5到8条
+- carrier_messages：4到6条
+- bank_alerts：4到6条
+- deleted_threads：3到5条
+
+【普通短信字段】
+- sender
+- remark
+- time
+- content
+- unread
+- source_type
+- related_to_user
+- hidden_tension
+- owner_reply（可为空；若该条没有我方回复就留空字符串）
+- owner_reply_time（可为空；若有我方回复则提供时间）
+
+【已删除会话字段】
+- sender
+- remark
+- last_time
+- last_preview
+- unread_count
+- deleted_at
+- related_to_user
+- hidden_tension
+- owner_reply（可为空）
+- owner_reply_time（可为空）
+
+【deleted_threads 额外要求】
+1. last_preview 必须非常短，像短信最后一句预览。
+2. 不要所有 deleted_threads 都显得可疑，混合正常删除和微妙删除。
+3. 至少 1 到 2 条要有较强张力，例如：删除时间很近、还有未读、备注不清不楚、最后一句预览很短但意味不明。
+4. deleted_threads 中允许少量出现联系人本人曾回过的一句短回复，但不要每条都带回复。
+
+【返回格式】
+输出严格为 JSON 对象，不要附加解释、注释或 Markdown。
+返回结构必须是：
+{
+  "verification_codes": [],
+  "delivery_notifications": [],
+  "food_delivery_notifications": [],
+  "unknown_numbers": [],
+  "carrier_messages": [],
+  "bank_alerts": [],
+  "deleted_threads": []
+}`;
+}
+
+async function generatePhoneMessagesAll(contact) {
+    const btn = document.getElementById('phone-messages-generate-btn');
+    const originalContent = btn ? btn.innerHTML : null;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.classList.add('generating-pulse');
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    }
+
+    const systemPrompt = buildPhoneMessagesSystemPrompt(contact);
+    await callAiGeneration(contact, systemPrompt, 'messages_all', btn, originalContent);
 }
 
 // 检查AI API配置
@@ -4247,6 +5248,10 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
             result = window.normalizePhoneHealthData(result);
         }
 
+        if (type === 'messages_all') {
+            result = normalizePhoneMessagesAiPayload(result, generationTimeContext.localDateTime, contact);
+        }
+
         if (type === 'moments' && Array.isArray(result)) {
             console.log('处理moments类型，数组长度:', result.length);
             window.iphoneSimState.phoneContent[contact.id].wechatMoments = result;
@@ -4351,6 +5356,24 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
         } else if (type === 'browser' && Array.isArray(result)) {
             window.iphoneSimState.phoneContent[contact.id].browserHistory = result;
             renderPhoneBrowser(contact.id);
+        } else if (type === 'messages_all') {
+            const totalMessagesCount = PHONE_MESSAGES_DATA_KEYS.reduce((sum, key) => {
+                if (key === 'deleted_threads') return sum + ((result.deleted_threads || []).length);
+                return sum + ((result[key] || []).length);
+            }, 0);
+
+            if (!totalMessagesCount) {
+                throw new Error('短信应用生成结果为空');
+            }
+
+            window.iphoneSimState.phoneContent[contact.id].messagesData = result;
+
+            if (window.PhoneMessagesApp && typeof window.PhoneMessagesApp.refresh === 'function') {
+                window.PhoneMessagesApp.refresh(contact.id);
+            }
+
+            if (window.showChatToast) window.showChatToast('已为 ' + contact.name + ' 生成短信内容');
+            else alert('已为 ' + contact.name + ' 生成短信内容');
         } else if (type === 'browser_all') {
             if (!window.iphoneSimState.phoneContent[contact.id].browserData) {
                 window.iphoneSimState.phoneContent[contact.id].browserData = {};
@@ -4481,6 +5504,12 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
                     btn.onclick = () => handlePhoneAppGenerate('browser');
                 } catch (browserError) {
                     console.warn('重新绑定浏览器按钮事件失败:', browserError);
+                }
+            } else if (type === 'messages_all') {
+                try {
+                    btn.onclick = () => handlePhoneAppGenerate('messages');
+                } catch (messagesError) {
+                    console.warn('重新绑定短信按钮事件失败:', messagesError);
                 }
             }
         }
