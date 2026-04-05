@@ -27,6 +27,7 @@
     <link rel="manifest" href="manifest.json">
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&display=swap">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/whisper_challenge_palette.css">
@@ -54,6 +55,7 @@
     <link rel="stylesheet" href="css/chat_oracle_quick_replies.css">
     <link rel="stylesheet" href="css/preset_app.css">
     <link rel="stylesheet" href="css/messages_app.css">
+    <link rel="stylesheet" href="css/phone_delivery_app.css">
 </head>
 <body>
     <div class="screen-container" id="screen-container">
@@ -5308,6 +5310,189 @@
                     </div>
                 </div>
             </section>
+        </div>
+    </div>
+
+    <!-- 查手机 - 外卖 -->
+    <div id="phone-delivery" class="sub-screen hidden" style="z-index: 200; background-color: #ffffff;">
+        <div class="phone-delivery-shell">
+            <header>
+                <div class="animate-enter phone-delivery-title-back" id="phone-delivery-page-header" role="button" tabindex="0" aria-label="返回查手机主屏幕">
+                    <span id="phone-delivery-header-subtitle" class="page-subtitle">Current Status</span>
+                    <h1 id="phone-delivery-header-title" class="page-title display-font">Delivery</h1>
+                </div>
+                <button id="generate-phone-delivery-btn" class="profile-btn interactive animate-enter" type="button" aria-label="Generate delivery content" title="Generate">
+                    <i class="ri-user-smile-line"></i>
+                </button>
+            </header>
+
+            <div id="page-home" class="page-view active phone-delivery-page" data-page="home">
+                <div class="nav-pills animate-enter d-1">
+                    <button class="pill active interactive" type="button">Delivery </button>
+                    <button class="pill interactive" type="button">Gift </button>
+                    <button class="pill interactive" type="button">Pick-up </button>
+                </div>
+
+                <div class="container">
+                    <div class="utility-group animate-enter d-1">
+                        <div class="utility-item interactive">
+                            <div class="item-icon"><i class="ri-map-pin-user-line"></i></div>
+                            <div class="item-content">
+                                <div class="item-label">Delivery Address 送达地址</div>
+                                <div id="phone-delivery-address-value" class="item-value">静安区愚园路 120 号 8F</div>
+                            </div>
+                            <i class="ri-arrow-right-s-line arrow-icon"></i>
+                        </div>
+                        <div class="utility-item interactive" style="border-top: 1px solid var(--border);">
+                            <div class="item-icon"><i class="ri-sticky-note-line"></i></div>
+                            <div class="item-content">
+                                <div class="item-label">Taste Notes 口味备注</div>
+                                <div id="phone-delivery-note-value" class="item-value">无接触配送，多放葱花</div>
+                            </div>
+                            <i class="ri-arrow-right-s-line arrow-icon"></i>
+                        </div>
+                    </div>
+
+                    <button id="phone-delivery-featured-card" class="featured-card interactive animate-enter d-2" type="button">
+                        <div class="deco-circle"></div>
+
+                        <div class="featured-header">
+                            <div class="status-pill">
+                                <div class="pulse-dot"></div>
+                                <span id="phone-delivery-featured-status">Arriving Soon</span>
+                            </div>
+                            <div id="phone-delivery-featured-icon" class="brand-icon">
+                                <i class="ri-restaurant-2-line"></i>
+                            </div>
+                        </div>
+
+                        <div class="featured-content">
+                            <h2 id="phone-delivery-featured-name" class="featured-title display-font">Wagas<br>10 mins away</h2>
+                            <div id="phone-delivery-featured-summary" class="featured-subtitle">Chicken Pesto Penne, Iced Americano</div>
+                        </div>
+
+                        <div class="featured-action">
+                            <div id="phone-delivery-featured-courier" class="courier-text" style="font-size: 13px; font-weight: 500;">
+                                <i class="ri-ebike-2-line" style="margin-right: 6px;"></i><span>Li Ming</span>
+                            </div>
+                            <div class="btn-track interactive">
+                                Track <i class="ri-arrow-right-up-line"></i>
+                            </div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <div id="page-shops" class="page-view phone-delivery-page" data-page="discover">
+                <div class="container" style="padding-top: 20px;">
+                    <div class="section-label animate-enter d-1">
+                        Frequent &amp; Favorites
+                        <span>常点 / 收藏</span>
+                    </div>
+                    <div id="phone-delivery-favorites-list" class="item-grid animate-enter d-2"></div>
+
+                    <div class="section-label animate-enter d-3" style="margin-top: 24px;">
+                        For You
+                        <span>猜你想吃</span>
+                    </div>
+                    <div id="phone-delivery-recommend-list" class="item-grid animate-enter d-3"></div>
+                </div>
+            </div>
+
+            <div id="page-orders" class="page-view phone-delivery-page" data-page="orders">
+                <div class="container" style="padding-top: 20px;">
+                    <div class="section-label animate-enter d-1">
+                        Recent Orders
+                        <span>最近订单</span>
+                    </div>
+                    <div id="phone-delivery-order-list" class="item-grid animate-enter d-2"></div>
+                </div>
+            </div>
+
+            <div class="order-detail-overlay" id="phone-delivery-detail" aria-hidden="true">
+                <div class="detail-header">
+                    <button id="phone-delivery-detail-back" class="back-btn interactive" type="button" aria-label="返回订单列表"><i class="ri-arrow-down-s-line"></i></button>
+                    <div id="phone-delivery-detail-title" class="detail-title phone-delivery-title-back" role="button" tabindex="0" aria-label="返回订单列表">Order Details</div>
+                </div>
+
+                <div class="detail-content">
+                    <div class="review-note note-grid phone-delivery-note-card">
+                        <div id="phone-delivery-detail-stickers" class="phone-delivery-note-stickers" aria-hidden="true"></div>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                            <i class="ri-double-quotes-l review-quote-icon" style="color: #000; opacity: 0.3; margin-bottom: 0; font-size: 28px;"></i>
+                            <div id="phone-delivery-detail-note-title" style="font-size: 22px; font-weight: 600; padding-top: 4px;">我的随手记 ✦</div>
+                        </div>
+                        <div id="phone-delivery-detail-preview" style="font-size: 18px; font-weight: 400; text-indent: 1em; line-height: 1.6;">骑手已送达，记得及时取餐。</div>
+                    </div>
+
+                    <div class="detail-shop">
+                        <div id="phone-delivery-detail-icon" class="detail-shop-img"><i class="ri-goblet-line"></i></div>
+                        <div style="flex:1;">
+                            <div id="phone-delivery-detail-shop-name" style="font-size:20px; font-weight:700;">Blue Bottle Coffee</div>
+                            <div class="status-pill" style="display:inline-flex; margin-top:8px; background:var(--surface); border:1px solid var(--border); box-shadow:none;">
+                                <span id="phone-delivery-detail-status" style="color:var(--text-muted);">Completed</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-label" style="margin-bottom:0; font-size:18px;">Items</div>
+                    <div id="phone-delivery-detail-items" class="detail-items"></div>
+
+                    <div class="detail-summary">
+                        <div class="summary-row"><span>Subtotal</span><span id="phone-delivery-detail-subtotal">¥68</span></div>
+                        <div class="summary-row"><span>Delivery Fee</span><span id="phone-delivery-detail-fee">¥0</span></div>
+                        <div class="summary-row total"><span>Total</span><span id="phone-delivery-detail-total">¥68</span></div>
+                    </div>
+
+                    <div class="section-label" style="margin-bottom:0; margin-top:8px; font-size:18px;">Delivery Info</div>
+                    <div style="background:var(--surface); border-radius:24px; padding:24px; border:1px solid var(--border); display:flex; flex-direction:column; gap:16px;">
+                        <div style="display:flex; justify-content:space-between; font-size:14px; gap:12px;">
+                            <span style="color:var(--text-muted);">Recipient 收货人</span>
+                            <span id="phone-delivery-detail-recipient" style="font-weight:600; text-align:right;">J. Smith · 138****8888</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:14px; gap:12px;">
+                            <span style="color:var(--text-muted);">Address 地址</span>
+                            <span id="phone-delivery-detail-address" style="font-weight:600; text-align:right; max-width: 60%;">静安区愚园路 120 号</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:14px; gap:12px;">
+                            <span style="color:var(--text-muted);">Status 配送状态</span>
+                            <span id="phone-delivery-detail-delivery-status" style="font-weight:600; color:var(--text-main); text-align:right;">Delivered On Time</span>
+                        </div>
+                    </div>
+
+                    <div class="section-label" style="margin-bottom:0; margin-top:8px; font-size:18px;">Order Info</div>
+                    <div style="background:var(--surface); border-radius:24px; padding:24px; border:1px solid var(--border); display:flex; flex-direction:column; gap:16px;">
+                        <div style="display:flex; justify-content:space-between; font-size:14px; gap:12px;">
+                            <span style="color:var(--text-muted);">Order ID</span>
+                            <span id="phone-delivery-detail-order-id" style="font-weight:600; text-align:right;">8892 1204 43</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:14px; gap:12px;">
+                            <span style="color:var(--text-muted);">Time</span>
+                            <span id="phone-delivery-detail-time" style="font-weight:600; text-align:right;">Yesterday, 14:30</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:14px; gap:12px;">
+                            <span style="color:var(--text-muted);">Notes 备注</span>
+                            <span id="phone-delivery-detail-note" style="font-weight:600; text-align:right; max-width: 60%;">无接触配送，多放葱花</span>
+                        </div>
+                    </div>
+
+                    <button id="phone-delivery-detail-action" class="btn-track interactive" type="button" style="justify-content:center; padding:18px; font-size:16px; margin-top:10px; width:100%;">
+                        Reorder 再来一单
+                    </button>
+                </div>
+            </div>
+
+            <nav class="bottom-nav" aria-label="外卖底部导航">
+                <button class="nav-item active interactive" data-page="home" type="button" aria-label="外卖首页">
+                    <i class="ri-home-5-fill"></i>
+                </button>
+                <button class="nav-item interactive" data-page="discover" type="button" aria-label="发现商家">
+                    <i class="ri-compass-3-line"></i>
+                </button>
+                <button class="nav-item interactive" data-page="orders" type="button" aria-label="最近订单">
+                    <i class="ri-file-list-3-line"></i>
+                </button>
+            </nav>
         </div>
     </div>
 

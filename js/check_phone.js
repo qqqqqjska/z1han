@@ -1103,7 +1103,7 @@ function initPhoneGrid() {
         }
 
         /* 修复查手机内App底部漏出问题 - 其他应用 (白底) */
-        #phone-weibo, #phone-icity, #phone-browser, #phone-notes, #phone-files, #phone-health {
+        #phone-weibo, #phone-icity, #phone-browser, #phone-notes, #phone-files, #phone-health, #phone-delivery {
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
@@ -1171,6 +1171,8 @@ function initPhoneGrid() {
                 }
             } else if (appId === 'phone-notes') {
                 openPhoneNotesApp();
+            } else if (appId === 'phone-delivery') {
+                openPhoneDeliveryApp();
             } else if (appId === 'phone-files') {
                 openPhoneFilesApp();
             } else if (appId === 'phone-theme') {
@@ -1424,6 +1426,1482 @@ function openPhoneNotesApp() {
 
     ensurePhoneNotesV1Styles();
     content.scrollTop = 0;
+    screen.classList.remove('hidden');
+}
+
+const PHONE_DELIVERY_PAGE_META = {
+    home: { title: 'Delivery', subtitle: 'Current Status' },
+    discover: { title: 'Discover', subtitle: 'Explore Shops' },
+    orders: { title: 'Orders', subtitle: 'Recent Activity' }
+};
+
+const PHONE_DELIVERY_STATUS_META = {
+    on_the_way: { badge: 'On the Way', hero: 'Arriving Soon', delivery: '骑手配送中', eta: '10 mins away', active: true },
+    preparing: { badge: 'Preparing', hero: 'Preparing', delivery: '商家出餐中', eta: '18 mins away', active: true },
+    confirmed: { badge: 'Confirmed', hero: 'Order Confirmed', delivery: '商家已接单', eta: '25 mins away', active: true },
+    completed: { badge: 'Completed', hero: 'Delivered', delivery: 'Delivered On Time', eta: 'Delivered', active: false }
+};
+
+const PHONE_DELIVERY_STICKER_LEVELS = ['very_bad', 'bad', 'neutral', 'good', 'very_good'];
+
+const PHONE_DELIVERY_NOTE_STICKERS = {
+    very_bad: [
+        'https://i.postimg.cc/gkd0CVvq/wu-biao-ti129-20260406011214.png',
+        'https://i.postimg.cc/m2RrvYQY/wu-biao-ti129-20260406011238.png',
+        'https://i.postimg.cc/gkd0CVvX/wu-biao-ti129-20260406011319.png',
+        'https://i.postimg.cc/QxsM2QpC/wu-biao-ti129-20260406011707.png',
+        'https://i.postimg.cc/xjLCpxbd/wu-biao-ti129-20260406011720.png'
+    ],
+    bad: [
+        'https://i.postimg.cc/tggZL3G3/wu-biao-ti129-20260406011134.png',
+        'https://i.postimg.cc/255bPQNT/wu-biao-ti129-20260406011428.png',
+        'https://i.postimg.cc/g2sLSMQv/wu-biao-ti129-20260406011628.png',
+        'https://i.postimg.cc/s22QtYCW/wu-biao-ti129-20260406011649.png',
+        'https://i.postimg.cc/qvw6bmSk/wu-biao-ti129-20260406011811.png'
+    ],
+    neutral: [
+        'https://i.postimg.cc/Qtkb0ggL/wu-biao-ti129-20260406010839.png',
+        'https://i.postimg.cc/Ss7rDL6w/wu-biao-ti129-20260406011226.png',
+        'https://i.postimg.cc/50q3n5BT/wu-biao-ti129-20260406011402.png',
+        'https://i.postimg.cc/LXBTNkt7/wu-biao-ti129-20260406011753.png',
+        'https://i.postimg.cc/nzYk0K4R/wu-biao-ti129-20260406011828.png'
+    ],
+    good: [
+        'https://i.postimg.cc/LsZRY5zW/wu-biao-ti129-20260406010819.png',
+        'https://i.postimg.cc/7LTDGhgj/wu-biao-ti129-20260406011306.png',
+        'https://i.postimg.cc/bw5pwk25/wu-biao-ti129-20260406011329.png'
+    ],
+    very_good: [
+        'https://i.postimg.cc/7YYk1m3s/wu-biao-ti129-20260406011052.png',
+        'https://i.postimg.cc/zXXrw0CP/wu-biao-ti129-20260406011106.png',
+        'https://i.postimg.cc/fTTN7BcK/wu-biao-ti129-20260406011415.png',
+        'https://i.postimg.cc/Y2x7mJWR/wu-biao-ti129-20260406011734.png'
+    ]
+};
+
+const PHONE_DELIVERY_REVIEW_STYLE_CLASS_MAP = {
+    grid: 'note-grid',
+    ruled: 'note-ruled',
+    'plain-yellow': 'note-plain-yellow'
+};
+
+const PHONE_DELIVERY_ALLOWED_REVIEW_STYLES = Object.keys(PHONE_DELIVERY_REVIEW_STYLE_CLASS_MAP);
+
+const PHONE_DELIVERY_ALLOWED_RATING_LEVELS = ['\u975e\u5e38\u4e0d\u6ee1\u610f', '\u4e0d\u6ee1\u610f', '\u4e00\u822c', '\u6ee1\u610f', '\u975e\u5e38\u6ee1\u610f'];
+
+const PHONE_DELIVERY_RATING_LEVEL_MAP = {
+    '\u975e\u5e38\u4e0d\u6ee1\u610f': 'very_bad',
+    '\u4e0d\u6ee1\u610f': 'bad',
+    '\u4e00\u822c': 'neutral',
+    '\u6ee1\u610f': 'good',
+    '\u975e\u5e38\u6ee1\u610f': 'very_good'
+};
+
+const PHONE_DELIVERY_PRESET_SHOPS = [
+    {
+        name: 'Wagas',
+        icon: 'ri-restaurant-2-line',
+        keywords: ['wagas', '轻食', '沙拉', 'pesto'],
+        category: '健康轻食',
+        note: '无接触配送，多放葱花',
+        courier: 'Li Ming',
+        preview: '骑手已取餐，预计 10 分钟内送达。',
+        items: [
+            { name: 'Chicken Pesto Penne', price: 42, count: 1 },
+            { name: 'Iced Americano', price: 18, count: 1 }
+        ]
+    },
+    {
+        name: 'Blue Bottle Coffee',
+        icon: 'ri-cup-line',
+        keywords: ['blue bottle', 'coffee', '咖啡', '拿铁'],
+        category: '咖啡提神',
+        note: '少冰，纸吸管',
+        courier: 'Wang Lei',
+        preview: '咖啡已制作完成，请留意骑手来电。',
+        items: [
+            { name: 'Iced Latte', price: 34, count: 1 },
+            { name: 'Cold Brew', price: 34, count: 1 }
+        ]
+    },
+    {
+        name: 'Alimentari',
+        icon: 'ri-goblet-line',
+        keywords: ['alimentari', '意面', '意式', 'toast'],
+        category: '意式精选',
+        note: '酱汁分装',
+        courier: 'Chen Yu',
+        preview: '商家正在出餐，预计 18 分钟送达。',
+        items: [
+            { name: 'Truffle Toastie', price: 48, count: 1 },
+            { name: 'Sparkling Lemonade', price: 20, count: 1 }
+        ]
+    },
+    {
+        name: 'Fasciné Bakery',
+        icon: 'ri-cake-line',
+        keywords: ['bakery', '面包', '甜点', '可颂'],
+        category: '烘焙甜点',
+        note: '靠近门口存放',
+        courier: 'Sun Hao',
+        preview: '订单已完成，感谢你的耐心等待。',
+        items: [
+            { name: 'Butter Croissant', price: 16, count: 2 },
+            { name: 'Sea Salt Roll', price: 14, count: 1 }
+        ]
+    },
+    {
+        name: 'Shake Shack',
+        icon: 'ri-hamburger-line',
+        keywords: ['shake shack', '汉堡', 'burger', '薯条'],
+        category: '美式汉堡',
+        note: '番茄酱另装',
+        courier: 'Zhao Jun',
+        preview: '商家已接单，正在安排制作。',
+        items: [
+            { name: 'Cheeseburger', price: 39, count: 1 },
+            { name: 'Crinkle Fries', price: 18, count: 1 }
+        ]
+    },
+    {
+        name: 'Manner Coffee',
+        icon: 'ri-cup-line',
+        keywords: ['manner', '美式', 'dirty', '浓缩'],
+        category: '通勤咖啡',
+        note: '到店前电话联系',
+        courier: 'Xu Mo',
+        preview: '骑手已到楼下，请尽快取餐。',
+        items: [
+            { name: 'Dirty Coffee', price: 24, count: 1 },
+            { name: 'Iced Americano', price: 20, count: 1 }
+        ]
+    }
+];
+
+const phoneDeliveryRuntime = {
+    bound: false,
+    activePage: 'home',
+    orders: [],
+    featuredOrderId: ''
+};
+
+function normalizePhoneDeliveryText(value, fallback = '') {
+    const text = String(value == null ? '' : value).trim();
+    return text || fallback;
+}
+
+function normalizePhoneDeliveryBoolean(value, fallback = false) {
+    if (typeof value === 'boolean') return value;
+    const text = String(value == null ? '' : value).trim().toLowerCase();
+    if (!text) return !!fallback;
+    if (['true', '1', 'yes', 'y', 'default'].includes(text)) return true;
+    if (['false', '0', 'no', 'n'].includes(text)) return false;
+    return !!fallback;
+}
+
+function normalizePhoneDeliveryNumber(value, fallback = 0) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    const match = String(value == null ? '' : value).replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
+    return match ? Number(match[0]) : fallback;
+}
+
+function normalizePhoneDeliveryCurrency(value, fallback = 0) {
+    const number = normalizePhoneDeliveryNumber(value, fallback);
+    return Number.isFinite(number) ? Number(number.toFixed(2)) : fallback;
+}
+
+function createEmptyPhoneDeliveryData() {
+    return {
+        delivery_addresses: [],
+        taste_notes: [],
+        active_order: null,
+        frequent_shops: [],
+        favorite_shops: [],
+        recent_orders: [],
+        gift_orders: [],
+        pickup_orders: []
+    };
+}
+
+function getPhoneDeliveryStoreBucket(contactId) {
+    const state = window.iphoneSimState || {};
+    if (!state.phoneContent) state.phoneContent = {};
+    if (!state.phoneContent[contactId]) state.phoneContent[contactId] = {};
+    return state.phoneContent[contactId];
+}
+
+function phoneDeliveryExtractAddressText(value) {
+    if (typeof value === 'string') {
+        const text = value.trim();
+        return text && text !== '[object Object]' ? text : '';
+    }
+    if (value && typeof value === 'object') {
+        const directKeys = ['address', 'full_address', 'fullAddress', 'detail', 'text', 'location'];
+        for (const key of directKeys) {
+            const candidate = normalizePhoneDeliveryText(value[key], '');
+            if (candidate && candidate !== '[object Object]') return candidate;
+        }
+        const fragments = ['province', 'city', 'district', 'street', 'community', 'building', 'room']
+            .map(key => normalizePhoneDeliveryText(value[key], ''))
+            .filter(Boolean);
+        if (fragments.length) return fragments.join('');
+    }
+    return '';
+}
+
+function phoneDeliveryFormatAddressEntry(entry) {
+    const source = entry && typeof entry === 'object' ? entry : {};
+    const label = normalizePhoneDeliveryText(source.label, '');
+    const address = phoneDeliveryExtractAddressText(source.address || source);
+    if (label && address) return `${label} ? ${address}`;
+    return address || label || '';
+}
+
+function phoneDeliveryBuildItemsFromPreview(preview, itemCount = 0, subtotal = 0) {
+    const text = normalizePhoneDeliveryText(preview, '');
+    let names = text
+        ? text.split(/[\,\uFF0C\u3001+/]/).map(part => part.trim()).filter(Boolean)
+        : [];
+    if (!names.length) {
+        const fallbackCount = Math.max(1, Math.round(normalizePhoneDeliveryNumber(itemCount, 1)) || 1);
+        names = Array.from({ length: fallbackCount }, (_, index) => `Item ${index + 1}`);
+    }
+    const count = names.length || 1;
+    const average = count ? Number((subtotal / count).toFixed(2)) : 0;
+    return names.slice(0, Math.max(1, count)).map((name, index) => ({
+        name,
+        count: 1,
+        price: index === count - 1
+            ? Number(Math.max(0, subtotal - average * (count - 1)).toFixed(2))
+            : average
+    }));
+}
+
+function normalizePhoneDeliveryOrderItem(item, index, subtotalHint = 0, totalCount = 1) {
+    const source = item && typeof item === 'object' ? item : {};
+    const name = normalizePhoneDeliveryText(source.name || source.title || item, `Item ${index + 1}`);
+    const count = Math.max(1, Math.round(normalizePhoneDeliveryNumber(source.count || source.qty || source.quantity, 1)) || 1);
+    const fallbackPrice = totalCount > 0 ? Number((subtotalHint / totalCount).toFixed(2)) : 0;
+    const price = Math.max(0, normalizePhoneDeliveryCurrency(source.price || source.amount || source.unit_price || source.total_price, fallbackPrice));
+    return { name, count, price };
+}
+
+function phoneDeliveryParseTimeValue(value) {
+    const text = normalizePhoneDeliveryText(value, '');
+    if (!text) return null;
+    const isoLike = text.replace(/\//g, '-').replace(/\.(?=\d)/g, '-').replace(' ', 'T');
+    const isoTs = Date.parse(isoLike);
+    if (!Number.isNaN(isoTs)) return isoTs;
+    const relativeMatch = text.match(/^(\u4eca\u5929|\u6628\u5929|\u524d\u5929)\s*(\d{1,2}):(\d{2})$/);
+    if (relativeMatch) {
+        const date = new Date();
+        if (relativeMatch[1] === '\u6628\u5929') date.setDate(date.getDate() - 1);
+        if (relativeMatch[1] === '\u524d\u5929') date.setDate(date.getDate() - 2);
+        date.setHours(Number(relativeMatch[2]), Number(relativeMatch[3]), 0, 0);
+        return date.getTime();
+    }
+    const monthDayMatch = text.match(/^(\d{1,2})[-/.\u6708](\d{1,2})[\u65e5]?\s*(\d{1,2}):(\d{2})$/);
+    if (monthDayMatch) {
+        const date = new Date();
+        date.setMonth(Number(monthDayMatch[1]) - 1, Number(monthDayMatch[2]));
+        date.setHours(Number(monthDayMatch[3]), Number(monthDayMatch[4]), 0, 0);
+        return date.getTime();
+    }
+    return null;
+}
+
+function normalizePhoneDeliveryAddressEntry(item, index, contact) {
+    const source = item && typeof item === 'object' ? item : {};
+    return {
+        label: normalizePhoneDeliveryText(source.label, index === 0 ? 'Home' : `Address ${index + 1}`),
+        recipient: normalizePhoneDeliveryText(source.recipient, getPhoneDeliveryRecipient(contact)),
+        recipient_phone: maskPhoneDeliveryPhone(source.recipient_phone || source.phone || source.recipientPhone || getPhoneDeliveryRecipientPhone(contact)),
+        address: phoneDeliveryExtractAddressText(source.address || source) || getPhoneDeliveryAddress(contact),
+        is_default: normalizePhoneDeliveryBoolean(source.is_default, index === 0),
+        used_count: Math.max(0, Math.round(normalizePhoneDeliveryNumber(source.used_count, Math.max(1, 6 - index)))),
+        note: normalizePhoneDeliveryText(source.note, ''),
+        related_to_user: normalizePhoneDeliveryBoolean(source.related_to_user, false),
+        hidden_tension: normalizePhoneDeliveryText(source.hidden_tension, '')
+    };
+}
+
+function normalizePhoneDeliveryTasteNoteEntry(item, index) {
+    const source = item && typeof item === 'object' ? item : {};
+    return {
+        text: normalizePhoneDeliveryText(source.text, `Saved note ${index + 1}`),
+        used_count: Math.max(0, Math.round(normalizePhoneDeliveryNumber(source.used_count, Math.max(1, 5 - index)))),
+        last_used_at: normalizePhoneDeliveryText(source.last_used_at, index === 0 ? '2026-04-06 20:18' : '2026-04-05 13:20'),
+        scene: normalizePhoneDeliveryText(source.scene, 'Delivery'),
+        related_to_user: normalizePhoneDeliveryBoolean(source.related_to_user, false),
+        hidden_tension: normalizePhoneDeliveryText(source.hidden_tension, '')
+    };
+}
+
+function normalizePhoneDeliveryShopEntry(item, index, kind = 'frequent') {
+    const source = item && typeof item === 'object' ? item : {};
+    return {
+        store_name: normalizePhoneDeliveryText(source.store_name, `Store ${index + 1}`),
+        category: normalizePhoneDeliveryText(source.category, 'Food'),
+        tag: normalizePhoneDeliveryText(source.tag, kind === 'favorite' ? 'Favorite' : 'Frequent'),
+        avg_spend: Math.max(0, normalizePhoneDeliveryCurrency(source.avg_spend, 38 + index * 6)),
+        order_count: Math.max(1, Math.round(normalizePhoneDeliveryNumber(source.order_count, Math.max(1, 5 - index))) || 1),
+        last_ordered_at: normalizePhoneDeliveryText(source.last_ordered_at, index === 0 ? '2026-04-05 21:44' : '2026-04-04 18:20'),
+        reason: normalizePhoneDeliveryText(source.reason, kind === 'favorite' ? 'Saved and revisited often.' : 'Ordered here repeatedly.'),
+        related_to_user: normalizePhoneDeliveryBoolean(source.related_to_user, false),
+        hidden_tension: normalizePhoneDeliveryText(source.hidden_tension, '')
+    };
+}
+
+function normalizePhoneDeliveryOrderEntry(item, index, deliveryType, contact) {
+    const source = item && typeof item === 'object' ? item : {};
+    const storeName = normalizePhoneDeliveryText(source.store_name, `Store ${index + 1}`);
+    const normalizedDeliveryType = normalizePhoneDeliveryText(source.delivery_type, deliveryType === 'pickup' ? 'pickup' : (deliveryType === 'gift' ? 'gift' : 'delivery'));
+    const defaultFee = deliveryType === 'pickup' ? 0 : 3;
+    let subtotal = Math.max(0, normalizePhoneDeliveryCurrency(source.subtotal, 0));
+    const deliveryFee = Math.max(0, normalizePhoneDeliveryCurrency(source.delivery_fee, defaultFee));
+    let total = Math.max(0, normalizePhoneDeliveryCurrency(source.total, 0));
+    const rawItems = Array.isArray(source.items) ? source.items : [];
+    let itemCount = Math.max(1, Math.round(normalizePhoneDeliveryNumber(source.item_count, 0)) || 0);
+    let items = rawItems.length
+        ? rawItems.map((entry, itemIndex) => normalizePhoneDeliveryOrderItem(entry, itemIndex, subtotal, rawItems.length))
+        : [];
+    if (!subtotal && total) {
+        subtotal = Math.max(0, Number((total - deliveryFee).toFixed(2)));
+    }
+    if (!items.length) {
+        items = phoneDeliveryBuildItemsFromPreview(source.items_preview, itemCount || 1, subtotal);
+    }
+    if (!subtotal) {
+        subtotal = Number(items.reduce((sum, entry) => sum + entry.price * entry.count, 0).toFixed(2));
+    }
+    if (!itemCount) {
+        itemCount = Math.max(1, items.reduce((sum, entry) => sum + entry.count, 0));
+    }
+    if (!total) {
+        total = Number((subtotal + deliveryFee).toFixed(2));
+    }
+    const itemsPreview = normalizePhoneDeliveryText(source.items_preview, items.map(entry => entry.name).join(', '));
+    const ratingLevelSource = normalizePhoneDeliveryText(source.rating_level, PHONE_DELIVERY_ALLOWED_RATING_LEVELS[index % PHONE_DELIVERY_ALLOWED_RATING_LEVELS.length]);
+    const reviewStyleSource = normalizePhoneDeliveryText(source.review_style, PHONE_DELIVERY_ALLOWED_REVIEW_STYLES[index % PHONE_DELIVERY_ALLOWED_REVIEW_STYLES.length]);
+    return {
+        store_name: storeName,
+        status: normalizePhoneDeliveryText(source.status, deliveryType === 'pickup' ? 'Ready for pickup' : 'Delivered'),
+        ordered_at: normalizePhoneDeliveryText(source.ordered_at, index === 0 ? '2026-04-06 20:18' : '2026-04-05 13:42'),
+        delivery_type: normalizedDeliveryType,
+        item_count: itemCount,
+        items_preview: itemsPreview,
+        items,
+        subtotal,
+        delivery_fee: deliveryFee,
+        total,
+        courier_name: normalizePhoneDeliveryText(source.courier_name, deliveryType === 'pickup' ? 'Self Pickup' : 'Courier'),
+        eta_text: normalizePhoneDeliveryText(source.eta_text, deliveryType === 'pickup' ? 'Ready for pickup' : PHONE_DELIVERY_STATUS_META.completed.eta),
+        recipient: normalizePhoneDeliveryText(source.recipient, getPhoneDeliveryRecipient(contact)),
+        recipient_phone: maskPhoneDeliveryPhone(source.recipient_phone || source.phone || source.recipientPhone || getPhoneDeliveryRecipientPhone(contact)),
+        address_label: normalizePhoneDeliveryText(source.address_label, deliveryType === 'pickup' ? 'Pickup Store' : 'Saved Address'),
+        address: phoneDeliveryExtractAddressText(source.address) || (deliveryType === 'pickup' ? `${storeName} Store` : getPhoneDeliveryAddress(contact)),
+        remark: normalizePhoneDeliveryText(source.remark, deliveryType === 'pickup' ? 'Show pickup code at store' : getPhoneDeliveryNote(contact)),
+        order_id: normalizePhoneDeliveryText(source.order_id, buildPhoneDeliveryOrderId(contact && contact.id, index)),
+        delivery_status: normalizePhoneDeliveryText(source.delivery_status, deliveryType === 'pickup' ? 'Awaiting pickup' : PHONE_DELIVERY_STATUS_META.completed.delivery),
+        rating_level: PHONE_DELIVERY_RATING_LEVEL_MAP[ratingLevelSource] ? ratingLevelSource : PHONE_DELIVERY_ALLOWED_RATING_LEVELS[index % PHONE_DELIVERY_ALLOWED_RATING_LEVELS.length],
+        review_text: normalizePhoneDeliveryText(source.review_text, ''),
+        review_style: PHONE_DELIVERY_REVIEW_STYLE_CLASS_MAP[reviewStyleSource] ? reviewStyleSource : PHONE_DELIVERY_ALLOWED_REVIEW_STYLES[index % PHONE_DELIVERY_ALLOWED_REVIEW_STYLES.length],
+        related_to_user: normalizePhoneDeliveryBoolean(source.related_to_user, false),
+        hidden_tension: normalizePhoneDeliveryText(source.hidden_tension, '')
+    };
+}
+
+function normalizePhoneDeliveryActiveOrder(item, contact) {
+    if (!item || typeof item !== 'object') return null;
+    const source = item;
+    const runtimeOrder = normalizePhoneDeliveryOrderEntry({
+        ...source,
+        ordered_at: source.ordered_at || 'Just now',
+        subtotal: source.subtotal || source.total,
+        delivery_fee: source.delivery_fee || 0,
+        total: source.total,
+        order_id: source.order_id || buildPhoneDeliveryOrderId(contact && contact.id, 99),
+        delivery_status: source.track_hint || source.delivery_status || source.status || 'See tracking',
+        rating_level: source.rating_level || PHONE_DELIVERY_ALLOWED_RATING_LEVELS[2],
+        review_style: source.review_style || 'grid',
+        review_text: source.review_text || ''
+    }, 0, 'delivery', contact);
+    return {
+        store_name: normalizePhoneDeliveryText(source.store_name, runtimeOrder.store_name),
+        status: normalizePhoneDeliveryText(source.status, 'On the way'),
+        eta_text: normalizePhoneDeliveryText(source.eta_text, PHONE_DELIVERY_STATUS_META.on_the_way.eta),
+        items_preview: normalizePhoneDeliveryText(source.items_preview, runtimeOrder.items_preview),
+        courier_name: normalizePhoneDeliveryText(source.courier_name, runtimeOrder.courier_name),
+        track_hint: normalizePhoneDeliveryText(source.track_hint, runtimeOrder.delivery_status || 'See tracking'),
+        recipient: runtimeOrder.recipient,
+        recipient_phone: runtimeOrder.recipient_phone,
+        address: runtimeOrder.address,
+        remark: runtimeOrder.remark,
+        total: runtimeOrder.total,
+        related_to_user: runtimeOrder.related_to_user,
+        hidden_tension: runtimeOrder.hidden_tension,
+        runtime_order: runtimeOrder
+    };
+}
+
+function normalizePhoneDeliveryData(raw, contact) {
+    const source = raw && typeof raw === 'object' ? raw : {};
+    const normalized = createEmptyPhoneDeliveryData();
+    normalized.delivery_addresses = Array.isArray(source.delivery_addresses)
+        ? source.delivery_addresses.map((item, index) => normalizePhoneDeliveryAddressEntry(item, index, contact))
+        : [];
+    normalized.taste_notes = Array.isArray(source.taste_notes)
+        ? source.taste_notes.map((item, index) => normalizePhoneDeliveryTasteNoteEntry(item, index))
+        : [];
+    normalized.active_order = normalizePhoneDeliveryActiveOrder(source.active_order, contact);
+    normalized.frequent_shops = Array.isArray(source.frequent_shops)
+        ? source.frequent_shops.map((item, index) => normalizePhoneDeliveryShopEntry(item, index, 'frequent'))
+        : [];
+    normalized.favorite_shops = Array.isArray(source.favorite_shops)
+        ? source.favorite_shops.map((item, index) => normalizePhoneDeliveryShopEntry(item, index, 'favorite'))
+        : [];
+    normalized.recent_orders = Array.isArray(source.recent_orders)
+        ? source.recent_orders.map((item, index) => normalizePhoneDeliveryOrderEntry(item, index, 'delivery', contact))
+        : [];
+    normalized.gift_orders = Array.isArray(source.gift_orders)
+        ? source.gift_orders.map((item, index) => normalizePhoneDeliveryOrderEntry(item, index, 'gift', contact))
+        : [];
+    normalized.pickup_orders = Array.isArray(source.pickup_orders)
+        ? source.pickup_orders.map((item, index) => normalizePhoneDeliveryOrderEntry(item, index, 'pickup', contact))
+        : [];
+    return normalized;
+}
+
+function normalizePhoneDeliveryAiPayload(raw, contact) {
+    if (raw && typeof raw === 'object' && raw.deliveryData && typeof raw.deliveryData === 'object') {
+        return normalizePhoneDeliveryData(raw.deliveryData, contact);
+    }
+    return normalizePhoneDeliveryData(raw, contact);
+}
+
+function getPhoneDeliveryData(contactId) {
+    if (!contactId) return createEmptyPhoneDeliveryData();
+    const bucket = getPhoneDeliveryStoreBucket(contactId);
+    bucket.deliveryData = normalizePhoneDeliveryData(bucket.deliveryData, getPhoneDeliveryContact(contactId));
+    return bucket.deliveryData;
+}
+
+function setPhoneDeliveryData(contactId, deliveryData) {
+    const bucket = getPhoneDeliveryStoreBucket(contactId);
+    bucket.deliveryData = normalizePhoneDeliveryData(deliveryData, getPhoneDeliveryContact(contactId));
+    return bucket.deliveryData;
+}
+
+function phoneDeliveryHasData(deliveryData) {
+    if (!deliveryData || typeof deliveryData !== 'object') return false;
+    if (deliveryData.active_order) return true;
+    return ['delivery_addresses', 'taste_notes', 'frequent_shops', 'favorite_shops', 'recent_orders', 'gift_orders', 'pickup_orders']
+        .some(key => Array.isArray(deliveryData[key]) && deliveryData[key].length);
+}
+
+function getPhoneDeliveryPrimaryAddressEntry(deliveryData) {
+    if (!deliveryData || !Array.isArray(deliveryData.delivery_addresses) || !deliveryData.delivery_addresses.length) return null;
+    return [...deliveryData.delivery_addresses].sort((left, right) => {
+        return Number(right.is_default) - Number(left.is_default)
+            || (right.used_count || 0) - (left.used_count || 0);
+    })[0] || null;
+}
+
+function getPhoneDeliveryPrimaryTasteNote(deliveryData) {
+    if (!deliveryData || !Array.isArray(deliveryData.taste_notes) || !deliveryData.taste_notes.length) return null;
+    return [...deliveryData.taste_notes].sort((left, right) => {
+        return (right.used_count || 0) - (left.used_count || 0)
+            || (phoneDeliveryParseTimeValue(right.last_used_at) || 0) - (phoneDeliveryParseTimeValue(left.last_used_at) || 0);
+    })[0] || null;
+}
+
+function createPhoneDeliveryRuntimeOrder(record, index, contactId, overrides = {}) {
+    const preset = getPhoneDeliveryPreset(record && record.store_name, index);
+    const statusKey = inferPhoneDeliveryStatusKey(`${record && record.status ? record.status : ''} ${record && record.delivery_status ? record.delivery_status : ''} ${record && record.eta_text ? record.eta_text : ''}`);
+    const runtimeOrder = createPhoneDeliveryOrderFromPreset(preset, {
+        id: overrides.id || `phone_delivery_generated_${contactId || 'default'}_${index}`,
+        shopName: normalizePhoneDeliveryText(record && record.store_name, preset.name),
+        statusKey,
+        statusLabel: normalizePhoneDeliveryText(record && record.status, PHONE_DELIVERY_STATUS_META[statusKey].badge),
+        heroStatus: normalizePhoneDeliveryText(record && record.status, PHONE_DELIVERY_STATUS_META[statusKey].hero),
+        deliveryStatus: normalizePhoneDeliveryText(record && record.delivery_status, PHONE_DELIVERY_STATUS_META[statusKey].delivery),
+        eta: normalizePhoneDeliveryText(record && record.eta_text, PHONE_DELIVERY_STATUS_META[statusKey].eta),
+        items: Array.isArray(record && record.items) ? record.items : [],
+        itemCount: record && record.item_count,
+        subtotal: record && record.subtotal,
+        deliveryFee: record && record.delivery_fee,
+        total: record && record.total,
+        summary: normalizePhoneDeliveryText(record && record.items_preview, Array.isArray(record && record.items) ? record.items.map(entry => entry.name).join(', ') : preset.items.map(entry => entry.name).join(', ')),
+        time: normalizePhoneDeliveryText(record && record.ordered_at, '2026-04-06 20:18'),
+        note: normalizePhoneDeliveryText(record && record.remark, getPhoneDeliveryNote(getPhoneDeliveryContact(contactId))),
+        preview: normalizePhoneDeliveryText(record && record.review_text, normalizePhoneDeliveryText(record && record.delivery_status, PHONE_DELIVERY_STATUS_META[statusKey].delivery)),
+        courier: normalizePhoneDeliveryText(record && record.courier_name, record && record.delivery_type === 'pickup' ? 'Self Pickup' : preset.courier),
+        recipient: normalizePhoneDeliveryText(record && record.recipient, getPhoneDeliveryRecipient(getPhoneDeliveryContact(contactId))),
+        recipientPhone: normalizePhoneDeliveryText(record && record.recipient_phone, getPhoneDeliveryRecipientPhone(getPhoneDeliveryContact(contactId))),
+        address: normalizePhoneDeliveryText(record && record.address, getPhoneDeliveryAddress(getPhoneDeliveryContact(contactId))),
+        orderId: normalizePhoneDeliveryText(record && record.order_id, buildPhoneDeliveryOrderId(contactId, index)),
+        stickerLevel: PHONE_DELIVERY_RATING_LEVEL_MAP[record && record.rating_level] || 'neutral'
+    });
+    return {
+        ...runtimeOrder,
+        reviewText: normalizePhoneDeliveryText(record && record.review_text, ''),
+        reviewStyle: normalizePhoneDeliveryText(record && record.review_style, 'grid'),
+        ratingLevel: normalizePhoneDeliveryText(record && record.rating_level, PHONE_DELIVERY_ALLOWED_RATING_LEVELS[2]),
+        deliveryType: normalizePhoneDeliveryText(record && record.delivery_type, 'delivery'),
+        relatedToUser: normalizePhoneDeliveryBoolean(record && record.related_to_user, false),
+        hiddenTension: normalizePhoneDeliveryText(record && record.hidden_tension, ''),
+        trackHint: normalizePhoneDeliveryText(overrides.trackHint || (record && record.track_hint), ''),
+        addressLabel: normalizePhoneDeliveryText(record && record.address_label, '')
+    };
+}
+
+function buildPhoneDeliveryOrdersFromData(deliveryData, contactId) {
+    if (!phoneDeliveryHasData(deliveryData)) return [];
+    const orders = [];
+    const pushRuntimeOrder = (record, sourceKey, index) => {
+        if (!record) return;
+        const runtimeOrder = createPhoneDeliveryRuntimeOrder(record, orders.length + index, contactId, {
+            id: `phone_delivery_${sourceKey}_${contactId || 'default'}_${orders.length + index}`,
+            trackHint: record.track_hint || ''
+        });
+        const duplicate = orders.some(existing => {
+            if (existing.orderId && runtimeOrder.orderId && existing.orderId === runtimeOrder.orderId) return true;
+            return existing.shopName === runtimeOrder.shopName
+                && existing.time === runtimeOrder.time
+                && existing.summary === runtimeOrder.summary;
+        });
+        if (!duplicate) orders.push(runtimeOrder);
+    };
+    if (deliveryData.active_order && deliveryData.active_order.runtime_order) {
+        const activeRuntimeRecord = {
+            ...deliveryData.active_order.runtime_order,
+            status: deliveryData.active_order.status,
+            eta_text: deliveryData.active_order.eta_text,
+            courier_name: deliveryData.active_order.courier_name,
+            delivery_status: deliveryData.active_order.track_hint || deliveryData.active_order.runtime_order.delivery_status,
+            remark: deliveryData.active_order.remark,
+            total: deliveryData.active_order.total,
+            address: deliveryData.active_order.address,
+            recipient: deliveryData.active_order.recipient,
+            recipient_phone: deliveryData.active_order.recipient_phone
+        };
+        pushRuntimeOrder(activeRuntimeRecord, 'active', 0);
+    }
+    deliveryData.recent_orders.forEach((record, index) => pushRuntimeOrder(record, 'recent', index));
+    deliveryData.gift_orders.forEach((record, index) => pushRuntimeOrder(record, 'gift', index));
+    deliveryData.pickup_orders.forEach((record, index) => pushRuntimeOrder(record, 'pickup', index));
+    return orders.sort((left, right) => {
+        return Number(right.active) - Number(left.active)
+            || (phoneDeliveryParseTimeValue(right.time) || 0) - (phoneDeliveryParseTimeValue(left.time) || 0);
+    });
+}
+
+function escapePhoneDeliveryHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getPhoneDeliveryContact(contactId) {
+    const state = window.iphoneSimState || {};
+    const contacts = Array.isArray(state.contacts) ? state.contacts : [];
+    return contacts.find(contact => contact.id === contactId) || null;
+}
+
+function maskPhoneDeliveryPhone(value) {
+    const digits = String(value == null ? '' : value).replace(/\D/g, '');
+    if (digits.length >= 7) {
+        return `${digits.slice(0, 3)}****${digits.slice(-4)}`;
+    }
+    return '138****8888';
+}
+
+function getPhoneDeliveryRecipient(contact) {
+    return normalizePhoneDeliveryText(contact && (contact.remark || contact.name), 'Current Contact');
+}
+
+function getPhoneDeliveryRecipientPhone(contact) {
+    return maskPhoneDeliveryPhone(contact && (contact.phone || contact.mobile || contact.phoneNumber || contact.tel || contact.phone_number));
+}
+
+function getPhoneDeliveryAddress(contact) {
+    const candidates = [
+        phoneDeliveryExtractAddressText(contact && contact.address),
+        phoneDeliveryExtractAddressText(contact && contact.homeAddress),
+        phoneDeliveryExtractAddressText(contact && contact.location),
+        contact && contact.city ? `${contact.city} ? Saved delivery address` : '',
+        contact && contact.school ? `${contact.school} ? Dorm lobby` : '',
+        contact && contact.company ? `${contact.company} ? Front desk` : ''
+    ];
+    for (const candidate of candidates) {
+        const value = normalizePhoneDeliveryText(candidate, '');
+        if (value) return value;
+    }
+    return 'Jing\'an District, Yuyuan Rd 120 8F';
+}
+
+function getPhoneDeliveryNote(contact) {
+    const candidates = [
+        contact && contact.deliveryNote,
+        contact && contact.foodNote,
+        contact && contact.foodPreference,
+        contact && contact.note
+    ];
+    for (const candidate of candidates) {
+        const value = normalizePhoneDeliveryText(candidate, '');
+        if (value) return value;
+    }
+    return 'No-contact delivery, extra scallions';
+}
+
+function normalizePhoneDeliveryShopName(value) {
+    const normalized = String(value == null ? '' : value)
+        .replace(/[【】\[\]()（）]/g, ' ')
+        .replace(/(美团|饿了么|外卖|订单|服务|通知|平台|商家版|配送|骑手|官方|闪送|达达|蜂鸟|系统消息)/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return normalized.length > 24 ? normalized.slice(0, 24).trim() : normalized;
+}
+
+function getPhoneDeliveryPreset(shopName, index = 0) {
+    const lowerShopName = String(shopName || '').toLowerCase();
+    const matched = PHONE_DELIVERY_PRESET_SHOPS.find(preset => {
+        if (lowerShopName.includes(String(preset.name).toLowerCase())) return true;
+        return Array.isArray(preset.keywords) && preset.keywords.some(keyword => lowerShopName.includes(String(keyword).toLowerCase()));
+    });
+    return matched || PHONE_DELIVERY_PRESET_SHOPS[index % PHONE_DELIVERY_PRESET_SHOPS.length];
+}
+
+function inferPhoneDeliveryStatusKey(text) {
+    const value = String(text || '').toLowerCase();
+    if (!value) return 'preparing';
+    if (/(已取餐|配送中|派送|骑手|送餐|即将送达|快送达|正在赶来|还有.*分钟|预计.*分钟|到楼下)/.test(value)) return 'on_the_way';
+    if (/(已送达|送达|已完成|完成订单|已签收|感谢你的耐心等待|请及时取餐|已放在)/.test(value)) return 'completed';
+    if (/(出餐|备餐|制作中|准备中|打包中|商家已出餐)/.test(value)) return 'preparing';
+    if (/(已接单|接单|确认订单|已确认|下单成功)/.test(value)) return 'confirmed';
+    return 'preparing';
+}
+
+function formatPhoneDeliveryPrice(amount) {
+    const value = Number(amount || 0);
+    if (!Number.isFinite(value)) return '¥0';
+    return `¥${Number.isInteger(value) ? value.toFixed(0) : value.toFixed(2)}`;
+}
+
+function buildPhoneDeliveryOrderId(contactId, index) {
+    const digits = String(contactId == null ? '' : contactId).replace(/\D/g, '');
+    const blockA = (digits.slice(-4) || '8892').padStart(4, '8');
+    const blockB = String(1204 + index).padStart(4, '0');
+    const blockC = String(43 + index).padStart(2, '0');
+    return `${blockA} ${blockB} ${blockC}`;
+}
+
+function createPhoneDeliveryOrderFromPreset(preset, options = {}) {
+    const statusKey = PHONE_DELIVERY_STATUS_META[options.statusKey] ? options.statusKey : 'preparing';
+    const statusMeta = PHONE_DELIVERY_STATUS_META[statusKey];
+    const itemsSource = Array.isArray(options.items) && options.items.length ? options.items : (Array.isArray(preset.items) ? preset.items : []);
+    const items = itemsSource.map(item => ({
+        name: String(item && item.name ? item.name : 'Item').trim() || 'Item',
+        price: Number(item && item.price ? item.price : 0) || 0,
+        count: Math.max(1, Number(item && item.count ? item.count : 1) || 1)
+    }));
+    const explicitSubtotal = Number(options.subtotal);
+    const subtotal = Number.isFinite(explicitSubtotal)
+        ? explicitSubtotal
+        : items.reduce((sum, item) => sum + item.price * item.count, 0);
+    const fallbackFee = statusKey === 'completed' ? 0 : 4;
+    const deliveryFeeValue = Number(options.deliveryFee);
+    const deliveryFee = Number.isFinite(deliveryFeeValue) ? deliveryFeeValue : fallbackFee;
+    const explicitTotal = Number(options.total);
+    const total = Number.isFinite(explicitTotal) ? explicitTotal : subtotal + deliveryFee;
+    const explicitItemCount = Number(options.itemCount);
+    const itemCount = Number.isFinite(explicitItemCount) && explicitItemCount > 0
+        ? Math.round(explicitItemCount)
+        : items.reduce((sum, item) => sum + item.count, 0);
+    const shopName = String(options.shopName || preset.name || '外卖商家').trim() || '外卖商家';
+    const time = String(options.time || '今天 12:18').trim() || '今天 12:18';
+    const note = String(options.note || preset.note || '无接触配送').trim() || '无接触配送';
+    const preview = String(options.preview || preset.preview || `${shopName} 订单状态已更新。`).trim() || `${shopName} 订单状态已更新。`;
+    const summary = String(options.summary || items.map(item => item.name).join(', ')).trim() || '订单详情';
+
+    return {
+        id: String(options.id || `${shopName}-${time}`).replace(/\s+/g, '_'),
+        shopName,
+        icon: options.icon || preset.icon || 'ri-restaurant-2-line',
+        category: preset.category || '精选餐饮',
+        items,
+        itemCount,
+        subtotal,
+        deliveryFee,
+        total,
+        statusKey,
+        statusLabel: options.statusLabel || statusMeta.badge,
+        heroStatus: options.heroStatus || statusMeta.hero,
+        deliveryStatus: options.deliveryStatus || statusMeta.delivery,
+        eta: options.eta || statusMeta.eta,
+        summary,
+        courier: String(options.courier || preset.courier || '配送员').trim() || '配送员',
+        time,
+        note,
+        recipient: String(options.recipient || '当前联系人').trim() || '当前联系人',
+        recipientPhone: String(options.recipientPhone || '138****8888').trim() || '138****8888',
+        address: String(options.address || '静安区愚园路 120 号 8F').trim() || '静安区愚园路 120 号 8F',
+        preview,
+        orderId: String(options.orderId || '8892 1204 43').trim() || '8892 1204 43',
+        active: !!statusMeta.active,
+        stickerLevel: PHONE_DELIVERY_NOTE_STICKERS[options.stickerLevel] ? options.stickerLevel : 'neutral'
+    };
+}
+
+function buildPhoneDeliveryFallbackOrders(contact) {
+    const recipient = getPhoneDeliveryRecipient(contact);
+    const recipientPhone = getPhoneDeliveryRecipientPhone(contact);
+    const address = getPhoneDeliveryAddress(contact);
+    const baseNote = getPhoneDeliveryNote(contact);
+
+    return [
+        createPhoneDeliveryOrderFromPreset(getPhoneDeliveryPreset('Wagas', 0), {
+            id: 'phone_delivery_fallback_0',
+            statusKey: 'on_the_way',
+            time: '今天 12:18',
+            recipient,
+            recipientPhone,
+            address,
+            note: baseNote,
+            orderId: buildPhoneDeliveryOrderId(contact && contact.id, 0),
+            stickerLevel: 'good'
+        }),
+        createPhoneDeliveryOrderFromPreset(getPhoneDeliveryPreset('Blue Bottle Coffee', 1), {
+            id: 'phone_delivery_fallback_1',
+            statusKey: 'completed',
+            time: '昨天 14:30',
+            recipient,
+            recipientPhone,
+            address,
+            note: '少冰，纸吸管',
+            deliveryFee: 0,
+            orderId: buildPhoneDeliveryOrderId(contact && contact.id, 1),
+            stickerLevel: 'very_good'
+        }),
+        createPhoneDeliveryOrderFromPreset(getPhoneDeliveryPreset('Fasciné Bakery', 2), {
+            id: 'phone_delivery_fallback_2',
+            statusKey: 'completed',
+            time: '周五 09:12',
+            recipient,
+            recipientPhone,
+            address,
+            note: '放前台即可',
+            deliveryFee: 0,
+            orderId: buildPhoneDeliveryOrderId(contact && contact.id, 2),
+            stickerLevel: 'neutral'
+        }),
+        createPhoneDeliveryOrderFromPreset(getPhoneDeliveryPreset('Alimentari', 3), {
+            id: 'phone_delivery_fallback_3',
+            statusKey: 'preparing',
+            time: '今天 18:02',
+            recipient,
+            recipientPhone,
+            address,
+            note: '酱汁分装',
+            orderId: buildPhoneDeliveryOrderId(contact && contact.id, 3),
+            stickerLevel: 'bad'
+        }),
+        createPhoneDeliveryOrderFromPreset(getPhoneDeliveryPreset('Shake Shack', 4), {
+            id: 'phone_delivery_fallback_4',
+            statusKey: 'confirmed',
+            time: '今天 20:16',
+            recipient,
+            recipientPhone,
+            address,
+            note: '番茄酱另装',
+            orderId: buildPhoneDeliveryOrderId(contact && contact.id, 4),
+            stickerLevel: 'very_bad'
+        })
+    ];
+}
+
+function getPhoneDeliveryMessageSource(contactId) {
+    const state = window.iphoneSimState || {};
+    const phoneContent = state.phoneContent && state.phoneContent[contactId] ? state.phoneContent[contactId] : null;
+    const messagesData = phoneContent && phoneContent.messagesData ? phoneContent.messagesData : null;
+    return Array.isArray(messagesData && messagesData.food_delivery_notifications) ? messagesData.food_delivery_notifications : [];
+}
+
+function buildPhoneDeliveryOrders(contactId) {
+    const contact = getPhoneDeliveryContact(contactId);
+    const deliveryData = getPhoneDeliveryData(contactId);
+    if (phoneDeliveryHasData(deliveryData)) {
+        const generatedOrders = buildPhoneDeliveryOrdersFromData(deliveryData, contactId);
+        if (generatedOrders.length) {
+            return generatedOrders;
+        }
+    }
+
+    const messages = getPhoneDeliveryMessageSource(contactId);
+    if (!messages.length) {
+        return buildPhoneDeliveryFallbackOrders(contact);
+    }
+
+    const recipient = getPhoneDeliveryRecipient(contact);
+    const recipientPhone = getPhoneDeliveryRecipientPhone(contact);
+    const address = getPhoneDeliveryAddress(contact);
+    const baseNote = getPhoneDeliveryNote(contact);
+    const courierNames = ['Li Ming', 'Wang Lei', 'Chen Yu', 'Sun Hao', 'Xu Mo', 'Zhao Jun'];
+
+    const orders = messages.slice(0, 6).map((entry, index) => {
+        const rawShopName = normalizePhoneDeliveryShopName(entry && (entry.remark || entry.sender));
+        const preset = getPhoneDeliveryPreset(rawShopName, index);
+        const shopName = rawShopName || preset.name;
+        const statusKey = inferPhoneDeliveryStatusKey(`${entry && entry.content ? entry.content : ''} ${entry && entry.owner_reply ? entry.owner_reply : ''}`);
+        const time = String(entry && (entry.time || entry.last_time) ? (entry.time || entry.last_time) : (index === 0 ? 'Today 12:18' : 'Yesterday 14:30')).trim() || (index === 0 ? 'Today 12:18' : 'Yesterday 14:30');
+        const preview = String(entry && (entry.owner_reply || entry.content) ? (entry.owner_reply || entry.content) : preset.preview).trim() || preset.preview;
+        const courier = statusKey === 'completed' ? 'Completed' : courierNames[index % courierNames.length];
+
+        return createPhoneDeliveryOrderFromPreset(preset, {
+            id: `phone_delivery_${contactId || 'default'}_${index}`,
+            shopName,
+            statusKey,
+            time,
+            preview,
+            recipient,
+            recipientPhone,
+            address,
+            note: baseNote,
+            courier,
+            orderId: buildPhoneDeliveryOrderId(contactId, index),
+            stickerLevel: PHONE_DELIVERY_STICKER_LEVELS[index % PHONE_DELIVERY_STICKER_LEVELS.length]
+        });
+    }).filter(Boolean);
+
+    if (!orders.length) {
+        return buildPhoneDeliveryFallbackOrders(contact);
+    }
+
+    if (orders.length < PHONE_DELIVERY_STICKER_LEVELS.length) {
+        const fallbackOrders = buildPhoneDeliveryFallbackOrders(contact);
+        fallbackOrders.forEach(fallbackOrder => {
+            if (orders.length >= PHONE_DELIVERY_STICKER_LEVELS.length) return;
+            if (orders.some(existing => existing.shopName === fallbackOrder.shopName)) return;
+            orders.push({
+                ...fallbackOrder,
+                id: `${fallbackOrder.id}_preview_${orders.length}`,
+                stickerLevel: PHONE_DELIVERY_STICKER_LEVELS[orders.length % PHONE_DELIVERY_STICKER_LEVELS.length]
+            });
+        });
+    }
+
+    return orders.sort((left, right) => Number(right.active) - Number(left.active));
+}
+
+function getPhoneDeliveryOrderById(orderId) {
+    return phoneDeliveryRuntime.orders.find(order => order.id === orderId) || null;
+}
+
+function buildPhoneDeliveryShopCollections(orders, deliveryData = null) {
+    if (phoneDeliveryHasData(deliveryData) && ((deliveryData.frequent_shops || []).length || (deliveryData.favorite_shops || []).length)) {
+        const favorites = [];
+        const recommendations = [];
+        const seen = new Set();
+        const pushShop = (entry, sourceLabel, target) => {
+            const name = normalizePhoneDeliveryText(entry && entry.store_name, '');
+            if (!name) return;
+            const key = name.toLowerCase();
+            if (seen.has(key)) return;
+            seen.add(key);
+            const preset = getPhoneDeliveryPreset(name, target.length);
+            target.push({
+                name,
+                icon: preset.icon,
+                category: normalizePhoneDeliveryText(entry && entry.category, preset.category),
+                eta: PHONE_DELIVERY_STATUS_META.preparing.eta,
+                meta: `${sourceLabel} ? ${normalizePhoneDeliveryText((entry && (entry.tag || entry.reason || entry.category)), preset.category)}`
+            });
+        };
+
+        deliveryData.frequent_shops.forEach(entry => pushShop(entry, 'Frequent', favorites));
+        deliveryData.favorite_shops.forEach(entry => {
+            if (favorites.length < 6) pushShop(entry, 'Favorite', favorites);
+            else pushShop(entry, 'Favorite', recommendations);
+        });
+
+        orders.forEach(order => {
+            const key = normalizePhoneDeliveryText(order && order.shopName, '').toLowerCase();
+            if (!key || seen.has(key)) return;
+            const preset = getPhoneDeliveryPreset(order.shopName, recommendations.length);
+            recommendations.push({
+                name: order.shopName,
+                icon: order.icon || preset.icon,
+                category: order.category || preset.category,
+                eta: order.eta || PHONE_DELIVERY_STATUS_META.preparing.eta,
+                meta: `${order.active ? 'Active' : 'Recent'} - ${order.category || preset.category}`
+            });
+            seen.add(key);
+        });
+
+        if (favorites.length || recommendations.length) {
+            return {
+                favorites: favorites.slice(0, 6),
+                recommendations: recommendations.slice(0, 6)
+            };
+        }
+    }
+
+    const merged = [];
+    const seen = new Set();
+    const appendShop = (shopName, index) => {
+        const preset = getPhoneDeliveryPreset(shopName, index);
+        const key = String(preset.name || shopName).toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        merged.push({
+            name: shopName || preset.name,
+            icon: preset.icon,
+            category: preset.category,
+            eta: PHONE_DELIVERY_STATUS_META.preparing.eta
+        });
+    };
+
+    orders.forEach((order, index) => appendShop(order.shopName, index));
+    PHONE_DELIVERY_PRESET_SHOPS.forEach((preset, index) => appendShop(preset.name, index));
+
+    return {
+        favorites: merged.slice(0, 4).map(item => ({ ...item, meta: `Frequent - ${item.category}` })),
+        recommendations: merged.slice(4, 8).map((item, index) => ({
+            ...item,
+            meta: `${['10 mins', '18 mins', '22 mins', '28 mins'][index % 4]} ? ${item.category}`
+        }))
+    };
+}
+
+function phoneDeliveryAddRipple(event, target) {
+    const btn = target || event.currentTarget;
+    if (!btn) return;
+
+    const circle = document.createElement('span');
+    const diameter = Math.max(btn.clientWidth, btn.clientHeight);
+    const radius = diameter / 2;
+    const rect = btn.getBoundingClientRect();
+    const clientX = typeof event.clientX === 'number' ? event.clientX : rect.left + rect.width / 2;
+    const clientY = typeof event.clientY === 'number' ? event.clientY : rect.top + rect.height / 2;
+
+    circle.style.width = circle.style.height = `${diameter}px`;
+    circle.style.left = `${clientX - rect.left - radius}px`;
+    circle.style.top = `${clientY - rect.top - radius}px`;
+    circle.style.position = 'absolute';
+    circle.style.borderRadius = '50%';
+    circle.style.backgroundColor = 'rgba(0, 0, 0, 0.08)';
+    circle.style.transform = 'scale(0)';
+    circle.style.animation = 'phoneDeliveryRipple 0.6s cubic-bezier(0.25, 1, 0.5, 1)';
+    circle.style.pointerEvents = 'none';
+    circle.classList.add('phone-delivery-ripple-effect');
+
+    if (getComputedStyle(btn).position === 'static') {
+        btn.style.position = 'relative';
+    }
+    btn.style.overflow = 'hidden';
+
+    const ripple = btn.querySelector('.phone-delivery-ripple-effect');
+    if (ripple) ripple.remove();
+
+    btn.appendChild(circle);
+    setTimeout(() => circle.remove(), 600);
+}
+
+function phoneDeliveryRestartAnimations(target) {
+    if (!target) return;
+    const elements = [];
+    if (target.classList && target.classList.contains('animate-enter')) {
+        elements.push(target);
+    }
+    elements.push(...target.querySelectorAll('.animate-enter'));
+    elements.forEach(element => {
+        element.style.animation = 'none';
+        element.offsetHeight;
+        element.style.animation = null;
+    });
+}
+
+function phoneDeliverySyncNavIcons() {
+    document.querySelectorAll('#phone-delivery .bottom-nav .nav-item').forEach(item => {
+        const icon = item.querySelector('i');
+        if (!icon) return;
+        const isActive = item.classList.contains('active');
+        if (isActive && icon.className.includes('-line')) {
+            icon.className = icon.className.replace('-line', '-fill');
+        } else if (!isActive && icon.className.includes('-fill')) {
+            icon.className = icon.className.replace('-fill', '-line');
+        }
+    });
+}
+
+function hashPhoneDeliverySeed(value) {
+    const text = String(value || '');
+    let hash = 0;
+    for (let index = 0; index < text.length; index += 1) {
+        hash = ((hash << 5) - hash + text.charCodeAt(index)) >>> 0;
+    }
+    return hash >>> 0;
+}
+
+function phoneDeliverySeedRatio(seedKey, salt) {
+    return (hashPhoneDeliverySeed(`${seedKey}|${salt}`) % 1000) / 1000;
+}
+
+function pickPhoneDeliveryNoteStickers(order) {
+    const level = PHONE_DELIVERY_NOTE_STICKERS[order && order.stickerLevel] ? order.stickerLevel : 'neutral';
+    const pool = PHONE_DELIVERY_NOTE_STICKERS[level] || [];
+    if (!pool.length) return [];
+
+    const seed = hashPhoneDeliverySeed(`${order && order.id ? order.id : ''}|${level}|${order && order.shopName ? order.shopName : ''}`);
+    const count = pool.length > 1 ? 1 + (seed % 2) : 1;
+    const selected = [];
+
+    for (let index = 0; index < count; index += 1) {
+        let pickIndex = (seed + index * 7) % pool.length;
+        let candidate = pool[pickIndex];
+        let guard = 0;
+        while (selected.includes(candidate) && guard < pool.length) {
+            pickIndex = (pickIndex + 1) % pool.length;
+            candidate = pool[pickIndex];
+            guard += 1;
+        }
+        if (candidate && !selected.includes(candidate)) {
+            selected.push(candidate);
+        }
+    }
+
+    return selected;
+}
+
+function renderPhoneDeliveryNoteStickers(order) {
+    const container = document.getElementById('phone-delivery-detail-stickers');
+    if (!container) return;
+
+    container.innerHTML = '';
+    const stickers = pickPhoneDeliveryNoteStickers(order);
+    if (!stickers.length) return;
+
+    const seedKey = `${order && order.id ? order.id : ''}|stickers|${stickers.length}`;
+    let layouts = [];
+
+    if (stickers.length === 1) {
+        layouts = [{
+            width: 54 + Math.round(phoneDeliverySeedRatio(seedKey, 'width') * 24),
+            top: -2 + Math.round(phoneDeliverySeedRatio(seedKey, 'top') * 16),
+            right: -4 + Math.round(phoneDeliverySeedRatio(seedKey, 'right') * 18),
+            rotate: -18 + Math.round(phoneDeliverySeedRatio(seedKey, 'rotate') * 36),
+            zIndex: 2
+        }];
+    } else {
+        const mode = Math.floor(phoneDeliverySeedRatio(seedKey, 'mode') * 3);
+        const largeWidth = 58 + Math.round(phoneDeliverySeedRatio(seedKey, 'largeWidth') * 24);
+        const smallWidth = 42 + Math.round(phoneDeliverySeedRatio(seedKey, 'smallWidth') * 22);
+
+        if (mode === 0) {
+            const first = {
+                width: largeWidth,
+                top: -2 + Math.round(phoneDeliverySeedRatio(seedKey, 'm0_t1') * 10),
+                right: 2 + Math.round(phoneDeliverySeedRatio(seedKey, 'm0_r1') * 10),
+                rotate: -10 + Math.round(phoneDeliverySeedRatio(seedKey, 'm0_rot1') * 24),
+                zIndex: 1
+            };
+            const overlapShift = Math.round(first.width * 0.42);
+            const second = {
+                width: smallWidth,
+                top: first.top + 18 + Math.round(phoneDeliverySeedRatio(seedKey, 'm0_t2') * 14),
+                right: first.right + overlapShift - 8,
+                rotate: -22 + Math.round(phoneDeliverySeedRatio(seedKey, 'm0_rot2') * 34),
+                zIndex: 2
+            };
+            layouts = [first, second];
+        } else if (mode === 1) {
+            const back = {
+                width: smallWidth + 8,
+                top: 6 + Math.round(phoneDeliverySeedRatio(seedKey, 'm1_t1') * 12),
+                right: 34 + Math.round(phoneDeliverySeedRatio(seedKey, 'm1_r1') * 14),
+                rotate: -28 + Math.round(phoneDeliverySeedRatio(seedKey, 'm1_rot1') * 18),
+                zIndex: 1
+            };
+            const front = {
+                width: largeWidth,
+                top: -4 + Math.round(phoneDeliverySeedRatio(seedKey, 'm1_t2') * 8),
+                right: 0 + Math.round(phoneDeliverySeedRatio(seedKey, 'm1_r2') * 8),
+                rotate: 4 + Math.round(phoneDeliverySeedRatio(seedKey, 'm1_rot2') * 18),
+                zIndex: 2
+            };
+            layouts = [back, front];
+        } else {
+            const first = {
+                width: largeWidth - 2,
+                top: 0 + Math.round(phoneDeliverySeedRatio(seedKey, 'm2_t1') * 12),
+                right: 8 + Math.round(phoneDeliverySeedRatio(seedKey, 'm2_r1') * 8),
+                rotate: 8 + Math.round(phoneDeliverySeedRatio(seedKey, 'm2_rot1') * 18),
+                zIndex: 2
+            };
+            const overlapShift = Math.round(first.width * 0.48);
+            const second = {
+                width: smallWidth,
+                top: first.top + 22 + Math.round(phoneDeliverySeedRatio(seedKey, 'm2_t2') * 10),
+                right: first.right + overlapShift - 4,
+                rotate: -18 + Math.round(phoneDeliverySeedRatio(seedKey, 'm2_rot2') * 22),
+                zIndex: 1
+            };
+            layouts = [first, second];
+        }
+    }
+
+    stickers.forEach((url, index) => {
+        const layout = layouts[index] || layouts[layouts.length - 1];
+        const image = document.createElement('img');
+        image.className = 'phone-delivery-note-sticker';
+        image.src = url;
+        image.alt = '';
+        image.loading = 'lazy';
+        image.referrerPolicy = 'no-referrer';
+        image.style.width = `${layout.width}px`;
+        image.style.top = `${layout.top}px`;
+        image.style.right = `${layout.right}px`;
+        image.style.transform = `rotate(${layout.rotate}deg)`;
+        image.style.zIndex = String(layout.zIndex || index + 1);
+        container.appendChild(image);
+    });
+}
+
+function renderPhoneDeliveryFeatured(order) {
+    const featuredCard = document.getElementById('phone-delivery-featured-card');
+    const featuredStatus = document.getElementById('phone-delivery-featured-status');
+    const featuredIcon = document.getElementById('phone-delivery-featured-icon');
+    const featuredName = document.getElementById('phone-delivery-featured-name');
+    const featuredSummary = document.getElementById('phone-delivery-featured-summary');
+    const featuredCourier = document.querySelector('#phone-delivery-featured-courier span');
+    if (!featuredCard || !order) return;
+
+    featuredCard.dataset.orderId = order.id;
+    if (featuredStatus) featuredStatus.textContent = order.heroStatus;
+    if (featuredIcon) featuredIcon.innerHTML = `<i class="${escapePhoneDeliveryHtml(order.icon)}"></i>`;
+    if (featuredName) featuredName.innerHTML = `${escapePhoneDeliveryHtml(order.shopName)}<br>${escapePhoneDeliveryHtml(order.eta)}`;
+    if (featuredSummary) featuredSummary.textContent = order.summary;
+    if (featuredCourier) featuredCourier.textContent = order.courier;
+}
+
+function renderPhoneDeliveryShopCardList(containerId, shops) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (!Array.isArray(shops) || !shops.length) {
+        container.innerHTML = '<div class="phone-delivery-empty">还没有可展示的商家记录。</div>';
+        return;
+    }
+
+    container.innerHTML = '';
+    shops.forEach(shop => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'list-card interactive';
+        button.setAttribute('style', 'background: var(--surface); padding: 16px; border-radius: 20px; border: 1px solid var(--border); border-bottom: none;');
+        button.innerHTML = `
+            <div class="card-image" style="background: var(--bg-color); width: 60px; height: 60px;"><i class="${escapePhoneDeliveryHtml(shop.icon)}"></i></div>
+            <div class="card-info" style="justify-content: center;">
+                <div class="card-head">
+                    <div class="card-title">${escapePhoneDeliveryHtml(shop.name)}</div>
+                </div>
+                <div class="card-meta">${escapePhoneDeliveryHtml(shop.meta)}</div>
+            </div>
+        `;
+
+        button.addEventListener('click', event => {
+            phoneDeliveryAddRipple(event, button);
+            const matchedOrder = phoneDeliveryRuntime.orders.find(order => order.shopName === shop.name)
+                || phoneDeliveryRuntime.orders.find(order => getPhoneDeliveryPreset(order.shopName).name === shop.name);
+            if (matchedOrder) {
+                switchPhoneDeliveryPage('orders');
+                openPhoneDeliveryOrderDetail(matchedOrder.id);
+            } else {
+                switchPhoneDeliveryPage('orders');
+            }
+        });
+
+        container.appendChild(button);
+    });
+}
+
+function renderPhoneDeliveryOrderList(orders) {
+    const container = document.getElementById('phone-delivery-order-list');
+    if (!container) return;
+
+    if (!Array.isArray(orders) || !orders.length) {
+        container.innerHTML = '<div class="phone-delivery-empty">当前联系人还没有外卖订单记录。</div>';
+        return;
+    }
+
+    container.innerHTML = '';
+    orders.forEach(order => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'list-card interactive';
+        button.innerHTML = `
+            <div class="card-image"><i class="${escapePhoneDeliveryHtml(order.icon)}"></i></div>
+            <div class="card-info">
+                <div class="card-head">
+                    <div class="card-title">${escapePhoneDeliveryHtml(order.shopName)}</div>
+                    <div class="card-status">${escapePhoneDeliveryHtml(order.statusLabel)}</div>
+                </div>
+                <div class="card-meta">${escapePhoneDeliveryHtml(`${order.itemCount} 件 · ${order.time}`)}</div>
+                <div class="card-footer">
+                    <div class="card-price">${escapePhoneDeliveryHtml(formatPhoneDeliveryPrice(order.total))}</div>
+                    <div class="card-action interactive">${escapePhoneDeliveryHtml(order.active ? 'Track Progress' : 'Reorder')}</div>
+                </div>
+            </div>
+        `;
+        button.addEventListener('click', event => {
+            phoneDeliveryAddRipple(event, button);
+            openPhoneDeliveryOrderDetail(order.id);
+        });
+        container.appendChild(button);
+    });
+}
+
+function renderPhoneDeliveryDetail(order) {
+    if (!order) return;
+
+    const noteCard = document.querySelector('#phone-delivery .phone-delivery-note-card');
+    const detailNoteTitle = document.getElementById('phone-delivery-detail-note-title');
+    const detailIcon = document.getElementById('phone-delivery-detail-icon');
+    const detailShopName = document.getElementById('phone-delivery-detail-shop-name');
+    const detailStatus = document.getElementById('phone-delivery-detail-status');
+    const detailPreview = document.getElementById('phone-delivery-detail-preview');
+    const detailItems = document.getElementById('phone-delivery-detail-items');
+    const detailSubtotal = document.getElementById('phone-delivery-detail-subtotal');
+    const detailFee = document.getElementById('phone-delivery-detail-fee');
+    const detailTotal = document.getElementById('phone-delivery-detail-total');
+    const detailRecipient = document.getElementById('phone-delivery-detail-recipient');
+    const detailAddress = document.getElementById('phone-delivery-detail-address');
+    const detailDeliveryStatus = document.getElementById('phone-delivery-detail-delivery-status');
+    const detailOrderId = document.getElementById('phone-delivery-detail-order-id');
+    const detailTime = document.getElementById('phone-delivery-detail-time');
+    const detailNote = document.getElementById('phone-delivery-detail-note');
+    const detailAction = document.getElementById('phone-delivery-detail-action');
+
+    if (noteCard) {
+        noteCard.classList.remove('note-grid', 'note-ruled', 'note-plain-yellow');
+        noteCard.classList.add(PHONE_DELIVERY_REVIEW_STYLE_CLASS_MAP[order.reviewStyle] || 'note-grid');
+    }
+
+    if (detailIcon) detailIcon.innerHTML = `<i class="${escapePhoneDeliveryHtml(order.icon)}"></i>`;
+    if (detailShopName) detailShopName.textContent = order.shopName;
+    if (detailStatus) detailStatus.textContent = order.statusLabel;
+    if (detailNoteTitle) detailNoteTitle.textContent = order.reviewText ? `${order.ratingLevel || 'Review'} ?` : 'Order Update ?';
+    if (detailPreview) detailPreview.textContent = order.reviewText || order.preview || order.trackHint || order.deliveryStatus || 'Order status updated.';
+    if (detailSubtotal) detailSubtotal.textContent = formatPhoneDeliveryPrice(order.subtotal);
+    if (detailFee) detailFee.textContent = formatPhoneDeliveryPrice(order.deliveryFee);
+    if (detailTotal) detailTotal.textContent = formatPhoneDeliveryPrice(order.total);
+    if (detailRecipient) detailRecipient.textContent = order.recipientPhone ? `${order.recipient} ? ${order.recipientPhone}` : order.recipient;
+    if (detailAddress) detailAddress.textContent = order.address;
+    if (detailDeliveryStatus) detailDeliveryStatus.textContent = order.deliveryStatus;
+    if (detailOrderId) detailOrderId.textContent = order.orderId;
+    if (detailTime) detailTime.textContent = order.time;
+    if (detailNote) detailNote.textContent = order.note;
+    if (detailAction) detailAction.textContent = order.statusKey === 'completed' ? 'Reorder' : 'Track Progress';
+    renderPhoneDeliveryNoteStickers(order);
+
+    if (detailItems) {
+        detailItems.innerHTML = '';
+        order.items.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'detail-item-row';
+            row.innerHTML = `
+                <div>
+                    <div class="item-name">${escapePhoneDeliveryHtml(item.name)}</div>
+                    <div class="item-qty">x ${escapePhoneDeliveryHtml(item.count)}</div>
+                </div>
+                <div class="item-price">${escapePhoneDeliveryHtml(formatPhoneDeliveryPrice(item.price * item.count))}</div>
+            `;
+            detailItems.appendChild(row);
+        });
+    }
+}
+
+function closePhoneDeliveryOrderDetail() {
+    const detail = document.getElementById('phone-delivery-detail');
+    if (!detail) return;
+    detail.classList.remove('show');
+    detail.setAttribute('aria-hidden', 'true');
+}
+
+function openPhoneDeliveryOrderDetail(orderId) {
+    const order = getPhoneDeliveryOrderById(orderId);
+    const detail = document.getElementById('phone-delivery-detail');
+    if (!order || !detail) return;
+    renderPhoneDeliveryDetail(order);
+    detail.classList.add('show');
+    detail.setAttribute('aria-hidden', 'false');
+}
+
+function switchPhoneDeliveryPage(page) {
+    const pageKey = PHONE_DELIVERY_PAGE_META[page] ? page : 'home';
+    phoneDeliveryRuntime.activePage = pageKey;
+
+    document.querySelectorAll('#phone-delivery .page-view').forEach(view => {
+        view.classList.toggle('active', view.dataset.page === pageKey);
+    });
+    document.querySelectorAll('#phone-delivery .bottom-nav .nav-item').forEach(button => {
+        button.classList.toggle('active', button.dataset.page === pageKey);
+    });
+    phoneDeliverySyncNavIcons();
+
+    const headerTitle = document.getElementById('phone-delivery-header-title');
+    const headerSubtitle = document.getElementById('phone-delivery-header-subtitle');
+    const headerBox = document.getElementById('phone-delivery-page-header');
+    const pageMeta = PHONE_DELIVERY_PAGE_META[pageKey];
+    if (headerTitle) headerTitle.textContent = pageMeta.title;
+    if (headerSubtitle) headerSubtitle.textContent = pageMeta.subtitle;
+
+    const targetPage = document.querySelector(`#phone-delivery .page-view[data-page="${pageKey}"]`);
+    phoneDeliveryRestartAnimations(targetPage);
+    phoneDeliveryRestartAnimations(headerBox);
+}
+
+function bindPhoneDeliveryApp() {
+    if (phoneDeliveryRuntime.bound) return;
+
+    const screen = document.getElementById('phone-delivery');
+    const pageHeaderBack = document.getElementById('phone-delivery-page-header');
+    const detailBackBtn = document.getElementById('phone-delivery-detail-back');
+    const detailTitleBack = document.getElementById('phone-delivery-detail-title');
+    const detailActionBtn = document.getElementById('phone-delivery-detail-action');
+    const featuredCard = document.getElementById('phone-delivery-featured-card');
+    if (!screen) return;
+
+    if (pageHeaderBack) {
+        const closeScreen = event => {
+            phoneDeliveryAddRipple(event, pageHeaderBack);
+            closePhoneDeliveryOrderDetail();
+            screen.classList.add('hidden');
+        };
+        pageHeaderBack.addEventListener('click', closeScreen);
+        pageHeaderBack.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                closeScreen(event);
+            }
+        });
+    }
+
+    if (detailBackBtn) {
+        detailBackBtn.addEventListener('click', event => {
+            phoneDeliveryAddRipple(event, detailBackBtn);
+            closePhoneDeliveryOrderDetail();
+        });
+    }
+
+    if (detailTitleBack) {
+        const closeDetail = event => {
+            phoneDeliveryAddRipple(event, detailTitleBack);
+            closePhoneDeliveryOrderDetail();
+        };
+        detailTitleBack.addEventListener('click', closeDetail);
+        detailTitleBack.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                closeDetail(event);
+            }
+        });
+    }
+
+    if (detailActionBtn) {
+        detailActionBtn.addEventListener('click', event => {
+            phoneDeliveryAddRipple(event, detailActionBtn);
+            closePhoneDeliveryOrderDetail();
+            switchPhoneDeliveryPage('orders');
+        });
+    }
+
+    if (featuredCard) {
+        featuredCard.addEventListener('click', event => {
+            phoneDeliveryAddRipple(event, featuredCard);
+            const orderId = featuredCard.dataset.orderId;
+            if (orderId) openPhoneDeliveryOrderDetail(orderId);
+        });
+    }
+
+    document.querySelectorAll('#phone-delivery .bottom-nav .nav-item').forEach(button => {
+        button.addEventListener('click', event => {
+            phoneDeliveryAddRipple(event, button);
+            switchPhoneDeliveryPage(button.dataset.page);
+            closePhoneDeliveryOrderDetail();
+        });
+    });
+
+    document.querySelectorAll('#phone-delivery .nav-pills .pill').forEach(button => {
+        button.addEventListener('click', event => {
+            phoneDeliveryAddRipple(event, button);
+            document.querySelectorAll('#phone-delivery .nav-pills .pill').forEach(item => item.classList.remove('active'));
+            button.classList.add('active');
+        });
+    });
+
+    document.querySelectorAll('#phone-delivery .utility-item').forEach(item => {
+        item.addEventListener('click', event => phoneDeliveryAddRipple(event, item));
+    });
+
+    document.querySelectorAll('#phone-delivery .profile-btn').forEach(item => {
+        item.addEventListener('click', event => phoneDeliveryAddRipple(event, item));
+    });
+
+    document.querySelectorAll('#phone-delivery .featured-card .btn-track').forEach(item => {
+        item.addEventListener('click', event => {
+            event.stopPropagation();
+            phoneDeliveryAddRipple(event, item);
+            const orderId = featuredCard && featuredCard.dataset ? featuredCard.dataset.orderId : '';
+            if (orderId) openPhoneDeliveryOrderDetail(orderId);
+        });
+    });
+
+    phoneDeliveryRuntime.bound = true;
+}
+
+function refreshPhoneDeliveryApp(contactId = currentCheckPhoneContactId) {
+    const screen = document.getElementById('phone-delivery');
+    if (!screen) return;
+
+    bindPhoneDeliveryApp();
+
+    const contact = getPhoneDeliveryContact(contactId);
+    const deliveryData = getPhoneDeliveryData(contactId);
+    const orders = buildPhoneDeliveryOrders(contactId);
+    const featuredOrder = orders.find(order => order.active) || orders[0] || null;
+    phoneDeliveryRuntime.orders = orders;
+    phoneDeliveryRuntime.featuredOrderId = featuredOrder ? featuredOrder.id : '';
+
+    const addressValue = document.getElementById('phone-delivery-address-value');
+    const noteValue = document.getElementById('phone-delivery-note-value');
+    const primaryAddress = phoneDeliveryFormatAddressEntry(getPhoneDeliveryPrimaryAddressEntry(deliveryData));
+    const primaryTasteNote = getPhoneDeliveryPrimaryTasteNote(deliveryData);
+    if (addressValue) addressValue.textContent = primaryAddress || getPhoneDeliveryAddress(contact);
+    if (noteValue) noteValue.textContent = (primaryTasteNote && primaryTasteNote.text) || getPhoneDeliveryNote(contact);
+
+    renderPhoneDeliveryFeatured(featuredOrder);
+    renderPhoneDeliveryOrderList(orders);
+
+    const collections = buildPhoneDeliveryShopCollections(orders, deliveryData);
+    renderPhoneDeliveryShopCardList('phone-delivery-favorites-list', collections.favorites);
+    renderPhoneDeliveryShopCardList('phone-delivery-recommend-list', collections.recommendations);
+
+    closePhoneDeliveryOrderDetail();
+}
+
+function openPhoneDeliveryApp() {
+    const screen = document.getElementById('phone-delivery');
+    if (!screen) return;
+
+    bindPhoneDeliveryApp();
+    phoneDeliveryRuntime.activePage = 'home';
+    refreshPhoneDeliveryApp(currentCheckPhoneContactId);
+    switchPhoneDeliveryPage('home');
+    phoneDeliverySyncNavIcons();
     screen.classList.remove('hidden');
 }
 
@@ -3709,6 +5187,7 @@ function enterPhoneCheck(contactId) {
     renderPhonePages();
     renderPhoneItems();
     applyPhoneWallpaper();
+    refreshPhoneDeliveryApp(contactId);
 
     // 加载并设置朋友圈背景
     const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
@@ -4340,12 +5819,14 @@ function setupPhoneAppListeners() {
     const btnIcity = document.getElementById('generate-icity-btn');
     const btnBrowser = document.getElementById('generate-browser-btn');
     const btnXianyu = document.getElementById('generate-xianyu-btn');
+    const btnDelivery = document.getElementById('generate-phone-delivery-btn');
 
     if (btnWechat) btnWechat.onclick = () => handlePhoneAppGenerate('wechat');
     if (btnWeibo) btnWeibo.onclick = () => handlePhoneAppGenerate('weibo');
     if (btnIcity) btnIcity.onclick = () => handlePhoneAppGenerate('icity');
     if (btnBrowser) btnBrowser.onclick = () => handlePhoneAppGenerate('browser');
     if (btnXianyu) btnXianyu.onclick = () => handlePhoneAppGenerate('xianyu');
+    if (btnDelivery) btnDelivery.onclick = () => handlePhoneAppGenerate('delivery');
 }
 
 window.switchPhoneWechatTab = function(tabName) {
@@ -4493,20 +5974,17 @@ function showPhoneWechatGenerateMenu(event) {
 
 async function handlePhoneAppGenerate(appType) {
     if (!currentCheckPhoneContactId) {
-        alert('未选择联系人');
+        alert('No contact selected');
         return;
     }
     
     const contact = window.iphoneSimState.contacts.find(c => c.id === currentCheckPhoneContactId);
     if (!contact) {
-        alert('联系人数据错误');
+        alert('Contact data error');
         return;
     }
 
     if (appType === 'wechat') {
-        // 先尝试加载已有内容（如果有缓存，这里可以优化）
-        // 但用户点击生成，通常意味着强制生成。
-        // 读取内容逻辑移到打开应用时，这里只负责生成。
         await generatePhoneWechatMoments(contact);
     } else if (appType === 'messages') {
         await generatePhoneMessagesAll(contact);
@@ -4516,9 +5994,83 @@ async function handlePhoneAppGenerate(appType) {
         await generatePhoneXianyuAll(contact);
     } else if (appType === 'health') {
         await generatePhoneHealthAll(contact);
+    } else if (appType === 'delivery') {
+        await generatePhoneDeliveryAll(contact);
     } else {
-        alert(`正在生成 ${contact.name} 的 ${appType} 内容...\n(功能开发中)`);
+        alert(`Generating ${contact.name}'s ${appType} content...\n(Feature in progress)`);
     }
+}
+
+function buildPhoneDeliverySystemPrompt(contact) {
+    const state = window.iphoneSimState || {};
+    const userName = normalizePhoneDeliveryText(state.userProfile && state.userProfile.name, 'User');
+    const recentChatContext = buildPhoneWechatRecentChatContext(contact) || 'No recent chat context.';
+
+    return `You are generating a fake-but-highly-believable food delivery / errand app dataset for a mobile phone inspection scenario.
+
+Current contact: ${contact.name}
+Persona: ${contact.persona || 'None'}
+User reference: ${userName}
+Recent chat context (only for subtle indirect tension, never copy wording, never state conclusions directly):
+${recentChatContext}
+
+Task:
+Act as a "mobile delivery / errand app content generator" and output one strict JSON object for a realistic delivery app.
+This is NOT chat history. It should feel like everyday platform residue: repeated late-night orders, frequently used addresses, terse delivery notes, occasional orders for someone else, favorite stores, repeated reorders, and a few subtle emotionally-loaded details.
+
+Hard requirements:
+- The output must be STRICT JSON only. No markdown, no explanation.
+- All visible content values should be in natural Simplified Chinese unless the field is naturally a brand name or mixed-language store name.
+- Do not write direct conclusions. Create implication through address reuse, order timing, notes, review text, recipient names, and order rhythm.
+- Most records should look normal. Only a minority should feel subtly loaded.
+- Use desensitized or fictional phone numbers, order IDs, amounts, and addresses.
+- Keep all requested fields; do not omit fields.
+
+Generate these modules:
+- delivery_addresses: 3 to 5 items
+- taste_notes: 4 to 8 items
+- active_order: 1 item
+- frequent_shops: 4 to 6 items
+- favorite_shops: 4 to 6 items
+- recent_orders: 6 to 10 items
+- gift_orders: 3 to 5 items
+- pickup_orders: 2 to 4 items
+
+Field schema:
+- delivery_addresses item fields:
+  label, recipient, recipient_phone, address, is_default, used_count, note, related_to_user, hidden_tension
+- taste_notes item fields:
+  text, used_count, last_used_at, scene, related_to_user, hidden_tension
+- active_order fields:
+  store_name, status, eta_text, items_preview, courier_name, track_hint, recipient, recipient_phone, address, remark, total, related_to_user, hidden_tension
+- frequent_shops / favorite_shops item fields:
+  store_name, category, tag, avg_spend, order_count, last_ordered_at, reason, related_to_user, hidden_tension
+- recent_orders / gift_orders / pickup_orders item fields:
+  store_name, status, ordered_at, delivery_type, item_count, items_preview, items, subtotal, delivery_fee, total, courier_name, eta_text, recipient, recipient_phone, address_label, address, remark, order_id, delivery_status, rating_level, review_text, review_style, related_to_user, hidden_tension
+
+Constraints:
+- rating_level must be exactly one of: \u975e\u5e38\u4e0d\u6ee1\u610f, \u4e0d\u6ee1\u610f, \u4e00\u822c, \u6ee1\u610f, \u975e\u5e38\u6ee1\u610f
+- review_style must be exactly one of: grid, ruled, plain-yellow
+- review_text must be exactly one short sentence
+- gift order recipient can be someone else such as a friend, coworker, or a recurring contact
+- pickup orders should show life-like pickup timing or pickup status
+- A repeated fixed address should appear often enough to feel suspiciously habitual, but not on every order
+- Mix ordinary notes with more suggestive ones, for example: no calls, leave at door, message on arrival, less ice, extra spicy, do not ring, front desk pickup
+- At least 30% to 40% of the content should be indirectly related to the user, but never written as a direct conclusion
+- Make the subtle tension come from details like late-night ordering, note changes, a recurring address, help-order traces, favorite stores, and short reviews
+
+Output one legal JSON object and nothing else.`;
+}
+
+async function generatePhoneDeliveryAll(contact) {
+    const btn = document.getElementById('generate-phone-delivery-btn');
+    if (btn) {
+        btn.classList.add('phone-delivery-generating');
+        btn.disabled = true;
+    }
+
+    const systemPrompt = buildPhoneDeliverySystemPrompt(contact);
+    await callAiGeneration(contact, systemPrompt, 'delivery_all', btn);
 }
 
 async function generatePhoneWechatAll(contact) {
@@ -5058,6 +6610,7 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
         alert(errorMsg);
         if (btn) {
             btn.classList.remove('generating-pulse');
+            btn.classList.remove('phone-delivery-generating');
             btn.disabled = false;
             if (originalContent) {
                 btn.innerHTML = originalContent;
@@ -5252,6 +6805,10 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
             result = normalizePhoneMessagesAiPayload(result, generationTimeContext.localDateTime, contact);
         }
 
+        if (type === 'delivery_all') {
+            result = normalizePhoneDeliveryAiPayload(result, contact);
+        }
+
         if (type === 'moments' && Array.isArray(result)) {
             console.log('处理moments类型，数组长度:', result.length);
             window.iphoneSimState.phoneContent[contact.id].wechatMoments = result;
@@ -5274,6 +6831,20 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
             const currentTab = document.getElementById('phone-wechat-tab-contacts').style.display === 'block' ? 'contacts' : 'moments';
             console.log('切换到标签页:', currentTab);
             window.switchPhoneWechatTab(currentTab);
+        } else if (type === 'delivery_all') {
+            const normalizedDeliveryData = normalizePhoneDeliveryData(result, contact);
+            const totalDeliveryCount = (normalizedDeliveryData.active_order ? 1 : 0)
+                + ['delivery_addresses', 'taste_notes', 'frequent_shops', 'favorite_shops', 'recent_orders', 'gift_orders', 'pickup_orders']
+                    .reduce((sum, key) => sum + ((normalizedDeliveryData[key] || []).length), 0);
+            if (!totalDeliveryCount) {
+                throw new Error('Delivery app generation returned empty data');
+            }
+            setPhoneDeliveryData(contact.id, normalizedDeliveryData);
+            const currentPage = phoneDeliveryRuntime.activePage || 'home';
+            refreshPhoneDeliveryApp(contact.id);
+            switchPhoneDeliveryPage(currentPage);
+            if (window.showChatToast) window.showChatToast('Generated delivery content for ' + contact.name);
+            else alert('Generated delivery content for ' + contact.name);
         } else if (type === 'notes_all') {
             const normalizedNotesData = normalizePhoneNotesData(result);
             const totalNotesCount = PHONE_NOTES_SECTION_ORDER.reduce((sum, sectionKey) => sum + (normalizedNotesData[sectionKey] || []).length, 0);
@@ -5509,7 +7080,13 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
                 try {
                     btn.onclick = () => handlePhoneAppGenerate('messages');
                 } catch (messagesError) {
-                    console.warn('重新绑定短信按钮事件失败:', messagesError);
+                    console.warn('Failed to rebind messages generate button:', messagesError);
+                }
+            } else if (type === 'delivery_all') {
+                try {
+                    btn.onclick = () => handlePhoneAppGenerate('delivery');
+                } catch (deliveryError) {
+                    console.warn('Failed to rebind delivery generate button:', deliveryError);
                 }
             }
         }
