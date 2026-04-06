@@ -837,6 +837,39 @@ function compressImage(file, maxWidth = 1024, quality = 0.7) {
     });
 }
 
+function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        if (!(file instanceof Blob)) {
+            reject(new Error('invalid file'));
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = (err) => reject(err || new Error('file read failed'));
+        reader.readAsDataURL(file);
+    });
+}
+
+function shouldPreferInlineChatImageStorage(file) {
+    const userAgent = navigator.userAgent || '';
+    if (/MicroMessenger/i.test(userAgent)) return true;
+    if (/iPhone|iPad|iPod/i.test(userAgent)) return true;
+    if (!window.isSecureContext) return true;
+    if (!file || !(file instanceof Blob)) return false;
+    const fileType = String(file.type || '').toLowerCase();
+    if (fileType.includes('heic') || fileType.includes('heif')) return true;
+    return false;
+}
+
+async function buildInlineChatImagePayload(file, maxWidth = 1024, quality = 0.7) {
+    try {
+        return await compressImage(file, maxWidth, quality);
+    } catch (compressionError) {
+        console.warn('聊天图片压缩失败，回退原图 data URL', compressionError);
+        return readFileAsDataUrl(file);
+    }
+}
+
 const CHAT_MEDIA_REF_PREFIX = 'chat-media://';
 const CHAT_MEDIA_PIXEL_PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 const chatMediaObjectUrlCache = new Map();
@@ -1029,6 +1062,9 @@ function revokeCachedChatMediaUrls() {
 }
 
 window.CHAT_MEDIA_PIXEL_PLACEHOLDER = CHAT_MEDIA_PIXEL_PLACEHOLDER;
+window.readFileAsDataUrl = readFileAsDataUrl;
+window.shouldPreferInlineChatImageStorage = shouldPreferInlineChatImageStorage;
+window.buildInlineChatImagePayload = buildInlineChatImagePayload;
 window.isChatMediaReference = isChatMediaReference;
 window.compressImageToBlob = compressImageToBlob;
 window.saveChatMediaBlob = saveChatMediaBlob;

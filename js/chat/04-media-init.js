@@ -181,12 +181,22 @@ function handleChatPhotoUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
 
-    const fallbackToBase64 = () => compressImage(file, 800, 0.7).then(base64 => {
+    const fallbackToBase64 = async () => {
+        if (typeof window.buildInlineChatImagePayload === 'function') {
+            const base64 = await window.buildInlineChatImagePayload(file, 1280, 0.72);
+            sendMessage(base64, true, 'image');
+            return;
+        }
+        const base64 = await compressImage(file, 1280, 0.72);
         sendMessage(base64, true, 'image');
-    });
+    };
 
     Promise.resolve()
         .then(async () => {
+            if (typeof window.shouldPreferInlineChatImageStorage === 'function' && window.shouldPreferInlineChatImageStorage(file)) {
+                return fallbackToBase64();
+            }
+
             if (typeof window.compressImageToBlob !== 'function' || typeof window.saveChatMediaBlob !== 'function') {
                 return fallbackToBase64();
             }
