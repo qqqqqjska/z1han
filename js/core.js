@@ -2012,6 +2012,54 @@ function handleClearAllData() {
     }
 }
 
+async function handleForceRefreshPage() {
+    if (!confirm('这会尝试更新页面缓存并重新加载最新版本，不会清空本地数据。确定继续吗？')) {
+        return;
+    }
+
+    const forceRefreshBtn = document.getElementById('force-refresh-page');
+    const originalLabel = forceRefreshBtn ? forceRefreshBtn.textContent : '';
+
+    if (forceRefreshBtn) {
+        forceRefreshBtn.disabled = true;
+        forceRefreshBtn.textContent = '刷新中...';
+    }
+
+    try {
+        if (typeof saveConfig === 'function') {
+            await Promise.resolve(saveConfig());
+        }
+
+        if ('serviceWorker' in navigator) {
+            try {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(registrations.map(registration => registration.update().catch(err => {
+                    console.warn('Failed to update service worker registration:', err);
+                })));
+            } catch (err) {
+                console.warn('Failed to inspect service worker registrations:', err);
+            }
+        }
+
+        if ('caches' in window) {
+            try {
+                const cacheKeys = await caches.keys();
+                await Promise.all(cacheKeys.map(cacheKey => caches.delete(cacheKey).catch(err => {
+                    console.warn(`Failed to delete cache: ${cacheKey}`, err);
+                })));
+            } catch (err) {
+                console.warn('Failed to clear Cache Storage:', err);
+            }
+        }
+    } catch (err) {
+        console.warn('Force refresh preparation failed:', err);
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('_refresh', Date.now().toString());
+    window.location.replace(url.toString());
+}
+
 function exportJSON() {
     const exportAsZip = document.getElementById('export-as-zip');
     if (exportAsZip && exportAsZip.checked) {
@@ -2161,6 +2209,9 @@ async function init() {
 
     const analyzeStorageBtn = document.getElementById('analyze-storage');
     if (analyzeStorageBtn) analyzeStorageBtn.addEventListener('click', window.analyzeStorageUsage);
+
+    const forceRefreshPageBtn = document.getElementById('force-refresh-page');
+    if (forceRefreshPageBtn) forceRefreshPageBtn.addEventListener('click', handleForceRefreshPage);
 
     try {
         await loadConfig();
