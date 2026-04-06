@@ -1497,6 +1497,81 @@ const PHONE_DELIVERY_RATING_LEVEL_MAP = {
     '\u975e\u5e38\u6ee1\u610f': 'very_good'
 };
 
+const PHONE_DELIVERY_PLATFORM_NOTE_KEYWORDS = [
+    '预计',
+    '已取餐',
+    '已接单',
+    '正在出餐',
+    '请留意',
+    '感谢',
+    '配送中',
+    '已送达',
+    '请尽快取餐',
+    '订单已完成',
+    '订单状态',
+    '骑手已',
+    '商家已',
+    '骑手配送',
+    '五星好评',
+    '会回购',
+    '味道不错'
+];
+
+const PHONE_DELIVERY_THIN_NOTE_PATTERNS = [
+    /^(还行|不错|一般|可以|到了|送到|收到了|挺好|还好|就那样)[。！!，,、]*$/
+];
+
+const PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS = {
+    confirmed: [
+        '刚接单就开始等，越看越觉得这单今天不会太快。',
+        '它才刚接单，我这边已经先被吊得有点烦了。',
+        '进度停在这里不动，我现在看着就有点上火。',
+        '明明只是等一单饭，结果从一开始就把我等得心浮气躁。'
+    ],
+    preparing: [
+        '出餐出这么久，我已经开始担心这口到手还剩多少状态了。',
+        '它再这么磨下去，我这顿饭的心情都要被耗干净了。',
+        '看着还在做我就有点烦，饿的时候真的最怕这种慢吞吞。',
+        '这一单卡在这里太久了，我现在只想它赶紧往前动一动。'
+    ],
+    on_the_way: [
+        '怎么还没送到，我现在已经有点饿过头了。',
+        '看着在路上但一直不到，我耐心已经快被它磨没了。',
+        '它再慢一点我真的会怀疑这份饭是不是已经在路上凉透了。',
+        '都已经配送中了还拖这么久，这单真的把人等得有点烦。'
+    ],
+    completed: [
+        '总算送到了，但这一单折腾下来心情已经被磨掉一半了。',
+        '东西是到了，可前面那一通等真的把我等得挺没脾气。',
+        '终于拿到手了，不过这单一路拖下来还是让人有点不爽。',
+        '送到是送到了，可我现在回想前面的进度还是觉得挺磨人。'
+    ],
+    pickup_pending: [
+        '我人都快到了，它还没好，真的有点磨人。',
+        '都准备去拿了还得继续等，这种卡一下真的很烦。',
+        '明明都到自取这一步了，结果还是让我站着干等。',
+        '我已经快到门口了，它还没准备好，这单真有点拖。'
+    ],
+    pickup_completed: [
+        '总算拿到手了，但这一趟跑下来还是被它磨得有点烦。',
+        '东西是拿到了，可前面那段等候还是让我心里堵了一下。',
+        '终于拿到以后才缓过来，刚刚在门口等的时候真的挺烦。',
+        '拿到手是拿到手了，可这单前面的节奏还是拖得人不太爽。'
+    ],
+    gift_pending: [
+        '替别人点单最怕卡在半路，这种等法比给自己点还悬着。',
+        '这单是送出去的，我现在比自己等饭还更怕它出岔子。',
+        '给别人点的还拖这么久，我现在只希望别在关键时候掉链子。',
+        '看着它一直慢悠悠地走，我替那边等的人都开始着急了。'
+    ],
+    gift_completed: [
+        '总算送过去了，但中间这一路还是把我等得有点冒火。',
+        '送是送到了，可替别人盯这一单真的比自己吃还累。',
+        '这单终于送出去以后，我才觉得前面那口气慢慢顺下来。',
+        '还好最后送到了，不然前面那阵心悬着真的挺烦人的。'
+    ]
+};
+
 const PHONE_DELIVERY_PRESET_SHOPS = [
     {
         name: 'Wagas',
@@ -1505,7 +1580,7 @@ const PHONE_DELIVERY_PRESET_SHOPS = [
         category: '健康轻食',
         note: '无接触配送，多放葱花',
         courier: 'Li Ming',
-        preview: '骑手已取餐，预计 10 分钟内送达。',
+        preview: '怎么还没送到，我现在真的已经开始惦记这口了。',
         items: [
             { name: 'Chicken Pesto Penne', price: 42, count: 1 },
             { name: 'Iced Americano', price: 18, count: 1 }
@@ -1518,7 +1593,7 @@ const PHONE_DELIVERY_PRESET_SHOPS = [
         category: '咖啡提神',
         note: '少冰，纸吸管',
         courier: 'Wang Lei',
-        preview: '咖啡已制作完成，请留意骑手来电。',
+        preview: '咖啡这种东西一拖就烦，我已经在担心它到手不对劲了。',
         items: [
             { name: 'Iced Latte', price: 34, count: 1 },
             { name: 'Cold Brew', price: 34, count: 1 }
@@ -1531,7 +1606,7 @@ const PHONE_DELIVERY_PRESET_SHOPS = [
         category: '意式精选',
         note: '酱汁分装',
         courier: 'Chen Yu',
-        preview: '商家正在出餐，预计 18 分钟送达。',
+        preview: '这单看着就不快，我现在已经开始担心面会不会坨了。',
         items: [
             { name: 'Truffle Toastie', price: 48, count: 1 },
             { name: 'Sparkling Lemonade', price: 20, count: 1 }
@@ -1544,7 +1619,7 @@ const PHONE_DELIVERY_PRESET_SHOPS = [
         category: '烘焙甜点',
         note: '靠近门口存放',
         courier: 'Sun Hao',
-        preview: '订单已完成，感谢你的耐心等待。',
+        preview: '总算拿到了，但这一单等下来已经把我耐心磨没不少。',
         items: [
             { name: 'Butter Croissant', price: 16, count: 2 },
             { name: 'Sea Salt Roll', price: 14, count: 1 }
@@ -1557,7 +1632,7 @@ const PHONE_DELIVERY_PRESET_SHOPS = [
         category: '美式汉堡',
         note: '番茄酱另装',
         courier: 'Zhao Jun',
-        preview: '商家已接单，正在安排制作。',
+        preview: '刚接单就让我开始等，越看进度越觉得这单不会太利索。',
         items: [
             { name: 'Cheeseburger', price: 39, count: 1 },
             { name: 'Crinkle Fries', price: 18, count: 1 }
@@ -1570,7 +1645,7 @@ const PHONE_DELIVERY_PRESET_SHOPS = [
         category: '通勤咖啡',
         note: '到店前电话联系',
         courier: 'Xu Mo',
-        preview: '骑手已到楼下，请尽快取餐。',
+        preview: '人都快到门口了还要催我拿，这种节奏真的有点折腾。',
         items: [
             { name: 'Dirty Coffee', price: 24, count: 1 },
             { name: 'Iced Americano', price: 20, count: 1 }
@@ -2075,6 +2150,92 @@ function getPhoneDeliveryPreset(shopName, index = 0) {
     return matched || PHONE_DELIVERY_PRESET_SHOPS[index % PHONE_DELIVERY_PRESET_SHOPS.length];
 }
 
+function pickPhoneDeliveryPersonalNoteVariant(order, variants, salt = 'note') {
+    if (!Array.isArray(variants) || !variants.length) return '';
+    const seedKey = `${order && order.id ? order.id : ''}|${order && order.shopName ? order.shopName : ''}|${order && order.statusKey ? order.statusKey : ''}|${order && order.deliveryType ? order.deliveryType : ''}|${salt}`;
+    const seed = hashPhoneDeliverySeed(seedKey);
+    return variants[seed % variants.length] || variants[0] || '';
+}
+
+function isPhoneDeliveryPlatformLikeText(value) {
+    const text = normalizePhoneDeliveryText(value, '');
+    if (!text) return false;
+    const normalized = text.replace(/\s+/g, '');
+    if (/order\s*update|see\s*tracking|on\s*the\s*way|delivered/i.test(text)) return true;
+    return PHONE_DELIVERY_PLATFORM_NOTE_KEYWORDS.some(keyword => normalized.includes(keyword));
+}
+
+function isPhoneDeliveryThinThoughtText(value) {
+    const text = normalizePhoneDeliveryText(value, '');
+    if (!text) return false;
+    const compact = text.replace(/[，。！？、,.!?\s]/g, '');
+    if (compact.length <= 5) return true;
+    return PHONE_DELIVERY_THIN_NOTE_PATTERNS.some(pattern => pattern.test(text));
+}
+
+function getPhoneDeliveryPersonalNoteTitle(order) {
+    const deliveryType = normalizePhoneDeliveryText(order && order.deliveryType, 'delivery');
+    const statusKey = normalizePhoneDeliveryText(order && order.statusKey, 'preparing');
+
+    if (deliveryType === 'gift' && statusKey === 'completed') return '这单送出去后';
+    if (deliveryType === 'pickup' && statusKey !== 'completed') return '还没拿到手';
+    if (deliveryType === 'pickup' && statusKey === 'completed') return '拿到手以后';
+    if (['confirmed', 'preparing', 'on_the_way'].includes(statusKey)) return '还在等这单';
+    if (statusKey === 'completed') return '这单送到以后';
+    return '这单记一下';
+}
+
+function buildPhoneDeliveryPersonalNoteBody(order) {
+    const deliveryType = normalizePhoneDeliveryText(order && order.deliveryType, 'delivery');
+    const statusKey = normalizePhoneDeliveryText(order && order.statusKey, 'preparing');
+
+    if (deliveryType === 'gift' && statusKey === 'completed') {
+        return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.gift_completed, 'gift-completed');
+    }
+    if (deliveryType === 'gift' && statusKey !== 'completed') {
+        return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.gift_pending, 'gift-pending');
+    }
+    if (deliveryType === 'pickup' && statusKey !== 'completed') {
+        return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.pickup_pending, 'pickup-pending');
+    }
+    if (deliveryType === 'pickup' && statusKey === 'completed') {
+        return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.pickup_completed, 'pickup-completed');
+    }
+    if (statusKey === 'confirmed') {
+        return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.confirmed, 'confirmed');
+    }
+    if (statusKey === 'preparing') {
+        return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.preparing, 'preparing');
+    }
+    if (statusKey === 'completed') {
+        return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.completed, 'completed');
+    }
+    return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.on_the_way, 'on-the-way');
+}
+
+function getPhoneDeliveryResolvedNoteContent(order) {
+    const title = getPhoneDeliveryPersonalNoteTitle(order);
+    const bodyCandidate = normalizePhoneDeliveryText(
+        (order && order.reviewText)
+        || (order && order.preview)
+        || (order && order.trackHint)
+        || (order && order.deliveryStatus),
+        ''
+    );
+
+    if (!bodyCandidate || isPhoneDeliveryPlatformLikeText(bodyCandidate) || isPhoneDeliveryThinThoughtText(bodyCandidate)) {
+        return {
+            title,
+            body: buildPhoneDeliveryPersonalNoteBody(order)
+        };
+    }
+
+    return {
+        title,
+        body: bodyCandidate
+    };
+}
+
 function inferPhoneDeliveryStatusKey(text) {
     const value = String(text || '').toLowerCase();
     if (!value) return 'preparing';
@@ -2102,6 +2263,7 @@ function buildPhoneDeliveryOrderId(contactId, index) {
 function createPhoneDeliveryOrderFromPreset(preset, options = {}) {
     const statusKey = PHONE_DELIVERY_STATUS_META[options.statusKey] ? options.statusKey : 'preparing';
     const statusMeta = PHONE_DELIVERY_STATUS_META[statusKey];
+    const deliveryType = String(options.deliveryType || 'delivery').trim() || 'delivery';
     const itemsSource = Array.isArray(options.items) && options.items.length ? options.items : (Array.isArray(preset.items) ? preset.items : []);
     const items = itemsSource.map(item => ({
         name: String(item && item.name ? item.name : 'Item').trim() || 'Item',
@@ -2124,11 +2286,20 @@ function createPhoneDeliveryOrderFromPreset(preset, options = {}) {
     const shopName = String(options.shopName || preset.name || '外卖商家').trim() || '外卖商家';
     const time = String(options.time || '今天 12:18').trim() || '今天 12:18';
     const note = String(options.note || preset.note || '无接触配送').trim() || '无接触配送';
-    const preview = String(options.preview || preset.preview || `${shopName} 订单状态已更新。`).trim() || `${shopName} 订单状态已更新。`;
+    const orderIdValue = String(options.id || `${shopName}-${time}`).replace(/\s+/g, '_');
+    const stickerLevel = PHONE_DELIVERY_NOTE_STICKERS[options.stickerLevel] ? options.stickerLevel : 'neutral';
+    const previewFallback = buildPhoneDeliveryPersonalNoteBody({
+        id: orderIdValue,
+        shopName,
+        statusKey,
+        deliveryType,
+        stickerLevel
+    });
+    const preview = String(options.preview || previewFallback || preset.preview || `${shopName} 这单把我等得有点烦了。`).trim() || `${shopName} 这单把我等得有点烦了。`;
     const summary = String(options.summary || items.map(item => item.name).join(', ')).trim() || '订单详情';
 
     return {
-        id: String(options.id || `${shopName}-${time}`).replace(/\s+/g, '_'),
+        id: orderIdValue,
         shopName,
         icon: options.icon || preset.icon || 'ri-restaurant-2-line',
         category: preset.category || '精选餐饮',
@@ -2138,6 +2309,7 @@ function createPhoneDeliveryOrderFromPreset(preset, options = {}) {
         deliveryFee,
         total,
         statusKey,
+        deliveryType,
         statusLabel: options.statusLabel || statusMeta.badge,
         heroStatus: options.heroStatus || statusMeta.hero,
         deliveryStatus: options.deliveryStatus || statusMeta.delivery,
@@ -2152,7 +2324,7 @@ function createPhoneDeliveryOrderFromPreset(preset, options = {}) {
         preview,
         orderId: String(options.orderId || '8892 1204 43').trim() || '8892 1204 43',
         active: !!statusMeta.active,
-        stickerLevel: PHONE_DELIVERY_NOTE_STICKERS[options.stickerLevel] ? options.stickerLevel : 'neutral'
+        stickerLevel
     };
 }
 
@@ -2690,11 +2862,13 @@ function renderPhoneDeliveryDetail(order) {
         noteCard.classList.add(PHONE_DELIVERY_REVIEW_STYLE_CLASS_MAP[order.reviewStyle] || 'note-grid');
     }
 
+    const resolvedNoteContent = getPhoneDeliveryResolvedNoteContent(order);
+
     if (detailIcon) detailIcon.innerHTML = `<i class="${escapePhoneDeliveryHtml(order.icon)}"></i>`;
     if (detailShopName) detailShopName.textContent = order.shopName;
     if (detailStatus) detailStatus.textContent = order.statusLabel;
-    if (detailNoteTitle) detailNoteTitle.textContent = order.reviewText ? `${order.ratingLevel || '订单'}评价` : 'Order Update';
-    if (detailPreview) detailPreview.textContent = order.reviewText || order.preview || order.trackHint || order.deliveryStatus || 'Order status updated.';
+    if (detailNoteTitle) detailNoteTitle.textContent = resolvedNoteContent.title;
+    if (detailPreview) detailPreview.textContent = resolvedNoteContent.body;
     if (detailSubtotal) detailSubtotal.textContent = formatPhoneDeliveryPrice(order.subtotal);
     if (detailFee) detailFee.textContent = formatPhoneDeliveryPrice(order.deliveryFee);
     if (detailTotal) detailTotal.textContent = formatPhoneDeliveryPrice(order.total);
@@ -6021,7 +6195,7 @@ This is NOT chat history. It should feel like everyday platform residue: repeate
 Hard requirements:
 - The output must be STRICT JSON only. No markdown, no explanation.
 - All visible content values should be in natural Simplified Chinese unless the field is naturally a brand name or mixed-language store name.
-- Do not write direct conclusions. Create implication through address reuse, order timing, notes, review text, recipient names, and order rhythm.
+- Do not write direct conclusions. Create implication through address reuse, order timing, notes, review_text, recipient names, and order rhythm.
 - Most records should look normal. Only a minority should feel subtly loaded.
 - Use desensitized or fictional phone numbers, order IDs, amounts, and addresses.
 - Keep all requested fields; do not omit fields.
@@ -6050,14 +6224,22 @@ Field schema:
 
 Constraints:
 - rating_level must be exactly one of: \u975e\u5e38\u4e0d\u6ee1\u610f, \u4e0d\u6ee1\u610f, \u4e00\u822c, \u6ee1\u610f, \u975e\u5e38\u6ee1\u610f
+- rating_level is only used as note mood intensity / sticker mood, not as a merchant score
 - review_style must be exactly one of: grid, ruled, plain-yellow
-- review_text must be exactly one short sentence
+- review_text keeps this exact field name, but it means the contact's own immediate thought about the order
+- review_text must be exactly one colloquial Simplified Chinese sentence, around 12 to 32 Chinese characters, optionally with one comma or dunhao
+- review_text must sound like self-talk, muttering, a small complaint, or a personal afterthought, not customer service language, not logistics tracking copy, and not a merchant review
+- For confirmed / preparing / on_the_way orders, write impatience, hunger, annoyance, fear of food getting cold or melting, or the feeling that the order is too slow
+- For completed orders, write the contact's personal after-feeling with a slightly complaining tone, not praise for the merchant and not a formal summary
+- For pickup orders that are not yet collected, write the feeling of already being near the store, almost arriving, or still being forced to wait on site
+- For gift_orders, you may lightly reveal the psychology of ordering for someone else, but never explain the whole story directly
+- Do NOT write expressions like: "骑手已取餐，预计 10 分钟内送达", "订单已完成，感谢您的耐心等待", "商家已接单", "正在出餐", "请留意来电", "味道不错", "会回购", "五星好评"
 - gift order recipient can be someone else such as a friend, coworker, or a recurring contact
 - pickup orders should show life-like pickup timing or pickup status
 - A repeated fixed address should appear often enough to feel suspiciously habitual, but not on every order
 - Mix ordinary notes with more suggestive ones, for example: no calls, leave at door, message on arrival, less ice, extra spicy, do not ring, front desk pickup
 - At least 30% to 40% of the content should be indirectly related to the user, but never written as a direct conclusion
-- Make the subtle tension come from details like late-night ordering, note changes, a recurring address, help-order traces, favorite stores, and short reviews
+- Make the subtle tension come from details like late-night ordering, note changes, a recurring address, help-order traces, favorite stores, and these small personal thoughts
 
 Output one legal JSON object and nothing else.`;
 }

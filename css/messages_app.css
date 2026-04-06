@@ -847,6 +847,7 @@
 
 #phone-messages .messages-list-header {
     overflow: visible;
+    padding-top: max(22px, env(safe-area-inset-top, 0px));
 }
 
 #phone-messages .messages-list-header::after {
@@ -883,12 +884,14 @@
 
 #phone-messages .messages-list-topbar {
     position: relative;
+    padding: 10px 30px 0;
 }
 
 #phone-messages .messages-title-back {
+    padding-top: 30px;
     transform-origin: left top;
     opacity: calc(1 - var(--phone-messages-header-progress));
-    transform: translateY(calc(var(--phone-messages-header-progress) * -24px)) scale(calc(1 - (var(--phone-messages-header-progress) * 0.42)));
+    transform: translateY(calc(-10px + (var(--phone-messages-header-progress) * -24px))) scale(calc(1 - (var(--phone-messages-header-progress) * 0.42)));
     filter: blur(calc(var(--phone-messages-header-progress) * 1.4px));
     transition: opacity 0.18s ease, transform 0.18s ease, filter 0.18s ease;
 }
@@ -896,7 +899,7 @@
 #phone-messages .messages-compact-title {
     position: absolute;
     left: 50%;
-    top: 65%;
+    top: 58%;
     border: 0;
     padding: 0;
     margin: 0;
@@ -912,6 +915,10 @@
     pointer-events: none;
     cursor: pointer;
     z-index: 2;
+}
+
+#phone-messages .messages-list-scroll {
+    padding-top: 144px;
 }
 
 #phone-messages.list-header-compact .messages-compact-title {
