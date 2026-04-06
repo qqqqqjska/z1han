@@ -1653,7 +1653,7 @@ function phoneDeliveryFormatAddressEntry(entry) {
     const source = entry && typeof entry === 'object' ? entry : {};
     const label = normalizePhoneDeliveryText(source.label, '');
     const address = phoneDeliveryExtractAddressText(source.address || source);
-    if (label && address) return `${label} ? ${address}`;
+    if (label && address) return `${label} · ${address}`;
     return address || label || '';
 }
 
@@ -2032,9 +2032,9 @@ function getPhoneDeliveryAddress(contact) {
         phoneDeliveryExtractAddressText(contact && contact.address),
         phoneDeliveryExtractAddressText(contact && contact.homeAddress),
         phoneDeliveryExtractAddressText(contact && contact.location),
-        contact && contact.city ? `${contact.city} ? Saved delivery address` : '',
-        contact && contact.school ? `${contact.school} ? Dorm lobby` : '',
-        contact && contact.company ? `${contact.company} ? Front desk` : ''
+        contact && contact.city ? `${contact.city} 常用收货地址` : '',
+        contact && contact.school ? `${contact.school} 宿舍楼下` : '',
+        contact && contact.company ? `${contact.company} 前台` : ''
     ];
     for (const candidate of candidates) {
         const value = normalizePhoneDeliveryText(candidate, '');
@@ -2317,7 +2317,7 @@ function buildPhoneDeliveryShopCollections(orders, deliveryData = null) {
                 icon: preset.icon,
                 category: normalizePhoneDeliveryText(entry && entry.category, preset.category),
                 eta: PHONE_DELIVERY_STATUS_META.preparing.eta,
-                meta: `${sourceLabel} ? ${normalizePhoneDeliveryText((entry && (entry.tag || entry.reason || entry.category)), preset.category)}`
+                meta: `${sourceLabel} · ${normalizePhoneDeliveryText((entry && (entry.tag || entry.reason || entry.category)), preset.category)}`
             });
         };
 
@@ -2371,7 +2371,7 @@ function buildPhoneDeliveryShopCollections(orders, deliveryData = null) {
         favorites: merged.slice(0, 4).map(item => ({ ...item, meta: `Frequent - ${item.category}` })),
         recommendations: merged.slice(4, 8).map((item, index) => ({
             ...item,
-            meta: `${['10 mins', '18 mins', '22 mins', '28 mins'][index % 4]} ? ${item.category}`
+            meta: `${['10 mins', '18 mins', '22 mins', '28 mins'][index % 4]} · ${item.category}`
         }))
     };
 }
@@ -2693,12 +2693,12 @@ function renderPhoneDeliveryDetail(order) {
     if (detailIcon) detailIcon.innerHTML = `<i class="${escapePhoneDeliveryHtml(order.icon)}"></i>`;
     if (detailShopName) detailShopName.textContent = order.shopName;
     if (detailStatus) detailStatus.textContent = order.statusLabel;
-    if (detailNoteTitle) detailNoteTitle.textContent = order.reviewText ? `${order.ratingLevel || 'Review'} ?` : 'Order Update ?';
+    if (detailNoteTitle) detailNoteTitle.textContent = order.reviewText ? `${order.ratingLevel || '订单'}评价` : 'Order Update';
     if (detailPreview) detailPreview.textContent = order.reviewText || order.preview || order.trackHint || order.deliveryStatus || 'Order status updated.';
     if (detailSubtotal) detailSubtotal.textContent = formatPhoneDeliveryPrice(order.subtotal);
     if (detailFee) detailFee.textContent = formatPhoneDeliveryPrice(order.deliveryFee);
     if (detailTotal) detailTotal.textContent = formatPhoneDeliveryPrice(order.total);
-    if (detailRecipient) detailRecipient.textContent = order.recipientPhone ? `${order.recipient} ? ${order.recipientPhone}` : order.recipient;
+    if (detailRecipient) detailRecipient.textContent = order.recipientPhone ? `${order.recipient} · ${order.recipientPhone}` : order.recipient;
     if (detailAddress) detailAddress.textContent = order.address;
     if (detailDeliveryStatus) detailDeliveryStatus.textContent = order.deliveryStatus;
     if (detailOrderId) detailOrderId.textContent = order.orderId;
@@ -6064,13 +6064,14 @@ Output one legal JSON object and nothing else.`;
 
 async function generatePhoneDeliveryAll(contact) {
     const btn = document.getElementById('generate-phone-delivery-btn');
+    const originalContent = btn ? btn.innerHTML : null;
     if (btn) {
         btn.classList.add('phone-delivery-generating');
         btn.disabled = true;
     }
 
     const systemPrompt = buildPhoneDeliverySystemPrompt(contact);
-    await callAiGeneration(contact, systemPrompt, 'delivery_all', btn);
+    await callAiGeneration(contact, systemPrompt, 'delivery_all', btn, originalContent);
 }
 
 async function generatePhoneWechatAll(contact) {
@@ -7054,6 +7055,7 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
     } finally {
         if (btn) {
             btn.classList.remove('generating-pulse');
+            btn.classList.remove('phone-delivery-generating');
             btn.disabled = false;
             
             if (originalContent) {
