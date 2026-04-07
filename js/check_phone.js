@@ -11210,6 +11210,56 @@ const PHONE_NOTES_EXTRA_STYLE_TEXT = `
     font-size: 13px;
     line-height: 1.5;
 }
+.notes-lock-tip {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: rgba(208,163,49,0.12);
+    color: #8d641d;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.notes-lock-reveal {
+    margin-top: 10px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(111,99,216,0.08);
+    color: #554aa8;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.6;
+}
+.notes-lock-force {
+    margin-top: 12px;
+    padding: 14px;
+    border-radius: 18px;
+    background: rgba(60,60,67,0.06);
+}
+.notes-lock-force-text {
+    color: #44454d;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.notes-lock-force-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+}
+.notes-lock-mini-btn {
+    flex: 1;
+    height: 38px;
+    border: none;
+    border-radius: 12px;
+    background: rgba(118,118,128,0.12);
+    color: #4d4e56;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.notes-lock-mini-btn.is-primary {
+    background: rgba(208,163,49,0.14);
+    color: #8b6419;
+}
 .notes-lock-actions {
     display: flex;
     gap: 10px;
@@ -11349,6 +11399,15 @@ const PHONE_NOTES_APP_TEMPLATE_HTML = `<div id="app">
             <input type="text" id="notes-lock-answer-input" class="notes-lock-input" placeholder="输入答案" autocomplete="off" spellcheck="false">
             <div class="notes-lock-helper">答案会比较短，通常是日期、称呼、地点或一个名词。</div>
             <div class="notes-lock-error" id="notes-lock-error"></div>
+            <div class="notes-lock-tip phone-notes-hidden" id="notes-lock-tip"></div>
+            <div class="notes-lock-reveal phone-notes-hidden" id="notes-lock-reveal"></div>
+            <div class="notes-lock-force phone-notes-hidden" id="notes-lock-force">
+                <div class="notes-lock-force-text">已连续输错 5 次，是否强制进入？</div>
+                <div class="notes-lock-force-actions">
+                    <button type="button" class="notes-lock-mini-btn" data-action="decline-force-enter">再试试</button>
+                    <button type="button" class="notes-lock-mini-btn is-primary" data-action="force-enter-note">是，强制进入</button>
+                </div>
+            </div>
             <div class="notes-lock-actions">
                 <button type="button" class="notes-lock-btn is-secondary" data-action="close-lock-modal">取消</button>
                 <button type="button" class="notes-lock-btn is-primary" data-action="submit-lock-answer">查看内容</button>
@@ -11929,7 +11988,9 @@ function phoneNotesGetRuntime(container) {
             searchTerm: '',
             unlockedNoteKey: null,
             unlockModalSectionKey: null,
-            unlockModalNoteIndex: null
+            unlockModalNoteIndex: null,
+            unlockFailedCount: 0,
+            unlockDirectEntryEnabled: false
         };
     }
     return container.__phoneNotesRuntime;
@@ -11949,17 +12010,99 @@ function phoneNotesHasLockChallenge(note) {
     return !!(note && phoneNotesNormalizeText(note.lock_question, '') && phoneNotesNormalizeText(note.lock_answer, ''));
 }
 
+function phoneNotesGetLockHintText(note) {
+    if (!note) return '';
+    const customHint = phoneNotesNormalizeText(note.lock_hint, '');
+    const questionText = phoneNotesNormalizeText(note.lock_question, '');
+    const answerText = phoneNotesNormalizeText(note.lock_answer, '');
+    if (customHint && customHint !== '回答问题' && customHint !== questionText && customHint !== answerText) {
+        return `提示：${customHint}`;
+    }
+    const answerLength = Array.from(answerText.replace(/\s+/g, '')).length;
+    if (answerLength > 0) {
+        return `提示：答案一共 ${answerLength} 个字。`;
+    }
+    return '提示：换个更具体的细节再试试。';
+}
+
+function phoneNotesSetLockPrimaryButton(container, directEnterEnabled) {
+    const primaryButton = container.querySelector('[data-action="submit-lock-answer"]');
+    if (!primaryButton) return;
+    primaryButton.textContent = directEnterEnabled ? '直接进入' : '查看内容';
+}
+
+function phoneNotesResetLockModalState(container) {
+    const runtime = phoneNotesGetRuntime(container);
+    const input = container.querySelector('#notes-lock-answer-input');
+    const error = container.querySelector('#notes-lock-error');
+    const tip = container.querySelector('#notes-lock-tip');
+    const reveal = container.querySelector('#notes-lock-reveal');
+    const forcePanel = container.querySelector('#notes-lock-force');
+
+    runtime.unlockFailedCount = 0;
+    runtime.unlockDirectEntryEnabled = false;
+
+    if (input) {
+        input.disabled = false;
+        input.value = '';
+        input.placeholder = '输入答案';
+    }
+    if (error) error.textContent = '';
+    if (tip) {
+        tip.textContent = '';
+        tip.classList.add('phone-notes-hidden');
+    }
+    if (reveal) {
+        reveal.textContent = '';
+        reveal.classList.add('phone-notes-hidden');
+    }
+    if (forcePanel) {
+        forcePanel.classList.add('phone-notes-hidden');
+    }
+    phoneNotesSetLockPrimaryButton(container, false);
+}
+
+function phoneNotesEnableDirectEntry(container, note) {
+    const runtime = phoneNotesGetRuntime(container);
+    const input = container.querySelector('#notes-lock-answer-input');
+    const error = container.querySelector('#notes-lock-error');
+    const reveal = container.querySelector('#notes-lock-reveal');
+    const forcePanel = container.querySelector('#notes-lock-force');
+
+    runtime.unlockDirectEntryEnabled = true;
+
+    if (error) error.textContent = '';
+    if (forcePanel) {
+        forcePanel.classList.add('phone-notes-hidden');
+    }
+    if (reveal) {
+        reveal.textContent = `正确答案：${phoneNotesNormalizeText(note && note.lock_answer, '')}`;
+        reveal.classList.remove('phone-notes-hidden');
+    }
+    if (input) {
+        input.disabled = true;
+        input.value = phoneNotesNormalizeText(note && note.lock_answer, '');
+        input.placeholder = '已显示正确答案';
+    }
+    phoneNotesSetLockPrimaryButton(container, true);
+}
+
+function phoneNotesUnlockCurrentNote(container, sectionKey, noteIndex) {
+    const runtime = phoneNotesGetRuntime(container);
+    runtime.unlockedNoteKey = phoneNotesBuildRuntimeNoteKey(sectionKey, noteIndex);
+    phoneNotesCloseLockModal(container);
+    phoneNotesRenderNoteDetail(container, sectionKey, noteIndex);
+    phoneNotesShowNotePage(container);
+}
+
 function phoneNotesCloseLockModal(container) {
     const runtime = phoneNotesGetRuntime(container);
     const modal = container.querySelector('#notes-lock-modal');
-    const input = container.querySelector('#notes-lock-answer-input');
-    const error = container.querySelector('#notes-lock-error');
     if (modal) {
         modal.classList.add('hidden');
         modal.setAttribute('aria-hidden', 'true');
     }
-    if (input) input.value = '';
-    if (error) error.textContent = '';
+    phoneNotesResetLockModalState(container);
     runtime.unlockModalSectionKey = null;
     runtime.unlockModalNoteIndex = null;
 }
@@ -11980,6 +12123,7 @@ function phoneNotesOpenLockModal(container, noteIndex) {
     }
 
     const modal = container.querySelector('#notes-lock-modal');
+    const title = container.querySelector('#notes-lock-title');
     const noteTitle = container.querySelector('#notes-lock-note-title');
     const question = container.querySelector('#notes-lock-question');
     const input = container.querySelector('#notes-lock-answer-input');
@@ -11988,13 +12132,17 @@ function phoneNotesOpenLockModal(container, noteIndex) {
 
     runtime.unlockModalSectionKey = sectionKey;
     runtime.unlockModalNoteIndex = noteIndex;
+    phoneNotesResetLockModalState(container);
+    if (title) {
+        title.textContent = phoneNotesNormalizeText(note.lock_hint, '回答问题');
+    }
     noteTitle.textContent = note.title || '锁定笔记';
     question.textContent = note.lock_question;
-    input.value = '';
-    error.textContent = '';
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
-    setTimeout(() => input.focus(), 0);
+    setTimeout(() => {
+        if (!input.disabled) input.focus();
+    }, 0);
 }
 
 function phoneNotesSubmitLockAnswer(container) {
@@ -12004,11 +12152,18 @@ function phoneNotesSubmitLockAnswer(container) {
     const contact = getActivePhoneNotesContact();
     const input = container.querySelector('#notes-lock-answer-input');
     const error = container.querySelector('#notes-lock-error');
+    const tip = container.querySelector('#notes-lock-tip');
+    const forcePanel = container.querySelector('#notes-lock-force');
     if (!sectionKey || noteIndex == null || !input || !error) return;
 
     const note = (getPhoneNotesData(contact && contact.id)[sectionKey] || [])[noteIndex];
     if (!note) {
         phoneNotesCloseLockModal(container);
+        return;
+    }
+
+    if (runtime.unlockDirectEntryEnabled) {
+        phoneNotesUnlockCurrentNote(container, sectionKey, noteIndex);
         return;
     }
 
@@ -12021,16 +12176,24 @@ function phoneNotesSubmitLockAnswer(container) {
     }
 
     if (!expectedAnswer || typedAnswer !== expectedAnswer) {
+        runtime.unlockFailedCount = Number(runtime.unlockFailedCount || 0) + 1;
         error.textContent = '答案不对，再想想。';
+
+        if (runtime.unlockFailedCount >= 3 && tip) {
+            tip.textContent = phoneNotesGetLockHintText(note);
+            tip.classList.remove('phone-notes-hidden');
+        }
+
+        if (runtime.unlockFailedCount >= 5 && forcePanel) {
+            forcePanel.classList.remove('phone-notes-hidden');
+        }
+
         input.focus();
         input.select();
         return;
     }
 
-    runtime.unlockedNoteKey = phoneNotesBuildRuntimeNoteKey(sectionKey, noteIndex);
-    phoneNotesCloseLockModal(container);
-    phoneNotesRenderNoteDetail(container, sectionKey, noteIndex);
-    phoneNotesShowNotePage(container);
+    phoneNotesUnlockCurrentNote(container, sectionKey, noteIndex);
 }
 
 function phoneNotesResolveSectionKey(primaryValue, secondaryValue) {
@@ -12462,6 +12625,34 @@ function bindPhoneNotesV1Interactions(container) {
         if (closeLockModal) {
             event.preventDefault();
             phoneNotesCloseLockModal(container);
+            return;
+        }
+
+        const declineForceEnter = target.closest('[data-action="decline-force-enter"]');
+        if (declineForceEnter) {
+            event.preventDefault();
+            const forcePanel = container.querySelector('#notes-lock-force');
+            const input = container.querySelector('#notes-lock-answer-input');
+            if (forcePanel) forcePanel.classList.add('phone-notes-hidden');
+            if (input && !input.disabled) {
+                input.focus();
+                input.select();
+            }
+            return;
+        }
+
+        const forceEnterNote = target.closest('[data-action="force-enter-note"]');
+        if (forceEnterNote) {
+            event.preventDefault();
+            const sectionKey = runtime.unlockModalSectionKey;
+            const noteIndex = runtime.unlockModalNoteIndex;
+            const contact = getActivePhoneNotesContact();
+            const note = sectionKey && noteIndex != null ? (getPhoneNotesData(contact && contact.id)[sectionKey] || [])[noteIndex] : null;
+            if (!note) {
+                phoneNotesCloseLockModal(container);
+                return;
+            }
+            phoneNotesEnableDirectEntry(container, note);
             return;
         }
 
