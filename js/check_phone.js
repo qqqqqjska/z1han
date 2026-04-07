@@ -1116,6 +1116,19 @@ function initPhoneGrid() {
             overflow: hidden !important;
         }
 
+        #phone-parcel {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            height: 100vh !important;
+            bottom: 0 !important;
+            z-index: 210 !important;
+            background-color: #eef2f5 !important;
+            overflow: hidden !important;
+        }
+
         /* 闲鱼 (灰底) */
         #phone-xianyu {
             position: fixed !important;
@@ -1173,6 +1186,8 @@ function initPhoneGrid() {
                 openPhoneNotesApp();
             } else if (appId === 'phone-delivery') {
                 openPhoneDeliveryApp();
+            } else if (appId === 'phone-parcel') {
+                openPhoneParcelApp();
             } else if (appId === 'phone-files') {
                 openPhoneFilesApp();
             } else if (appId === 'phone-theme') {
@@ -3193,6 +3208,443 @@ function openPhoneDeliveryApp() {
     switchPhoneDeliveryPage('home');
     phoneDeliverySyncNavIcons();
     screen.classList.remove('hidden');
+}
+
+function phoneParcelEscapeHtml(value) {
+    return phoneFilesEscapeHtml(value == null ? '' : String(value));
+}
+
+function normalizePhoneParcelStatusColor(value, fallback = 'green') {
+    const raw = normalizePhoneDeliveryText(value, fallback).toLowerCase();
+    if (['green', 'orange', 'red'].includes(raw)) return raw;
+    if (/已签收|已送达|delivered|signed/.test(raw)) return 'green';
+    if (/异常|退回|拒收|exception|failed/.test(raw)) return 'red';
+    if (/运输|在途|派送|transit|shipping|delivery/.test(raw)) return 'orange';
+    return fallback;
+}
+
+function normalizePhoneParcelTags(value, fallback = []) {
+    const defaults = Array.isArray(fallback) ? fallback.filter(Boolean).map(item => normalizePhoneDeliveryText(item, '')).filter(Boolean) : [];
+    if (Array.isArray(value)) {
+        const tags = value.map(item => normalizePhoneDeliveryText(item, '')).filter(Boolean);
+        return tags.length ? tags.slice(0, 4) : defaults;
+    }
+    const text = normalizePhoneDeliveryText(value, '');
+    if (!text) return defaults;
+    const tags = text.split(/[、,，|/]/).map(item => item.trim()).filter(Boolean);
+    return tags.length ? tags.slice(0, 4) : defaults;
+}
+
+function createDefaultPhoneParcelData(contact) {
+    const recipient = getPhoneDeliveryRecipient(contact);
+    const recipientPhone = maskPhoneDeliveryPhone(getPhoneDeliveryRecipientPhone(contact));
+    const address = getPhoneDeliveryAddress(contact) || '玫瑰公寓 2201室';
+    return {
+        featured_card: {
+            status_label: 'DELIVERED',
+            status_meta: '03:15 AM',
+            status_color: 'green',
+            title: '配件 (Accessories)',
+            receiver: recipient || 'Q女士',
+            address: `${address} (物业代收)`,
+            tags: ['深夜签收', '非默认地址', '隐私面单']
+        },
+        list_items: [
+            {
+                status_label: 'TRANSIT',
+                status_meta: 'ZTO',
+                status_color: 'orange',
+                title: '生活用品',
+                subtitle: `送至：${address}`,
+                badge: '已改址'
+            },
+            {
+                status_label: 'EXCEPTION',
+                status_meta: 'SF',
+                status_color: 'red',
+                title: '高端礼盒',
+                subtitle: '拒收退回中',
+                badge: '退回'
+            }
+        ],
+        detail: {
+            hero_icon: 'ri-box-3-line',
+            hero_status: '已签收',
+            hero_track: 'SF EXPRESS · SF20984***',
+            note: '“直接塞消防栓里，别按门铃，别打电话。”',
+            timeline: [
+                { time: '03:15 AM', title: '已签收', desc: `${address} 物业夜间值班室代收`, active: true },
+                { time: '02:30 AM', title: '派送中', desc: '深夜特派员 正在为您派件', active: false },
+                { time: 'YEST', title: '离开转运中心', desc: `发往 ${address}`, active: false }
+            ],
+            info: {
+                receiver: `${recipient || 'Q女士'} (${recipientPhone})`,
+                address,
+                content: '配件 (模糊化)',
+                sender: '隐私发件人'
+            }
+        },
+        addresses: [
+            { title: address, count_label: '15 TIMES', common_receiver: recipient || 'Q女士', last_seen: 'Today, 03:15 AM', tags: ['Late Night', 'Hidden Item'] },
+            { title: '南区 丰巢快递柜', count_label: '28 TIMES', common_receiver: '李先生', last_seen: 'Last Week', tags: ['Self Pickup', 'Timeout Frequent'] },
+            { title: '中心医院 住院部代收', count_label: '3 TIMES', common_receiver: '家属代收', last_seen: '2 Months Ago', tags: ['Others Signed'] }
+        ]
+    };
+}
+
+function normalizePhoneParcelListItem(item, index, fallback) {
+    const source = item && typeof item === 'object' ? item : {};
+    const defaults = fallback && typeof fallback === 'object' ? fallback : {};
+    return {
+        status_label: normalizePhoneDeliveryText(source.status_label || source.status || defaults.status_label, index === 0 ? 'TRANSIT' : 'DELIVERED').toUpperCase(),
+        status_meta: normalizePhoneDeliveryText(source.status_meta || source.courier || source.meta || defaults.status_meta, index === 0 ? 'ZTO' : 'SF'),
+        status_color: normalizePhoneParcelStatusColor(source.status_color || source.status || defaults.status_color, index === 0 ? 'orange' : 'green'),
+        title: normalizePhoneDeliveryText(source.title || source.content || source.package_title || defaults.title, `包裹 ${index + 1}`),
+        subtitle: normalizePhoneDeliveryText(source.subtitle || source.address_hint || source.desc || defaults.subtitle, '送至：常用地址'),
+        badge: normalizePhoneDeliveryText(source.badge || source.tag || defaults.badge, '')
+    };
+}
+
+function normalizePhoneParcelTimelineEntry(item, index, fallback) {
+    const source = item && typeof item === 'object' ? item : {};
+    const defaults = fallback && typeof fallback === 'object' ? fallback : {};
+    return {
+        time: normalizePhoneDeliveryText(source.time || defaults.time, index === 0 ? '03:15 AM' : 'YEST'),
+        title: normalizePhoneDeliveryText(source.title || defaults.title, index === 0 ? '已签收' : `物流节点 ${index + 1}`),
+        desc: normalizePhoneDeliveryText(source.desc || source.description || defaults.desc, '物流已更新'),
+        active: normalizePhoneDeliveryBoolean(source.active, !!defaults.active && index === 0)
+    };
+}
+
+function normalizePhoneParcelAddressEntry(item, index, fallback) {
+    const source = item && typeof item === 'object' ? item : {};
+    const defaults = fallback && typeof fallback === 'object' ? fallback : {};
+    return {
+        title: normalizePhoneDeliveryText(source.title || source.address || defaults.title, `地址 ${index + 1}`),
+        count_label: normalizePhoneDeliveryText(source.count_label || source.count || source.used_count || defaults.count_label, `${Math.max(2, 12 - index * 4)} TIMES`).toUpperCase(),
+        common_receiver: normalizePhoneDeliveryText(source.common_receiver || source.receiver || defaults.common_receiver, '代收人'),
+        last_seen: normalizePhoneDeliveryText(source.last_seen || source.last_time || defaults.last_seen, 'Recently'),
+        tags: normalizePhoneParcelTags(source.tags, defaults.tags || [])
+    };
+}
+
+function normalizePhoneParcelData(raw, contact) {
+    const defaults = createDefaultPhoneParcelData(contact);
+    const source = raw && typeof raw === 'object' ? raw : {};
+    const featuredSource = source.featured_card && typeof source.featured_card === 'object' ? source.featured_card : {};
+    const detailSource = source.detail && typeof source.detail === 'object' ? source.detail : {};
+    const infoSource = detailSource.info && typeof detailSource.info === 'object' ? detailSource.info : {};
+
+    const featured = {
+        status_label: normalizePhoneDeliveryText(featuredSource.status_label || featuredSource.status, defaults.featured_card.status_label).toUpperCase(),
+        status_meta: normalizePhoneDeliveryText(featuredSource.status_meta || featuredSource.time || featuredSource.meta, defaults.featured_card.status_meta),
+        status_color: normalizePhoneParcelStatusColor(featuredSource.status_color || featuredSource.status, defaults.featured_card.status_color),
+        title: normalizePhoneDeliveryText(featuredSource.title, defaults.featured_card.title),
+        receiver: normalizePhoneDeliveryText(featuredSource.receiver || featuredSource.recipient, defaults.featured_card.receiver),
+        address: normalizePhoneDeliveryText(featuredSource.address, defaults.featured_card.address),
+        tags: normalizePhoneParcelTags(featuredSource.tags, defaults.featured_card.tags)
+    };
+
+    const listDefaults = Array.isArray(defaults.list_items) ? defaults.list_items : [];
+    const listItems = (Array.isArray(source.list_items) ? source.list_items : listDefaults)
+        .slice(0, 4)
+        .map((item, index) => normalizePhoneParcelListItem(item, index, listDefaults[index] || listDefaults[0] || null));
+
+    const detailDefaults = defaults.detail;
+    const timelineDefaults = Array.isArray(detailDefaults.timeline) ? detailDefaults.timeline : [];
+    const detail = {
+        hero_icon: normalizePhoneDeliveryText(detailSource.hero_icon, detailDefaults.hero_icon),
+        hero_status: normalizePhoneDeliveryText(detailSource.hero_status, detailDefaults.hero_status),
+        hero_track: normalizePhoneDeliveryText(detailSource.hero_track, detailDefaults.hero_track),
+        note: normalizePhoneDeliveryText(detailSource.note, detailDefaults.note),
+        timeline: (Array.isArray(detailSource.timeline) ? detailSource.timeline : timelineDefaults)
+            .slice(0, 5)
+            .map((item, index) => normalizePhoneParcelTimelineEntry(item, index, timelineDefaults[index] || timelineDefaults[0] || null)),
+        info: {
+            receiver: normalizePhoneDeliveryText(infoSource.receiver, detailDefaults.info.receiver),
+            address: normalizePhoneDeliveryText(infoSource.address, detailDefaults.info.address),
+            content: normalizePhoneDeliveryText(infoSource.content, detailDefaults.info.content),
+            sender: normalizePhoneDeliveryText(infoSource.sender, detailDefaults.info.sender)
+        }
+    };
+
+    const addressDefaults = Array.isArray(defaults.addresses) ? defaults.addresses : [];
+    const addresses = (Array.isArray(source.addresses) ? source.addresses : addressDefaults)
+        .slice(0, 5)
+        .map((item, index) => normalizePhoneParcelAddressEntry(item, index, addressDefaults[index] || addressDefaults[0] || null));
+
+    return {
+        featured_card: featured,
+        list_items: listItems.length ? listItems : listDefaults,
+        detail,
+        addresses: addresses.length ? addresses : addressDefaults
+    };
+}
+
+function normalizePhoneParcelAiPayload(raw, contact) {
+    return normalizePhoneParcelData(raw, contact);
+}
+
+function getPhoneParcelStoreBucket(contactId) {
+    const state = window.iphoneSimState || {};
+    if (!state.phoneContent) state.phoneContent = {};
+    if (!state.phoneContent[contactId]) state.phoneContent[contactId] = {};
+    return state.phoneContent[contactId];
+}
+
+function getPhoneParcelData(contactId) {
+    if (!contactId) return createDefaultPhoneParcelData(null);
+    const bucket = getPhoneParcelStoreBucket(contactId);
+    bucket.parcelData = normalizePhoneParcelData(bucket.parcelData, getPhoneDeliveryContact(contactId));
+    return bucket.parcelData;
+}
+
+function setPhoneParcelData(contactId, parcelData) {
+    const bucket = getPhoneParcelStoreBucket(contactId);
+    bucket.parcelData = normalizePhoneParcelData(parcelData, getPhoneDeliveryContact(contactId));
+    return bucket.parcelData;
+}
+
+function phoneParcelMatchesTab(item, tabIndex) {
+    const status = normalizePhoneDeliveryText(item && item.status_label, '').toLowerCase();
+    if (tabIndex === 1) return /transit|在途|运输|派送/.test(status);
+    if (tabIndex === 2) return /delivered|已签收|已送达/.test(status);
+    return true;
+}
+
+function renderPhoneParcelHome(parcelData) {
+    const container = document.getElementById('phone-parcel-home-content');
+    if (!container) return;
+
+    const featured = parcelData.featured_card || createDefaultPhoneParcelData(null).featured_card;
+    const items = (parcelData.list_items || []).filter(item => phoneParcelMatchesTab(item, phoneParcelRuntime.activeTabIndex));
+    const listHtml = items.map(item => `
+        <div class="glass-card" style="padding: 16px 20px;">
+            <div class="meta-text" style="margin-bottom: 4px;">
+                <span class="status-dot ${phoneParcelEscapeHtml(item.status_color)}"></span> ${phoneParcelEscapeHtml(item.status_label)} · ${phoneParcelEscapeHtml(item.status_meta)}
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+                <div>
+                    <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">${phoneParcelEscapeHtml(item.title)}</div>
+                    <div style="font-size: 13px; color: var(--text-sec);">${phoneParcelEscapeHtml(item.subtitle)}</div>
+                </div>
+                ${item.badge ? `<div class="mini-tag">${phoneParcelEscapeHtml(item.badge)}</div>` : ''}
+            </div>
+        </div>
+    `).join('');
+
+    container.innerHTML = `
+        <div id="phone-parcel-open-detail" class="glass-card" role="button" tabindex="0" aria-label="查看快递详情">
+            <div class="meta-text">
+                <span class="status-dot ${phoneParcelEscapeHtml(featured.status_color)}"></span> ${phoneParcelEscapeHtml(featured.status_label)} · ${phoneParcelEscapeHtml(featured.status_meta)}
+            </div>
+            <div class="pkg-title">${phoneParcelEscapeHtml(featured.title)}</div>
+            <div class="pkg-desc">
+                <i class="ri-user-smile-line"></i> 收件：${phoneParcelEscapeHtml(featured.receiver)}<br>
+                <i class="ri-map-pin-line"></i> ${phoneParcelEscapeHtml(featured.address)}
+            </div>
+            <div class="tag-row">
+                ${(featured.tags || []).map((tag, index) => `<div class="mini-tag${index === 0 ? ' dark' : ''}">${phoneParcelEscapeHtml(tag)}</div>`).join('')}
+            </div>
+        </div>
+        ${listHtml}
+    `;
+
+    bindPhoneParcelClickable(document.getElementById('phone-parcel-open-detail'), () => {
+        switchPhoneParcelView('detail');
+    });
+}
+
+function renderPhoneParcelDetail(parcelData) {
+    const container = document.getElementById('phone-parcel-detail-content');
+    if (!container) return;
+    const detail = parcelData.detail || createDefaultPhoneParcelData(null).detail;
+    const timelineHtml = (detail.timeline || []).map(item => `
+        <div class="mt-item${item.active ? ' active' : ''}">
+            <div class="mt-time">${phoneParcelEscapeHtml(item.time)}</div>
+            <div class="mt-dot"></div>
+            <div class="mt-line"></div>
+            <div class="mt-content">
+                <div class="mt-title">${phoneParcelEscapeHtml(item.title)}</div>
+                <div class="mt-desc">${phoneParcelEscapeHtml(item.desc)}</div>
+            </div>
+        </div>
+    `).join('');
+
+    container.innerHTML = `
+        <div class="detail-hero">
+            <div class="hero-circle"><i class="${phoneParcelEscapeHtml(detail.hero_icon || 'ri-box-3-line')}"></i></div>
+            <div class="hero-status">${phoneParcelEscapeHtml(detail.hero_status)}</div>
+            <div class="hero-track">${phoneParcelEscapeHtml(detail.hero_track)}</div>
+        </div>
+
+        <div class="sticky-note">
+            <i class="ri-chat-quote-line note-icon"></i>
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-sec); margin-bottom: 8px;">CONTACT NOTE</div>
+            <div style="font-size: 15px; font-weight: 600; color: var(--text-main); line-height: 1.5;">${phoneParcelEscapeHtml(detail.note)}</div>
+        </div>
+
+        <div class="glass-card" style="padding: 24px 20px;">
+            <div class="min-timeline">${timelineHtml}</div>
+        </div>
+
+        <div class="title-xl" style="font-size: 20px; margin: 32px 0 16px;">Information</div>
+
+        <div class="glass-card info-list" style="padding: 12px 20px;">
+            <div class="info-row">
+                <div class="info-label">Receiver</div>
+                <div class="info-val">${phoneParcelEscapeHtml(detail.info.receiver)}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Address</div>
+                <div class="info-val">${phoneParcelEscapeHtml(detail.info.address)}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Content</div>
+                <div class="info-val">${phoneParcelEscapeHtml(detail.info.content)}</div>
+            </div>
+            <div class="info-row" style="border: none;">
+                <div class="info-label">Sender</div>
+                <div class="info-val">${phoneParcelEscapeHtml(detail.info.sender)}</div>
+            </div>
+        </div>
+    `;
+}
+
+function renderPhoneParcelAddresses(parcelData) {
+    const container = document.getElementById('phone-parcel-address-list');
+    if (!container) return;
+    const addresses = parcelData.addresses || [];
+    container.innerHTML = addresses.map(entry => `
+        <div class="glass-card">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 12px; gap: 12px;">
+                <div style="font-size: 18px; font-weight: 700;">${phoneParcelEscapeHtml(entry.title)}</div>
+                <div style="font-size: 12px; font-weight: 700; color: var(--text-sec); white-space: nowrap;">${phoneParcelEscapeHtml(entry.count_label)}</div>
+            </div>
+            <div style="font-size: 14px; color: var(--text-sec); margin-bottom: 16px; line-height: 1.5;">
+                Common Receiver: ${phoneParcelEscapeHtml(entry.common_receiver)}<br>
+                Last seen: ${phoneParcelEscapeHtml(entry.last_seen)}
+            </div>
+            <div class="tag-row">
+                ${(entry.tags || []).map((tag, index) => `<div class="mini-tag${index === 0 ? ' dark' : ''}">${phoneParcelEscapeHtml(tag)}</div>`).join('')}
+            </div>
+        </div>
+    `).join('');
+}
+
+function refreshPhoneParcelApp(contactId = currentCheckPhoneContactId) {
+    const screen = document.getElementById('phone-parcel');
+    if (!screen) return;
+    const parcelData = getPhoneParcelData(contactId);
+    renderPhoneParcelHome(parcelData);
+    renderPhoneParcelDetail(parcelData);
+    renderPhoneParcelAddresses(parcelData);
+}
+
+const phoneParcelRuntime = {
+    bound: false,
+    activeView: 'home',
+    activeTabIndex: 0,
+    resizeBound: false
+};
+
+function setPhoneParcelActiveTab(index = 0) {
+    const screen = document.getElementById('phone-parcel');
+    if (!screen) return;
+
+    const tabs = Array.from(screen.querySelectorAll('.tab'));
+    const indicator = document.getElementById('phone-parcel-tab-line');
+    if (!tabs.length || !indicator) return;
+
+    const safeIndex = Math.max(0, Math.min(index, tabs.length - 1));
+    const activeTab = tabs[safeIndex];
+    phoneParcelRuntime.activeTabIndex = safeIndex;
+
+    tabs.forEach((tab, tabIndex) => {
+        const isActive = tabIndex === safeIndex;
+        tab.classList.toggle('active', isActive);
+        tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+
+    renderPhoneParcelHome(getPhoneParcelData(currentCheckPhoneContactId));
+
+    indicator.style.width = `${activeTab.offsetWidth}px`;
+    indicator.style.transform = `translateX(${activeTab.offsetLeft}px)`;
+}
+
+function switchPhoneParcelView(view = 'home') {
+    const nextView = ['home', 'detail', 'address'].includes(view) ? view : 'home';
+    const screen = document.getElementById('phone-parcel');
+    if (!screen) return;
+
+    phoneParcelRuntime.activeView = nextView;
+    screen.querySelectorAll('.page').forEach(panel => {
+        panel.classList.toggle('active', panel.id === `phone-parcel-view-${nextView}`);
+    });
+
+    if (nextView === 'home') {
+        window.requestAnimationFrame(() => setPhoneParcelActiveTab(phoneParcelRuntime.activeTabIndex));
+    }
+}
+
+function bindPhoneParcelClickable(element, handler) {
+    if (!element) return;
+    element.addEventListener('click', handler);
+    element.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handler(event);
+        }
+    });
+}
+
+function bindPhoneParcelApp() {
+    const screen = document.getElementById('phone-parcel');
+    if (!screen || phoneParcelRuntime.bound) return;
+
+    const closeBtn = document.getElementById('phone-parcel-home-close');
+
+    bindPhoneParcelClickable(closeBtn, () => {
+        switchPhoneParcelView('home');
+        screen.classList.add('hidden');
+    });
+
+    screen.querySelectorAll('[data-parcel-back]').forEach(button => {
+        bindPhoneParcelClickable(button, () => {
+            switchPhoneParcelView(button.dataset.parcelBack || 'home');
+        });
+    });
+
+    screen.querySelectorAll('.tab').forEach(button => {
+        bindPhoneParcelClickable(button, () => {
+            setPhoneParcelActiveTab(Number(button.dataset.tabIndex || 0));
+        });
+    });
+
+    if (!phoneParcelRuntime.resizeBound) {
+        window.addEventListener('resize', () => {
+            const parcelScreen = document.getElementById('phone-parcel');
+            if (parcelScreen && !parcelScreen.classList.contains('hidden')) {
+                setPhoneParcelActiveTab(phoneParcelRuntime.activeTabIndex);
+            }
+        });
+        phoneParcelRuntime.resizeBound = true;
+    }
+
+    phoneParcelRuntime.bound = true;
+}
+
+function openPhoneParcelApp() {
+    const screen = document.getElementById('phone-parcel');
+    if (!screen) return;
+
+    bindPhoneParcelApp();
+    phoneParcelRuntime.activeView = 'home';
+    phoneParcelRuntime.activeTabIndex = 0;
+    refreshPhoneParcelApp(currentCheckPhoneContactId);
+    switchPhoneParcelView('home');
+    screen.classList.remove('hidden');
+    window.requestAnimationFrame(() => setPhoneParcelActiveTab(0));
 }
 
 const PHONE_FILES_TEMPLATE_VERSION = 'v4';
@@ -5478,6 +5930,7 @@ function enterPhoneCheck(contactId) {
     renderPhoneItems();
     applyPhoneWallpaper();
     refreshPhoneDeliveryApp(contactId);
+    refreshPhoneParcelApp(contactId);
 
     // 加载并设置朋友圈背景
     const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
@@ -6110,6 +6563,7 @@ function setupPhoneAppListeners() {
     const btnBrowser = document.getElementById('generate-browser-btn');
     const btnXianyu = document.getElementById('generate-xianyu-btn');
     const btnDelivery = document.getElementById('generate-phone-delivery-btn');
+    const btnParcel = document.getElementById('generate-phone-parcel-btn');
 
     if (btnWechat) btnWechat.onclick = () => handlePhoneAppGenerate('wechat');
     if (btnWeibo) btnWeibo.onclick = () => handlePhoneAppGenerate('weibo');
@@ -6117,6 +6571,7 @@ function setupPhoneAppListeners() {
     if (btnBrowser) btnBrowser.onclick = () => handlePhoneAppGenerate('browser');
     if (btnXianyu) btnXianyu.onclick = () => handlePhoneAppGenerate('xianyu');
     if (btnDelivery) btnDelivery.onclick = () => handlePhoneAppGenerate('delivery');
+    if (btnParcel) btnParcel.onclick = () => handlePhoneAppGenerate('parcel');
 }
 
 window.switchPhoneWechatTab = function(tabName) {
@@ -6286,6 +6741,8 @@ async function handlePhoneAppGenerate(appType) {
         await generatePhoneHealthAll(contact);
     } else if (appType === 'delivery') {
         await generatePhoneDeliveryAll(contact);
+    } else if (appType === 'parcel') {
+        await generatePhoneParcelAll(contact);
     } else {
         alert(`Generating ${contact.name}'s ${appType} content...\n(Feature in progress)`);
     }
@@ -6366,6 +6823,103 @@ async function generatePhoneDeliveryAll(contact) {
 
     const systemPrompt = buildPhoneDeliverySystemPrompt(contact);
     await callAiGeneration(contact, systemPrompt, 'delivery_all', btn, originalContent);
+}
+
+function buildPhoneParcelSystemPrompt(contact) {
+    const state = window.iphoneSimState || {};
+    const userName = normalizePhoneDeliveryText(state.userProfile && state.userProfile.name, '用户');
+    const recentChatContext = buildPhoneWechatRecentChatContext(contact) || '无最近聊天上下文';
+
+    return `你是一个“恋爱场景下查手机”的虚拟快递应用内容生成器。
+
+当前手机主人：${contact.name}
+人设：${contact.persona || '无'}
+用户称呼参考：${userName}
+最近聊天上下文（只能用于间接影响生活痕迹，不能照抄聊天原句，不能直接下结论）：
+${recentChatContext}
+
+你的任务：生成一个看起来真实、克制、但能让人隐约感觉“不太对劲”的快递应用页面数据。
+
+生成原则：
+1. 输出必须是严格 JSON 对象，不要 markdown，不要解释。
+2. 所有可见文案默认使用简体中文，品牌名可中英混合。
+3. 不要直接写“出轨”“暧昧对象”“给别人买礼物”这类结论。
+4. 通过收件人、地址复用、深夜签收、隐私面单、备注、退回记录、地址页频率这些细节制造张力。
+5. 大多数内容必须正常，只有少部分细节微妙可疑。
+6. 时间必须真实分布，能和“查手机”场景匹配。
+
+请输出以下结构：
+{
+  "featured_card": {
+    "status_label": "DELIVERED / TRANSIT / EXCEPTION 之一",
+    "status_meta": "如 03:15 AM / SF / ZTO",
+    "status_color": "green 或 orange 或 red",
+    "title": "包裹标题",
+    "receiver": "收件人",
+    "address": "地址 + 代收信息",
+    "tags": ["标签1", "标签2", "标签3"]
+  },
+  "list_items": [
+    {
+      "status_label": "DELIVERED / TRANSIT / EXCEPTION",
+      "status_meta": "承运商或时间",
+      "status_color": "green / orange / red",
+      "title": "包裹标题",
+      "subtitle": "一句副标题，如 送至：XX 或 拒收退回中",
+      "badge": "右侧小标签，可为空字符串"
+    }
+  ],
+  "detail": {
+    "hero_icon": "Remix Icon 类名，如 ri-box-3-line",
+    "hero_status": "详情页主状态",
+    "hero_track": "快递公司 + 单号缩写",
+    "note": "一句会让人多想的收件备注",
+    "timeline": [
+      { "time": "时间", "title": "节点标题", "desc": "节点描述", "active": true }
+    ],
+    "info": {
+      "receiver": "收件人 + 脱敏手机号",
+      "address": "详细地址",
+      "content": "模糊内容",
+      "sender": "发件人信息"
+    }
+  },
+  "addresses": [
+    {
+      "title": "地址名称",
+      "count_label": "如 15 TIMES",
+      "common_receiver": "常见收件人",
+      "last_seen": "最近一次时间",
+      "tags": ["标签1", "标签2"]
+    }
+  ]
+}
+
+数量要求：
+- list_items: 2 到 4 条
+- timeline: 3 到 5 条
+- addresses: 3 到 5 条
+
+额外要求：
+- featured_card 必须比其他项更“有信息量”，适合放在首页最上方。
+- 至少 30% 的内容与“用户关系”间接相关，但只能通过生活痕迹体现。
+- 可以出现：非默认地址、酒店/公寓/快递柜、代收、深夜签收、拒收退回、隐私发件人、不要打电话、放门口等。
+- 不要把所有内容都做得很可疑，要像真实生活记录。
+
+只输出合法 JSON。`;
+}
+
+async function generatePhoneParcelAll(contact) {
+    const btn = document.getElementById('generate-phone-parcel-btn');
+    const originalContent = btn ? btn.innerHTML : null;
+    if (btn) {
+        btn.classList.add('generating-pulse');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="ri-loader-4-line"></i>';
+    }
+
+    const systemPrompt = buildPhoneParcelSystemPrompt(contact);
+    await callAiGeneration(contact, systemPrompt, 'parcel_all', btn, originalContent);
 }
 
 async function generatePhoneWechatAll(contact) {
@@ -7104,6 +7658,10 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
             result = normalizePhoneDeliveryAiPayload(result, contact);
         }
 
+        if (type === 'parcel_all') {
+            result = normalizePhoneParcelAiPayload(result, contact);
+        }
+
         if (type === 'moments' && Array.isArray(result)) {
             console.log('处理moments类型，数组长度:', result.length);
             window.iphoneSimState.phoneContent[contact.id].wechatMoments = result;
@@ -7140,6 +7698,21 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
             switchPhoneDeliveryPage(currentPage);
             if (window.showChatToast) window.showChatToast('Generated delivery content for ' + contact.name);
             else alert('Generated delivery content for ' + contact.name);
+        } else if (type === 'parcel_all') {
+            const normalizedParcelData = normalizePhoneParcelData(result, contact);
+            const totalParcelCount = (normalizedParcelData.featured_card && normalizedParcelData.featured_card.title ? 1 : 0)
+                + ((normalizedParcelData.list_items || []).length)
+                + ((normalizedParcelData.detail && normalizedParcelData.detail.timeline || []).length)
+                + ((normalizedParcelData.addresses || []).length);
+            if (!totalParcelCount) {
+                throw new Error('快递应用生成结果为空');
+            }
+            setPhoneParcelData(contact.id, normalizedParcelData);
+            const currentView = phoneParcelRuntime.activeView || 'home';
+            refreshPhoneParcelApp(contact.id);
+            switchPhoneParcelView(currentView);
+            if (window.showChatToast) window.showChatToast('已为 ' + contact.name + ' 生成快递内容');
+            else alert('已为 ' + contact.name + ' 生成快递内容');
         } else if (type === 'notes_all') {
             const normalizedNotesData = normalizePhoneNotesData(result);
             const totalNotesCount = PHONE_NOTES_SECTION_ORDER.reduce((sum, sectionKey) => sum + (normalizedNotesData[sectionKey] || []).length, 0);
@@ -7383,6 +7956,12 @@ async function callAiGeneration(contact, systemPrompt, type, btn, originalConten
                     btn.onclick = () => handlePhoneAppGenerate('delivery');
                 } catch (deliveryError) {
                     console.warn('Failed to rebind delivery generate button:', deliveryError);
+                }
+            } else if (type === 'parcel_all') {
+                try {
+                    btn.onclick = () => handlePhoneAppGenerate('parcel');
+                } catch (parcelError) {
+                    console.warn('Failed to rebind parcel generate button:', parcelError);
                 }
             }
         }

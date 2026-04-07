@@ -5553,6 +5553,59 @@
         </div>
     </div>
 
+    <!-- 查手机 - 快递 -->
+    <div id="phone-parcel" class="sub-screen hidden" style="z-index: 200; background-color: #eef2f5;">
+        <div class="phone-mockup">
+            <div class="blob blob-1"></div>
+            <div class="blob blob-2"></div>
+            <div class="blob blob-3"></div>
+
+            <div class="page active" id="phone-parcel-view-home">
+                <div class="header">
+                    <div id="phone-parcel-home-close" class="btn-icon" role="button" tabindex="0" aria-label="返回查手机主屏幕"><i class="ri-search-line"></i></div>
+                    <div class="header-title">TRACKING</div>
+                    <button id="generate-phone-parcel-btn" class="btn-icon" type="button" aria-label="生成快递内容" title="生成快递内容"><i class="ri-sparkling-2-line"></i></button>
+                </div>
+
+                <div class="scroll-area">
+                    <div class="title-xl">Your<br>Packages</div>
+
+                    <div class="tabs" role="tablist" aria-label="快递筛选">
+                        <div class="tab active" data-tab-index="0" role="tab" aria-selected="true">ALL</div>
+                        <div class="tab" data-tab-index="1" role="tab" aria-selected="false">TRANSIT</div>
+                        <div class="tab" data-tab-index="2" role="tab" aria-selected="false">DELIVERED</div>
+                        <div class="tab-indicator" id="phone-parcel-tab-line"></div>
+                    </div>
+
+                    <div id="phone-parcel-home-content"></div>
+                </div>
+            </div>
+
+            <div class="page" id="phone-parcel-view-detail">
+                <div class="header">
+                    <div class="btn-icon" data-parcel-back="home" role="button" tabindex="0" aria-label="返回快递首页"><i class="ri-arrow-left-line"></i></div>
+                    <div class="header-title">DETAILS</div>
+                    <div class="btn-icon" role="button" tabindex="0" aria-label="更多操作"><i class="ri-more-line"></i></div>
+                </div>
+
+                <div id="phone-parcel-detail-content" class="scroll-area"></div>
+            </div>
+
+            <div class="page" id="phone-parcel-view-address">
+                <div class="header">
+                    <div class="btn-icon" data-parcel-back="home" role="button" tabindex="0" aria-label="返回快递首页"><i class="ri-arrow-left-line"></i></div>
+                    <div class="header-title">ADDRESSES</div>
+                    <div class="btn-icon" role="button" tabindex="0" aria-label="筛选地址"><i class="ri-equalizer-line"></i></div>
+                </div>
+
+                <div class="scroll-area">
+                    <div class="title-xl">Frequent<br>Spots</div>
+                    <div id="phone-parcel-address-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 查手机 - 微信 -->
     <div id="phone-wechat" class="sub-screen hidden" style="z-index: 200;">
         <div class="app-header" id="phone-wechat-header" style="background: transparent; border: none; position: absolute; top: 0; left: 0; width: 100%; z-index: 10; padding-left: 20px; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; height: auto; padding-top: max(47px, env(safe-area-inset-top)); justify-content: space-between;">
