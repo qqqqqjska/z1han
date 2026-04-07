@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <title>iPhone Simulator</title>
@@ -1483,6 +1483,32 @@
                     </div>
                 </div>
             </div>
+            <!-- 导航弹窗 -->
+            <div id="chat-nav-modal" class="modal hidden" style="z-index: 205; align-items: center;">
+                <div class="modal-content chat-nav-modal-card">
+                    <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
+                        <h3 style="width: 100%; text-align: center;">路线规划</h3>
+                        <button class="close-btn" id="close-chat-nav-modal" style="position: absolute; right: 15px;">&times;</button>
+                    </div>
+                    <div class="modal-body" style="padding: 20px;">
+                        <div class="chat-nav-modal-copy">输入目的地，并选择你想要的出行方式</div>
+                        <div class="setting-group" style="margin-top: 14px;">
+                            <label for="chat-nav-destination">目的地</label>
+                            <input type="text" id="chat-nav-destination" placeholder="例如：南京南站 / 新街口 / 夫子庙" maxlength="60">
+                        </div>
+                        <div class="setting-group" style="margin-top: 16px;">
+                            <label>出行方式</label>
+                            <div id="chat-nav-mode-group" class="chat-nav-mode-group">
+                                <button type="button" class="chat-nav-mode-chip active" data-mode="driving">驾车</button>
+                                <button type="button" class="chat-nav-mode-chip" data-mode="transit">公交地铁</button>
+                                <button type="button" class="chat-nav-mode-chip" data-mode="walking">步行</button>
+                                <button type="button" class="chat-nav-mode-chip" data-mode="bicycling">骑行</button>
+                            </div>
+                        </div>
+                        <button id="confirm-chat-nav-btn" class="ios-btn-block" style="margin-top: 16px;">发送导航请求</button>
+                    </div>
+                </div>
+            </div>
         <!-- 发送语音弹窗 -->
         <div id="voice-input-modal" class="modal hidden">
             <div class="modal-content">
@@ -1745,6 +1771,10 @@
                             <div class="more-item" id="chat-more-food-btn">
                                 <div class="more-icon"><i class="fas fa-utensils"></i></div>
                                 <div class="more-label">吃什么</div>
+                            </div>
+                            <div class="more-item" id="chat-more-nav-btn">
+                                <div class="more-icon"><i class="fas fa-route"></i></div>
+                                <div class="more-label">导航</div>
                             </div>
                             <div class="more-item" id="chat-more-screen-share-btn" onclick="window.startScreenShare(); event.stopPropagation();">
                                 <div class="more-icon"><i class="fas fa-desktop"></i></div>

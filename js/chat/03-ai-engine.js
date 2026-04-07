@@ -614,7 +614,7 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
             </div>
         `;
     } else if (type === 'food_invite') {
-        const cardTitle = String(text || '我正在邀请你帮我挑选晚饭').trim() || '我正在邀请你帮我挑选晚饭';
+        const cardTitle = String(text || '我正在邀请你帮我挑选美食').trim() || '我正在邀请你帮我挑选晚饭';
         const cardSubtitle = String(description || '将结合附近餐厅与外卖给你建议').trim() || '将结合附近餐厅与外卖给你建议';
         contentHtml = `
             <div class="food-invite-card">
@@ -626,7 +626,24 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
                 <div class="food-invite-card-subtitle">${cardSubtitle}</div>
                 <div class="food-invite-card-foot">
                     <span class="food-invite-card-dot"></span>
-                    <span>智能晚饭邀请</span>
+                    <span>美食邀请</span>
+                </div>
+            </div>
+        `;
+    } else if (type === 'route_invite') {
+        const cardTitle = String(text || '我正在邀请你帮我规划路线').trim() || '我正在邀请你帮我规划路线';
+        const cardSubtitle = String(description || '输入目的地和出行方式后为你生成路线建议').trim() || '输入目的地和出行方式后为你生成路线建议';
+        contentHtml = `
+            <div class="food-invite-card">
+                <div class="food-invite-card-head">
+                    <div class="food-invite-card-icon"><i class="fas fa-route"></i></div>
+                    <div class="food-invite-card-chip">Route Assist</div>
+                </div>
+                <div class="food-invite-card-title">${cardTitle}</div>
+                <div class="food-invite-card-subtitle">${cardSubtitle}</div>
+                <div class="food-invite-card-foot">
+                    <span class="food-invite-card-dot"></span>
+                    <span>路线规划</span>
                 </div>
             </div>
         `;
@@ -667,7 +684,7 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
 
     let extraClass = '';
     const isHtmlTextMessage = type === 'text' && isHtmlPayloadForParser(text);
-    const cardTypes = ['transfer', 'family_card', 'food_invite', 'gift_card', 'shopping_gift', 'delivery_share', 'order_progress', 'order_share', 'pay_request', 'product_share', 'icity_card', 'minesweeper_invite', 'pdd_cash_share', 'pdd_bargain_share', 'savings_invite', 'savings_withdraw_request', 'savings_withdraw_result', 'savings_progress', 'music_listen_invite'];
+    const cardTypes = ['transfer', 'family_card', 'food_invite', 'route_invite', 'gift_card', 'shopping_gift', 'delivery_share', 'order_progress', 'order_share', 'pay_request', 'product_share', 'icity_card', 'minesweeper_invite', 'pdd_cash_share', 'pdd_bargain_share', 'savings_invite', 'savings_withdraw_request', 'savings_withdraw_result', 'savings_progress', 'music_listen_invite'];
     if (cardTypes.includes(type)) {
         extraClass += ' no-bubble';
     }
@@ -681,7 +698,7 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
         } catch(e) {}
     } else if (type === 'family_card') {
         extraClass += ' family-card-msg';
-    } else if (type === 'food_invite') {
+    } else if (type === 'food_invite' || type === 'route_invite') {
         extraClass += ' food-invite-msg';
     } else if (type === 'sticker') {
         extraClass = 'sticker-msg';
@@ -6165,6 +6182,323 @@ async function getChatAmapEtaToContact(contactId, mode = 'driving') {
     persistChatAmapRuntimeSoon();
     return route;
 }
+
+function normalizeChatAmapRouteMode(modeValue) {
+    const text = String(modeValue || '').trim().toLowerCase();
+    if (!text) return { key: 'driving', label: '驾车' };
+    if (/(公交|地铁|巴士|公车|公共交通|transit|bus|metro|subway)/i.test(text)) {
+        return { key: 'transit', label: '公交地铁' };
+    }
+    if (/(步行|走路|徒步|walking|walk)/i.test(text)) {
+        return { key: 'walking', label: '步行' };
+    }
+    if (/(骑行|骑车|单车|自行车|电瓶车|电动车|bike|bicycle|cycling|ride)/i.test(text)) {
+        return { key: 'bicycling', label: '骑行' };
+    }
+    return { key: 'driving', label: '驾车' };
+}
+
+function buildChatAmapRouteInstructionText(step) {
+    if (!step || typeof step !== 'object') return '';
+    const parts = [
+        String(step.instruction || '').trim(),
+        step.distanceText ? `约 ${step.distanceText}` : ''
+    ].filter(Boolean);
+    return parts.join('，');
+}
+
+function buildChatAmapCommonRouteSteps(path, limit = 5) {
+    const steps = Array.isArray(path && path.steps) ? path.steps : [];
+    return steps
+        .map(step => ({
+            instruction: String(step && step.instruction || '').trim(),
+            road: String(step && step.road || '').trim(),
+            distanceText: formatChatAmapDistance(step && step.distance),
+            durationMin: Number(step && step.duration) > 0 ? Math.max(1, Math.round(Number(step.duration) / 60)) : null
+        }))
+        .filter(step => step.instruction)
+        .slice(0, limit);
+}
+
+function buildChatAmapTransitRouteSteps(transit, limit = 6) {
+    const segments = Array.isArray(transit && transit.segments) ? transit.segments : [];
+    const steps = [];
+
+    segments.forEach(segment => {
+        if (steps.length >= limit) return;
+
+        const walkingSteps = Array.isArray(segment && segment.walking && segment.walking.steps)
+            ? segment.walking.steps
+            : [];
+        walkingSteps.forEach(step => {
+            if (steps.length >= limit) return;
+            const instruction = String(step && step.instruction || '').trim();
+            if (!instruction) return;
+            steps.push({
+                instruction,
+                distanceText: formatChatAmapDistance(step && step.distance)
+            });
+        });
+
+        const busLines = Array.isArray(segment && segment.bus && segment.bus.buslines)
+            ? segment.bus.buslines
+            : [];
+        busLines.forEach(line => {
+            if (steps.length >= limit) return;
+            const name = String(line && line.name || '').trim();
+            if (!name) return;
+            const viaNum = Number(line && line.via_num);
+            const departure = String(line && line.departure_stop && line.departure_stop.name || '').trim();
+            const arrival = String(line && line.arrival_stop && line.arrival_stop.name || '').trim();
+            const instruction = [
+                `乘坐 ${name}`,
+                Number.isFinite(viaNum) && viaNum > 0 ? `${viaNum} 站` : '',
+                departure && arrival ? `${departure} 上车，${arrival} 下车` : ''
+            ].filter(Boolean).join('，');
+            steps.push({ instruction, distanceText: '' });
+        });
+
+        const railway = segment && segment.railway ? segment.railway : null;
+        if (railway && steps.length < limit) {
+            const name = String(railway.name || railway.trip || '').trim();
+            if (name) {
+                const departure = String(railway.departure_stop && railway.departure_stop.name || '').trim();
+                const arrival = String(railway.arrival_stop && railway.arrival_stop.name || '').trim();
+                steps.push({
+                    instruction: [
+                        `乘坐 ${name}`,
+                        departure && arrival ? `${departure} 上车，${arrival} 下车` : ''
+                    ].filter(Boolean).join('，'),
+                    distanceText: ''
+                });
+            }
+        }
+    });
+
+    return steps.slice(0, limit);
+}
+
+async function geocodeChatAmapDestination(query, options = {}) {
+    const text = String(query || '').trim();
+    if (!text) return null;
+
+    const data = await fetchChatAmapJson('/v3/geocode/geo', {
+        address: text,
+        city: String(options.city || '').trim()
+    }).catch(error => {
+        console.error('[Route Debug] destination geocode failed', {
+            query: text,
+            city: String(options.city || '').trim(),
+            message: error && error.message ? error.message : String(error)
+        });
+        return null;
+    });
+
+    const geocode = data && Array.isArray(data.geocodes) ? data.geocodes[0] : null;
+    if (!geocode || !geocode.location) return null;
+
+    const [lngStr, latStr] = String(geocode.location).split(',');
+    const destination = {
+        query: text,
+        lng: Number(lngStr),
+        lat: Number(latStr),
+        formattedAddress: String(geocode.formatted_address || '').trim(),
+        city: normalizeChatAmapCity(geocode.city) || String(geocode.province || '').trim(),
+        district: String(geocode.district || '').trim(),
+        adcode: String(geocode.adcode || '').trim(),
+        updateTime: Date.now()
+    };
+    destination.shortLabel = joinChatAmapText([
+        destination.district,
+        destination.query
+    ]) || destination.formattedAddress || destination.query;
+    return destination;
+}
+
+async function fetchChatAmapBicyclingJson(params = {}) {
+    const settings = window.iphoneSimState && window.iphoneSimState.amapSettings;
+    const webKey = String((settings && (settings.webKey || settings.key)) || '').trim();
+    if (!webKey) {
+        throw new Error('AMap Web 服务 Key 未配置');
+    }
+    const url = new URL('https://restapi.amap.com/v4/direction/bicycling');
+    url.searchParams.set('key', webKey);
+    Object.keys(params).forEach(key => {
+        const value = params[key];
+        if (value !== undefined && value !== null && value !== '') {
+            url.searchParams.set(key, String(value));
+        }
+    });
+
+    const response = await fetch(url.toString(), { method: 'GET' });
+    const rawText = await response.text().catch(() => '');
+    if (!response.ok) {
+        throw new Error(`AMap HTTP ${response.status}`);
+    }
+    const data = rawText ? JSON.parse(rawText) : {};
+    if (String(data.errcode || '0') !== '0') {
+        throw new Error(String(data.errmsg || 'AMap 骑行路线调用失败'));
+    }
+    return data;
+}
+
+window.planAmapRouteToDestination = async function(destinationText, mode = 'driving', options = {}) {
+    const myLocation = await getChatAmapMyLocation(!!options.force).catch(() => null);
+    if (!myLocation || !Number.isFinite(Number(myLocation.lng)) || !Number.isFinite(Number(myLocation.lat))) {
+        throw new Error('未获取到当前位置，请先允许定位');
+    }
+
+    const modeMeta = normalizeChatAmapRouteMode(mode);
+    const destination = await geocodeChatAmapDestination(destinationText, {
+        city: myLocation.city || String(options.city || '').trim()
+    });
+    if (!destination || !Number.isFinite(Number(destination.lng)) || !Number.isFinite(Number(destination.lat))) {
+        throw new Error('未识别到目的地，请换个更具体的地点名');
+    }
+
+    console.log('[Route Debug] planning route', {
+        destinationText,
+        mode: modeMeta,
+        origin: {
+            lat: myLocation.lat,
+            lng: myLocation.lng,
+            label: myLocation.shortLabel || myLocation.formattedAddress || ''
+        },
+        destination: {
+            lat: destination.lat,
+            lng: destination.lng,
+            label: destination.shortLabel || destination.formattedAddress || destination.query
+        }
+    });
+
+    let route = null;
+    if (modeMeta.key === 'walking') {
+        const data = await fetchChatAmapJson('/v3/direction/walking', {
+            origin: `${myLocation.lng},${myLocation.lat}`,
+            destination: `${destination.lng},${destination.lat}`
+        });
+        const path = data && data.route && Array.isArray(data.route.paths) ? data.route.paths[0] : null;
+        if (!path) throw new Error('未获取到步行路线');
+        route = {
+            mode: modeMeta.key,
+            modeLabel: modeMeta.label,
+            distanceKm: Number(path.distance || 0) > 0 ? Number((Number(path.distance) / 1000).toFixed(1)) : null,
+            etaMin: Number(path.duration || 0) > 0 ? Math.max(1, Math.round(Number(path.duration) / 60)) : null,
+            steps: buildChatAmapCommonRouteSteps(path)
+        };
+    } else if (modeMeta.key === 'transit') {
+        const data = await fetchChatAmapJson('/v3/direction/transit/integrated', {
+            origin: `${myLocation.lng},${myLocation.lat}`,
+            destination: `${destination.lng},${destination.lat}`,
+            city: myLocation.city || destination.city || '',
+            strategy: 0,
+            nightflag: 0,
+            extensions: 'all'
+        });
+        const transit = data && data.route && Array.isArray(data.route.transits) ? data.route.transits[0] : null;
+        if (!transit) throw new Error('未获取到公交地铁路线');
+        route = {
+            mode: modeMeta.key,
+            modeLabel: modeMeta.label,
+            distanceKm: Number(transit.distance || 0) > 0 ? Number((Number(transit.distance) / 1000).toFixed(1)) : null,
+            etaMin: Number(transit.duration || 0) > 0 ? Math.max(1, Math.round(Number(transit.duration) / 60)) : null,
+            cost: Number(transit.cost || 0) > 0 ? `¥${Number(transit.cost).toFixed(0)}` : '',
+            walkingDistanceText: formatChatAmapDistance(transit.walking_distance),
+            steps: buildChatAmapTransitRouteSteps(transit)
+        };
+    } else if (modeMeta.key === 'bicycling') {
+        const data = await fetchChatAmapBicyclingJson({
+            origin: `${myLocation.lng},${myLocation.lat}`,
+            destination: `${destination.lng},${destination.lat}`
+        });
+        const path = data && data.data && Array.isArray(data.data.paths) ? data.data.paths[0] : null;
+        if (!path) throw new Error('未获取到骑行路线');
+        route = {
+            mode: modeMeta.key,
+            modeLabel: modeMeta.label,
+            distanceKm: Number(path.distance || 0) > 0 ? Number((Number(path.distance) / 1000).toFixed(1)) : null,
+            etaMin: Number(path.duration || 0) > 0 ? Math.max(1, Math.round(Number(path.duration) / 60)) : null,
+            steps: buildChatAmapCommonRouteSteps(path)
+        };
+    } else {
+        const data = await fetchChatAmapJson('/v3/direction/driving', {
+            origin: `${myLocation.lng},${myLocation.lat}`,
+            destination: `${destination.lng},${destination.lat}`,
+            strategy: 0,
+            extensions: 'all'
+        });
+        const path = data && data.route && Array.isArray(data.route.paths) ? data.route.paths[0] : null;
+        if (!path) throw new Error('未获取到驾车路线');
+        route = {
+            mode: modeMeta.key,
+            modeLabel: modeMeta.label,
+            distanceKm: Number(path.distance || 0) > 0 ? Number((Number(path.distance) / 1000).toFixed(1)) : null,
+            etaMin: Number(path.duration || 0) > 0 ? Math.max(1, Math.round(Number(path.duration) / 60)) : null,
+            taxiCost: Number(data && data.route && data.route.taxi_cost || 0) > 0 ? `¥${Number(data.route.taxi_cost).toFixed(0)}` : '',
+            steps: buildChatAmapCommonRouteSteps(path)
+        };
+    }
+
+    const result = {
+        destinationQuery: String(destinationText || '').trim(),
+        originLabel: myLocation.shortLabel || myLocation.formattedAddress || myLocation.city || '当前位置',
+        originAddress: myLocation.formattedAddress || '',
+        destinationLabel: destination.shortLabel || destination.formattedAddress || destination.query || '目的地',
+        destinationAddress: destination.formattedAddress || destination.query || '',
+        destination,
+        ...route,
+        updateTime: Date.now()
+    };
+
+    console.log('[Route Debug] route result', {
+        destination: result.destinationLabel,
+        mode: result.mode,
+        distanceKm: result.distanceKm,
+        etaMin: result.etaMin,
+        cost: result.cost || result.taxiCost || '',
+        steps: result.steps || []
+    });
+    return result;
+};
+
+window.buildAmapNavigationPromptContext = function(routeResult, userQuestion = '') {
+    if (!routeResult) return '';
+
+    const lines = [
+        '【导航路线缓存】',
+        userQuestion ? `- 用户原始需求：${userQuestion}` : '',
+        `- 出发地：${routeResult.originLabel || '当前位置'}`,
+        `- 目的地：${routeResult.destinationLabel || routeResult.destinationQuery || '未知目的地'}`,
+        `- 出行方式：${routeResult.modeLabel || '驾车'}`
+    ].filter(Boolean);
+
+    const summary = [];
+    if (routeResult.distanceKm !== null && routeResult.distanceKm !== undefined) {
+        summary.push(`全程约 ${routeResult.distanceKm} km`);
+    }
+    if (routeResult.etaMin !== null && routeResult.etaMin !== undefined) {
+        summary.push(`预计 ${routeResult.etaMin} 分钟`);
+    }
+    if (routeResult.cost) summary.push(`花费约 ${routeResult.cost}`);
+    if (routeResult.taxiCost) summary.push(`打车约 ${routeResult.taxiCost}`);
+    if (routeResult.walkingDistanceText) summary.push(`步行约 ${routeResult.walkingDistanceText}`);
+    if (summary.length > 0) {
+        lines.push(`- 路线概览：${summary.join('，')}`);
+    }
+
+    if (Array.isArray(routeResult.steps) && routeResult.steps.length > 0) {
+        lines.push('- 路线步骤（前几步）：');
+        routeResult.steps.slice(0, 5).forEach((step, index) => {
+            const stepText = buildChatAmapRouteInstructionText(step);
+            if (stepText) {
+                lines.push(`  ${index + 1}. ${stepText}`);
+            }
+        });
+    }
+
+    lines.push('⚠️ 仅当用户在继续问导航、路线、多久到、怎么走、哪种方式更合适时，才引用这份缓存；平时不要主动复述。');
+    return lines.join('\n');
+};
 
 window.getAmapMyLocation = getChatAmapMyLocation;
 window.getAmapContactLocation = getChatAmapContactLocation;

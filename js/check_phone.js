@@ -5676,14 +5676,15 @@ async function generatePhoneFilesSection(contact, sectionKey, mode, btn) {
 }
 
 const PHONE_FILES_PROMPT_TEMPLATES = {
-    COMMON_CONTEXT: ({ contact, userName, recentChatContext }) => `请你扮演“手机文件应用内容生成器”，为角色【${contact.name}】生成“文件 App”里的私人内容。
+    COMMON_CONTEXT: ({ contact, userName, userPersona, recentChatContext }) => `请你扮演“手机文件应用内容生成器”，为角色【${contact.name}】生成“文件 App”里的私人内容。
 
 【角色设定】
 姓名：${contact.name}
 人设：${contact.persona || '无'}
 
 【用户信息】
-用户昵称：${userName}
+用户名称：${userName}
+用户人设：${userPersona || '未填写'}
 
 【与用户最近聊天上下文】
 ${recentChatContext || '暂无最近聊天记录'}
@@ -5843,16 +5844,21 @@ ${recentChatContext || '暂无最近聊天记录'}
 };
 
 function buildPhoneFilesSystemPrompt(contact, type) {
-    const state = window.iphoneSimState || {};
-    const recentChatContext = buildPhoneWechatRecentChatContext(contact) || '暂无最近聊天记录';
-    const userName = phoneFilesNormalizeText(state.userProfile && state.userProfile.name, '用户');
+    const sharedContext = buildPhoneSharedPromptContext(contact, {
+        recentChatFallback: '暂无最近聊天记录',
+        userPersonaFallback: '未填写'
+    });
+    const userName = phoneFilesNormalizeText(sharedContext.userName, '用户');
+    const userPersona = phoneFilesNormalizeText(sharedContext.userPersona, '');
+    const recentChatContext = sharedContext.recentChatContext;
     const COMMON_CONTEXT = PHONE_FILES_PROMPT_TEMPLATES.COMMON_CONTEXT({
         contact,
         userName,
+        userPersona,
         recentChatContext
     });
     const builder = PHONE_FILES_PROMPT_TEMPLATES[type] || PHONE_FILES_PROMPT_TEMPLATES.files_all;
-    return builder({ COMMON_CONTEXT, contact, userName, recentChatContext });
+    return builder({ COMMON_CONTEXT, contact, userName, userPersona, recentChatContext });
 }
 
 function handlePhoneWechatBgUpload(e) {
@@ -6749,15 +6755,20 @@ async function handlePhoneAppGenerate(appType) {
 }
 
 function buildPhoneDeliverySystemPrompt(contact) {
-    const state = window.iphoneSimState || {};
-    const userName = normalizePhoneDeliveryText(state.userProfile && state.userProfile.name, 'User');
-    const recentChatContext = buildPhoneWechatRecentChatContext(contact) || 'No recent chat context.';
+    const sharedContext = buildPhoneSharedPromptContext(contact, {
+        recentChatFallback: 'No recent chat context.',
+        userPersonaFallback: 'Not provided'
+    });
+    const userName = normalizePhoneDeliveryText(sharedContext.userName, '用户');
+    const userPersona = normalizePhoneDeliveryText(sharedContext.userPersona, 'Not provided');
+    const recentChatContext = sharedContext.recentChatContext;
 
     return `You are generating a fake-but-highly-believable food delivery / errand app dataset for a mobile phone inspection scenario.
 
 Current contact: ${contact.name}
-Persona: ${contact.persona || 'None'}
-User reference: ${userName}
+Contact persona: ${sharedContext.contactPersona || 'None'}
+User name: ${userName}
+User persona: ${userPersona}
 Recent chat context (only for subtle indirect tension, never copy wording, never state conclusions directly):
 ${recentChatContext}
 
@@ -6826,15 +6837,20 @@ async function generatePhoneDeliveryAll(contact) {
 }
 
 function buildPhoneParcelSystemPrompt(contact) {
-    const state = window.iphoneSimState || {};
-    const userName = normalizePhoneDeliveryText(state.userProfile && state.userProfile.name, '用户');
-    const recentChatContext = buildPhoneWechatRecentChatContext(contact) || '无最近聊天上下文';
+    const sharedContext = buildPhoneSharedPromptContext(contact, {
+        recentChatFallback: '无最近聊天上下文',
+        userPersonaFallback: '未填写'
+    });
+    const userName = normalizePhoneDeliveryText(sharedContext.userName, '用户');
+    const userPersona = normalizePhoneDeliveryText(sharedContext.userPersona, '未填写');
+    const recentChatContext = sharedContext.recentChatContext;
 
     return `你是一个“恋爱场景下查手机”的虚拟快递应用内容生成器。
 
 当前手机主人：${contact.name}
-人设：${contact.persona || '无'}
-用户称呼参考：${userName}
+人设：${sharedContext.contactPersona || '无'}
+用户名称：${userName}
+用户人设：${userPersona}
 最近聊天上下文（只能用于间接影响生活痕迹，不能照抄聊天原句，不能直接下结论）：
 ${recentChatContext}
 
@@ -6929,10 +6945,16 @@ async function generatePhoneWechatAll(contact) {
         btn.classList.add('generating-pulse');
     }
 
-    const recentChatContext = buildPhoneWechatRecentChatContext(contact);
+    const sharedContext = buildPhoneSharedPromptContext(contact, {
+        recentChatFallback: '暂无最近聊天记录可供参考。',
+        userPersonaFallback: '未填写'
+    });
+    const recentChatContext = sharedContext.recentChatContext;
 
     const systemPrompt = `你是一个虚拟手机内容生成器。请为角色【${contact.name}】生成微信内容（包含聊天列表和朋友圈）。
-角色设定：${contact.persona || '无'}
+角色设定：${sharedContext.contactPersona || '无'}
+用户名称：${sharedContext.userName}
+用户人设：${sharedContext.userPersonaText}
 
 ${recentChatContext}
 
@@ -6974,7 +6996,7 @@ function buildPhoneWechatRecentChatContext(contact) {
     const state = window.iphoneSimState || {};
     const historyMap = state.chatHistory || {};
     const rawHistory = Array.isArray(historyMap[contact.id]) ? historyMap[contact.id] : [];
-    const userName = String(state.userProfile && state.userProfile.name ? state.userProfile.name : '用户').trim() || '用户';
+    const { userName } = resolvePhonePromptUserIdentity(contact);
 
     const recentMessages = rawHistory
         .filter(msg => {
@@ -7029,6 +7051,48 @@ ${recentMessages.join('\n')}
 - 不要照抄聊天原句，请改写后再融入内容。`;
 }
 
+function resolvePhonePromptUserIdentity(contact) {
+    const state = window.iphoneSimState || {};
+    const userPersonas = Array.isArray(state.userPersonas) ? state.userPersonas : [];
+    const resolvedUserPersonaId = (contact && contact.userPersonaId) || state.currentUserPersonaId || null;
+    const matchedPersona = resolvedUserPersonaId
+        ? userPersonas.find(item => String(item && item.id) === String(resolvedUserPersonaId))
+        : null;
+    const userName = String(
+        (matchedPersona && matchedPersona.name)
+        || (state.userProfile && state.userProfile.name)
+        || '用户'
+    ).trim() || '用户';
+    const userPersona = String(
+        (contact && contact.userPersonaPromptOverride)
+        || (matchedPersona && matchedPersona.aiPrompt)
+        || ''
+    ).trim();
+
+    return {
+        userName,
+        userPersona,
+        matchedPersona,
+        resolvedUserPersonaId
+    };
+}
+
+function buildPhoneSharedPromptContext(contact, options = {}) {
+    const {
+        recentChatFallback = '暂无最近聊天记录可供参考。',
+        userPersonaFallback = '未填写'
+    } = options;
+    const identity = resolvePhonePromptUserIdentity(contact);
+
+    return {
+        contactPersona: String(contact && contact.persona ? contact.persona : '无').trim() || '无',
+        userName: identity.userName,
+        userPersona: identity.userPersona,
+        userPersonaText: identity.userPersona || userPersonaFallback,
+        recentChatContext: buildPhoneWechatRecentChatContext(contact) || recentChatFallback
+    };
+}
+
 const PHONE_MESSAGES_DATA_KEYS = [
     'verification_codes',
     'delivery_notifications',
@@ -7063,8 +7127,7 @@ function normalizePhoneMessagesIdentity(value) {
 }
 
 function getForbiddenPhoneMessageCounterparties(contact) {
-    const state = window.iphoneSimState || {};
-    const userName = normalizePhoneMessagesString(state.userProfile && state.userProfile.name ? state.userProfile.name : '用户');
+    const { userName } = resolvePhonePromptUserIdentity(contact);
     const labels = ['用户', '玩家', '{{user}}', '我'];
     if (userName) labels.push(userName);
     if (contact && contact.name) labels.push(contact.name);
@@ -7191,10 +7254,14 @@ function normalizePhoneMessagesAiPayload(raw, generatedAt = '', contact = null) 
 window.normalizePhoneMessagesAiPayload = normalizePhoneMessagesAiPayload;
 
 function buildPhoneMessagesSystemPrompt(contact) {
-    const state = window.iphoneSimState || {};
-    const userName = String(state.userProfile && state.userProfile.name ? state.userProfile.name : '用户').trim() || '用户';
-    const persona = String(contact && contact.persona ? contact.persona : '无').trim() || '无';
-    const recentChatContext = buildPhoneWechatRecentChatContext(contact) || '暂无最近聊天记录可供参考。';
+    const sharedContext = buildPhoneSharedPromptContext(contact, {
+        recentChatFallback: '暂无最近聊天记录可供参考。',
+        userPersonaFallback: '未填写'
+    });
+    const userName = String(sharedContext.userName || '用户').trim() || '用户';
+    const persona = String(sharedContext.contactPersona || '无').trim() || '无';
+    const userPersona = String(sharedContext.userPersona || '').trim();
+    const recentChatContext = sharedContext.recentChatContext;
     const romanceAllowed = isPhoneMessagesRomanceAllowed(contact);
     const romanceRule = romanceAllowed
         ? '15. Since this persona explicitly includes romance or ambiguous relationship traits, a small amount of subtle third-party flirtation is allowed, but it must stay restrained, low-frequency, and consistent with the persona.'
@@ -7205,6 +7272,8 @@ function buildPhoneMessagesSystemPrompt(contact) {
 【角色信息】
 - 角色姓名：${contact.name}
 - 角色人设：${persona}
+- 用户名称：${userName}
+- 用户人设：${userPersona || '未填写'}
 
 ${recentChatContext}
 
@@ -7306,17 +7375,22 @@ async function generatePhoneMessagesAll(contact) {
 
 // 检查AI API配置
 function buildPhoneHealthSystemPrompt(contact) {
-    const state = window.iphoneSimState || {};
-    const userName = String(state.userProfile && state.userProfile.name ? state.userProfile.name : '用户').trim() || '用户';
-    const persona = String(contact && contact.persona ? contact.persona : '无').trim() || '无';
-    const recentChatContext = buildPhoneWechatRecentChatContext(contact) || '暂无最近聊天记录可供参考。';
+    const sharedContext = buildPhoneSharedPromptContext(contact, {
+        recentChatFallback: '暂无最近聊天记录可供参考。',
+        userPersonaFallback: '未填写'
+    });
+    const userName = String(sharedContext.userName || '用户').trim() || '用户';
+    const persona = String(sharedContext.contactPersona || '无').trim() || '无';
+    const userPersona = String(sharedContext.userPersona || '').trim();
+    const recentChatContext = sharedContext.recentChatContext;
 
     return `请你扮演“手机健康/睡眠应用内容生成器”，为角色【${contact.name}】生成一组用于“翻手机”剧情展示的虚构健康数据。注意：这些数据不是设备真实采集，而是为了剧情展示服务的健康应用内容，因此必须同时具备真实感、生活感和克制的情绪张力。
 
 【角色信息】
 - 角色姓名：${contact.name}
 - 角色人设：${persona}
-- 用户显示名：${userName}
+- 用户名称：${userName}
+- 用户人设：${userPersona || '未填写'}
 
 ${recentChatContext}
 
@@ -7981,12 +8055,18 @@ async function generatePhoneWechatMoments(contact) {
         btn.disabled = true;
     }
 
-    const recentChatContext = buildPhoneWechatRecentChatContext(contact);
+    const sharedContext = buildPhoneSharedPromptContext(contact, {
+        recentChatFallback: '暂无最近聊天记录可供参考。',
+        userPersonaFallback: '未填写'
+    });
+    const recentChatContext = sharedContext.recentChatContext;
 
     const systemPrompt = `你是一个虚拟手机内容生成器。请为角色【${contact.name}】生成微信朋友圈【信息流/Timeline】。
 ！！！重要！！！：你生成的是${contact.name}【看到的】朋友圈列表，而不是他/她【发的】列表。所以大部分内容应该来自【别人】。
 
-角色设定：${contact.persona || '无'}
+角色设定：${sharedContext.contactPersona || '无'}
+用户名称：${sharedContext.userName}
+用户人设：${sharedContext.userPersonaText}
 
 ${recentChatContext}
 
@@ -8299,10 +8379,16 @@ async function generatePhoneWechatChats(contact) {
         btn.classList.add('generating-pulse');
     }
 
-    const recentChatContext = buildPhoneWechatRecentChatContext(contact);
+    const sharedContext = buildPhoneSharedPromptContext(contact, {
+        recentChatFallback: '暂无最近聊天记录可供参考。',
+        userPersonaFallback: '未填写'
+    });
+    const recentChatContext = sharedContext.recentChatContext;
 
     const systemPrompt = `你是一个虚拟手机内容生成器。请为角色【${contact.name}】生成微信消息列表（聊天会话）及详细聊天记录。
-角色设定：${contact.persona || '无'}
+角色设定：${sharedContext.contactPersona || '无'}
+用户名称：${sharedContext.userName}
+用户人设：${sharedContext.userPersonaText}
 
 ${recentChatContext}
 
@@ -8847,16 +8933,10 @@ async function generatePhoneBrowserHistory(contact) {
         btn.classList.add('generating-pulse');
     }
 
-    let userPersonaInfo = '';
-    if (contact.userPersonaId) {
-        const p = window.iphoneSimState.userPersonas.find(p => p.id === contact.userPersonaId);
-        if (p) userPersonaInfo = `用户(我)的设定：${p.name} - ${p.aiPrompt || ''}`;
-    } else if (window.iphoneSimState.userProfile) {
-        userPersonaInfo = `用户(我)的昵称：${window.iphoneSimState.userProfile.name}`;
-    }
-
-    const history = window.iphoneSimState.chatHistory[contact.id] || [];
-    const recentChat = history.slice(-20).map(m => `${m.role === 'user' ? '用户' : contact.name}: ${m.content}`).join('\n');
+    const sharedContext = buildPhoneSharedPromptContext(contact, {
+        recentChatFallback: '暂无最近聊天记录可供参考。',
+        userPersonaFallback: '未填写'
+    });
 
     let worldbookInfo = '';
     if (window.iphoneSimState.worldbook) {
@@ -8870,13 +8950,13 @@ async function generatePhoneBrowserHistory(contact) {
     const systemPrompt = `你是一个虚拟手机内容生成器。请为角色【${contact.name}】生成浏览器相关的所有数据。
 
 【角色设定】
-人设：${contact.persona || '无'}
-${userPersonaInfo}
+联系人信息：${sharedContext.contactPersona || '无'}
+用户名称：${sharedContext.userName}
+用户人设：${sharedContext.userPersonaText}
 
 【背景信息】
 ${worldbookInfo}
-最近聊天：
-${recentChat}
+${sharedContext.recentChatContext}
 
 【任务要求】
 请生成一个 JSON 对象，包含以下 5 个部分的真实数据 (数据要符合角色人设和生活习惯)：
@@ -9915,21 +9995,22 @@ async function generatePhoneXianyuAll(contact) {
         btn.classList.add('generating-pulse');
     }
 
-    // 获取用户设定和世界书信息
-    const userPersona = window.iphoneSimState.userProfile?.persona || '';
+    const sharedContext = buildPhoneSharedPromptContext(contact, {
+        recentChatFallback: '暂无最近聊天记录可供参考。',
+        userPersonaFallback: '未填写'
+    });
     const worldBook = window.iphoneSimState.worldBook || '';
-    const chatHistory = window.iphoneSimState.chatHistory[contact.id] || [];
-    const recentChats = chatHistory.slice(-10).map(msg => `${msg.role}: ${msg.content}`).join('\n');
 
     const systemPrompt = `你是一个虚拟手机内容生成器。请为角色【${contact.name}】生成闲鱼应用的完整内容。
 
 【角色设定】
-联系人信息：${contact.persona || '无特殊设定'}
-用户身份：${userPersona}
+联系人信息：${sharedContext.contactPersona || '无特殊设定'}
+用户名称：${sharedContext.userName}
+用户人设：${sharedContext.userPersonaText}
 世界书背景：${worldBook}
 
 【参考资料：最近微信聊天记录】
-${recentChats}
+${sharedContext.recentChatContext}
 (注意：此聊天记录仅用于判断用户是否提到过"想要"、"喜欢"某样物品。如果用户明确表达了想要某个东西，请让角色在闲鱼"我买到的"或"消息"中体现正在购买该物品作为礼物。除此之外，闲鱼的聊天内容绝不能与微信聊天内容相似或模仿，必须是完全独立的二手交易对话。)
 
 【任务要求】
@@ -11417,14 +11498,15 @@ const PHONE_NOTES_APP_TEMPLATE_HTML = `<div id="app">
 </div>`;
 
 const PHONE_NOTES_PROMPT_TEMPLATES = {
-    COMMON_CONTEXT: ({ contact, userName, recentChatContext }) => `你是一个虚拟手机内容生成器。你要为角色【${contact.name}】生成“备忘录 App”里的私人内容。
+    COMMON_CONTEXT: ({ contact, userName, userPersona, recentChatContext }) => `你是一个虚拟手机内容生成器。你要为角色【${contact.name}】生成“备忘录 App”里的私人内容。
 
 【角色设定】
 姓名：${contact.name}
 人设：${contact.persona || '无'}
 
 【用户信息】
-用户昵称：${userName}
+用户名称：${userName}
+用户人设：${userPersona || '未填写'}
 
 【与用户最近聊天上下文】
 ${recentChatContext || '暂无最近聊天记录'}
@@ -11967,16 +12049,21 @@ function setPhoneNotesData(contactId, notesData) {
 }
 
 function buildPhoneNotesSystemPrompt(contact, type) {
-    const state = window.iphoneSimState || {};
-    const recentChatContext = buildPhoneWechatRecentChatContext(contact) || '暂无最近聊天记录';
-    const userName = phoneNotesNormalizeText(state.userProfile && state.userProfile.name, '用户');
+    const sharedContext = buildPhoneSharedPromptContext(contact, {
+        recentChatFallback: '暂无最近聊天记录',
+        userPersonaFallback: '未填写'
+    });
+    const recentChatContext = sharedContext.recentChatContext;
+    const userName = phoneNotesNormalizeText(sharedContext.userName, '用户');
+    const userPersona = phoneNotesNormalizeText(sharedContext.userPersona, '');
     const COMMON_CONTEXT = PHONE_NOTES_PROMPT_TEMPLATES.COMMON_CONTEXT({
         contact,
         userName,
+        userPersona,
         recentChatContext
     });
     const builder = PHONE_NOTES_PROMPT_TEMPLATES[type] || PHONE_NOTES_PROMPT_TEMPLATES.notes_all;
-    return builder({ COMMON_CONTEXT, contact, userName, recentChatContext });
+    return builder({ COMMON_CONTEXT, contact, userName, userPersona, recentChatContext });
 }
 
 function phoneNotesGetRuntime(container) {
