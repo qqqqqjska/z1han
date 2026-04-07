@@ -1497,81 +1497,6 @@ const PHONE_DELIVERY_RATING_LEVEL_MAP = {
     '\u975e\u5e38\u6ee1\u610f': 'very_good'
 };
 
-const PHONE_DELIVERY_PLATFORM_NOTE_KEYWORDS = [
-    '预计',
-    '已取餐',
-    '已接单',
-    '正在出餐',
-    '请留意',
-    '感谢',
-    '配送中',
-    '已送达',
-    '请尽快取餐',
-    '订单已完成',
-    '订单状态',
-    '骑手已',
-    '商家已',
-    '骑手配送',
-    '五星好评',
-    '会回购',
-    '味道不错'
-];
-
-const PHONE_DELIVERY_THIN_NOTE_PATTERNS = [
-    /^(还行|不错|一般|可以|到了|送到|收到了|挺好|还好|就那样)[。！!，,、]*$/
-];
-
-const PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS = {
-    confirmed: [
-        '刚接单就开始等，越看越觉得这单今天不会太快。',
-        '它才刚接单，我这边已经先被吊得有点烦了。',
-        '进度停在这里不动，我现在看着就有点上火。',
-        '明明只是等一单饭，结果从一开始就把我等得心浮气躁。'
-    ],
-    preparing: [
-        '出餐出这么久，我已经开始担心这口到手还剩多少状态了。',
-        '它再这么磨下去，我这顿饭的心情都要被耗干净了。',
-        '看着还在做我就有点烦，饿的时候真的最怕这种慢吞吞。',
-        '这一单卡在这里太久了，我现在只想它赶紧往前动一动。'
-    ],
-    on_the_way: [
-        '怎么还没送到，我现在已经有点饿过头了。',
-        '看着在路上但一直不到，我耐心已经快被它磨没了。',
-        '它再慢一点我真的会怀疑这份饭是不是已经在路上凉透了。',
-        '都已经配送中了还拖这么久，这单真的把人等得有点烦。'
-    ],
-    completed: [
-        '总算送到了，但这一单折腾下来心情已经被磨掉一半了。',
-        '东西是到了，可前面那一通等真的把我等得挺没脾气。',
-        '终于拿到手了，不过这单一路拖下来还是让人有点不爽。',
-        '送到是送到了，可我现在回想前面的进度还是觉得挺磨人。'
-    ],
-    pickup_pending: [
-        '我人都快到了，它还没好，真的有点磨人。',
-        '都准备去拿了还得继续等，这种卡一下真的很烦。',
-        '明明都到自取这一步了，结果还是让我站着干等。',
-        '我已经快到门口了，它还没准备好，这单真有点拖。'
-    ],
-    pickup_completed: [
-        '总算拿到手了，但这一趟跑下来还是被它磨得有点烦。',
-        '东西是拿到了，可前面那段等候还是让我心里堵了一下。',
-        '终于拿到以后才缓过来，刚刚在门口等的时候真的挺烦。',
-        '拿到手是拿到手了，可这单前面的节奏还是拖得人不太爽。'
-    ],
-    gift_pending: [
-        '替别人点单最怕卡在半路，这种等法比给自己点还悬着。',
-        '这单是送出去的，我现在比自己等饭还更怕它出岔子。',
-        '给别人点的还拖这么久，我现在只希望别在关键时候掉链子。',
-        '看着它一直慢悠悠地走，我替那边等的人都开始着急了。'
-    ],
-    gift_completed: [
-        '总算送过去了，但中间这一路还是把我等得有点冒火。',
-        '送是送到了，可替别人盯这一单真的比自己吃还累。',
-        '这单终于送出去以后，我才觉得前面那口气慢慢顺下来。',
-        '还好最后送到了，不然前面那阵心悬着真的挺烦人的。'
-    ]
-};
-
 const PHONE_DELIVERY_PRESET_SHOPS = [
     {
         name: 'Wagas',
@@ -1580,7 +1505,7 @@ const PHONE_DELIVERY_PRESET_SHOPS = [
         category: '健康轻食',
         note: '无接触配送，多放葱花',
         courier: 'Li Ming',
-        preview: '怎么还没送到，我现在真的已经开始惦记这口了。',
+        preview: '骑手已取餐，预计 10 分钟内送达。',
         items: [
             { name: 'Chicken Pesto Penne', price: 42, count: 1 },
             { name: 'Iced Americano', price: 18, count: 1 }
@@ -1593,7 +1518,7 @@ const PHONE_DELIVERY_PRESET_SHOPS = [
         category: '咖啡提神',
         note: '少冰，纸吸管',
         courier: 'Wang Lei',
-        preview: '咖啡这种东西一拖就烦，我已经在担心它到手不对劲了。',
+        preview: '咖啡已制作完成，请留意骑手来电。',
         items: [
             { name: 'Iced Latte', price: 34, count: 1 },
             { name: 'Cold Brew', price: 34, count: 1 }
@@ -1606,7 +1531,7 @@ const PHONE_DELIVERY_PRESET_SHOPS = [
         category: '意式精选',
         note: '酱汁分装',
         courier: 'Chen Yu',
-        preview: '这单看着就不快，我现在已经开始担心面会不会坨了。',
+        preview: '商家正在出餐，预计 18 分钟送达。',
         items: [
             { name: 'Truffle Toastie', price: 48, count: 1 },
             { name: 'Sparkling Lemonade', price: 20, count: 1 }
@@ -1619,7 +1544,7 @@ const PHONE_DELIVERY_PRESET_SHOPS = [
         category: '烘焙甜点',
         note: '靠近门口存放',
         courier: 'Sun Hao',
-        preview: '总算拿到了，但这一单等下来已经把我耐心磨没不少。',
+        preview: '订单已完成，感谢你的耐心等待。',
         items: [
             { name: 'Butter Croissant', price: 16, count: 2 },
             { name: 'Sea Salt Roll', price: 14, count: 1 }
@@ -1632,7 +1557,7 @@ const PHONE_DELIVERY_PRESET_SHOPS = [
         category: '美式汉堡',
         note: '番茄酱另装',
         courier: 'Zhao Jun',
-        preview: '刚接单就让我开始等，越看进度越觉得这单不会太利索。',
+        preview: '商家已接单，正在安排制作。',
         items: [
             { name: 'Cheeseburger', price: 39, count: 1 },
             { name: 'Crinkle Fries', price: 18, count: 1 }
@@ -1645,7 +1570,7 @@ const PHONE_DELIVERY_PRESET_SHOPS = [
         category: '通勤咖啡',
         note: '到店前电话联系',
         courier: 'Xu Mo',
-        preview: '人都快到门口了还要催我拿，这种节奏真的有点折腾。',
+        preview: '骑手已到楼下，请尽快取餐。',
         items: [
             { name: 'Dirty Coffee', price: 24, count: 1 },
             { name: 'Iced Americano', price: 20, count: 1 }
@@ -1657,12 +1582,23 @@ const phoneDeliveryRuntime = {
     bound: false,
     activePage: 'home',
     orders: [],
-    featuredOrderId: ''
+    featuredOrderId: '',
+    activeShop: null
 };
 
 function normalizePhoneDeliveryText(value, fallback = '') {
     const text = String(value == null ? '' : value).trim();
     return text || fallback;
+}
+
+function normalizePhoneDeliveryTextList(value, fallback = '') {
+    if (Array.isArray(value)) {
+        const items = value
+            .map(entry => normalizePhoneDeliveryText(entry, ''))
+            .filter(Boolean);
+        return items.length ? items.join('、') : fallback;
+    }
+    return normalizePhoneDeliveryText(value, fallback);
 }
 
 function normalizePhoneDeliveryBoolean(value, fallback = false) {
@@ -1821,6 +1757,14 @@ function normalizePhoneDeliveryShopEntry(item, index, kind = 'frequent') {
         avg_spend: Math.max(0, normalizePhoneDeliveryCurrency(source.avg_spend, 38 + index * 6)),
         order_count: Math.max(1, Math.round(normalizePhoneDeliveryNumber(source.order_count, Math.max(1, 5 - index))) || 1),
         last_ordered_at: normalizePhoneDeliveryText(source.last_ordered_at, index === 0 ? '2026-04-05 21:44' : '2026-04-04 18:20'),
+        common_address: normalizePhoneDeliveryText(source.common_address || source.usual_address || source.address_hint, ''),
+        common_items: normalizePhoneDeliveryTextList(source.common_items || source.usual_items || source.top_items, ''),
+        popup_summary: normalizePhoneDeliveryText(
+            source.popup_summary || source.popup_note || source.meta_note || source.shop_summary,
+            kind === 'favorite'
+                ? '最近总会想起这家，像是会专门留着反复点。'
+                : '最近点这家的频率挺高，像是已经变成固定选项。'
+        ),
         reason: normalizePhoneDeliveryText(source.reason, kind === 'favorite' ? 'Saved and revisited often.' : 'Ordered here repeatedly.'),
         related_to_user: normalizePhoneDeliveryBoolean(source.related_to_user, false),
         hidden_tension: normalizePhoneDeliveryText(source.hidden_tension, '')
@@ -2150,92 +2094,6 @@ function getPhoneDeliveryPreset(shopName, index = 0) {
     return matched || PHONE_DELIVERY_PRESET_SHOPS[index % PHONE_DELIVERY_PRESET_SHOPS.length];
 }
 
-function pickPhoneDeliveryPersonalNoteVariant(order, variants, salt = 'note') {
-    if (!Array.isArray(variants) || !variants.length) return '';
-    const seedKey = `${order && order.id ? order.id : ''}|${order && order.shopName ? order.shopName : ''}|${order && order.statusKey ? order.statusKey : ''}|${order && order.deliveryType ? order.deliveryType : ''}|${salt}`;
-    const seed = hashPhoneDeliverySeed(seedKey);
-    return variants[seed % variants.length] || variants[0] || '';
-}
-
-function isPhoneDeliveryPlatformLikeText(value) {
-    const text = normalizePhoneDeliveryText(value, '');
-    if (!text) return false;
-    const normalized = text.replace(/\s+/g, '');
-    if (/order\s*update|see\s*tracking|on\s*the\s*way|delivered/i.test(text)) return true;
-    return PHONE_DELIVERY_PLATFORM_NOTE_KEYWORDS.some(keyword => normalized.includes(keyword));
-}
-
-function isPhoneDeliveryThinThoughtText(value) {
-    const text = normalizePhoneDeliveryText(value, '');
-    if (!text) return false;
-    const compact = text.replace(/[，。！？、,.!?\s]/g, '');
-    if (compact.length <= 5) return true;
-    return PHONE_DELIVERY_THIN_NOTE_PATTERNS.some(pattern => pattern.test(text));
-}
-
-function getPhoneDeliveryPersonalNoteTitle(order) {
-    const deliveryType = normalizePhoneDeliveryText(order && order.deliveryType, 'delivery');
-    const statusKey = normalizePhoneDeliveryText(order && order.statusKey, 'preparing');
-
-    if (deliveryType === 'gift' && statusKey === 'completed') return '这单送出去后';
-    if (deliveryType === 'pickup' && statusKey !== 'completed') return '还没拿到手';
-    if (deliveryType === 'pickup' && statusKey === 'completed') return '拿到手以后';
-    if (['confirmed', 'preparing', 'on_the_way'].includes(statusKey)) return '还在等这单';
-    if (statusKey === 'completed') return '这单送到以后';
-    return '这单记一下';
-}
-
-function buildPhoneDeliveryPersonalNoteBody(order) {
-    const deliveryType = normalizePhoneDeliveryText(order && order.deliveryType, 'delivery');
-    const statusKey = normalizePhoneDeliveryText(order && order.statusKey, 'preparing');
-
-    if (deliveryType === 'gift' && statusKey === 'completed') {
-        return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.gift_completed, 'gift-completed');
-    }
-    if (deliveryType === 'gift' && statusKey !== 'completed') {
-        return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.gift_pending, 'gift-pending');
-    }
-    if (deliveryType === 'pickup' && statusKey !== 'completed') {
-        return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.pickup_pending, 'pickup-pending');
-    }
-    if (deliveryType === 'pickup' && statusKey === 'completed') {
-        return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.pickup_completed, 'pickup-completed');
-    }
-    if (statusKey === 'confirmed') {
-        return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.confirmed, 'confirmed');
-    }
-    if (statusKey === 'preparing') {
-        return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.preparing, 'preparing');
-    }
-    if (statusKey === 'completed') {
-        return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.completed, 'completed');
-    }
-    return pickPhoneDeliveryPersonalNoteVariant(order, PHONE_DELIVERY_PERSONAL_NOTE_VARIANTS.on_the_way, 'on-the-way');
-}
-
-function getPhoneDeliveryResolvedNoteContent(order) {
-    const title = getPhoneDeliveryPersonalNoteTitle(order);
-    const bodyCandidate = normalizePhoneDeliveryText(
-        (order && order.reviewText)
-        || (order && order.preview)
-        || (order && order.trackHint)
-        || (order && order.deliveryStatus),
-        ''
-    );
-
-    if (!bodyCandidate || isPhoneDeliveryPlatformLikeText(bodyCandidate) || isPhoneDeliveryThinThoughtText(bodyCandidate)) {
-        return {
-            title,
-            body: buildPhoneDeliveryPersonalNoteBody(order)
-        };
-    }
-
-    return {
-        title,
-        body: bodyCandidate
-    };
-}
-
 function inferPhoneDeliveryStatusKey(text) {
     const value = String(text || '').toLowerCase();
     if (!value) return 'preparing';
@@ -2263,7 +2121,6 @@ function buildPhoneDeliveryOrderId(contactId, index) {
 function createPhoneDeliveryOrderFromPreset(preset, options = {}) {
     const statusKey = PHONE_DELIVERY_STATUS_META[options.statusKey] ? options.statusKey : 'preparing';
     const statusMeta = PHONE_DELIVERY_STATUS_META[statusKey];
-    const deliveryType = String(options.deliveryType || 'delivery').trim() || 'delivery';
     const itemsSource = Array.isArray(options.items) && options.items.length ? options.items : (Array.isArray(preset.items) ? preset.items : []);
     const items = itemsSource.map(item => ({
         name: String(item && item.name ? item.name : 'Item').trim() || 'Item',
@@ -2286,20 +2143,11 @@ function createPhoneDeliveryOrderFromPreset(preset, options = {}) {
     const shopName = String(options.shopName || preset.name || '外卖商家').trim() || '外卖商家';
     const time = String(options.time || '今天 12:18').trim() || '今天 12:18';
     const note = String(options.note || preset.note || '无接触配送').trim() || '无接触配送';
-    const orderIdValue = String(options.id || `${shopName}-${time}`).replace(/\s+/g, '_');
-    const stickerLevel = PHONE_DELIVERY_NOTE_STICKERS[options.stickerLevel] ? options.stickerLevel : 'neutral';
-    const previewFallback = buildPhoneDeliveryPersonalNoteBody({
-        id: orderIdValue,
-        shopName,
-        statusKey,
-        deliveryType,
-        stickerLevel
-    });
-    const preview = String(options.preview || previewFallback || preset.preview || `${shopName} 这单把我等得有点烦了。`).trim() || `${shopName} 这单把我等得有点烦了。`;
+    const preview = String(options.preview || preset.preview || `${shopName} 订单状态已更新。`).trim() || `${shopName} 订单状态已更新。`;
     const summary = String(options.summary || items.map(item => item.name).join(', ')).trim() || '订单详情';
 
     return {
-        id: orderIdValue,
+        id: String(options.id || `${shopName}-${time}`).replace(/\s+/g, '_'),
         shopName,
         icon: options.icon || preset.icon || 'ri-restaurant-2-line',
         category: preset.category || '精选餐饮',
@@ -2309,7 +2157,6 @@ function createPhoneDeliveryOrderFromPreset(preset, options = {}) {
         deliveryFee,
         total,
         statusKey,
-        deliveryType,
         statusLabel: options.statusLabel || statusMeta.badge,
         heroStatus: options.heroStatus || statusMeta.hero,
         deliveryStatus: options.deliveryStatus || statusMeta.delivery,
@@ -2324,7 +2171,7 @@ function createPhoneDeliveryOrderFromPreset(preset, options = {}) {
         preview,
         orderId: String(options.orderId || '8892 1204 43').trim() || '8892 1204 43',
         active: !!statusMeta.active,
-        stickerLevel
+        stickerLevel: PHONE_DELIVERY_NOTE_STICKERS[options.stickerLevel] ? options.stickerLevel : 'neutral'
     };
 }
 
@@ -2472,45 +2319,239 @@ function getPhoneDeliveryOrderById(orderId) {
     return phoneDeliveryRuntime.orders.find(order => order.id === orderId) || null;
 }
 
+function findPhoneDeliveryPresetMatch(shopName) {
+    const lowerShopName = String(shopName || '').toLowerCase();
+    if (!lowerShopName) return null;
+    return PHONE_DELIVERY_PRESET_SHOPS.find(preset => {
+        if (lowerShopName.includes(String(preset.name).toLowerCase())) return true;
+        return Array.isArray(preset.keywords) && preset.keywords.some(keyword => lowerShopName.includes(String(keyword).toLowerCase()));
+    }) || null;
+}
+
+function getPhoneDeliveryShopMatchKey(shopName) {
+    const normalizedName = normalizePhoneDeliveryShopName(shopName);
+    if (!normalizedName) return '';
+    const matchedPreset = findPhoneDeliveryPresetMatch(normalizedName);
+    const baseName = matchedPreset ? matchedPreset.name : normalizedName;
+    return String(baseName || '').trim().toLowerCase();
+}
+
+function getPhoneDeliveryOrderTimeValue(order) {
+    return phoneDeliveryParseTimeValue(order && order.time) || 0;
+}
+
+function getPhoneDeliveryOrdersForShop(shopName) {
+    const shopKey = getPhoneDeliveryShopMatchKey(shopName);
+    if (!shopKey) return [];
+    return [...phoneDeliveryRuntime.orders]
+        .filter(order => getPhoneDeliveryShopMatchKey(order && order.shopName) === shopKey)
+        .sort((left, right) => getPhoneDeliveryOrderTimeValue(right) - getPhoneDeliveryOrderTimeValue(left));
+}
+
+function phoneDeliveryShortenShopText(value, limit = 18, fallback = '') {
+    const text = normalizePhoneDeliveryText(value, fallback);
+    if (!text) return fallback;
+    return text.length > limit ? `${text.slice(0, limit).trim()}…` : text;
+}
+
+function buildPhoneDeliveryPopupTimeHtml(value) {
+    const text = normalizePhoneDeliveryText(value, '');
+    if (!text) return '12:18 <span>Today</span>';
+    const todayMatch = text.match(/^今天\s*(\d{1,2}:\d{2})$/);
+    if (todayMatch) return `${todayMatch[1]} <span>Today</span>`;
+    const yesterdayMatch = text.match(/^昨天\s*(\d{1,2}:\d{2})$/);
+    if (yesterdayMatch) return `${yesterdayMatch[1]} <span>Yesterday</span>`;
+    const beforeMatch = text.match(/^前天\s*(\d{1,2}:\d{2})$/);
+    if (beforeMatch) return `${beforeMatch[1]} <span>2 days ago</span>`;
+    const monthDayMatch = text.match(/^(\d{1,2}[月\/-]\d{1,2}[日]?)\s*(\d{1,2}:\d{2})$/);
+    if (monthDayMatch) return `${monthDayMatch[2]} <span>${monthDayMatch[1]}</span>`;
+    return escapePhoneDeliveryHtml(text);
+}
+
+function buildPhoneDeliveryPopupItemsHtml(value) {
+    const text = normalizePhoneDeliveryText(value, '暂无常点内容');
+    const parts = text.split(/[、,，/&＋+]/g).map(item => normalizePhoneDeliveryText(item, '')).filter(Boolean);
+    if (!parts.length) return escapePhoneDeliveryHtml(text);
+    if (parts.length === 1) return escapePhoneDeliveryHtml(parts[0]);
+    const first = escapePhoneDeliveryHtml(parts[0]);
+    const remaining = escapePhoneDeliveryHtml(parts.slice(1).join(' & '));
+    return `${first}<br><span>&amp; ${remaining}</span>`;
+}
+
+function buildPhoneDeliveryPopupNoteText(shop) {
+    const raw = normalizePhoneDeliveryText(shop && (shop.modalMeta || shop.reason), '最近总能翻到这家，像是忙的时候会顺手下单，已经有点变成固定选项了。');
+    const cleaned = raw.replace(/^[“"']+|[”"']+$/g, '').trim();
+    return `“${cleaned}”`;
+}
+
+function getPhoneDeliveryShopCommonAddress(orders) {
+    if (!Array.isArray(orders) || !orders.length) return '';
+    const counts = new Map();
+    orders.forEach(order => {
+        const value = normalizePhoneDeliveryText(order && (order.addressLabel || order.address), '');
+        if (!value) return;
+        counts.set(value, (counts.get(value) || 0) + 1);
+    });
+    if (!counts.size) return '';
+    const [topAddress] = [...counts.entries()].sort((left, right) => right[1] - left[1] || left[0].length - right[0].length)[0];
+    return phoneDeliveryShortenShopText(topAddress, 18, '');
+}
+
+function getPhoneDeliveryShopCommonItems(orders) {
+    if (!Array.isArray(orders) || !orders.length) return '';
+    const itemStats = new Map();
+    orders.forEach((order, orderIndex) => {
+        const sourceItems = Array.isArray(order && order.items) && order.items.length
+            ? order.items.map(item => item && item.name)
+            : String(order && order.summary || '').split(/[、,，/]/g);
+        sourceItems.forEach((rawName, itemIndex) => {
+            const name = normalizePhoneDeliveryText(rawName, '');
+            if (!name) return;
+            const current = itemStats.get(name) || { count: 0, rank: Number.MAX_SAFE_INTEGER };
+            current.count += 1;
+            current.rank = Math.min(current.rank, orderIndex * 10 + itemIndex);
+            itemStats.set(name, current);
+        });
+    });
+    if (!itemStats.size) return '';
+    return [...itemStats.entries()]
+        .sort((left, right) => right[1].count - left[1].count || left[1].rank - right[1].rank)
+        .slice(0, 3)
+        .map(entry => entry[0])
+        .join('、');
+}
+
+function getPhoneDeliveryShopOrderCount(entry, matchedOrders) {
+    const entryCount = Math.round(normalizePhoneDeliveryNumber(entry && entry.order_count, 0)) || 0;
+    if (entryCount > 0) return entryCount;
+    return Array.isArray(matchedOrders) && matchedOrders.length ? matchedOrders.length : 1;
+}
+
+function getPhoneDeliveryShopAverageSpend(entry, matchedOrders) {
+    const entrySpend = normalizePhoneDeliveryCurrency(entry && entry.avg_spend, 0);
+    if (entrySpend > 0) return entrySpend;
+    if (!Array.isArray(matchedOrders) || !matchedOrders.length) return 0;
+    const total = matchedOrders.reduce((sum, order) => sum + Math.max(0, Number(order && order.total) || 0), 0);
+    return Number((total / matchedOrders.length).toFixed(2));
+}
+
+function getPhoneDeliveryShopLastOrderedAt(entry, matchedOrders) {
+    const explicit = normalizePhoneDeliveryText(entry && entry.last_ordered_at, '');
+    if (explicit) return explicit;
+    const latestOrder = Array.isArray(matchedOrders) ? matchedOrders[0] : null;
+    return normalizePhoneDeliveryText(latestOrder && latestOrder.time, '暂无记录');
+}
+
+function buildPhoneDeliveryShopReason(entry, matchedOrders, sourceType) {
+    const explicitReason = normalizePhoneDeliveryText(entry && entry.reason, '');
+    if (explicitReason) return explicitReason;
+    if (Array.isArray(matchedOrders) && matchedOrders.length) {
+        const latestOrder = matchedOrders[0];
+        if (sourceType === 'favorite') {
+            return `最近一次点的是${normalizePhoneDeliveryText(latestOrder && latestOrder.summary, '熟悉的那几样')}，像是会专门留着反复回点的店。`;
+        }
+        if (sourceType === 'frequent') {
+            return `最近总能翻到这家，像是忙的时候会顺手下单，已经有点变成固定选项了。`;
+        }
+        return `订单里反复出现这家，口味和节奏应该都比较对得上，不然不会一再点到它。`;
+    }
+    if (sourceType === 'favorite') return '会专门留着的一家店，像是稳妥时就会想起它。';
+    if (sourceType === 'frequent') return '下单记录比较密，像是最近常常顺手会点到它。';
+    return '最近订单里出现过，像是开始形成固定偏好。';
+}
+
+function buildPhoneDeliveryShopMetaLine(shop) {
+    if (shop.orderCount > 1 && shop.commonAddress && shop.commonAddress !== '常用地址未显示') {
+        return `最近点了 ${shop.orderCount} 次，常送到 ${shop.commonAddress}。`;
+    }
+    if (shop.lastOrderedAt && shop.lastOrderedAt !== '暂无记录') {
+        return `最近一次下单是 ${shop.lastOrderedAt}，看起来这家还挺常出现。`;
+    }
+    if (shop.sourceType === 'favorite') return '像是会专门留着、想吃时就会翻出来的店。';
+    if (shop.sourceType === 'frequent') return '最近点得比较勤，像是顺手就会下单的固定选择。';
+    return '最近订单里露面过，像是正在变成新的常点。';
+}
+
+function createPhoneDeliveryShopCardData(shopName, entry = null, sourceType = 'recommendation', index = 0) {
+    const matchedOrders = getPhoneDeliveryOrdersForShop(shopName);
+    const latestOrder = matchedOrders[0] || null;
+    const preset = getPhoneDeliveryPreset(shopName, index);
+    const sourceLabelCnMap = {
+        frequent: '常点',
+        favorite: '收藏',
+        recommendation: '推荐'
+    };
+    const sourceLabelCn = sourceLabelCnMap[sourceType] || sourceLabelCnMap.recommendation;
+    const orderCount = getPhoneDeliveryShopOrderCount(entry, matchedOrders);
+    const presetDefaultSpend = Array.isArray(preset.items) && preset.items.length
+        ? Number(preset.items.reduce((sum, item) => {
+            const price = Math.max(0, Number(item && item.price) || 0);
+            const count = Math.max(1, Number(item && item.count) || 1);
+            return sum + price * count;
+        }, 0).toFixed(2))
+        : 0;
+    const avgSpend = getPhoneDeliveryShopAverageSpend(entry, matchedOrders) || presetDefaultSpend;
+    const lastOrderedAt = getPhoneDeliveryShopLastOrderedAt(entry, matchedOrders);
+    const commonAddress = normalizePhoneDeliveryText(entry && entry.common_address, '')
+        || getPhoneDeliveryShopCommonAddress(matchedOrders)
+        || '常用地址未显示';
+    const commonItems = normalizePhoneDeliveryTextList(entry && entry.common_items, '')
+        || getPhoneDeliveryShopCommonItems(matchedOrders)
+        || normalizePhoneDeliveryText(Array.isArray(preset.items) ? preset.items.map(item => item.name).join('、') : '', '暂无常点内容');
+    const reason = buildPhoneDeliveryShopReason(entry, matchedOrders, sourceType);
+    const displayName = normalizePhoneDeliveryText(shopName, preset.name);
+    const category = normalizePhoneDeliveryText(entry && entry.category, normalizePhoneDeliveryText(latestOrder && latestOrder.category, preset.category));
+    const rawMetaTag = normalizePhoneDeliveryText(entry && (entry.tag || entry.category), category);
+    const metaTag = /^(favorite|frequent)$/i.test(rawMetaTag) ? category : rawMetaTag;
+    const shop = {
+        name: displayName,
+        icon: normalizePhoneDeliveryText(latestOrder && latestOrder.icon, preset.icon),
+        category,
+        eta: normalizePhoneDeliveryText(latestOrder && latestOrder.eta, PHONE_DELIVERY_STATUS_META.preparing.eta),
+        meta: `${sourceLabelCn} · ${metaTag || category}`,
+        sourceType,
+        sourceLabelCn,
+        orderCount,
+        avgSpend,
+        lastOrderedAt,
+        commonAddress,
+        commonItems,
+        reason,
+        latestOrderId: latestOrder ? latestOrder.id : '',
+        latestOrderSummary: normalizePhoneDeliveryText(latestOrder && latestOrder.summary, ''),
+        modalMeta: normalizePhoneDeliveryText(entry && entry.popup_summary, '')
+    };
+    if (!shop.modalMeta) {
+        shop.modalMeta = buildPhoneDeliveryShopMetaLine(shop);
+    }
+    return shop;
+}
+
 function buildPhoneDeliveryShopCollections(orders, deliveryData = null) {
     if (phoneDeliveryHasData(deliveryData) && ((deliveryData.frequent_shops || []).length || (deliveryData.favorite_shops || []).length)) {
         const favorites = [];
         const recommendations = [];
         const seen = new Set();
-        const pushShop = (entry, sourceLabel, target) => {
+        const pushShop = (entry, sourceType, target) => {
             const name = normalizePhoneDeliveryText(entry && entry.store_name, '');
             if (!name) return;
-            const key = name.toLowerCase();
+            const key = getPhoneDeliveryShopMatchKey(name) || name.toLowerCase();
             if (seen.has(key)) return;
             seen.add(key);
-            const preset = getPhoneDeliveryPreset(name, target.length);
-            target.push({
-                name,
-                icon: preset.icon,
-                category: normalizePhoneDeliveryText(entry && entry.category, preset.category),
-                eta: PHONE_DELIVERY_STATUS_META.preparing.eta,
-                meta: `${sourceLabel} · ${normalizePhoneDeliveryText((entry && (entry.tag || entry.reason || entry.category)), preset.category)}`
-            });
+            target.push(createPhoneDeliveryShopCardData(name, entry, sourceType, target.length));
         };
 
-        deliveryData.frequent_shops.forEach(entry => pushShop(entry, 'Frequent', favorites));
+        deliveryData.frequent_shops.forEach(entry => pushShop(entry, 'frequent', favorites));
         deliveryData.favorite_shops.forEach(entry => {
-            if (favorites.length < 6) pushShop(entry, 'Favorite', favorites);
-            else pushShop(entry, 'Favorite', recommendations);
+            if (favorites.length < 6) pushShop(entry, 'favorite', favorites);
+            else pushShop(entry, 'favorite', recommendations);
         });
 
-        orders.forEach(order => {
-            const key = normalizePhoneDeliveryText(order && order.shopName, '').toLowerCase();
+        orders.forEach((order, index) => {
+            const key = getPhoneDeliveryShopMatchKey(order && order.shopName) || normalizePhoneDeliveryText(order && order.shopName, '').toLowerCase();
             if (!key || seen.has(key)) return;
-            const preset = getPhoneDeliveryPreset(order.shopName, recommendations.length);
-            recommendations.push({
-                name: order.shopName,
-                icon: order.icon || preset.icon,
-                category: order.category || preset.category,
-                eta: order.eta || PHONE_DELIVERY_STATUS_META.preparing.eta,
-                meta: `${order.active ? 'Active' : 'Recent'} - ${order.category || preset.category}`
-            });
             seen.add(key);
+            recommendations.push(createPhoneDeliveryShopCardData(order.shopName, null, 'recommendation', recommendations.length + index));
         });
 
         if (favorites.length || recommendations.length) {
@@ -2525,26 +2566,18 @@ function buildPhoneDeliveryShopCollections(orders, deliveryData = null) {
     const seen = new Set();
     const appendShop = (shopName, index) => {
         const preset = getPhoneDeliveryPreset(shopName, index);
-        const key = String(preset.name || shopName).toLowerCase();
+        const key = getPhoneDeliveryShopMatchKey(shopName) || String(preset.name || shopName).toLowerCase();
         if (seen.has(key)) return;
         seen.add(key);
-        merged.push({
-            name: shopName || preset.name,
-            icon: preset.icon,
-            category: preset.category,
-            eta: PHONE_DELIVERY_STATUS_META.preparing.eta
-        });
+        merged.push(normalizePhoneDeliveryText(shopName, preset.name));
     };
 
     orders.forEach((order, index) => appendShop(order.shopName, index));
     PHONE_DELIVERY_PRESET_SHOPS.forEach((preset, index) => appendShop(preset.name, index));
 
     return {
-        favorites: merged.slice(0, 4).map(item => ({ ...item, meta: `Frequent - ${item.category}` })),
-        recommendations: merged.slice(4, 8).map((item, index) => ({
-            ...item,
-            meta: `${['10 mins', '18 mins', '22 mins', '28 mins'][index % 4]} · ${item.category}`
-        }))
+        favorites: merged.slice(0, 4).map((item, index) => createPhoneDeliveryShopCardData(item, null, 'frequent', index)),
+        recommendations: merged.slice(4, 8).map((item, index) => createPhoneDeliveryShopCardData(item, null, 'recommendation', index))
     };
 }
 
@@ -2786,14 +2819,7 @@ function renderPhoneDeliveryShopCardList(containerId, shops) {
 
         button.addEventListener('click', event => {
             phoneDeliveryAddRipple(event, button);
-            const matchedOrder = phoneDeliveryRuntime.orders.find(order => order.shopName === shop.name)
-                || phoneDeliveryRuntime.orders.find(order => getPhoneDeliveryPreset(order.shopName).name === shop.name);
-            if (matchedOrder) {
-                switchPhoneDeliveryPage('orders');
-                openPhoneDeliveryOrderDetail(matchedOrder.id);
-            } else {
-                switchPhoneDeliveryPage('orders');
-            }
+            openPhoneDeliveryShopInfoModal(shop);
         });
 
         container.appendChild(button);
@@ -2862,13 +2888,11 @@ function renderPhoneDeliveryDetail(order) {
         noteCard.classList.add(PHONE_DELIVERY_REVIEW_STYLE_CLASS_MAP[order.reviewStyle] || 'note-grid');
     }
 
-    const resolvedNoteContent = getPhoneDeliveryResolvedNoteContent(order);
-
     if (detailIcon) detailIcon.innerHTML = `<i class="${escapePhoneDeliveryHtml(order.icon)}"></i>`;
     if (detailShopName) detailShopName.textContent = order.shopName;
     if (detailStatus) detailStatus.textContent = order.statusLabel;
-    if (detailNoteTitle) detailNoteTitle.textContent = resolvedNoteContent.title;
-    if (detailPreview) detailPreview.textContent = resolvedNoteContent.body;
+    if (detailNoteTitle) detailNoteTitle.textContent = order.reviewText ? `${order.ratingLevel || '订单'}评价` : 'Order Update';
+    if (detailPreview) detailPreview.textContent = order.reviewText || order.preview || order.trackHint || order.deliveryStatus || 'Order status updated.';
     if (detailSubtotal) detailSubtotal.textContent = formatPhoneDeliveryPrice(order.subtotal);
     if (detailFee) detailFee.textContent = formatPhoneDeliveryPrice(order.deliveryFee);
     if (detailTotal) detailTotal.textContent = formatPhoneDeliveryPrice(order.total);
@@ -2898,6 +2922,60 @@ function renderPhoneDeliveryDetail(order) {
     }
 }
 
+function closePhoneDeliveryShopInfoModal() {
+    const modal = document.getElementById('phone-delivery-shop-modal');
+    const actionBtn = document.getElementById('phone-delivery-shop-modal-action');
+    if (actionBtn) actionBtn.dataset.orderId = '';
+    phoneDeliveryRuntime.activeShop = null;
+    if (!modal) return;
+    modal.classList.remove('show');
+    modal.setAttribute('aria-hidden', 'true');
+}
+
+function openPhoneDeliveryShopInfoModal(shop) {
+    const modal = document.getElementById('phone-delivery-shop-modal');
+    if (!modal || !shop) return;
+
+    const icon = document.getElementById('phone-delivery-shop-modal-icon');
+    const name = document.getElementById('phone-delivery-shop-modal-name');
+    const category = document.getElementById('phone-delivery-shop-modal-category');
+    const badge = document.getElementById('phone-delivery-shop-modal-badge');
+    const meta = document.getElementById('phone-delivery-shop-modal-meta');
+    const orderCount = document.getElementById('phone-delivery-shop-modal-order-count');
+    const avgSpend = document.getElementById('phone-delivery-shop-modal-avg-spend');
+    const lastOrder = document.getElementById('phone-delivery-shop-modal-last-order');
+    const address = document.getElementById('phone-delivery-shop-modal-address');
+    const items = document.getElementById('phone-delivery-shop-modal-items');
+    const reason = document.getElementById('phone-delivery-shop-modal-reason');
+    const actionBtn = document.getElementById('phone-delivery-shop-modal-action');
+    const card = modal.querySelector('.shop-info-card');
+
+    if (icon) icon.innerHTML = `<i class="${escapePhoneDeliveryHtml(shop.icon || 'ri-store-2-line')}"></i>`;
+    if (name) name.textContent = normalizePhoneDeliveryText(shop.name, '店铺信息');
+    if (category) category.textContent = normalizePhoneDeliveryText(shop.category, '健康轻食');
+    if (address) address.textContent = normalizePhoneDeliveryText(shop.commonAddress, '上海市静安区');
+    if (badge) {
+        const badgeText = normalizePhoneDeliveryText(shop.sourceLabelCn, '常点');
+        badge.textContent = badgeText.endsWith('店铺') ? badgeText : `${badgeText}店铺`;
+        badge.dataset.source = normalizePhoneDeliveryText(shop.sourceType, 'recommendation');
+    }
+    if (meta) meta.textContent = '';
+    if (orderCount) orderCount.textContent = `${Math.max(1, Math.round(Number(shop.orderCount) || 1))} 次`;
+    if (avgSpend) avgSpend.textContent = formatPhoneDeliveryPrice(Math.max(0, Number(shop.avgSpend) || 0));
+    if (lastOrder) lastOrder.innerHTML = buildPhoneDeliveryPopupTimeHtml(shop.lastOrderedAt);
+    if (items) items.innerHTML = buildPhoneDeliveryPopupItemsHtml(shop.commonItems);
+    if (reason) reason.textContent = buildPhoneDeliveryPopupNoteText(shop);
+    if (actionBtn) {
+        actionBtn.dataset.orderId = normalizePhoneDeliveryText(shop.latestOrderId, '');
+        actionBtn.textContent = shop.latestOrderId ? '查看完整订单' : '前往订单页';
+    }
+    if (card) card.scrollTop = 0;
+
+    phoneDeliveryRuntime.activeShop = shop;
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden', 'false');
+}
+
 function closePhoneDeliveryOrderDetail() {
     const detail = document.getElementById('phone-delivery-detail');
     if (!detail) return;
@@ -2909,6 +2987,7 @@ function openPhoneDeliveryOrderDetail(orderId) {
     const order = getPhoneDeliveryOrderById(orderId);
     const detail = document.getElementById('phone-delivery-detail');
     if (!order || !detail) return;
+    closePhoneDeliveryShopInfoModal();
     renderPhoneDeliveryDetail(order);
     detail.classList.add('show');
     detail.setAttribute('aria-hidden', 'false');
@@ -2917,6 +2996,7 @@ function openPhoneDeliveryOrderDetail(orderId) {
 function switchPhoneDeliveryPage(page) {
     const pageKey = PHONE_DELIVERY_PAGE_META[page] ? page : 'home';
     phoneDeliveryRuntime.activePage = pageKey;
+    closePhoneDeliveryShopInfoModal();
 
     document.querySelectorAll('#phone-delivery .page-view').forEach(view => {
         view.classList.toggle('active', view.dataset.page === pageKey);
@@ -2947,11 +3027,16 @@ function bindPhoneDeliveryApp() {
     const detailTitleBack = document.getElementById('phone-delivery-detail-title');
     const detailActionBtn = document.getElementById('phone-delivery-detail-action');
     const featuredCard = document.getElementById('phone-delivery-featured-card');
+    const shopModalBackdrop = document.getElementById('phone-delivery-shop-modal-backdrop');
+    const shopModalClose = document.getElementById('phone-delivery-shop-modal-close');
+    const shopModalDismiss = document.getElementById('phone-delivery-shop-modal-dismiss');
+    const shopModalAction = document.getElementById('phone-delivery-shop-modal-action');
     if (!screen) return;
 
     if (pageHeaderBack) {
         const closeScreen = event => {
             phoneDeliveryAddRipple(event, pageHeaderBack);
+            closePhoneDeliveryShopInfoModal();
             closePhoneDeliveryOrderDetail();
             screen.classList.add('hidden');
         };
@@ -2990,6 +3075,36 @@ function bindPhoneDeliveryApp() {
             phoneDeliveryAddRipple(event, detailActionBtn);
             closePhoneDeliveryOrderDetail();
             switchPhoneDeliveryPage('orders');
+        });
+    }
+
+    if (shopModalBackdrop) {
+        shopModalBackdrop.addEventListener('click', () => {
+            closePhoneDeliveryShopInfoModal();
+        });
+    }
+
+    if (shopModalClose) {
+        shopModalClose.addEventListener('click', event => {
+            phoneDeliveryAddRipple(event, shopModalClose);
+            closePhoneDeliveryShopInfoModal();
+        });
+    }
+
+    if (shopModalDismiss) {
+        shopModalDismiss.addEventListener('click', event => {
+            phoneDeliveryAddRipple(event, shopModalDismiss);
+            closePhoneDeliveryShopInfoModal();
+        });
+    }
+
+    if (shopModalAction) {
+        shopModalAction.addEventListener('click', event => {
+            phoneDeliveryAddRipple(event, shopModalAction);
+            const orderId = normalizePhoneDeliveryText(shopModalAction.dataset.orderId, '');
+            closePhoneDeliveryShopInfoModal();
+            switchPhoneDeliveryPage('orders');
+            if (orderId) openPhoneDeliveryOrderDetail(orderId);
         });
     }
 
@@ -3064,6 +3179,7 @@ function refreshPhoneDeliveryApp(contactId = currentCheckPhoneContactId) {
     renderPhoneDeliveryShopCardList('phone-delivery-favorites-list', collections.favorites);
     renderPhoneDeliveryShopCardList('phone-delivery-recommend-list', collections.recommendations);
 
+    closePhoneDeliveryShopInfoModal();
     closePhoneDeliveryOrderDetail();
 }
 
@@ -6195,7 +6311,7 @@ This is NOT chat history. It should feel like everyday platform residue: repeate
 Hard requirements:
 - The output must be STRICT JSON only. No markdown, no explanation.
 - All visible content values should be in natural Simplified Chinese unless the field is naturally a brand name or mixed-language store name.
-- Do not write direct conclusions. Create implication through address reuse, order timing, notes, review_text, recipient names, and order rhythm.
+- Do not write direct conclusions. Create implication through address reuse, order timing, notes, review text, recipient names, and order rhythm.
 - Most records should look normal. Only a minority should feel subtly loaded.
 - Use desensitized or fictional phone numbers, order IDs, amounts, and addresses.
 - Keep all requested fields; do not omit fields.
@@ -6218,28 +6334,24 @@ Field schema:
 - active_order fields:
   store_name, status, eta_text, items_preview, courier_name, track_hint, recipient, recipient_phone, address, remark, total, related_to_user, hidden_tension
 - frequent_shops / favorite_shops item fields:
-  store_name, category, tag, avg_spend, order_count, last_ordered_at, reason, related_to_user, hidden_tension
+  store_name, category, tag, avg_spend, order_count, last_ordered_at, common_address, common_items, popup_summary, reason, related_to_user, hidden_tension
 - recent_orders / gift_orders / pickup_orders item fields:
   store_name, status, ordered_at, delivery_type, item_count, items_preview, items, subtotal, delivery_fee, total, courier_name, eta_text, recipient, recipient_phone, address_label, address, remark, order_id, delivery_status, rating_level, review_text, review_style, related_to_user, hidden_tension
 
 Constraints:
 - rating_level must be exactly one of: \u975e\u5e38\u4e0d\u6ee1\u610f, \u4e0d\u6ee1\u610f, \u4e00\u822c, \u6ee1\u610f, \u975e\u5e38\u6ee1\u610f
-- rating_level is only used as note mood intensity / sticker mood, not as a merchant score
 - review_style must be exactly one of: grid, ruled, plain-yellow
-- review_text keeps this exact field name, but it means the contact's own immediate thought about the order
-- review_text must be exactly one colloquial Simplified Chinese sentence, around 12 to 32 Chinese characters, optionally with one comma or dunhao
-- review_text must sound like self-talk, muttering, a small complaint, or a personal afterthought, not customer service language, not logistics tracking copy, and not a merchant review
-- For confirmed / preparing / on_the_way orders, write impatience, hunger, annoyance, fear of food getting cold or melting, or the feeling that the order is too slow
-- For completed orders, write the contact's personal after-feeling with a slightly complaining tone, not praise for the merchant and not a formal summary
-- For pickup orders that are not yet collected, write the feeling of already being near the store, almost arriving, or still being forced to wait on site
-- For gift_orders, you may lightly reveal the psychology of ordering for someone else, but never explain the whole story directly
-- Do NOT write expressions like: "骑手已取餐，预计 10 分钟内送达", "订单已完成，感谢您的耐心等待", "商家已接单", "正在出餐", "请留意来电", "味道不错", "会回购", "五星好评"
+- review_text must be exactly one short sentence
 - gift order recipient can be someone else such as a friend, coworker, or a recurring contact
 - pickup orders should show life-like pickup timing or pickup status
 - A repeated fixed address should appear often enough to feel suspiciously habitual, but not on every order
 - Mix ordinary notes with more suggestive ones, for example: no calls, leave at door, message on arrival, less ice, extra spicy, do not ring, front desk pickup
+- common_address should be a short address label or abbreviated place description suitable for direct popup display, such as “公司前台”, “公寓楼下”, “静安寺附近”
+- common_items should be 2 to 4 commonly ordered items in one natural Chinese string separated by “、”, suitable for direct popup display
+- popup_summary should be one natural Chinese sentence for the shop popup card, like a private observation about why this store keeps appearing; about 16 to 32 Chinese characters, not formal, not a system notice
+- reason should also be natural Chinese and feel like a personal usage reason, not a platform tag or generic marketing copy
 - At least 30% to 40% of the content should be indirectly related to the user, but never written as a direct conclusion
-- Make the subtle tension come from details like late-night ordering, note changes, a recurring address, help-order traces, favorite stores, and these small personal thoughts
+- Make the subtle tension come from details like late-night ordering, note changes, a recurring address, help-order traces, favorite stores, and short reviews
 
 Output one legal JSON object and nothing else.`;
 }
