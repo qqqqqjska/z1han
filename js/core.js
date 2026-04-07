@@ -416,6 +416,8 @@ window.migrateMemorySchemaV2 = migrateMemorySchemaV2;
 
 const state = {
     amapSettings: {
+        jsKey: '',
+        webKey: '',
         key: '',
         securityCode: ''
     },
@@ -1817,7 +1819,11 @@ async function loadConfig() {
                 negativePrompt: 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry',
                 corsProxy: 'corsproxy.io'
             };
-            if (!state.amapSettings) state.amapSettings = { key: '', securityCode: '' };
+            if (!state.amapSettings) state.amapSettings = { jsKey: '', webKey: '', key: '', securityCode: '' };
+            if (typeof state.amapSettings.jsKey !== 'string') state.amapSettings.jsKey = '';
+            if (typeof state.amapSettings.webKey !== 'string') state.amapSettings.webKey = '';
+            if (typeof state.amapSettings.key !== 'string') state.amapSettings.key = '';
+            if (typeof state.amapSettings.securityCode !== 'string') state.amapSettings.securityCode = '';
             if (!state.amapRuntime || typeof state.amapRuntime !== 'object') {
                 state.amapRuntime = {
                     myLocation: null,

@@ -1882,6 +1882,7 @@ function isHiddenForumWechatSyncText(text) {
 
 function shouldHideChatSyncMsg(msg) {
     if (!msg) return false;
+    if (msg.hiddenFromUi === true) return true;
     if (msg.type === 'system_event' || msg.type === 'live_sync_hidden' || msg.type === 'family_card_spend_notice_hidden' || msg.type === 'screen_share_hidden') return true;
     if (
         msg.role === 'system'
