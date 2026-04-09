@@ -1,10 +1,17 @@
-function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type = 'text', targetContactId = null, options = {}) {
+﻿function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type = 'text', targetContactId = null, options = {}) {
     return new Promise(resolve => {
         const contactId = targetContactId || window.iphoneSimState.currentChatContactId;
         if (!contactId) {
             resolve(null);
             return;
         }
+
+        const contact = Array.isArray(window.iphoneSimState && window.iphoneSimState.contacts)
+            ? window.iphoneSimState.contacts.find(item => String(item.id) === String(contactId)) || null
+            : null;
+        const deliveryChannel = typeof window.getResolvedDeliveryChannel === 'function'
+            ? window.getResolvedDeliveryChannel(contact, options && options.channel)
+            : 'wechat';
 
         if (!window.iphoneSimState.chatHistory[contactId]) {
             window.iphoneSimState.chatHistory[contactId] = [];
@@ -16,8 +23,13 @@ function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type 
             role: 'assistant',
             content: text,
             type: type,
+            channel: deliveryChannel,
             replyTo: replyTo
         };
+
+        if (deliveryChannel === 'messages-app') {
+            msgData.readInMessagesApp = false;
+        }
         
         if (thought) {
             msgData.thought = thought;
@@ -37,7 +49,6 @@ function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type 
             window.FloraEngine.analyzeChat(text, true, { contactId, type });
         }
         
-        const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
         if (contact) {
             if (contact.autoItineraryEnabled) {
                 if (typeof contact.messagesSinceLastItinerary !== 'number') {
@@ -81,12 +92,15 @@ function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type 
             }
         }
         
-        if (window.iphoneSimState.currentChatContactId === contactId) {
+        if (deliveryChannel === 'wechat' && window.iphoneSimState.currentChatContactId === contactId) {
             appendMessageToUI(text, false, type, null, replyTo, msgData.id, msgData.time);
             scrollToBottom();
         }
 
         if (window.renderContactList) window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
+        if (deliveryChannel === 'messages-app' && window.MessagesApp && typeof window.MessagesApp.refresh === 'function') {
+            window.MessagesApp.refresh(contactId);
+        }
         
         if (window.checkAndSummarize) window.checkAndSummarize(contactId);
 
@@ -711,6 +725,71 @@ async function tryRunChatFoodAssistReply(chatInput) {
     }
     console.log('[Food Debug] food assist reply finished', { contactId });
     return true;
+}
+
+async function triggerCurrentChatAiReply(chatInput = null, options = {}) {
+    const triggerSource = options && typeof options === 'object' && options.triggerSource
+        ? String(options.triggerSource)
+        : 'manual';
+    const handledByRouteAssist = await tryRunChatNavigationAssistReply(chatInput);
+    if (handledByRouteAssist) {
+        return true;
+    }
+
+    const handledByFoodAssist = await tryRunChatFoodAssistReply(chatInput);
+    if (handledByFoodAssist) {
+        return true;
+    }
+
+    return await generateAiReply(null, null, { triggerSource });
+}
+
+async function checkRestWindowUpcomingNotices() {
+    if (window.__restWindowUpcomingNoticeRunning) {
+        return;
+    }
+    window.__restWindowUpcomingNoticeRunning = true;
+
+    try {
+        if (!window.iphoneSimState || !Array.isArray(window.iphoneSimState.contacts)) return;
+        const now = Date.now();
+
+        for (const contact of window.iphoneSimState.contacts) {
+            if (typeof window.ensureContactRestWindowFields === 'function') {
+                window.ensureContactRestWindowFields(contact);
+            }
+            if (!contact || !contact.restWindowEnabled) continue;
+
+            const currentStatus = typeof window.getContactRestWindowStatus === 'function'
+                ? window.getContactRestWindowStatus(contact, now)
+                : null;
+            if (currentStatus && currentStatus.inRestWindow) continue;
+
+            const nextRest = typeof window.getContactNextRestWindowInfo === 'function'
+                ? window.getContactNextRestWindowInfo(contact, now)
+                : null;
+            if (!nextRest || !nextRest.enabled || !nextRest.withinNoticeWindow || !nextRest.nextStartTimeMs) {
+                continue;
+            }
+
+            if (Number(contact.restWindowUpcomingNoticeForStartMs) === Number(nextRest.nextStartTimeMs)) {
+                continue;
+            }
+
+            const noticeSent = await generateAiReply(
+                '现在距离你的休息时段开始只剩十分钟左右。请你主动发一条简短自然的文本消息，告诉对方你准备睡了/先休息，不要写成系统通知，不要突然展开大话题。',
+                contact.id,
+                { triggerSource: 'system' }
+            );
+
+            if (noticeSent) {
+                contact.restWindowUpcomingNoticeForStartMs = nextRest.nextStartTimeMs;
+                saveConfig();
+            }
+        }
+    } finally {
+        window.__restWindowUpcomingNoticeRunning = false;
+    }
 }
 
 function handleTransfer() {
@@ -4527,6 +4606,10 @@ function setupChatListeners() {
     const bilingualTranslationEnabledInput = document.getElementById('chat-setting-bilingual-translation-enabled');
     const bilingualSourceLangSelect = document.getElementById('chat-setting-bilingual-source-lang');
     const bilingualTargetLangSelect = document.getElementById('chat-setting-bilingual-target-lang');
+    const topbarAvatarVisibleInput = document.getElementById('chat-setting-topbar-avatar-visible');
+    const topbarAvatarPositionSelect = document.getElementById('chat-setting-topbar-avatar-position');
+    const topbarStatusVisibleInput = document.getElementById('chat-setting-topbar-status-visible');
+    const topbarStatusTextInput = document.getElementById('chat-setting-topbar-status-text');
 
     const syncThoughtPetPreviewSize = () => {
         const rawSize = thoughtPetSizeSlider ? parseInt(thoughtPetSizeSlider.value, 10) : 88;
@@ -4601,10 +4684,42 @@ function setupChatListeners() {
             markChatSettingsDirty();
         });
     }
+    if (topbarAvatarVisibleInput) {
+        topbarAvatarVisibleInput.addEventListener('change', () => {
+            if (typeof window.syncChatTopbarAvatarSettingsVisibility === 'function') {
+                window.syncChatTopbarAvatarSettingsVisibility();
+            }
+            markChatSettingsDirty();
+        });
+    }
+    if (topbarAvatarPositionSelect) {
+        topbarAvatarPositionSelect.addEventListener('change', () => {
+            if (typeof window.syncChatTopbarAvatarSettingsVisibility === 'function') {
+                window.syncChatTopbarAvatarSettingsVisibility();
+            }
+            markChatSettingsDirty();
+        });
+    }
+    if (topbarStatusVisibleInput) {
+        topbarStatusVisibleInput.addEventListener('change', () => {
+            if (typeof window.syncChatTopbarAvatarSettingsVisibility === 'function') {
+                window.syncChatTopbarAvatarSettingsVisibility();
+            }
+            markChatSettingsDirty();
+        });
+    }
+    if (topbarStatusTextInput) {
+        topbarStatusTextInput.addEventListener('input', () => {
+            markChatSettingsDirty();
+        });
+    }
     syncThoughtPetPanelVisibility();
     syncThoughtPetPreviewSize();
     if (typeof window.syncBilingualTranslationSettingsVisibility === 'function') {
         window.syncBilingualTranslationSettingsVisibility();
+    }
+    if (typeof window.syncChatTopbarAvatarSettingsVisibility === 'function') {
+        window.syncChatTopbarAvatarSettingsVisibility();
     }
     if (thoughtPetPreview && !thoughtPetPreview.src) {
         thoughtPetPreview.src = window.DEFAULT_THOUGHT_PET_IMAGE || '';
@@ -4676,6 +4791,8 @@ function setupChatListeners() {
     });
 
     const chatTitle = document.getElementById('chat-title');
+    const chatTopbarAvatarMain = document.getElementById('chat-topbar-avatar-main');
+    const chatTopbarAvatarRight = document.getElementById('chat-topbar-avatar-right');
     if (chatTitle) {
         chatTitle.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -4763,6 +4880,33 @@ function setupChatListeners() {
     const clearChatHistoryBtn = document.getElementById('clear-chat-history-btn');
     if (clearChatHistoryBtn) clearChatHistoryBtn.addEventListener('click', handleClearChatHistory);
 
+    const toggleWechatBlockBtn = document.getElementById('toggle-wechat-block-btn');
+    if (toggleWechatBlockBtn) toggleWechatBlockBtn.addEventListener('click', handleToggleWechatBlockStatus);
+
+    const wechatBlockConfirmModal = document.getElementById('wechat-block-confirm-modal');
+    const closeWechatBlockConfirmBtn = document.getElementById('close-wechat-block-confirm');
+    const cancelWechatBlockConfirmBtn = document.getElementById('cancel-wechat-block-confirm');
+    const confirmWechatBlockConfirmBtn = document.getElementById('confirm-wechat-block-confirm');
+    if (closeWechatBlockConfirmBtn && window.closeWechatBlockConfirmModal) {
+        closeWechatBlockConfirmBtn.addEventListener('click', window.closeWechatBlockConfirmModal);
+    }
+    if (cancelWechatBlockConfirmBtn && window.closeWechatBlockConfirmModal) {
+        cancelWechatBlockConfirmBtn.addEventListener('click', window.closeWechatBlockConfirmModal);
+    }
+    if (confirmWechatBlockConfirmBtn && window.confirmWechatBlockFromSettings) {
+        confirmWechatBlockConfirmBtn.addEventListener('click', window.confirmWechatBlockFromSettings);
+    }
+    if (wechatBlockConfirmModal && window.closeWechatBlockConfirmModal) {
+        wechatBlockConfirmModal.addEventListener('click', (event) => {
+            if (event.target === wechatBlockConfirmModal) {
+                window.closeWechatBlockConfirmModal();
+            }
+        });
+    }
+
+    const wechatUnblockBtn = document.getElementById('wechat-unblock-btn');
+    if (wechatUnblockBtn) wechatUnblockBtn.addEventListener('click', handleWechatUnblockFromChat);
+
     const exportCharBtn = document.getElementById('export-character-btn');
     if (exportCharBtn) exportCharBtn.addEventListener('click', handleExportCharacterData);
 
@@ -4773,34 +4917,52 @@ function setupChatListeners() {
     const triggerAiReplyBtn = document.getElementById('trigger-ai-reply-btn');
 
     if (chatInput) {
-        chatInput.addEventListener('keydown', (e) => {
+        chatInput.addEventListener('keydown', async (e) => {
             if (e.key === 'Enter') {
                 const text = chatInput.value.trim();
                 if (text) {
                     const sentMsg = sendMessage(text, true);
                     if (sentMsg) {
+                        const currentContactId = window.iphoneSimState.currentChatContactId;
+                        const currentContact = (window.iphoneSimState.contacts || []).find(c => c.id === currentContactId);
                         chatInput.value = '';
-                        if (getChatRouteAssistState(window.iphoneSimState.currentChatContactId) && typeof window.showChatToast === 'function') {
+                        if (getChatRouteAssistState(currentContactId) && typeof window.showChatToast === 'function') {
                             window.showChatToast('已发送，点右侧 AI 按钮规划路线', 2200);
-                        } else if (getChatFoodAssistState(window.iphoneSimState.currentChatContactId) && typeof window.showChatToast === 'function') {
+                        } else if (getChatFoodAssistState(currentContactId) && typeof window.showChatToast === 'function') {
                             window.showChatToast('已发送，点右侧 AI 按钮获取推荐', 2200);
+                        }
+
+                        if (
+                            currentContact
+                            && typeof window.getContactRestWindowStatus === 'function'
+                            && window.getContactRestWindowStatus(currentContact).inRestWindow
+                        ) {
+                            await triggerCurrentChatAiReply(null, { triggerSource: 'manual' });
                         }
                     }
                 }
             }
         });
     }
+    if (chatTopbarAvatarMain) {
+        chatTopbarAvatarMain.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const contactId = window.iphoneSimState.currentChatContactId;
+            if (contactId && typeof window.openAiProfile === 'function') {
+                window.openAiProfile(contactId);
+            }
+        });
+    }
+    if (chatTopbarAvatarRight) {
+        chatTopbarAvatarRight.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openChatSettings();
+        });
+    }
 
     if (triggerAiReplyBtn) {
         triggerAiReplyBtn.addEventListener('click', async () => {
-            const handledByRouteAssist = await tryRunChatNavigationAssistReply(chatInput);
-            if (handledByRouteAssist) {
-                return;
-            }
-            const handledByFoodAssist = await tryRunChatFoodAssistReply(chatInput);
-            if (!handledByFoodAssist) {
-                generateAiReply(null, null, { triggerSource: 'manual' });
-            }
+            await triggerCurrentChatAiReply(chatInput, { triggerSource: 'manual' });
         });
     }
 
@@ -5917,6 +6079,11 @@ if (window.appInitFunctions) {
         setInterval(checkActiveReplies, 5000);
     });
     window.appInitFunctions.push(() => {
+        checkRestWindowUpcomingNotices();
+        setInterval(checkRestWindowUpcomingNotices, 60000);
+    });
+    window.appInitFunctions.push(() => {
         if (window.startForumAutoPostScheduler) window.startForumAutoPostScheduler();
     });
 }
+

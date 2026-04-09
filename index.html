@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <title>iPhone Simulator</title>
@@ -1162,6 +1162,7 @@
                                 <input type="file" id="import-character-input" accept=".json" class="file-input-hidden">
                                 <label for="import-character-input" class="mag-btn" style="margin-bottom: 0; text-align: center;"><i class="ri-upload-line"></i> 导入角色数据</label>
                                 <button id="clear-chat-history-btn" class="mag-btn" style="border-color: var(--soft-danger, #d39a94); color: var(--soft-danger, #d39a94);"><i class="ri-delete-bin-line"></i> 清空聊天记录</button>
+                                <button id="toggle-wechat-block-btn" class="mag-btn" style="border-color: var(--soft-danger, #d39a94); color: var(--soft-danger, #d39a94);"><i class="ri-forbid-2-line"></i> 拉黑对方</button>
                             </div>
                         </div>
                     </div>
@@ -1241,6 +1242,14 @@
                             </div>
 
                             <div class="mag-field editorial-visual-select-field">
+                                <label class="mag-label">Appearance Preset <span class="separator">/</span> <span class="mag-zh">快捷外观</span></label>
+                                <select id="chat-setting-appearance-preset" class="mag-select">
+                                    <option value="default">Default / 默认</option>
+                                    <option value="ios26">iOS26 / 信息 App 风格</option>
+                                </select>
+                            </div>
+
+                            <div class="mag-field editorial-visual-select-field">
                                 <label class="mag-label">Avatar Visibility <span class="separator">/</span> <span class="mag-zh">头像显示范围</span></label>
                                 <select id="chat-setting-avatar-visibility" class="mag-select">
                                     <option value="show-both">Show Both / 都显示</option>
@@ -1248,6 +1257,30 @@
                                     <option value="hide-self">Hide Self / 隐藏自己</option>
                                     <option value="hide-both">Hide Both / 隐藏双方</option>
                                 </select>
+                            </div>
+
+                            <div class="mag-toggle">
+                                <span class="mag-toggle-text">Topbar Contact Avatar <span class="separator">/</span> <span class="mag-zh">顶栏显示对方头像</span></span>
+                                <label><input type="checkbox" id="chat-setting-topbar-avatar-visible" class="mag-toggle-input"><div class="mag-toggle-switch"></div></label>
+                            </div>
+
+                            <div id="chat-setting-topbar-avatar-position-field" class="mag-field editorial-visual-select-field" style="margin-top: 18px; display: none;">
+                                <label class="mag-label">Topbar Avatar Position <span class="separator">/</span> <span class="mag-zh">顶栏头像位置</span></label>
+                                <select id="chat-setting-topbar-avatar-position" class="mag-select">
+                                    <option value="left">Left / 左</option>
+                                    <option value="center">Center / 中</option>
+                                    <option value="right">Right / 右</option>
+                                </select>
+                            </div>
+
+                            <div id="chat-setting-topbar-status-visible-row" class="mag-toggle" style="margin-top: 18px; display: none;">
+                                <span class="mag-toggle-text">Topbar Status Text <span class="separator">/</span> <span class="mag-zh">顶栏状态文本</span></span>
+                                <label><input type="checkbox" id="chat-setting-topbar-status-visible" class="mag-toggle-input"><div class="mag-toggle-switch"></div></label>
+                            </div>
+
+                            <div id="chat-setting-topbar-status-text-field" class="mag-field editorial-visual-select-field" style="margin-top: 18px; display: none;">
+                                <label class="mag-label">Status Text <span class="separator">/</span> <span class="mag-zh">状态文本内容</span></label>
+                                <input type="text" id="chat-setting-topbar-status-text" class="mag-input" maxlength="40" placeholder="例如：5G Online">
                             </div>
 
                             <div class="mag-toggle">
@@ -1310,6 +1343,19 @@
                 <button type="button" id="chat-settings-editorial-save" class="chat-settings-editorial-save hidden" onclick="handleChatSettingsFloatingSave()" aria-label="Save chat settings" title="Save">
                     <i class="ri-save-line"></i>
                 </button>
+            </div>
+
+            <div id="wechat-block-confirm-modal" class="modal hidden" style="z-index: 220; align-items: center;">
+                <div class="modal-content" style="height: auto; border-radius: 18px; width: 85%; max-width: 332px; background-color: #fff;">
+                    <div class="modal-header" style="border-bottom: none; padding-bottom: 6px;">
+                        <h3 id="wechat-block-confirm-title">确认拉黑</h3>
+                        <button class="close-btn" id="close-wechat-block-confirm">&times;</button>
+                    </div>
+                    <div class="modal-body" style="padding-top: 4px;">
+                        <button id="confirm-wechat-block-confirm" class="ios-btn-block danger">确认拉黑</button>
+                        <button id="cancel-wechat-block-confirm" class="ios-btn-block secondary" style="margin-top: 10px;">取消</button>
+                    </div>
+                </div>
             </div>
 
             <!-- 添加联系人弹窗 -->
@@ -1594,17 +1640,32 @@
             <!-- 聊天页面 -->
             <div id="chat-screen" class="sub-screen hidden">
                 <div class="chat-header">
-                    <button id="back-to-contacts" class="back-btn"><i class="fas fa-chevron-left"></i></button>
-                    <button id="multi-select-cancel" class="multi-select-cancel hidden">退出</button>
-                    <span id="chat-title" style="cursor: pointer;">用户名</span>
-                    <button id="fire-buddy-entry" class="wechat-icon-btn fire-buddy-entry hidden" aria-label="打开小火人面板">
-                        <span class="fire-buddy-entry-icon" aria-hidden="true">
-                            <svg class="fire-buddy-brand-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path>
-                            </svg>
-                        </span>
-                    </button>
-                    <button id="chat-settings-btn" class="wechat-icon-btn"><i class="fas fa-ellipsis-h"></i></button>
+                    <div class="chat-header-left-actions">
+                        <button id="back-to-contacts" class="back-btn"><i class="fas fa-chevron-left"></i></button>
+                        <button id="multi-select-cancel" class="multi-select-cancel hidden">退出</button>
+                    </div>
+                    <div id="chat-header-main" class="chat-header-main">
+                        <button id="chat-topbar-avatar-main" class="chat-topbar-avatar chat-topbar-avatar-main hidden" type="button" aria-label="打开联系人资料">
+                            <i class="ri-user-line"></i>
+                        </button>
+                        <div id="chat-header-title-stack" class="chat-header-title-stack">
+                            <span id="chat-title" style="cursor: pointer;">用户名</span>
+                            <div id="chat-topbar-status" class="chat-topbar-status hidden"></div>
+                        </div>
+                    </div>
+                    <div class="chat-header-right-actions">
+                        <button id="fire-buddy-entry" class="wechat-icon-btn fire-buddy-entry hidden" aria-label="打开小火人面板">
+                            <span class="fire-buddy-entry-icon" aria-hidden="true">
+                                <svg class="fire-buddy-brand-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path>
+                                </svg>
+                            </span>
+                        </button>
+                        <button id="chat-topbar-avatar-right" class="wechat-icon-btn chat-topbar-avatar chat-topbar-avatar-right hidden" type="button" aria-label="打开聊天设置">
+                            <i class="ri-user-line"></i>
+                        </button>
+                        <button id="chat-settings-btn" class="wechat-icon-btn"><i class="fas fa-ellipsis-h"></i></button>
+                    </div>
                 </div>
                 <!-- 多选删除控制项：右下删除（退出按钮已移入 header） -->
                 <button id="multi-select-delete" class="multi-select-delete hidden">删除(<span id="multi-select-count">0</span>)</button>
@@ -1677,6 +1738,9 @@
                                 <i class="ri-mic-line"></i>
                             </button>
                         </div>
+                    </div>
+                    <div id="wechat-blocked-footer" class="chat-blocked-footer hidden">
+                        <button id="wechat-unblock-btn" class="chat-blocked-footer-btn" type="button">移出黑名单</button>
                     </div>
                 </div>
                 <!-- 表情包面板 -->
@@ -8504,7 +8568,7 @@
                 <div class="messages-list-header">
                     <div class="messages-list-topbar">
                         <button class="messages-edit-pill" type="button">&#x7F16;&#x8F91;</button>
-                        <button class="messages-list-menu-btn" type="button" aria-label="筛选菜单">
+                        <button id="messages-settings-btn" class="messages-list-menu-btn" type="button" aria-label="信息设置">
                             <i class="fas fa-bars"></i>
                         </button>
                     </div>
@@ -8530,6 +8594,7 @@
             <section class="messages-view messages-chat-view" aria-label="信息聊天页面">
                 <div class="messages-chat-header">
                     <div class="messages-chat-header-inner">
+                        <button id="messages-multi-select-cancel" class="messages-chat-multi-cancel hidden" type="button">退出</button>
                         <button id="messages-chat-back" class="messages-chat-back" type="button" aria-label="返回信息列表">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="m15 18-6-6 6-6"></path>
@@ -8552,6 +8617,18 @@
 
                 <div class="messages-chat-scroll" id="messages-chat-scroll"></div>
 
+                <button id="messages-multi-select-delete" class="messages-multi-select-delete hidden" type="button">删除(<span id="messages-multi-select-count">0</span>)</button>
+
+                <div id="messages-reply-bar" class="messages-reply-bar hidden">
+                    <div class="messages-reply-bar-main">
+                        <div id="messages-reply-name" class="messages-reply-name"></div>
+                        <div id="messages-reply-text" class="messages-reply-text"></div>
+                    </div>
+                    <button id="messages-close-reply-bar" class="messages-reply-close" type="button" aria-label="取消引用">
+                        <i class="fas fa-times-circle"></i>
+                    </button>
+                </div>
+
                 <div class="messages-input-bar">
                     <button id="messages-plus-btn" class="messages-plus-btn" type="button" aria-label="更多功能">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -8571,6 +8648,45 @@
                     </div>
                 </div>
             </section>
+        </div>
+    </div>
+
+    <div id="messages-active-reply-modal" class="modal hidden" style="z-index: 230; align-items: center;">
+        <div class="modal-content" style="height: auto; border-radius: 18px; width: 86%; max-width: 356px; background-color: #fff;">
+            <div class="modal-header" style="padding-bottom: 8px;">
+                <h3>信息中的主动发消息</h3>
+                <button class="close-btn" id="close-messages-active-reply-modal">&times;</button>
+            </div>
+            <div class="modal-body" style="padding-top: 2px;">
+                <div class="setting-group" style="margin-bottom: 12px;">
+                    <select id="messages-active-reply-contact" style="width: 100%; height: 42px; border-radius: 12px; border: 1px solid #e5e7eb; padding: 0 12px; font-size: 15px; background: #fff;"></select>
+                </div>
+                <div class="setting-group" style="margin-bottom: 12px;">
+                    <label style="display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer;">
+                        <span>开启主动发消息</span>
+                        <input id="messages-active-reply-enabled" type="checkbox" style="width: 18px; height: 18px;">
+                    </label>
+                </div>
+                <div id="messages-active-reply-interval-group" class="setting-group" style="margin-bottom: 12px;">
+                    <input id="messages-active-reply-interval" type="number" min="5" placeholder="主动消息间隔（秒）" style="width: 100%; height: 42px; border-radius: 12px; border: 1px solid #e5e7eb; padding: 0 12px; font-size: 15px; background: #fff;">
+                </div>
+                <button id="save-messages-active-reply-settings" class="ios-btn-block">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="messages-edit-msg-modal" class="modal hidden" style="z-index: 230; align-items: center;">
+        <div class="modal-content" style="height: auto; border-radius: 18px; width: 86%; max-width: 356px; background-color: #fff;">
+            <div class="modal-header">
+                <h3>编辑消息</h3>
+                <button class="close-btn" id="close-messages-edit-msg">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <textarea id="messages-edit-msg-content" placeholder="输入新的消息内容..." style="height: 150px;"></textarea>
+                </div>
+                <button id="save-messages-edit-msg-btn" class="ios-btn-block">保存修改</button>
+            </div>
         </div>
     </div>
 
@@ -9066,6 +9182,8 @@
 
 </body>
 </html>
+
+
 
 
 

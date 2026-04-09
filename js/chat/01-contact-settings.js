@@ -81,6 +81,8 @@ function ensureContactRestWindowFields(contact) {
     if (typeof contact.restWindowStart !== 'string') contact.restWindowStart = '';
     if (typeof contact.restWindowEnd !== 'string') contact.restWindowEnd = '';
     if (contact.restWindowAwakenedAt === undefined) contact.restWindowAwakenedAt = null;
+    if (contact.restWindowUpcomingNoticeForStartMs === undefined) contact.restWindowUpcomingNoticeForStartMs = null;
+    if (contact.restWindowWakeReplyForStartMs === undefined) contact.restWindowWakeReplyForStartMs = null;
     return contact;
 }
 
@@ -98,6 +100,14 @@ function buildDateWithMinutes(baseDate, totalMinutes) {
     const next = new Date(baseDate.getTime());
     next.setHours(Math.floor(totalMinutes / 60), totalMinutes % 60, 0, 0);
     return next;
+}
+
+function clearContactRestWindowRuntimeState(contact) {
+    if (!contact || typeof contact !== 'object') return contact;
+    contact.restWindowAwakenedAt = null;
+    contact.restWindowUpcomingNoticeForStartMs = null;
+    contact.restWindowWakeReplyForStartMs = null;
+    return contact;
 }
 
 function getContactRestWindowStatus(contact, now = Date.now()) {
@@ -144,6 +154,41 @@ function getContactRestWindowStatus(contact, now = Date.now()) {
     return result;
 }
 
+function getContactNextRestWindowInfo(contact, now = Date.now()) {
+    ensureContactRestWindowFields(contact);
+    const startMinutes = parseContactRestWindowTime(contact && contact.restWindowStart);
+    const endMinutes = parseContactRestWindowTime(contact && contact.restWindowEnd);
+    const enabled = !!(contact && contact.restWindowEnabled && startMinutes !== null && endMinutes !== null && startMinutes !== endMinutes);
+    const result = {
+        enabled,
+        nextStartTimeMs: null,
+        nextEndTimeMs: null,
+        msUntilStart: null,
+        minutesUntilStart: null,
+        withinNoticeWindow: false
+    };
+    if (!enabled) return result;
+
+    const nowDate = new Date(now);
+    let nextStart = buildDateWithMinutes(nowDate, startMinutes);
+    if (nextStart.getTime() <= now) {
+        nextStart = new Date(nextStart.getTime() + 86400000);
+    }
+
+    let nextEnd = buildDateWithMinutes(nextStart, endMinutes);
+    if (startMinutes >= endMinutes && nextEnd.getTime() <= nextStart.getTime()) {
+        nextEnd = new Date(nextEnd.getTime() + 86400000);
+    }
+
+    const msUntilStart = nextStart.getTime() - now;
+    result.nextStartTimeMs = nextStart.getTime();
+    result.nextEndTimeMs = nextEnd.getTime();
+    result.msUntilStart = msUntilStart;
+    result.minutesUntilStart = msUntilStart > 0 ? Math.floor(msUntilStart / 60000) : 0;
+    result.withinNoticeWindow = msUntilStart > 0 && msUntilStart <= 10 * 60 * 1000;
+    return result;
+}
+
 function isContactRestOfflineText(text) {
     const raw = String(text || '').trim();
     if (!raw) return false;
@@ -170,8 +215,9 @@ function updateContactRestStateOnAssistantMessage(contactId, text, type = 'text'
     if (!status.enabled || !status.inRestWindow) return false;
 
     if (type === 'text' && isContactRestOfflineText(text)) {
-        if (contact.restWindowAwakenedAt !== null) {
+        if (contact.restWindowAwakenedAt !== null || contact.restWindowWakeReplyForStartMs !== null) {
             contact.restWindowAwakenedAt = null;
+            contact.restWindowWakeReplyForStartMs = null;
             return true;
         }
         return false;
@@ -195,6 +241,13 @@ function getContactRestTriggerDecision(contact, triggerSource = 'system', now = 
         reason: ''
     };
     if (!status.enabled || !status.inRestWindow) return decision;
+
+    if (normalizedSource === 'active' || normalizedSource === 'offline-active') {
+        decision.allow = false;
+        decision.reason = 'resting-active-blocked';
+        return decision;
+    }
+
     if (status.awakened) return decision;
 
     if (normalizedSource === 'manual') {
@@ -202,12 +255,9 @@ function getContactRestTriggerDecision(contact, triggerSource = 'system', now = 
         decision.allow = shouldWake;
         decision.shouldToast = !shouldWake;
         decision.reason = shouldWake ? 'wake-up' : 'resting';
-        return decision;
-    }
-
-    if (normalizedSource === 'active' || normalizedSource === 'offline-active') {
-        decision.allow = false;
-        decision.reason = 'resting-active-blocked';
+        if (shouldWake && contact.restWindowWakeReplyForStartMs !== status.startTimeMs) {
+            contact.restWindowWakeReplyForStartMs = status.startTimeMs;
+        }
         return decision;
     }
 
@@ -275,8 +325,183 @@ function syncBilingualTranslationSettingsVisibility() {
     if (targetSelect) targetSelect.disabled = !enabled;
 }
 
+function normalizeChatTopbarAvatarPosition(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'center' || normalized === 'right') return normalized;
+    return 'left';
+}
+
+function normalizeChatAppearancePreset(value) {
+    return String(value || '').trim().toLowerCase() === 'ios26' ? 'ios26' : 'default';
+}
+
+function ensureContactChatAppearancePresetField(contact) {
+    if (!contact || typeof contact !== 'object') return contact;
+    contact.chatAppearancePreset = normalizeChatAppearancePreset(contact.chatAppearancePreset);
+    return contact;
+}
+
+function applyChatAppearancePreset(contactOrId = null) {
+    const chatScreen = document.getElementById('chat-screen');
+    if (!chatScreen) return 'default';
+
+    let contact = null;
+    if (contactOrId && typeof contactOrId === 'object') {
+        contact = contactOrId;
+    } else {
+        const targetId = contactOrId || window.iphoneSimState.currentChatContactId;
+        if (targetId !== undefined && targetId !== null) {
+            contact = (window.iphoneSimState.contacts || []).find(item => item.id === targetId) || null;
+        }
+    }
+
+    if (contact) {
+        ensureContactChatAppearancePresetField(contact);
+    }
+
+    const preset = contact ? normalizeChatAppearancePreset(contact.chatAppearancePreset) : 'default';
+    chatScreen.classList.toggle('chat-appearance-ios26', preset === 'ios26');
+    chatScreen.dataset.chatAppearancePreset = preset;
+    return preset;
+}
+
+function ensureContactTopbarAvatarFields(contact) {
+    if (!contact || typeof contact !== 'object') return contact;
+    if (typeof contact.topbarAvatarVisible !== 'boolean') {
+        contact.topbarAvatarVisible = false;
+    }
+    if (typeof contact.topbarStatusVisible !== 'boolean') {
+        contact.topbarStatusVisible = false;
+    }
+    if (typeof contact.topbarStatusText !== 'string') {
+        contact.topbarStatusText = '';
+    }
+    contact.topbarStatusText = String(contact.topbarStatusText || '');
+    contact.topbarAvatarPosition = normalizeChatTopbarAvatarPosition(contact.topbarAvatarPosition);
+    return contact;
+}
+
+function syncChatTopbarAvatarSettingsVisibility() {
+    const enabledInput = document.getElementById('chat-setting-topbar-avatar-visible');
+    const panel = document.getElementById('chat-setting-topbar-avatar-position-field');
+    const select = document.getElementById('chat-setting-topbar-avatar-position');
+    const statusToggleRow = document.getElementById('chat-setting-topbar-status-visible-row');
+    const statusToggleInput = document.getElementById('chat-setting-topbar-status-visible');
+    const statusTextField = document.getElementById('chat-setting-topbar-status-text-field');
+    const statusTextInput = document.getElementById('chat-setting-topbar-status-text');
+    if (!enabledInput || !panel) return;
+    const enabled = !!enabledInput.checked;
+    const position = normalizeChatTopbarAvatarPosition(select ? select.value : 'left');
+    const allowStatusText = enabled && (position === 'left' || position === 'right');
+    const statusEnabled = allowStatusText && !!(statusToggleInput && statusToggleInput.checked);
+    panel.style.display = enabled ? '' : 'none';
+    if (select) select.disabled = !enabled;
+    if (statusToggleRow) statusToggleRow.style.display = allowStatusText ? '' : 'none';
+    if (statusToggleInput) statusToggleInput.disabled = !allowStatusText;
+    if (statusTextField) statusTextField.style.display = statusEnabled ? '' : 'none';
+    if (statusTextInput) statusTextInput.disabled = !statusEnabled;
+}
+
+function setChatTopbarAvatarButton(button, imageUrl, fallbackHtml, visible) {
+    if (!button) return;
+    const shouldShow = !!visible;
+    button.classList.toggle('hidden', !shouldShow);
+    button.classList.toggle('has-image', shouldShow && !!imageUrl);
+    if (shouldShow && imageUrl) {
+        button.style.backgroundImage = `url(${imageUrl})`;
+        button.innerHTML = '';
+    } else {
+        button.style.backgroundImage = '';
+        button.innerHTML = fallbackHtml;
+    }
+}
+
+function applyChatTopbarAppearance(contactOrId = null) {
+    const chatScreen = document.getElementById('chat-screen');
+    const header = chatScreen ? chatScreen.querySelector('.chat-header') : null;
+    if (!chatScreen || !header) return;
+
+    let contact = null;
+    if (contactOrId && typeof contactOrId === 'object') {
+        contact = contactOrId;
+    } else {
+        const targetId = contactOrId || window.iphoneSimState.currentChatContactId;
+        if (targetId !== undefined && targetId !== null) {
+            contact = (window.iphoneSimState.contacts || []).find(item => item.id === targetId) || null;
+        }
+    }
+
+    const mainAvatarButton = document.getElementById('chat-topbar-avatar-main');
+    const rightAvatarButton = document.getElementById('chat-topbar-avatar-right');
+    const settingsButton = document.getElementById('chat-settings-btn');
+    const title = document.getElementById('chat-title');
+    const statusText = document.getElementById('chat-topbar-status');
+    const layoutClasses = ['show-topbar-avatar', 'topbar-avatar-left', 'topbar-avatar-center', 'topbar-avatar-right', 'show-topbar-status'];
+
+    layoutClasses.forEach(className => {
+        header.classList.remove(className);
+        chatScreen.classList.remove(className);
+    });
+
+    setChatTopbarAvatarButton(mainAvatarButton, '', '<i class="ri-user-line"></i>', false);
+    setChatTopbarAvatarButton(rightAvatarButton, '', '<i class="ri-user-line"></i>', false);
+    if (settingsButton) settingsButton.classList.remove('hidden');
+    if (statusText) {
+        statusText.textContent = '';
+        statusText.classList.add('hidden');
+    }
+
+    if (!contact) return;
+
+    ensureContactChatAppearancePresetField(contact);
+    ensureContactTopbarAvatarFields(contact);
+
+    const displayName = contact.remark || contact.nickname || contact.name || '';
+    if (title && displayName) {
+        title.textContent = displayName;
+    }
+
+    const avatarUrl = String(contact.avatar || '').trim();
+    if (contact.chatAppearancePreset === 'ios26') {
+        if (settingsButton) {
+            settingsButton.innerHTML = '<i class="fas fa-ellipsis-h"></i>';
+            settingsButton.setAttribute('aria-label', '打开聊天设置');
+        }
+        if (mainAvatarButton) mainAvatarButton.setAttribute('aria-label', '打开联系人资料');
+        setChatTopbarAvatarButton(mainAvatarButton, avatarUrl, '<i class="ri-user-line"></i>', true);
+        setChatTopbarAvatarButton(rightAvatarButton, '', '<i class="ri-user-line"></i>', false);
+        if (settingsButton) settingsButton.classList.remove('hidden');
+        return;
+    }
+
+    if (!contact.topbarAvatarVisible) return;
+
+    const position = normalizeChatTopbarAvatarPosition(contact.topbarAvatarPosition);
+    header.classList.add('show-topbar-avatar', `topbar-avatar-${position}`);
+    chatScreen.classList.add(`topbar-avatar-${position}`);
+
+    const shouldShowStatus = (position === 'left' || position === 'right') && !!contact.topbarStatusVisible;
+    if (shouldShowStatus && statusText) {
+        statusText.textContent = String(contact.topbarStatusText || '').trim() || '5G Online';
+        statusText.classList.remove('hidden');
+        header.classList.add('show-topbar-status');
+    }
+
+    if (position === 'right') {
+        if (settingsButton) settingsButton.classList.add('hidden');
+        if (rightAvatarButton) rightAvatarButton.setAttribute('aria-label', '打开聊天设置');
+        setChatTopbarAvatarButton(rightAvatarButton, avatarUrl, '<i class="ri-user-line"></i>', true);
+        return;
+    }
+
+    if (mainAvatarButton) mainAvatarButton.setAttribute('aria-label', '打开联系人资料');
+    setChatTopbarAvatarButton(mainAvatarButton, avatarUrl, '<i class="ri-user-line"></i>', true);
+
+}
 window.ensureContactRestWindowFields = ensureContactRestWindowFields;
+window.clearContactRestWindowRuntimeState = clearContactRestWindowRuntimeState;
 window.getContactRestWindowStatus = getContactRestWindowStatus;
+window.getContactNextRestWindowInfo = getContactNextRestWindowInfo;
 window.isContactRestOfflineText = isContactRestOfflineText;
 window.updateContactRestStateOnAssistantMessage = updateContactRestStateOnAssistantMessage;
 window.getContactRestTriggerDecision = getContactRestTriggerDecision;
@@ -285,6 +510,12 @@ window.ensureContactBilingualTranslationFields = ensureContactBilingualTranslati
 window.getChatBilingualLanguageLabel = getChatBilingualLanguageLabel;
 window.populateChatSettingsBilingualLanguageSelect = populateChatSettingsBilingualLanguageSelect;
 window.syncBilingualTranslationSettingsVisibility = syncBilingualTranslationSettingsVisibility;
+window.normalizeChatAppearancePreset = normalizeChatAppearancePreset;
+window.ensureContactChatAppearancePresetField = ensureContactChatAppearancePresetField;
+window.applyChatAppearancePreset = applyChatAppearancePreset;
+window.ensureContactTopbarAvatarFields = ensureContactTopbarAvatarFields;
+window.syncChatTopbarAvatarSettingsVisibility = syncChatTopbarAvatarSettingsVisibility;
+window.applyChatTopbarAppearance = applyChatTopbarAppearance;
 window.CHAT_BILINGUAL_LANGUAGE_OPTIONS = CHAT_BILINGUAL_LANGUAGE_OPTIONS.slice();
 
 // ====== AI 位置选择器数据 ======
@@ -1254,6 +1485,8 @@ function createBaseContactPayload({ name, remark = '', persona = '', avatar = ''
         restWindowStart: '',
         restWindowEnd: '',
         restWindowAwakenedAt: null,
+        restWindowUpcomingNoticeForStartMs: null,
+        restWindowWakeReplyForStartMs: null,
         calendarAwareEnabled: true,
         autoItineraryEnabled: false,
         autoItineraryInterval: 10,
@@ -1262,6 +1495,10 @@ function createBaseContactPayload({ name, remark = '', persona = '', avatar = ''
         bilingualTranslationEnabled: false,
         bilingualSourceLang: CHAT_BILINGUAL_DEFAULT_SOURCE_LANG,
         bilingualTargetLang: CHAT_BILINGUAL_DEFAULT_TARGET_LANG,
+        topbarAvatarVisible: false,
+        topbarAvatarPosition: 'left',
+        topbarStatusVisible: false,
+        topbarStatusText: '5G Online',
         userPerception: [],
         thoughtDisplayMode: 'title',
         thoughtPetImage: '',
@@ -2024,9 +2261,11 @@ function formatContactListTimeLabel(timestamp) {
 }
 
 function getLastRenderableChatMessage(contactId) {
-    const history = window.iphoneSimState && window.iphoneSimState.chatHistory
-        ? window.iphoneSimState.chatHistory[contactId]
-        : null;
+    const history = typeof window.getChatHistoryByChannel === 'function'
+        ? window.getChatHistoryByChannel(contactId, 'wechat')
+        : (window.iphoneSimState && window.iphoneSimState.chatHistory
+            ? window.iphoneSimState.chatHistory[contactId]
+            : null);
     if (!Array.isArray(history) || history.length === 0) return null;
 
     for (let index = history.length - 1; index >= 0; index--) {
@@ -2144,15 +2383,8 @@ function renderContactList(filterGroup = 'all') {
             if (!a.isPinned && b.isPinned) return 1;
             
             const getLastTime = (c) => {
-                const history = window.iphoneSimState.chatHistory[c.id];
-                if (history && history.length > 0) {
-                    for (let i = history.length - 1; i >= 0; i--) {
-                        const msg = history[i];
-                        if (shouldHideChatSyncMsg(msg)) continue;
-                        return msg.time || 0;
-                    }
-                }
-                return 0;
+                const lastMessage = getLastRenderableChatMessage(c.id);
+                return Number(lastMessage && lastMessage.time) || 0;
             };
             
             return getLastTime(b) - getLastTime(a);
@@ -2171,7 +2403,9 @@ function renderContactList(filterGroup = 'all') {
             let lastMsgTime = '';
             let unreadCount = 0;
 
-            const history = window.iphoneSimState.chatHistory[contact.id];
+            const history = typeof window.getChatHistoryByChannel === 'function'
+                ? window.getChatHistoryByChannel(contact.id, 'wechat')
+                : window.iphoneSimState.chatHistory[contact.id];
             if (history && history.length > 0) {
                 let lastMsg = null;
                 for (let i = history.length - 1; i >= 0; i--) {
@@ -2341,6 +2575,220 @@ function renderContactList(filterGroup = 'all') {
     }
 }
 
+function syncChatSettingsWechatBlockButton(contactOrId = null) {
+    const button = document.getElementById('toggle-wechat-block-btn');
+    if (!button) return;
+
+    let contact = contactOrId && typeof contactOrId === 'object'
+        ? contactOrId
+        : null;
+    if (!contact) {
+        const contactId = contactOrId || getActiveAiProfileContactId();
+        contact = contactId ? ((window.iphoneSimState.contacts || []).find(item => String(item.id) === String(contactId)) || null) : null;
+    }
+    if (typeof window.ensureContactWechatBlockFields === 'function') {
+        window.ensureContactWechatBlockFields(contact);
+    }
+
+    const isBlocked = !!(contact && contact.wechatBlockedByUser);
+    button.dataset.blocked = isBlocked ? '1' : '0';
+    button.innerHTML = isBlocked
+        ? '<i class="ri-close-circle-line"></i> 移出黑名单'
+        : '<i class="ri-forbid-2-line"></i> 拉黑对方';
+}
+
+function syncWechatBlockedChatUi(contactOrId = null) {
+    const chatScreen = document.getElementById('chat-screen');
+    const footer = document.getElementById('wechat-blocked-footer');
+    const button = document.getElementById('wechat-unblock-btn');
+    const stickerPanel = document.getElementById('sticker-panel');
+    const chatMorePanel = document.getElementById('chat-more-panel');
+    const voiceInputModal = document.getElementById('voice-input-modal');
+    if (!chatScreen || !footer || !button) return false;
+
+    const contactId = contactOrId && typeof contactOrId === 'object'
+        ? contactOrId.id
+        : (contactOrId || window.iphoneSimState.currentChatContactId);
+    const contact = contactOrId && typeof contactOrId === 'object'
+        ? contactOrId
+        : ((window.iphoneSimState.contacts || []).find(item => String(item.id) === String(contactId)) || null);
+    if (typeof window.ensureContactWechatBlockFields === 'function') {
+        window.ensureContactWechatBlockFields(contact);
+    }
+
+    const isBlocked = !!(contact && contact.wechatBlockedByUser && String(window.iphoneSimState.currentChatContactId || '') === String(contact.id || ''));
+    if (isBlocked && typeof cancelQuote === 'function') {
+        cancelQuote();
+    }
+    if (isBlocked && stickerPanel) stickerPanel.classList.add('hidden');
+    if (isBlocked && chatMorePanel) chatMorePanel.classList.add('hidden');
+    if (isBlocked && voiceInputModal) voiceInputModal.classList.add('hidden');
+    button.textContent = '移出黑名单';
+    footer.classList.toggle('hidden', !isBlocked);
+    chatScreen.classList.toggle('wechat-blocked-contact', isBlocked);
+    return isBlocked;
+}
+
+function setContactWechatBlockedState(contactId, blocked) {
+    const contact = (window.iphoneSimState.contacts || []).find(item => String(item.id) === String(contactId));
+    if (!contact) return null;
+
+    if (typeof window.ensureContactWechatBlockFields === 'function') {
+        window.ensureContactWechatBlockFields(contact);
+    }
+
+    contact.wechatBlockedByUser = !!blocked;
+    contact.wechatBlockedAt = blocked ? Date.now() : null;
+    saveConfig();
+
+    syncChatSettingsWechatBlockButton(contact);
+    syncWechatBlockedChatUi(contact);
+    if (window.renderContactList) {
+        window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
+    }
+    if (window.MessagesApp && typeof window.MessagesApp.refresh === 'function') {
+        window.MessagesApp.refresh(contact.id);
+    }
+    return contact;
+}
+
+let pendingWechatBlockConfirmContactId = null;
+let pendingWechatBlockConfirmAction = 'block';
+let pendingWechatBlockConfirmReturnToChat = false;
+
+function openWechatBlockConfirmModal(contactOrId = null, action = 'block', options = {}) {
+    const modal = document.getElementById('wechat-block-confirm-modal');
+    const title = document.getElementById('wechat-block-confirm-title');
+    const confirmBtn = document.getElementById('confirm-wechat-block-confirm');
+    if (!modal) return false;
+
+    const contact = contactOrId && typeof contactOrId === 'object'
+        ? contactOrId
+        : ((window.iphoneSimState.contacts || []).find(item => String(item.id) === String(contactOrId || getActiveAiProfileContactId())) || null);
+    if (!contact) return false;
+
+    const safeAction = action === 'unblock' ? 'unblock' : 'block';
+    const contactName = contact.remark || contact.nickname || contact.name || '对方';
+
+    pendingWechatBlockConfirmContactId = contact.id;
+    pendingWechatBlockConfirmAction = safeAction;
+    pendingWechatBlockConfirmReturnToChat = !!(options && options.returnToChat);
+
+    if (title) {
+        title.textContent = safeAction === 'unblock' ? '确认移出黑名单' : '确认拉黑';
+    }
+    if (confirmBtn) {
+        confirmBtn.textContent = safeAction === 'unblock' ? '确认移出' : '确认拉黑';
+    }
+    modal.classList.remove('hidden');
+    return true;
+}
+
+function closeWechatBlockConfirmModal() {
+    const modal = document.getElementById('wechat-block-confirm-modal');
+    if (modal) modal.classList.add('hidden');
+    pendingWechatBlockConfirmContactId = null;
+    pendingWechatBlockConfirmAction = 'block';
+    pendingWechatBlockConfirmReturnToChat = false;
+}
+
+function returnFromChatSettingsToChat(contactId) {
+    const chatSettingsScreen = document.getElementById('chat-settings-screen');
+    const aiProfileScreen = document.getElementById('ai-profile-screen');
+    if (chatSettingsScreen) chatSettingsScreen.classList.add('hidden');
+    if (aiProfileScreen) aiProfileScreen.classList.add('hidden');
+    if (window.setChatSettingsFloatingSaveVisible) {
+        window.setChatSettingsFloatingSaveVisible(false);
+    }
+    if (typeof openChat === 'function') {
+        openChat(contactId);
+    }
+}
+
+async function triggerWechatUnblockReply(contactId) {
+    const contact = (window.iphoneSimState.contacts || []).find(item => String(item.id) === String(contactId));
+    if (!contact) return false;
+
+    const instruction = '用户刚刚把你从微信黑名单里移出来了。你已经知道现在你发给用户的消息会重新出现在微信聊天页。请自然地接住这件事，像真人一样表达，不要写成系统通知，也不要每句都重复强调自己被移出黑名单。';
+    try {
+        return await generateAiReply(instruction, contact.id, {
+            triggerSource: 'manual',
+            deliveryChannel: 'wechat',
+            ignoreRestWindow: true
+        });
+    } catch (error) {
+        console.error('移出黑名单后触发微信回复失败', error);
+        return false;
+    }
+}
+
+async function confirmWechatBlockFromSettings() {
+    const contactId = pendingWechatBlockConfirmContactId;
+    const action = pendingWechatBlockConfirmAction;
+    const shouldReturnToChat = pendingWechatBlockConfirmReturnToChat;
+    if (!contactId) return;
+
+    closeWechatBlockConfirmModal();
+
+    if (action === 'unblock') {
+        const updatedContact = setContactWechatBlockedState(contactId, false);
+        if (!updatedContact) return;
+        if (shouldReturnToChat) {
+            returnFromChatSettingsToChat(updatedContact.id);
+        }
+        await triggerWechatUnblockReply(updatedContact.id);
+        return;
+    }
+
+    const updatedContact = setContactWechatBlockedState(contactId, true);
+    if (!updatedContact) return;
+
+    returnFromChatSettingsToChat(updatedContact.id);
+
+    const instruction = '用户刚刚把你在微信里拉黑了。你已经知道接下来可见的聊天不会继续出现在微信，而会进入“信息”里。请自然地接住这件事，像真人一样表达，不要写成系统通知，也不要每句都重复强调被拉黑。';
+    try {
+        await generateAiReply(instruction, updatedContact.id, {
+            triggerSource: 'manual',
+            deliveryChannel: 'messages-app',
+            ignoreRestWindow: true,
+            showWechatTypingTitle: false
+        });
+    } catch (error) {
+        console.error('拉黑后触发信息回复失败', error);
+    }
+
+    if (window.MessagesApp && typeof window.MessagesApp.refresh === 'function') {
+        window.MessagesApp.refresh(updatedContact.id);
+    }
+}
+
+async function handleToggleWechatBlockStatus() {
+    const contact = getActiveAiProfileContact();
+    if (!contact) return;
+
+    const nextBlocked = !(contact.wechatBlockedByUser === true);
+    if (nextBlocked) {
+        openWechatBlockConfirmModal(contact, 'block', { returnToChat: true });
+        return;
+    }
+
+    openWechatBlockConfirmModal(contact, 'unblock', { returnToChat: true });
+}
+
+async function handleWechatUnblockFromChat() {
+    const contactId = window.iphoneSimState.currentChatContactId;
+    if (!contactId) return;
+    openWechatBlockConfirmModal(contactId, 'unblock', { returnToChat: false });
+}
+
+window.syncChatSettingsWechatBlockButton = syncChatSettingsWechatBlockButton;
+window.syncWechatBlockedChatUi = syncWechatBlockedChatUi;
+window.openWechatBlockConfirmModal = openWechatBlockConfirmModal;
+window.closeWechatBlockConfirmModal = closeWechatBlockConfirmModal;
+window.confirmWechatBlockFromSettings = confirmWechatBlockFromSettings;
+window.handleToggleWechatBlockStatus = handleToggleWechatBlockStatus;
+window.handleWechatUnblockFromChat = handleWechatUnblockFromChat;
+
 function applyChatDisplayPreferences(contactOrId = null) {
     const chatScreen = document.getElementById('chat-screen');
     if (!chatScreen) return;
@@ -2403,6 +2851,10 @@ function openChat(contactId) {
     }
     const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
     if (!contact) return;
+    if (typeof window.ensureContactWechatBlockFields === 'function') {
+        window.ensureContactWechatBlockFields(contact);
+    }
+    ensureContactChatAppearancePresetField(contact);
     
     if (window.iphoneSimState.isMultiSelectMode) {
         exitMultiSelectMode();
@@ -2443,11 +2895,14 @@ function openChat(contactId) {
         chatBody.style.fontSize = (contact.chatFontSize || 16) + 'px';
     }
 
+    applyChatAppearancePreset(contact);
     applyChatDisplayPreferences(contact);
+    applyChatTopbarAppearance(contact);
     
     chatScreen.classList.remove('hidden');
     
     renderChatHistory(contactId);
+    syncWechatBlockedChatUi(contact);
 
     if (typeof window.prefetchAmapChatContext === 'function') {
         window.prefetchAmapChatContext(contactId);
@@ -2912,6 +3367,11 @@ function openChatSettings() {
     bindChatSettingsHeaderInteractions();
     ensureContactRestWindowFields(contact);
     ensureContactBilingualTranslationFields(contact);
+    ensureContactTopbarAvatarFields(contact);
+    ensureContactChatAppearancePresetField(contact);
+    if (typeof window.ensureContactWechatBlockFields === 'function') {
+        window.ensureContactWechatBlockFields(contact);
+    }
     setChatSettingsFloatingSaveVisible(true);
     setChatSettingsFloatingSaveState(false);
 
@@ -3028,6 +3488,11 @@ function openChatSettings() {
         };
     }
 
+    const appearancePresetSelect = document.getElementById('chat-setting-appearance-preset');
+    if (appearancePresetSelect) {
+        appearancePresetSelect.value = normalizeChatAppearancePreset(contact.chatAppearancePreset);
+    }
+
     const avatarVisibilitySelect = document.getElementById('chat-setting-avatar-visibility');
     if (avatarVisibilitySelect) {
         const legacyAvatarVisibility = contact.showAvatar === false ? 'hide-both' : 'show-both';
@@ -3038,6 +3503,24 @@ function openChatSettings() {
     if (showTimestampToggle) {
         showTimestampToggle.checked = contact.showTimestamp !== false;
     }
+
+    const topbarAvatarVisibleToggle = document.getElementById('chat-setting-topbar-avatar-visible');
+    if (topbarAvatarVisibleToggle) {
+        topbarAvatarVisibleToggle.checked = !!contact.topbarAvatarVisible;
+    }
+    const topbarAvatarPositionSelect = document.getElementById('chat-setting-topbar-avatar-position');
+    if (topbarAvatarPositionSelect) {
+        topbarAvatarPositionSelect.value = normalizeChatTopbarAvatarPosition(contact.topbarAvatarPosition);
+    }
+    const topbarStatusVisibleToggle = document.getElementById('chat-setting-topbar-status-visible');
+    if (topbarStatusVisibleToggle) {
+        topbarStatusVisibleToggle.checked = !!contact.topbarStatusVisible;
+    }
+    const topbarStatusTextInput = document.getElementById('chat-setting-topbar-status-text');
+    if (topbarStatusTextInput) {
+        topbarStatusTextInput.value = String(contact.topbarStatusText || '');
+    }
+    syncChatTopbarAvatarSettingsVisibility();
 
     const userPersonaSelect = document.getElementById('chat-setting-user-persona');
     userPersonaSelect.innerHTML = '<option value="">Default Self / 默认身份</option>';
@@ -3154,6 +3637,7 @@ function openChatSettings() {
     const chatSettingsScreen = document.getElementById('chat-settings-screen');
     const chatSettingsBody = chatSettingsScreen ? chatSettingsScreen.querySelector('.chat-settings-editorial-body') : null;
     if (chatSettingsScreen) chatSettingsScreen.classList.remove('hidden');
+    syncChatSettingsWechatBlockButton(contact);
     if (chatSettingsScreen) chatSettingsScreen.scrollTop = 0;
     if (chatSettingsBody) chatSettingsBody.scrollTop = 0;
     syncChatSettingsStickyChrome();
@@ -3568,6 +4052,7 @@ function handleSaveChatSettings() {
     if (!contact) return;
     ensureContactRestWindowFields(contact);
     ensureContactBilingualTranslationFields(contact);
+    ensureContactChatAppearancePresetField(contact);
     const previousRestWindowSnapshot = `${contact.restWindowEnabled ? '1' : '0'}|${contact.restWindowStart || ''}|${contact.restWindowEnd || ''}`;
 
     const name = document.getElementById('chat-setting-name').value;
@@ -3608,10 +4093,19 @@ function handleSaveChatSettings() {
     const myAvatarInput = document.getElementById('chat-setting-my-avatar');
     const customCss = document.getElementById('chat-setting-custom-css').value;
     const fontSize = document.getElementById('chat-font-size-slider') ? parseInt(document.getElementById('chat-font-size-slider').value) : 16;
+    const chatAppearancePreset = document.getElementById('chat-setting-appearance-preset')
+        ? normalizeChatAppearancePreset(document.getElementById('chat-setting-appearance-preset').value)
+        : 'default';
     const avatarVisibility = document.getElementById('chat-setting-avatar-visibility')
         ? document.getElementById('chat-setting-avatar-visibility').value
         : 'show-both';
     const showTimestamp = document.getElementById('chat-setting-show-timestamp') ? document.getElementById('chat-setting-show-timestamp').checked : true;
+    const topbarAvatarVisible = document.getElementById('chat-setting-topbar-avatar-visible') ? document.getElementById('chat-setting-topbar-avatar-visible').checked : false;
+    const topbarAvatarPosition = document.getElementById('chat-setting-topbar-avatar-position')
+        ? normalizeChatTopbarAvatarPosition(document.getElementById('chat-setting-topbar-avatar-position').value)
+        : 'left';
+    const topbarStatusVisible = document.getElementById('chat-setting-topbar-status-visible') ? document.getElementById('chat-setting-topbar-status-visible').checked : false;
+    const topbarStatusText = document.getElementById('chat-setting-topbar-status-text') ? document.getElementById('chat-setting-topbar-status-text').value : ''; 
     const intervalMin = document.getElementById('chat-setting-interval-min').value;
     const intervalMax = document.getElementById('chat-setting-interval-max').value;
     const activeReplyEnabled = document.getElementById('chat-setting-active-reply').checked;
@@ -3690,10 +4184,15 @@ function handleSaveChatSettings() {
     }
     contact.customCss = customCss;
     contact.chatFontSize = fontSize;
+    contact.chatAppearancePreset = chatAppearancePreset;
     contact.avatarVisibility = avatarVisibility;
     // Backward-compat for any old logic relying on showAvatar.
     contact.showAvatar = avatarVisibility !== 'hide-both';
     contact.showTimestamp = showTimestamp;
+    contact.topbarAvatarVisible = !!topbarAvatarVisible;
+    contact.topbarAvatarPosition = topbarAvatarPosition;
+    contact.topbarStatusVisible = !!topbarStatusVisible;
+    contact.topbarStatusText = String(topbarStatusText || '').trim();
     contact.replyIntervalMin = intervalMin ? parseInt(intervalMin) : null;
     contact.replyIntervalMax = intervalMax ? parseInt(intervalMax) : null;
     contact.activeReplyEnabled = activeReplyEnabled;
@@ -3703,7 +4202,13 @@ function handleSaveChatSettings() {
     contact.restWindowEnd = contact.restWindowEnabled ? restWindowEnd : '';
     const nextRestWindowSnapshot = `${contact.restWindowEnabled ? '1' : '0'}|${contact.restWindowStart || ''}|${contact.restWindowEnd || ''}`;
     if (!contact.restWindowEnabled || previousRestWindowSnapshot !== nextRestWindowSnapshot) {
-        contact.restWindowAwakenedAt = null;
+        if (typeof window.clearContactRestWindowRuntimeState === 'function') {
+            window.clearContactRestWindowRuntimeState(contact);
+        } else {
+            contact.restWindowAwakenedAt = null;
+            contact.restWindowUpcomingNoticeForStartMs = null;
+            contact.restWindowWakeReplyForStartMs = null;
+        }
     }
     contact.novelaiPreset = novelaiPreset;
     
@@ -3831,7 +4336,9 @@ function handleSaveChatSettings() {
             chatBody.style.fontSize = (contact.chatFontSize || 16) + 'px';
         }
 
+        applyChatAppearancePreset(contact);
         applyChatDisplayPreferences(contact);
+        applyChatTopbarAppearance(contact);
 
         document.getElementById('chat-settings-screen').classList.add('hidden');
         setChatSettingsFloatingSaveVisible(false);
@@ -4087,6 +4594,10 @@ async function refreshTokenCountForContact(contactId) {
 }
 
 // --- 聊天界面功能 ---
+
+
+
+
 
 
 

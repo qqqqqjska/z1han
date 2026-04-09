@@ -48,7 +48,7 @@
         };
 
         // 尝试从 preset 恢复参数
-        const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
+        const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(contactId));
         if (contact && contact.novelaiPreset) {
              let preset = null;
              if (contact.novelaiPreset === 'AUTO_MATCH') {
@@ -481,7 +481,7 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
 
     msgDiv.style.position = 'relative';
     
-    const contact = window.iphoneSimState.contacts.find(c => c.id === window.iphoneSimState.currentChatContactId);
+    const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(window.iphoneSimState.currentChatContactId));
     let fireBuddySpeakerMeta = null;
     if (!isUser && msgId && typeof window.getFireBuddySpeakerMeta === 'function') {
         try {
@@ -1712,7 +1712,7 @@ function handleMessageLongPress(e, content, isUser, type, msgId) {
 
     if (!target) return;
 
-    const contact = window.iphoneSimState.contacts.find(c => c.id === window.iphoneSimState.currentChatContactId);
+    const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(window.iphoneSimState.currentChatContactId));
     let name = 'AI';
     if (isUser) {
         if (contact && contact.userPersonaId) {
@@ -1820,7 +1820,7 @@ function showContextMenu(targetEl, msgData) {
         setAvatarBtn.onclick = async () => {
             menu.remove();
             if (!window.iphoneSimState.currentChatContactId) return;
-            const contact = window.iphoneSimState.contacts.find(c => c.id === window.iphoneSimState.currentChatContactId);
+            const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(window.iphoneSimState.currentChatContactId));
             if (!contact) return;
 
             if (confirm(`确定要将这张图片设为 "${contact.remark || contact.name}" 的头像吗？`)) {
@@ -1834,6 +1834,9 @@ function showContextMenu(targetEl, msgData) {
                 
                 // Refresh UI
                 if (window.renderContactList) window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
+                if (typeof window.applyChatTopbarAppearance === 'function') {
+                    window.applyChatTopbarAppearance(contact);
+                }
                 
                 // Refresh chat history (to update avatars in message list)
                 renderChatHistory(contact.id, true);
@@ -1868,7 +1871,7 @@ function showContextMenu(targetEl, msgData) {
             }
 
             try {
-                const contact = window.iphoneSimState.contacts.find(c => c.id === window.iphoneSimState.currentChatContactId);
+                const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(window.iphoneSimState.currentChatContactId));
                 const sourceLabel = contact ? `Saved from ${contact.remark || contact.name}` : 'Saved from Chat';
                 let imageSource = fullMsg.content;
                 if (typeof window.isChatMediaReference === 'function' && window.isChatMediaReference(imageSource)) {
@@ -3227,7 +3230,7 @@ window.sanitizeChatHistoryForRender = function(contactId) {
     if (!Array.isArray(history) || history.length === 0) return false;
 
     const contact = Array.isArray(window.iphoneSimState.contacts)
-        ? window.iphoneSimState.contacts.find(c => c.id === contactId)
+        ? window.iphoneSimState.contacts.find(c => String(c.id) === String(contactId))
         : null;
     let changed = false;
 
@@ -3516,6 +3519,16 @@ function buildWechatRolePrompt(contact, userPromptInfo) {
     ]);
 }
 
+function buildWechatBlockedStatusPrompt(contact) {
+    if (!contact || contact.wechatBlockedByUser !== true) return '';
+    return joinWechatPromptSections([
+        '【微信拉黑状态】',
+        '用户已经在微信里把你拉黑了。',
+        '你知道接下来你对用户可见的消息不会继续出现在微信聊天页，而会进入“信息”线程。',
+        '你可以自然地流露出你知道这件事，但不要写成系统通知，也不要每条都重复强调。'
+    ]);
+}
+
 function buildWechatProtocolPrompt(contact) {
     if (typeof window.ensureContactBilingualTranslationFields === 'function') {
         window.ensureContactBilingualTranslationFields(contact);
@@ -3652,20 +3665,90 @@ function buildWechatConditionalCapabilityPrompt(runtimeCtx) {
     ]);
 }
 
+function isVisibleAssistantReplyMessage(message) {
+    if (!message || message.role !== 'assistant' || message.hiddenFromUi) return false;
+    if (message.type === 'system_event' || message.type === 'live_sync_hidden' || message.type === 'voice_call_text') return false;
+    if (message.type === 'text') {
+        const raw = String(message.content || '').trim();
+        if (!raw) return false;
+        if (/^\[(系统|System)/i.test(raw)) return false;
+        if (/^(系统消息|系统提示|系统诊断)[:：]/.test(raw)) return false;
+    }
+    return true;
+}
+
+function buildContactRestWindowNarrativePrompt(contact, now = Date.now()) {
+    if (!contact || !contact.restWindowEnabled) return '';
+    if (typeof window.ensureContactRestWindowFields === 'function') {
+        window.ensureContactRestWindowFields(contact);
+    }
+    const status = typeof window.getContactRestWindowStatus === 'function'
+        ? window.getContactRestWindowStatus(contact, now)
+        : null;
+    const nextRest = typeof window.getContactNextRestWindowInfo === 'function'
+        ? window.getContactNextRestWindowInfo(contact, now)
+        : null;
+    if ((!status || !status.enabled) && (!nextRest || !nextRest.enabled)) return '';
+
+    const lines = [
+        '【休息作息】',
+        `- 你的固定休息时段：${contact.restWindowStart || '--:--'} - ${contact.restWindowEnd || '--:--'}。`
+    ];
+
+    const shouldForceWakeReply = !!(
+        status
+        && status.enabled
+        && status.inRestWindow
+        && Number(contact.restWindowWakeReplyForStartMs) === Number(status.startTimeMs)
+        && !status.awakened
+    );
+
+    if (status && status.enabled && status.inRestWindow) {
+        if (shouldForceWakeReply) {
+            lines.push('- 你刚在休息时段里被对方的消息吵醒，这一轮第一条成功回复要像刚睡着被叫醒：简短、自然、略带困意。');
+            lines.push('- 不要夸张，不要发火，不要写成系统通知或舞台说明。');
+            lines.push('- 这一轮至少要发出一条文本消息，不能只发图片、表情包或纯动作。');
+        } else {
+            lines.push('- 你现在仍处于休息时段里，但已经醒过一次；后续回复保持自然，不要反复强调“我刚醒”，除非上下文确实需要。');
+        }
+        lines.push('- 休息时段里不要自己主动开启新话题或突然变得很活跃，只在对方发来消息时自然接住。');
+        return lines.join('\n');
+    }
+
+    if (nextRest && nextRest.enabled && nextRest.withinNoticeWindow) {
+        const minutesText = nextRest.minutesUntilStart <= 0
+            ? '几分钟内'
+            : `${nextRest.minutesUntilStart}分钟内`;
+        lines.push(`- 你离休息时段开始只剩${minutesText}，这段时间的正常回复要自然收束，别继续展开大话题。`);
+        lines.push('- 可以顺势提到自己一会儿准备睡觉/先休息，但要像真人临睡前的自然收尾，不要每句都重复。');
+        return lines.join('\n');
+    }
+
+    return '';
+}
+
 async function generateAiReply(instruction = null, targetContactId = null, options = {}) {
     const contactId = targetContactId || window.iphoneSimState.currentChatContactId;
-    if (!contactId) return;
+    if (!contactId) return false;
     
-    const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
-    if (!contact) return;
+    const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(contactId));
+    if (!contact) return false;
+    if (typeof window.ensureContactWechatBlockFields === 'function') {
+        window.ensureContactWechatBlockFields(contact);
+    }
     if (typeof window.ensureContactRestWindowFields === 'function') {
         window.ensureContactRestWindowFields(contact);
     }
 
+    const deliveryChannel = typeof window.getResolvedDeliveryChannel === 'function'
+        ? window.getResolvedDeliveryChannel(contact, options && options.deliveryChannel)
+        : 'wechat';
+    const ignoreRestWindow = !!(options && options.ignoreRestWindow);
+
     const triggerSource = options && typeof options === 'object' && options.triggerSource
         ? String(options.triggerSource)
         : 'system';
-    if (typeof window.getContactRestTriggerDecision === 'function') {
+    if (!ignoreRestWindow && typeof window.getContactRestTriggerDecision === 'function') {
         const restDecision = window.getContactRestTriggerDecision(contact, triggerSource);
         if (!restDecision.allow) {
             if (restDecision.shouldToast && typeof window.showChatToast === 'function') {
@@ -3678,7 +3761,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
     const settings = window.iphoneSimState.aiSettings.url ? window.iphoneSimState.aiSettings : window.iphoneSimState.aiSettings2;
     if (!settings.url || !settings.key) {
         if (!targetContactId) alert('请先在设置中配置AI API');
-        return;
+        return false;
     }
 
     if (!window.__chatAiReplyLocks) {
@@ -3693,8 +3776,27 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
     window.__chatAiReplyLocks[contactId] = true;
 
     const titleEl = document.getElementById('chat-title');
+    const chatScreen = document.getElementById('chat-screen');
     const originalTitle = titleEl ? titleEl.textContent : '';
-    if (titleEl) {
+    const historyLengthBefore = Array.isArray(window.iphoneSimState.chatHistory[contactId])
+        ? window.iphoneSimState.chatHistory[contactId].length
+        : 0;
+    const initialRestStatus = typeof window.getContactRestWindowStatus === 'function'
+        ? window.getContactRestWindowStatus(contact)
+        : null;
+    const shouldClearWakeReplyOnText = !!(
+        initialRestStatus
+        && initialRestStatus.inRestWindow
+        && Number(contact.restWindowWakeReplyForStartMs) === Number(initialRestStatus.startTimeMs)
+    );
+    const shouldShowWechatTypingTitle = !!(
+        titleEl
+        && deliveryChannel === 'wechat'
+        && String(window.iphoneSimState.currentChatContactId || '') === String(contactId)
+        && (!chatScreen || !chatScreen.classList.contains('hidden'))
+        && !(options && options.showWechatTypingTitle === false)
+    );
+    if (shouldShowWechatTypingTitle) {
         titleEl.textContent = '正在输入中...';
     }
 
@@ -3724,6 +3826,9 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
 
     try {
         const messages = await window.buildAiPromptMessages(contactId, instruction, options);
+        if (!Array.isArray(messages) || messages.length === 0) {
+            throw new Error('AI上下文为空，未能构建有效请求');
+        }
         let fetchUrl = settings.url;
         if (!fetchUrl.endsWith('/chat/completions')) {
             fetchUrl = fetchUrl.endsWith('/') ? fetchUrl + 'chat/completions' : fetchUrl + '/chat/completions';
@@ -3809,7 +3914,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
             if (typeof window.showChatToast === 'function') {
                 window.showChatToast('这次 AI 没有返回可显示的回复，请重试', 2500);
             }
-            return;
+            return false;
         }
 
         let replyContent = extractedReply.content;
@@ -4479,6 +4584,9 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                         contact.avatar = nextAvatar;
                         saveConfig();
                         if (window.renderContactList) window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
+                        if (typeof window.applyChatTopbarAppearance === 'function') {
+                            window.applyChatTopbarAppearance(contact);
+                        }
                         renderChatHistory(contact.id, true);
                         sendMessage(`[系统消息]: 对方更换了头像`, false, 'text');
                     }, 500);
@@ -4961,7 +5069,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
             // 检查用户是否仍在当前聊天界面
             const isChatOpen = !document.getElementById('chat-screen').classList.contains('hidden');
             const isSameContact = window.iphoneSimState.currentChatContactId === contact.id;
-            const shouldShowInChat = isChatOpen && isSameContact;
+            const shouldShowInChat = isChatOpen && isSameContact && deliveryChannel === 'wechat';
 
             if (shouldShowInChat) {
                 // 如果用户在聊天界面但页面被隐藏/最小化，仍然发送系统通知
@@ -4984,12 +5092,13 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                 // 用户在聊天界面，使用打字机效果或直接发送
                 if (msg.type === '消息' || msg.type === 'text') {
                     await typewriterEffect(msg.content, contact.avatar, currentThought, currentReplyTo, 'text', contactId, {
-                        bilingualTranslation: bilingualTranslationMeta
+                        bilingualTranslation: bilingualTranslationMeta,
+                        channel: deliveryChannel
                     });
                 } else if (msg.type === '表情包' || msg.type === 'sticker') {
                     const stickerAsset = resolveStickerAssetForContact(contact, msg.content);
                     if (stickerAsset) {
-                        sendMessage(stickerAsset.url, false, 'sticker', stickerAsset.desc || msg.content, contactId);
+                        sendMessage(stickerAsset.url, false, 'sticker', stickerAsset.desc || msg.content, contactId, { channel: deliveryChannel });
                     } else {
                         // 找不到表情包，直接忽略，不发送文本 fallback，以免破坏沉浸感
                         console.warn(`Sticker not found: ${msg.content}`);
@@ -5011,7 +5120,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                         text: text,
                         isReal: false
                     };
-                    sendMessage(JSON.stringify(voiceData), false, 'voice', null, contactId);
+                    sendMessage(JSON.stringify(voiceData), false, 'voice', null, contactId, { channel: deliveryChannel });
                 } else if (msg.type === '图片' || msg.type === 'image' || msg.type === 'virtual_image') {
                     let sent = false;
                     const rawImageContent = typeof msg.content === 'string' ? msg.content.trim() : '';
@@ -5022,7 +5131,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                     const globalEnabled = novelaiSettings && novelaiSettings.enabled !== false;
 
                     if (isLikelyChatImageUrl(rawImageContent)) {
-                        sendMessage(rawImageContent, false, 'image', msg.description || null, contactId);
+                        sendMessage(rawImageContent, false, 'image', msg.description || null, contactId, { channel: deliveryChannel });
                         sent = true;
                     }
                     
@@ -5075,7 +5184,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
 
                             // 先发送占位图片以占据正确的历史记录顺序
                             const placeholderUrl = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Generating...';
-                            const placeholderMsg = sendMessage(placeholderUrl, false, 'virtual_image', msg.content, contactId);
+                            const placeholderMsg = sendMessage(placeholderUrl, false, 'virtual_image', msg.content, contactId, { channel: deliveryChannel });
                             
                             appendMessageToUI('[系统]: 正在生成图片...', false, 'system', null, null, null, null, false);
 
@@ -5117,10 +5226,10 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                             appendMessageToUI(`[系统诊断]: 无法生成图片 - ${failReason.join('; ')}`, false, 'text', null, null, null, null, false);
                         }
 
-                        sendMessage(imageFallbackText, false, 'text', null, contactId);
+                        sendMessage(imageFallbackText, false, 'text', null, contactId, { channel: deliveryChannel });
                     }
                 } else if (msg.type === '旁白' || msg.type === 'description') {
-                    await typewriterEffect(msg.content, contact.avatar, null, null, 'description', contactId);
+                    await typewriterEffect(msg.content, contact.avatar, null, null, 'description', contactId, { channel: deliveryChannel });
                 }
             } else {
                 // 用户不在聊天界面，后台保存并弹窗
@@ -5170,85 +5279,15 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                 } else if (msg.type === '旁白' || msg.type === 'description') {
                     typeToSave = 'description';
                 }
-
-                // 保存到历史记录
-                if (!window.iphoneSimState.chatHistory[contact.id]) {
-                    window.iphoneSimState.chatHistory[contact.id] = [];
-                }
-                
-                const msgData = {
-                    id: Date.now() + Math.random().toString(36).substr(2, 9),
-                    time: Date.now(),
-                    role: 'assistant',
-                    content: contentToSave,
-                    type: typeToSave,
-                    replyTo: currentReplyTo
-                };
-                
-                if (currentThought) {
-                    msgData.thought = currentThought;
-                }
-
-                if (typeToSave === 'text' && bilingualTranslationMeta) {
-                    msgData.bilingualTranslation = {
-                        sourceLang: bilingualTranslationMeta.sourceLang,
-                        targetLang: bilingualTranslationMeta.targetLang,
-                        translatedText: bilingualTranslationMeta.translatedText
-                    };
-                }
-                
-                if (msg.type === '图片' || msg.type === 'sticker') {
-                    msgData.description = msg.content; // 保存描述
-                }
-
-                window.iphoneSimState.chatHistory[contact.id].push(msgData);
-                if (typeof window.updateContactRestStateOnAssistantMessage === 'function') {
-                    window.updateContactRestStateOnAssistantMessage(contact.id, contentToSave, typeToSave, msgData.time);
-                }
-                saveConfig();
-
-                if (typeToSave === 'text' && window.WhisperChallenge && typeof window.WhisperChallenge.checkAiMessage === 'function') {
-                    window.WhisperChallenge.checkAiMessage(contentToSave, {
-                        contactId: contact.id,
-                        contactName: contact.remark || contact.name || '',
-                        type: typeToSave
-                    });
-                }
-
-                if (window.syncToFloatingChat && window.isScreenSharing) {
-                    console.log('[ScreenShare Debug] sync background assistant reply to floating', {
-                        contactId: contact.id,
-                        type: typeToSave,
-                        preview: String(contentToSave || '').slice(0, 120)
-                    });
-                    window.syncToFloatingChat({
-                        content: contentToSave,
-                        type: typeToSave,
-                        role: 'assistant'
-                    }, contact.id);
-                    if (typeof window.loadFloatingChatHistory === 'function') {
-                        window.loadFloatingChatHistory();
-                    }
-                }
-                
-                // 触发通知
-                let notificationText = contentToSave;
-                if (typeToSave === 'sticker') notificationText = '[表情包]';
-                if (typeToSave === 'virtual_image' || typeToSave === 'image') notificationText = '[图片]';
-                if (typeToSave === 'voice') notificationText = '[语音]';
-                if (typeToSave === 'family_card') notificationText = '[亲属卡]';
-                if (typeToSave === 'savings_invite') notificationText = '[共同存钱邀请]';
-                if (typeToSave === 'savings_withdraw_request') notificationText = '[共同存钱转出申请]';
-                if (typeToSave === 'savings_progress') notificationText = '[共同存钱进度]';
-                if (typeToSave === 'music_listen_invite') notificationText = '[一起听邀请]';
-                
-                showChatNotification(contact.id, notificationText);
-                
-                // 刷新联系人列表以更新预览
-                if (window.renderContactList) {
-                    // 只有当联系人列表可见时才刷新，或者强制刷新
-                    window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
-                }
+                const descriptionToSave = (msg.type === '图片' || msg.type === 'sticker') ? msg.content : null;
+                sendMessage(contentToSave, false, typeToSave, descriptionToSave, contact.id, {
+                    channel: deliveryChannel,
+                    replyTo: currentReplyTo,
+                    thought: currentThought,
+                    bilingualTranslation: typeToSave === 'text' ? bilingualTranslationMeta : null,
+                    showNotification: deliveryChannel === 'wechat',
+                    readInMessagesApp: false
+                });
             }
 
             // 模拟间隔
@@ -5314,7 +5353,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
 
                         // 先发送占位图片
                         const placeholderUrl = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Generating...';
-                        const placeholderMsg = sendMessage(placeholderUrl, false, 'virtual_image', imageToSend.content, contactId);
+                        const placeholderMsg = sendMessage(placeholderUrl, false, 'virtual_image', imageToSend.content, contactId, { channel: deliveryChannel });
 
                         // 直接调用当前作用域内的函数
                         appendMessageToUI('[系统]: 正在生成图片...', false, 'system', null, null, null, null, false);
@@ -5359,12 +5398,33 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                     }
                     
                     const defaultImageUrl = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Photo';
-                    sendMessage(defaultImageUrl, false, 'virtual_image', imageToSend.content, contactId);
+                    sendMessage(defaultImageUrl, false, 'virtual_image', imageToSend.content, contactId, { channel: deliveryChannel });
                 }
             } else if (imageToSend.type === 'sticker') {
-                sendMessage(imageToSend.content, false, 'sticker', imageToSend.desc, contactId);
+                sendMessage(imageToSend.content, false, 'sticker', imageToSend.desc, contactId, { channel: deliveryChannel });
             }
         }
+
+        const historyAfter = Array.isArray(window.iphoneSimState.chatHistory[contactId])
+            ? window.iphoneSimState.chatHistory[contactId]
+            : [];
+        const newVisibleReplies = historyAfter
+            .slice(historyLengthBefore)
+            .filter(isVisibleAssistantReplyMessage);
+        const hasVisibleReply = newVisibleReplies.length > 0;
+        const hasVisibleTextReply = newVisibleReplies.some(msg => msg.type === 'text' && String(msg.content || '').trim());
+
+        if (
+            shouldClearWakeReplyOnText
+            && hasVisibleTextReply
+            && initialRestStatus
+            && Number(contact.restWindowWakeReplyForStartMs) === Number(initialRestStatus.startTimeMs)
+        ) {
+            contact.restWindowWakeReplyForStartMs = null;
+            saveConfig();
+        }
+
+        return hasVisibleReply;
 
     } catch (error) {
         console.error('AI生成失败:', error);
@@ -5374,14 +5434,15 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
         } else {
             alert(`AI生成失败: ${error.message}\n请检查配置和API状态`);
         }
+        return false;
     } finally {
         if (window.__chatAiReplyLocks) {
             delete window.__chatAiReplyLocks[contactId];
         }
-        const currentContact = window.iphoneSimState.contacts.find(c => c.id === window.iphoneSimState.currentChatContactId);
-        if (titleEl && currentContact) {
+        const currentContact = window.iphoneSimState.contacts.find(c => String(c.id) === String(window.iphoneSimState.currentChatContactId));
+        if (shouldShowWechatTypingTitle && titleEl && currentContact) {
             titleEl.textContent = currentContact.remark || currentContact.name;
-        } else if (titleEl) {
+        } else if (shouldShowWechatTypingTitle && titleEl) {
             titleEl.textContent = originalTitle;
         }
     }
@@ -6076,7 +6137,7 @@ async function getChatAmapMyLocation(force = false) {
 async function getChatAmapContactLocation(contactId, force = false) {
     const settings = window.iphoneSimState && window.iphoneSimState.amapSettings;
     if (!String((settings && (settings.webKey || settings.key)) || '').trim()) return null;
-    const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
+    const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(contactId));
     if (!contact) return null;
     const runtime = ensureChatAmapRuntime();
     const query = buildChatAmapLocationQuery(contact.location);
@@ -6706,7 +6767,7 @@ window.buildNearbyFoodPromptContext = function(searchResult, userQuestion = '') 
 window.buildAmapPromptContext = async function(contactId) {
     const settings = window.iphoneSimState && window.iphoneSimState.amapSettings;
     if (!String((settings && (settings.webKey || settings.key)) || '').trim()) return '';
-    const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
+    const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(contactId));
     if (!contact) return '';
 
     const [myLocation, contactLocation, weather, route] = await Promise.all([
@@ -6748,7 +6809,7 @@ window.prefetchAmapChatContext = async function(contactId) {
 };
 
 window.buildAiPromptMessages = async function(contactId, instruction = null, options = {}) {
-    const baseContact = window.iphoneSimState.contacts.find(c => c.id === contactId);
+    const baseContact = window.iphoneSimState.contacts.find(c => String(c.id) === String(contactId));
     if (!baseContact) return [];
     const contact = options && options.contactOverride
         ? { ...baseContact, ...options.contactOverride }
@@ -6856,8 +6917,9 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
         }
     }
 
-        let timeContext = '';
+    let timeContext = '';
     let itineraryContext = '';
+    const restWindowNarrativeContext = buildContactRestWindowNarrativePrompt(contact);
     if (contact.realTimeVisible) {
         timeContext = buildRealtimeTimeContext(contact.id);
         
@@ -7073,6 +7135,7 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
     appendAiPromptPart(systemPromptParts, 'systemBase', '活人感', buildWechatHumanFeelPrompt(contact));
     appendAiPromptPart(systemPromptParts, 'systemBase', '基础能力', buildWechatBaseCapabilityPrompt(contact));
     appendAiPromptPart(systemPromptParts, 'systemBase', '小火人', typeof window.buildFireBuddyContactSystemPrompt === 'function' ? window.buildFireBuddyContactSystemPrompt(contactId) : '');
+    appendAiPromptPart(systemPromptParts, 'systemBase', '拉黑状态', buildWechatBlockedStatusPrompt(contact));
     appendAiPromptPart(systemPromptParts, 'systemBase', '状态', importantStateContext);
     appendAiPromptPart(systemPromptParts, 'systemBase', '朋友圈', momentContext);
     appendAiPromptPart(systemPromptParts, 'systemBase', 'iCity', icityContext);
@@ -7081,6 +7144,7 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
     appendAiPromptPart(systemPromptParts, 'systemBase', '线下见面', meetingContext);
     appendAiPromptPart(systemPromptParts, 'systemBase', 'iCity书籍', icityBookContext);
     appendAiPromptPart(systemPromptParts, 'systemBase', '时间', timeContext);
+    appendAiPromptPart(systemPromptParts, 'systemBase', '休息作息', restWindowNarrativeContext);
     appendAiPromptPart(systemPromptParts, 'systemBase', '日历', calendarContext);
     appendAiPromptPart(systemPromptParts, 'systemBase', '高德', amapContext);
     appendAiPromptPart(systemPromptParts, 'systemBase', '行程', itineraryContext);

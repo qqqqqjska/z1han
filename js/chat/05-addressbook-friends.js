@@ -335,6 +335,8 @@ async function handleAcceptFriend(req, remark) {
         restWindowStart: '',
         restWindowEnd: '',
         restWindowAwakenedAt: null,
+        restWindowUpcomingNoticeForStartMs: null,
+        restWindowWakeReplyForStartMs: null,
         autoItineraryEnabled: false,
         userPerception: [],
         thoughtDisplayMode: 'title',

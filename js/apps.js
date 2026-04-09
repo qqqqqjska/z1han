@@ -957,7 +957,7 @@ function renderMeTab() {
         };
     }
 
-    const { name, wxid, avatar, bgImage, desc, gender } = window.iphoneSimState.userProfile;
+    const { name, wxid, avatar, bgImage, desc } = window.iphoneSimState.userProfile;
     const bg = bgImage || '';
 
     container.innerHTML = `
@@ -969,7 +969,6 @@ function renderMeTab() {
                 </div>
                 <div class="me-name" id="me-name-trigger">${name}</div>
                 <div class="me-id">微信号：<span id="me-id-trigger">${wxid}</span></div>
-                <div class="me-gender" id="me-gender-trigger">性别：<span>${gender === 'male' ? '男' : '女'}</span></div>
                 <div class="me-desc" id="me-desc-trigger">${desc}</div>
             </div>
         </div>
@@ -1005,12 +1004,6 @@ function renderMeTab() {
     makeEditable('me-id-trigger', 'wxid');
     makeEditable('me-desc-trigger', 'desc');
 
-    document.getElementById('me-gender-trigger').addEventListener('click', () => {
-        const currentGender = window.iphoneSimState.userProfile.gender || 'female';
-        const newGender = currentGender === 'male' ? 'female' : 'male';
-        updateUserProfile('gender', newGender);
-        renderMeTab(); // 重新渲染
-    });
 }
 
 function handleMeImageUpload(e, type) {

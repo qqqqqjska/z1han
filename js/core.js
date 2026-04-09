@@ -1542,6 +1542,13 @@ function handleAppClick(appId, appName) {
         }
     }
 
+    if (appId === 'messages-app') {
+        if (window.MessagesApp && typeof window.MessagesApp.open === 'function') {
+            window.MessagesApp.open();
+            return;
+        }
+    }
+
     const screen = document.getElementById(appId);
     if (screen) {
         screen.classList.remove('hidden');
