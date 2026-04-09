@@ -2283,3 +2283,40 @@
 #chat-screen.chat-appearance-ios26 #trigger-ai-reply-btn::before {
     background-image: url('https://i.postimg.cc/FzJFFch9/%E6%97%A0%E6%A0%87%E9%A2%98133_20260409163727.png') !important;
 }
+
+
+@media (max-width: 520px) {
+    #chat-screen.chat-appearance-ios26 .chat-header-main {
+        top: calc(max(34px, env(safe-area-inset-top, 0px)) + 74px) !important;
+        left: 50% !important;
+    }
+
+    #chat-screen.chat-appearance-ios26 #fire-buddy-entry {
+        position: static !important;
+        width: 42px !important;
+        height: 42px !important;
+        min-width: 42px !important;
+        min-height: 42px !important;
+        flex: 0 0 42px !important;
+        margin-bottom: 40px !important;
+        padding: 0 !important;
+        box-sizing: border-box !important;
+        aspect-ratio: 1 / 1 !important;
+        flex-shrink: 0 !important;
+    }
+
+    #chat-screen.chat-appearance-ios26 #fire-buddy-entry .fire-buddy-entry-icon {
+        width: 20px !important;
+        height: 20px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        line-height: 1 !important;
+    }
+
+    #chat-screen.chat-appearance-ios26 #fire-buddy-entry .fire-buddy-brand-icon {
+        width: 20px !important;
+        height: 20px !important;
+        display: block !important;
+    }
+}
