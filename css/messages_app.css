@@ -101,6 +101,41 @@
     justify-content: center;
 }
 
+.messages-compact-title {
+    border: 0;
+    background: transparent;
+    color: var(--messages-text);
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0;
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(6px);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+#phone-messages.list-header-compact .messages-compact-title {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+#phone-messages:not(.list-header-compact) .messages-compact-title {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#phone-messages.list-header-compact #phone-messages-home-back {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#phone-messages #phone-messages-home-back {
+    transition: opacity 0.22s ease;
+}
+
 .messages-list-menu-btn {
     position: relative;
     width: 84px;
@@ -722,18 +757,20 @@
 
 .messages-reply-source.sent {
     right: 14px;
-    background: #0e8afe;
-    color: #ffffff;
+    background: rgba(255, 255, 255, 0.96);
+    border: 1.5px solid rgba(113, 183, 255, 0.9);
+    color: #2994ff;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.82) inset;
 }
 
 .messages-reply-source.sent::after {
     content: '';
     position: absolute;
     right: 1px;
-    bottom: -5px;
-    width: 18px;
-    height: 18px;
-    background-image: url('https://i.postimg.cc/8cM3b9HM/wu-biao-ti89-20260126054440.png');
+    bottom: -6px;
+    width: 25px;
+    height: 25px;
+    background-image: url('https://i.postimg.cc/3N63VQbs/wu-biao-ti130-20260409183500.png');
     background-repeat: no-repeat;
     background-size: contain;
     background-position: center;
@@ -1117,3 +1154,95 @@
 }
 
 
+#phone-messages {
+    --phone-messages-header-progress: 0;
+}
+
+#phone-messages .messages-list-header,
+#phone-messages .messages-list-bottom-bar {
+    background: transparent;
+}
+
+#phone-messages .messages-list-header {
+    overflow: visible;
+    padding-top: max(22px, env(safe-area-inset-top, 0px));
+}
+
+#phone-messages .messages-list-header::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 198px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.92) 34%, rgba(255, 255, 255, 0.62) 68%, rgba(255, 255, 255, 0.14) 90%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+#phone-messages .messages-list-bottom-bar::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 132px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.48) 30%, rgba(255, 255, 255, 0.88) 72%, rgba(255, 255, 255, 0.98) 100%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+#phone-messages .messages-list-topbar,
+#phone-messages .messages-title-back,
+#phone-messages .messages-bottom-search,
+#phone-messages .messages-bottom-compose-btn {
+    position: relative;
+    z-index: 1;
+}
+
+#phone-messages .messages-list-topbar {
+    position: relative;
+    padding: 10px 30px 0;
+}
+
+#phone-messages .messages-title-back {
+    padding-top: 30px;
+    transform-origin: left top;
+    opacity: calc(1 - var(--phone-messages-header-progress));
+    transform: translateY(calc(-10px + (var(--phone-messages-header-progress) * -24px))) scale(calc(1 - (var(--phone-messages-header-progress) * 0.42)));
+    filter: blur(calc(var(--phone-messages-header-progress) * 1.4px));
+    transition: opacity 0.18s ease, transform 0.18s ease, filter 0.18s ease;
+}
+
+#phone-messages .messages-compact-title {
+    position: absolute;
+    left: 50%;
+    top: 58%;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    color: var(--messages-text);
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    opacity: var(--phone-messages-header-progress);
+    transform: translate(-50%, calc(-50% + ((1 - var(--phone-messages-header-progress)) * 10px))) scale(calc(0.94 + (var(--phone-messages-header-progress) * 0.06)));
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    pointer-events: none;
+    cursor: pointer;
+    z-index: 2;
+}
+
+#phone-messages .messages-list-scroll {
+    padding-top: 176px;
+}
+
+#phone-messages.list-header-compact .messages-compact-title {
+    pointer-events: auto;
+}
+
+#phone-messages.list-header-compact .messages-title-back {
+    pointer-events: none;
+}

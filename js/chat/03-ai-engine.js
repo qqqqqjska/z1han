@@ -403,6 +403,30 @@ function formatTextMessageContentWithTranslation(text, msgId, type = 'text') {
     return `<div class="message-original-text">${originalHtml}</div><div class="message-translated-text">${translatedHtml}</div>`;
 }
 
+function removeWechatTypingBubble() {
+    const container = document.getElementById('chat-messages');
+    if (!container) return;
+    container.querySelectorAll('.wechat-typing-row').forEach(node => node.remove());
+}
+
+function appendWechatTypingBubble() {
+    const container = document.getElementById('chat-messages');
+    if (!container) return null;
+    removeWechatTypingBubble();
+    const row = document.createElement('div');
+    row.className = 'chat-message other wechat-typing-row has-tail';
+    row.innerHTML = `
+        <div class="msg-wrapper">
+            <div class="message-content wechat-typing-bubble" aria-label="对方正在输入">
+                <span class="wechat-typing-dot"></span>
+                <span class="wechat-typing-dot"></span>
+                <span class="wechat-typing-dot"></span>
+            </div>
+        </div>
+    `;
+    container.appendChild(row);
+    return row;
+}
 function appendMessageToUI(text, isUser, type = 'text', description = null, replyTo = null, msgId = null, timestamp = null, isHistory = false) {
     if (type === 'text' && text && typeof text === 'string') {
         // Strip hidden image data from display
@@ -420,6 +444,10 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
 
     if (type === 'voice_call_text') {
         return;
+    }
+
+    if (!isUser) {
+        removeWechatTypingBubble();
     }
 
     const container = document.getElementById('chat-messages');
@@ -1353,11 +1381,70 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
             replyPreviewText = '[图片]';
         }
 
-        replyHtml = `
-            <div class="quote-container">
-                回复 ${escapeChatMessageHtml(replyTo.name)}: ${escapeChatMessageHtml(replyPreviewText)}
-            </div>
-        `;
+        const activeChatScreen = document.getElementById('chat-screen');
+        const isIos26QuoteStyle = !!(activeChatScreen && activeChatScreen.classList.contains('chat-appearance-ios26'));
+
+        if (isIos26QuoteStyle) {
+            const currentContactId = window.iphoneSimState.currentChatContactId;
+            const historyForReply = Array.isArray(window.iphoneSimState.chatHistory[currentContactId])
+                ? window.iphoneSimState.chatHistory[currentContactId]
+                : [];
+            const replyTargetMsg = replyTo.targetMsgId
+                ? historyForReply.find(item => String(item && item.id) === String(replyTo.targetMsgId)) || null
+                : null;
+            const currentRoleClass = isUser ? 'sent' : 'received';
+            const replyTargetRoleClass = replyTargetMsg
+                ? (replyTargetMsg.role === 'user' ? 'sent' : 'received')
+                : (isUser ? 'received' : 'sent');
+            const currentMsg = msgId != null
+                ? historyForReply.find(item => String(item && item.id) === String(msgId)) || null
+                : null;
+            const currentChannel = currentMsg && typeof window.normalizeChatMessageChannel === 'function'
+                ? window.normalizeChatMessageChannel(currentMsg)
+                : ((currentMsg && currentMsg.channel === 'messages-app') ? 'messages-app' : 'wechat');
+
+            let shouldHideQuoteSourceBubble = false;
+            if (replyTo.targetMsgId) {
+                const visibleHistory = historyForReply.filter(item => {
+                    if (!item) return false;
+                    if (typeof window.isChatMessageInChannel === 'function') {
+                        return window.isChatMessageInChannel(item, currentChannel);
+                    }
+                    return currentChannel === 'messages-app'
+                        ? item.channel === 'messages-app'
+                        : item.channel !== 'messages-app';
+                });
+
+                if (currentMsg) {
+                    const currentIndex = visibleHistory.findIndex(item => String(item && item.id) === String(currentMsg.id));
+                    if (currentIndex > 0) {
+                        const previousVisibleMsg = visibleHistory[currentIndex - 1] || null;
+                        shouldHideQuoteSourceBubble = !!(previousVisibleMsg && String(previousVisibleMsg.id) === String(replyTo.targetMsgId));
+                    }
+                } else {
+                    const previousVisibleMsg = visibleHistory[visibleHistory.length - 1] || null;
+                    shouldHideQuoteSourceBubble = !!(previousVisibleMsg && String(previousVisibleMsg.id) === String(replyTo.targetMsgId));
+                }
+            }
+
+            const quoteSourceMarkup = shouldHideQuoteSourceBubble ? '' : `
+                <div class="quote-container quote-target-${replyTargetRoleClass}" aria-hidden="true">
+                    <div class="quote-preview-text">${escapeChatMessageHtml(replyPreviewText)}</div>
+                </div>
+            `;
+            const quoteThreadModifierClass = shouldHideQuoteSourceBubble ? ' quote-thread-prev-only' : '';
+
+            replyHtml = `
+                ${quoteSourceMarkup}
+                <div class="quote-thread${quoteThreadModifierClass} quote-from-${replyTargetRoleClass} quote-to-${currentRoleClass}" aria-hidden="true"></div>
+            `;
+        } else {
+            replyHtml = `
+                <div class="quote-container">
+                    回复 ${escapeChatMessageHtml(replyTo.name)}: ${escapeChatMessageHtml(replyPreviewText)}
+                </div>
+            `;
+        }
     }
 
     const date = new Date(now);
@@ -3796,8 +3883,21 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
         && (!chatScreen || !chatScreen.classList.contains('hidden'))
         && !(options && options.showWechatTypingTitle === false)
     );
+    const shouldShowWechatTypingBubble = !!(
+        deliveryChannel === 'wechat'
+        && chatScreen
+        && !chatScreen.classList.contains('hidden')
+        && String(window.iphoneSimState.currentChatContactId || '') === String(contactId)
+        && chatScreen.classList.contains('chat-appearance-ios26')
+    );
     if (shouldShowWechatTypingTitle) {
         titleEl.textContent = '正在输入中...';
+    }
+    if (shouldShowWechatTypingBubble) {
+        appendWechatTypingBubble();
+        if (typeof scrollToBottom === 'function') {
+            scrollToBottom();
+        }
     }
 
     const history = window.iphoneSimState.chatHistory[contactId] || [];
@@ -5438,6 +5538,9 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
     } finally {
         if (window.__chatAiReplyLocks) {
             delete window.__chatAiReplyLocks[contactId];
+        }
+        if (shouldShowWechatTypingBubble) {
+            removeWechatTypingBubble();
         }
         const currentContact = window.iphoneSimState.contacts.find(c => String(c.id) === String(window.iphoneSimState.currentChatContactId));
         if (shouldShowWechatTypingTitle && titleEl && currentContact) {
@@ -7519,6 +7622,10 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
 
     return messages;
 };
+
+
+
+
 
 
 

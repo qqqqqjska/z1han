@@ -1388,8 +1388,8 @@
 }
 
 #chat-screen.chat-appearance-ios26 #chat-more-btn {
-    width: 38px;
-    height: 38px;
+    width: 42px;
+    height: 42px;
     margin-top: 0;
     background: #ffffff !important;
     color: #111111 !important;
@@ -1479,7 +1479,7 @@
 
 #chat-screen.chat-appearance-ios26 .chat-header-main {
     position: absolute !important;
-    top: 75% !important;
+    top: 100% !important;
     left: 51% !important;
     transform: translateX(-50%) !important;
     background-color: rgba(255, 255, 255, 0.7) !important;
@@ -1612,6 +1612,14 @@
     margin-bottom: 0 !important;
 }
 
+#chat-screen.chat-appearance-ios26 .chat-input-area.push-up {
+    margin-bottom: 350px !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-input-area.push-up-more {
+    margin-bottom: 300px !important;
+}
+
 #chat-screen.chat-appearance-ios26 .chat-input-shell {
     background-color: rgba(255, 255, 255, 0.8) !important;
     backdrop-filter: blur(25px) !important;
@@ -1661,8 +1669,8 @@
 }
 
 #chat-screen.chat-appearance-ios26 #chat-more-btn {
-    width: 30px !important;
-    height: 30px !important;
+    width: 36px !important;
+    height: 36px !important;
     background-color: rgba(255, 255, 255, 0.8) !important;
     backdrop-filter: blur(25px) !important;
     -webkit-backdrop-filter: blur(25px) !important;
@@ -1701,54 +1709,71 @@
 }
 
 #chat-screen.chat-appearance-ios26 .chat-message .message-content {
-    border-radius: 20px !important;
-    padding: 6px 12px !important;
+    padding: 7px 12px !important;
+    font-size: 15px !important;
+    line-height: 1.4 !important;
     position: relative !important;
     overflow: visible !important;
-    margin-bottom: -6px !important;
+    box-shadow: none !important;
+    border: none !important;
+    margin-bottom: 0 !important;
     transform: translate3d(0, 0, 0) !important;
-    will-change: transform, content !important;
+    will-change: transform !important;
 }
 
 #chat-screen.chat-appearance-ios26 .chat-message.user .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg) {
-    background-color: #000 !important;
+    background-color: #0e8afe !important;
     color: #ffffff !important;
-    margin-right: -50px !important;
+    border-top-left-radius: 18px !important;
+    border-top-right-radius: 18px !important;
+    border-bottom-left-radius: 18px !important;
+    border-bottom-right-radius: 17px !important;
+    margin-right: 0 !important;
 }
 
 #chat-screen.chat-appearance-ios26 .chat-message.user .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg)::after {
     content: '' !important;
     position: absolute !important;
-    z-index: 1 !important;
-    bottom: -13px !important;
-    right: 1px !important;
-    width: 25px !important;
-    height: 26px !important;
-    background-image: url('https://i.postimg.cc/W4cxj91C/wu-biao-ti87-20260101035035.png') !important;
+    display: block !important;
+    width: 20px !important;
+    height: 20px !important;
     background-size: contain !important;
     background-repeat: no-repeat !important;
+    background-position: bottom left !important;
+    z-index: 1 !important;
+    pointer-events: none !important;
+    right: 1px !important;
+    bottom: -5px !important;
+    background-image: url('https://i.postimg.cc/8cM3b9HM/wu-biao-ti89-20260126054440.png') !important;
     transition: none !important;
     animation: none !important;
     transform: translateZ(0) !important;
 }
 
 #chat-screen.chat-appearance-ios26 .chat-message.other .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg) {
-    background-color: #eaeaea !important;
+    background-color: #e9e9eb !important;
     color: #000000 !important;
-    margin-left: -50px !important;
+    border-top-left-radius: 18px !important;
+    border-top-right-radius: 18px !important;
+    border-bottom-left-radius: 18px !important;
+    border-bottom-right-radius: 17px !important;
+    margin-left: 0 !important;
 }
 
 #chat-screen.chat-appearance-ios26 .chat-message.other .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg)::after {
     content: '' !important;
     position: absolute !important;
-    z-index: 1 !important;
-    bottom: -13px !important;
-    left: 1px !important;
-    width: 25px !important;
-    height: 25px !important;
-    background-image: url('https://i.postimg.cc/Bv99xbpv/IMG_6758.png') !important;
+    display: block !important;
+    width: 20px !important;
+    height: 20px !important;
     background-size: contain !important;
     background-repeat: no-repeat !important;
+    background-position: bottom right !important;
+    z-index: 1 !important;
+    pointer-events: none !important;
+    left: 1px !important;
+    bottom: -5px !important;
+    background-image: url('https://i.postimg.cc/zfBthqFn/wu-biao-ti89-20260130042626.png') !important;
     transition: none !important;
     animation: none !important;
     transform: translateZ(0) !important;
@@ -1792,3 +1817,469 @@
 }
 
 
+/* iOS26 bubbles aligned with messages-app */
+#chat-screen.chat-appearance-ios26 .chat-message {
+    margin-bottom: 2px !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.has-tail {
+    margin-bottom: 12px !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message:not(.has-tail).user .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg)::after,
+#chat-screen.chat-appearance-ios26 .chat-message:not(.has-tail).other .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg)::after {
+    display: none !important;
+    content: none !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.has-tail.user .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg)::after,
+#chat-screen.chat-appearance-ios26 .chat-message.has-tail.other .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg)::after {
+    display: block !important;
+    content: '' !important;
+}
+
+#chat-screen.chat-appearance-ios26 .msg-wrapper {
+    position: relative !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message:has(.quote-container) {
+    margin-top: 78px !important;
+}
+
+#chat-screen.chat-appearance-ios26 .quote-container {
+    position: absolute !important;
+    top: -82px !important;
+    max-width: 68% !important;
+    padding: 8px 10px !important;
+    border-radius: 22px !important;
+    box-sizing: border-box !important;
+    pointer-events: none !important;
+    z-index: 1 !important;
+    white-space: normal !important;
+    overflow: hidden !important;
+    text-overflow: clip !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    word-break: break-word !important;
+    font-size: 13px !important;
+    line-height: 1.22 !important;
+    margin-top: 0 !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.user .quote-container {
+    left: 0 !important;
+    right: auto !important;
+    background: #ffffff !important;
+    border: 1.3px solid #d5d5d5 !important;
+    color: #6c6f77 !important;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75) inset !important;
+    text-align: left !important;
+    align-self: auto !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.user .quote-container::after {
+    content: '' !important;
+    position: absolute !important;
+    left: 1px !important;
+    bottom: -11px !important;
+    width: 21px !important;
+    height: 21px !important;
+    background-image: url('https://i.postimg.cc/YS6zc32N/wu-biao-ti130-20260409131505.png') !important;
+    background-repeat: no-repeat !important;
+    background-size: contain !important;
+    background-position: center !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.other .quote-container {
+    right: 14px !important;
+    left: auto !important;
+    background: #0e8afe !important;
+    color: #ffffff !important;
+    text-align: left !important;
+    align-self: auto !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.other .quote-container::after {
+    content: '' !important;
+    position: absolute !important;
+    right: 1px !important;
+    bottom: -5px !important;
+    width: 18px !important;
+    height: 18px !important;
+    background-image: url('https://i.postimg.cc/8cM3b9HM/wu-biao-ti89-20260126054440.png') !important;
+    background-repeat: no-repeat !important;
+    background-size: contain !important;
+    background-position: center !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.user:has(.quote-container) .message-content::before,
+#chat-screen.chat-appearance-ios26 .chat-message.other:has(.quote-container) .message-content::before {
+    content: '' !important;
+    position: absolute !important;
+    top: -45px !important;
+    width: 72px !important;
+    height: 42px !important;
+    pointer-events: none !important;
+    z-index: 0 !important;
+    opacity: 0.96 !important;
+    background-image: url('https://i.postimg.cc/VNtzBKBv/wu-biao-ti131-20260409132449.png') !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 100% 100% !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.user:has(.quote-container) .message-content::before {
+    right: 54px !important;
+    transform: scaleX(-1) !important;
+    transform-origin: center !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.other:has(.quote-container) .message-content::before {
+    left: 4px !important;
+}
+
+#chat-screen.chat-appearance-ios26 .wechat-typing-row {
+    min-height: 44px !important;
+    margin-bottom: 12px !important;
+}
+
+#chat-screen.chat-appearance-ios26 .wechat-typing-bubble {
+    min-width: 62px !important;
+    height: 35px !important;
+    padding: 0 14px !important;
+    box-sizing: border-box !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    background: linear-gradient(180deg, #efeff3 0%, #e6e6eb 100%) !important;
+    border-top-left-radius: 18px !important;
+    border-top-right-radius: 18px !important;
+    border-bottom-left-radius: 18px !important;
+    border-bottom-right-radius: 17px !important;
+}
+
+#chat-screen.chat-appearance-ios26 .wechat-typing-bubble::after {
+    content: '' !important;
+    display: block !important;
+    position: absolute !important;
+    width: 20px !important;
+    height: 20px !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    z-index: 1 !important;
+    pointer-events: none !important;
+    left: 1px !important;
+    bottom: -5px !important;
+    background-position: bottom right !important;
+    background-image: url('https://i.postimg.cc/zfBthqFn/wu-biao-ti89-20260130042626.png') !important;
+}
+
+#chat-screen.chat-appearance-ios26 .wechat-typing-dot {
+    width: 8px !important;
+    height: 8px !important;
+    border-radius: 50% !important;
+    background: #a8a8b0 !important;
+    opacity: 0.42 !important;
+    animation: wechat-ios26-typing-dot-bounce 1.18s ease-in-out infinite !important;
+}
+
+#chat-screen.chat-appearance-ios26 .wechat-typing-dot:nth-child(2) {
+    animation-delay: 0.16s !important;
+}
+
+#chat-screen.chat-appearance-ios26 .wechat-typing-dot:nth-child(3) {
+    animation-delay: 0.32s !important;
+}
+
+@keyframes wechat-ios26-typing-dot-bounce {
+    0%, 80%, 100% {
+        transform: translateY(0) scale(0.9);
+        opacity: 0.38;
+    }
+
+    40% {
+        transform: translateY(-3px) scale(1);
+        opacity: 0.98;
+    }
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message:has(.quote-thread) {
+    position: relative !important;
+    width: 100% !important;
+    margin-top: 78px !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message:has(.quote-thread) .msg-wrapper {
+    position: static !important;
+    width: auto !important;
+    max-width: 70% !important;
+    overflow: visible !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.user:has(.quote-thread) .msg-wrapper {
+    align-items: flex-end !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.other:has(.quote-thread) .msg-wrapper {
+    align-items: flex-start !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message > .chat-avatar {
+    display: none !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.user:has(.quote-thread) .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg) {
+    top: -20px !important;
+    z-index: 2 !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.other:has(.quote-thread) .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg) {
+    z-index: 2 !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.user:has(.quote-thread) .message-content::before,
+#chat-screen.chat-appearance-ios26 .chat-message.other:has(.quote-thread) .message-content::before {
+    content: none !important;
+    display: none !important;
+    background-image: none !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message .quote-container.quote-target-received,
+#chat-screen.chat-appearance-ios26 .chat-message .quote-container.quote-target-sent {
+    position: absolute !important;
+    top: -76px !important;
+    display: block !important;
+    width: auto !important;
+    max-width: min(68vw, 248px) !important;
+    padding: 8px 10px !important;
+    border-radius: 18px !important;
+    box-sizing: border-box !important;
+    pointer-events: none !important;
+    z-index: 1 !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    margin-top: 0 !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message .quote-container.quote-target-received {
+    left: 0 !important;
+    right: auto !important;
+    background: #ffffff !important;
+    border: 1.3px solid #d5d5d5 !important;
+    color: #6c6f77 !important;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75) inset !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message .quote-container.quote-target-received::after {
+    content: '' !important;
+    position: absolute !important;
+    left: 1px !important;
+    bottom: -11px !important;
+    width: 21px !important;
+    height: 21px !important;
+    background: url('https://i.postimg.cc/3NLzbjW3/wu-biao-ti130-20260409184602.png') center / contain no-repeat !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message .quote-container.quote-target-sent {
+    left: auto !important;
+    right: 14px !important;
+    background: rgba(255, 255, 255, 0.96) !important;
+    border: 1.33px solid rgba(142, 209, 254, 1) !important;
+    color: #2994ff !important;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.82) inset !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message .quote-container.quote-target-sent::after {
+    content: '' !important;
+    position: absolute !important;
+    right: 0px !important;
+    bottom: -11px !important;
+    width: 21px !important;
+    height: 21px !important;
+    background: url('https://i.postimg.cc/MGMPW2HV/wu-biao-ti130-20260409185526.png') center / contain no-repeat !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message .quote-preview-text {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    word-break: break-word !important;
+    font-size: 13px !important;
+    line-height: 1.22 !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message .quote-thread {
+    position: absolute !important;
+    top: -25px !important;
+    width: 72px !important;
+    height: 42px !important;
+    pointer-events: none !important;
+    z-index: 0 !important;
+    opacity: 0.96 !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message .quote-thread::before {
+    content: '' !important;
+    position: absolute !important;
+    inset: 0 !important;
+    background: url('https://i.postimg.cc/VNtzBKBv/wu-biao-ti131-20260409132449.png') center / 100% 100% no-repeat !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message .quote-thread.quote-from-received.quote-to-sent,
+#chat-screen.chat-appearance-ios26 .chat-message .quote-thread.quote-from-received.quote-to-received {
+    left: 4px !important;
+    right: auto !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message .quote-thread.quote-from-received.quote-to-sent::before,
+#chat-screen.chat-appearance-ios26 .chat-message .quote-thread.quote-from-received.quote-to-received::before {
+    transform: none !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message .quote-thread.quote-from-sent.quote-to-received,
+#chat-screen.chat-appearance-ios26 .chat-message .quote-thread.quote-from-sent.quote-to-sent {
+    left: auto !important;
+    right: 54px !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message .quote-thread.quote-from-sent.quote-to-received::before,
+#chat-screen.chat-appearance-ios26 .chat-message .quote-thread.quote-from-sent.quote-to-sent::before {
+    transform: scaleX(-1) !important;
+    transform-origin: center !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message .quote-thread.quote-from-sent.quote-to-received {
+    top: -44px !important;
+    left: -5px !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message .quote-thread.quote-from-sent.quote-to-received::before {
+    transform: none !important;
+    transform-origin: center !important;
+    background-image: url('https://i.postimg.cc/zXZd8cYB/wu-biao-ti131-20260409184912.png') !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 100% 100% !important;
+}
+
+
+#chat-screen.chat-appearance-ios26 .chat-message:has(.quote-thread.quote-thread-prev-only) {
+    margin-top: 32px !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.user:has(.quote-thread.quote-thread-prev-only) .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg) {
+    top: -2px !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message .quote-thread.quote-thread-prev-only {
+    top: -30px !important;
+}
+
+
+#chat-screen.chat-appearance-ios26 .chat-message .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg) {
+    border-top-left-radius: 18px !important;
+    border-top-right-radius: 18px !important;
+    border-bottom-left-radius: 18px !important;
+    border-bottom-right-radius: 17px !important;
+    padding: 7px 12px !important;
+    font-size: 15px !important;
+    line-height: 1.4 !important;
+    position: relative !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.other .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg) {
+    background-color: #E9E9EB !important;
+    color: #000 !important;
+    margin-left: 0 !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.user .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg) {
+    background-color: #0E8AFE !important;
+    color: #fff !important;
+    margin-right: 0 !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.has-tail .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg)::after {
+    content: '' !important;
+    display: block !important;
+    position: absolute !important;
+    bottom: 0 !important;
+    width: 20px !important;
+    height: 20px !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    z-index: 1 !important;
+    pointer-events: none !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.other.has-tail .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg)::after {
+    left: 1px !important;
+    bottom: -5px !important;
+    background-position: bottom right !important;
+    background-image: url('https://i.postimg.cc/zfBthqFn/wu-biao-ti89-20260130042626.png') !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message.user.has-tail .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg)::after {
+    right: 1px !important;
+    bottom: -5px !important;
+    background-position: bottom left !important;
+    background-image: url('https://i.postimg.cc/8cM3b9HM/wu-biao-ti89-20260126054440.png') !important;
+}
+
+#chat-screen.chat-appearance-ios26 .chat-message:not(.has-tail) .message-content:not(.no-bubble):not(.voice-msg):not(.sticker-msg):not(.image-msg):not(.virtual-image-msg):not(.description-msg):not(.transfer-msg):not(.gift-card-msg):not(.shopping-gift-msg):not(.delivery-share-msg):not(.order-progress-msg)::after {
+    content: none !important;
+    display: none !important;
+    background-image: none !important;
+}
+
+
+#chat-screen.chat-appearance-ios26 #sticker-btn,
+#chat-screen.chat-appearance-ios26 #trigger-ai-reply-btn {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    flex: 0 0 35px !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    color: transparent !important;
+    font-size: 0 !important;
+    opacity: 1 !important;
+    position: relative !important;
+}
+
+#chat-screen.chat-appearance-ios26 #sticker-btn i,
+#chat-screen.chat-appearance-ios26 #trigger-ai-reply-btn i {
+    display: none !important;
+}
+
+#chat-screen.chat-appearance-ios26 #sticker-btn::before,
+#chat-screen.chat-appearance-ios26 #trigger-ai-reply-btn::before {
+    content: '' !important;
+    position: absolute !important;
+    inset: 0 !important;
+    display: block !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 35px 35px !important;
+}
+
+#chat-screen.chat-appearance-ios26 #sticker-btn {
+    margin-left: 0 !important;
+    transform: translateX(10px) !important;
+}
+
+#chat-screen.chat-appearance-ios26 #sticker-btn::before {
+    background-image: url('https://i.postimg.cc/Gts33Yb9/%E6%97%A0%E6%A0%87%E9%A2%98133_20260409163730.png') !important;
+}
+
+#chat-screen.chat-appearance-ios26 #trigger-ai-reply-btn::before {
+    background-image: url('https://i.postimg.cc/FzJFFch9/%E6%97%A0%E6%A0%87%E9%A2%98133_20260409163727.png') !important;
+}
