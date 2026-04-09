@@ -2287,7 +2287,7 @@
 
 @media (max-width: 520px) {
     #chat-screen.chat-appearance-ios26 .chat-header-main {
-        top: calc(max(34px, env(safe-area-inset-top, 0px)) + 74px) !important;
+        top: calc(max(34px, env(safe-area-inset-top, 0px)) + 50px) !important;
         left: 50% !important;
     }
 
