@@ -1286,12 +1286,12 @@
 }
 
 #chat-screen.chat-appearance-ios26 #chat-messages.chat-body {
-    padding: 190px 16px calc(120px + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 190px 16px calc(84px + env(safe-area-inset-bottom, 0px)) !important;
     background: transparent;
 }
 
 #chat-screen.chat-appearance-ios26.replying #chat-messages.chat-body {
-    padding-bottom: calc(168px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px)) !important;
 }
 
 #chat-screen.chat-appearance-ios26 .chat-message {
