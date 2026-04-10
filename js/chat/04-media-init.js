@@ -6223,12 +6223,240 @@ function isRealConversationMsg(msg) {
     return true;
 }
 
+function getChatPromptTimestampMs(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+        const parsed = Date.parse(value);
+        if (Number.isFinite(parsed)) return parsed;
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) return numeric;
+    }
+    if (value instanceof Date) {
+        const time = value.getTime();
+        return Number.isFinite(time) ? time : 0;
+    }
+    return 0;
+}
+
+function getRealtimeMealWindowLabel(date = new Date()) {
+    const hour = date.getHours();
+    if (hour >= 5 && hour < 9) return '早餐时段';
+    if (hour >= 11 && hour < 13) return '午餐时段';
+    if (hour >= 17 && hour < 20) return '晚餐时段';
+    if (hour >= 21 || hour < 1) return '夜宵/深夜时段';
+    return '非典型饭点';
+}
+
+function getRealtimeDayPhaseMeta(date = new Date()) {
+    const hour = date.getHours();
+    const mealLabel = getRealtimeMealWindowLabel(date);
+    if (hour >= 5 && hour < 8) {
+        return {
+            label: '清晨',
+            allowedGreetings: '早安、早上好',
+            bannedGreetings: '晚安、晚上好、午安',
+            toneHint: `适合刚醒来、准备出门、轻一点的清晨语气；当前是${mealLabel}`
+        };
+    }
+    if (hour >= 8 && hour < 11) {
+        return {
+            label: '上午',
+            allowedGreetings: '早上好、上午好',
+            bannedGreetings: '晚安、晚上好',
+            toneHint: `适合白天刚展开的节奏，别写成深夜氛围；当前是${mealLabel}`
+        };
+    }
+    if (hour >= 11 && hour < 13) {
+        return {
+            label: '中午',
+            allowedGreetings: '中午好、午安',
+            bannedGreetings: '早安、晚安、晚上好',
+            toneHint: `允许聊午饭、午休、正午状态；当前是${mealLabel}`
+        };
+    }
+    if (hour >= 13 && hour < 17) {
+        return {
+            label: '下午',
+            allowedGreetings: '下午好',
+            bannedGreetings: '早安、晚安、晚上好',
+            toneHint: `适合下午的工作/学习/出行节奏；当前是${mealLabel}`
+        };
+    }
+    if (hour >= 17 && hour < 19) {
+        return {
+            label: '傍晚',
+            allowedGreetings: '傍晚好、晚上好',
+            bannedGreetings: '早安、午安',
+            toneHint: `适合一天快收尾、准备吃晚饭或刚忙完的状态；当前是${mealLabel}`
+        };
+    }
+    if (hour >= 19 && hour < 22) {
+        return {
+            label: '晚上',
+            allowedGreetings: '晚上好',
+            bannedGreetings: '早安、上午好、下午好',
+            toneHint: `适合夜聊、放松、晚间陪伴感；当前是${mealLabel}`
+        };
+    }
+    if (hour >= 22 || hour < 1) {
+        return {
+            label: '深夜',
+            allowedGreetings: '可以不特意问候，直接自然接话',
+            bannedGreetings: '早安、上午好、下午好；也不要模板化催睡',
+            toneHint: `适合偏安静、偏私密、轻一点的深夜语气；当前是${mealLabel}`
+        };
+    }
+    return {
+        label: '凌晨',
+        allowedGreetings: '可以直接接话，不必强行打招呼',
+        bannedGreetings: '早安、上午好、下午好、晚上好；也不要模板化催睡',
+        toneHint: `适合熬夜、失眠、还醒着的凌晨语气，但不要把时间写错；当前是${mealLabel}`
+    };
+}
+
+function buildRealtimeHolidaySummary(date = new Date()) {
+    if (!window.getCalendarChatContext || typeof window.getCalendarChatContext !== 'function') {
+        return '';
+    }
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateKey = `${year}-${month}-${day}`;
+
+    try {
+        const calendarData = window.getCalendarChatContext(dateKey);
+        if (!calendarData || typeof calendarData !== 'object') return '';
+
+        const formatHoliday = (holiday, includeDaysAway = false) => {
+            if (!holiday) return '';
+            const name = holiday.name || holiday.label || '节日安排';
+            const typeLabel = holiday.type === 'workday'
+                ? '调休补班'
+                : (holiday.type === 'festival' ? '普通节日' : '节假日');
+            const daysAwayText = includeDaysAway && Number.isInteger(holiday.daysAway)
+                ? `，还有${holiday.daysAway}天`
+                : '';
+            return `${name}（${typeLabel}${daysAwayText}）`;
+        };
+
+        if (calendarData.todayHoliday) {
+            return `今天是${formatHoliday(calendarData.todayHoliday)}`;
+        }
+        if (calendarData.upcomingHoliday && Number.isInteger(calendarData.upcomingHoliday.daysAway) && calendarData.upcomingHoliday.daysAway <= 1) {
+            const prefix = calendarData.upcomingHoliday.daysAway === 0 ? '今天是' : '明天是';
+            return `${prefix}${formatHoliday(calendarData.upcomingHoliday, false)}`;
+        }
+    } catch (error) {
+        return '';
+    }
+
+    return '';
+}
+
+function buildRealtimeConversationGapGuidance(latestMsg, nowMs = Date.now()) {
+    if (!latestMsg) {
+        return '首次对话：请把它当作刚开始建立印象的聊天，不要假装你们已经聊到一半。';
+    }
+
+    const latestAt = getChatPromptTimestampMs(latestMsg.time);
+    if (!latestAt) {
+        return '时间戳缺失：优先按自然聊天处理，不要编造具体过去了多久。';
+    }
+
+    const gapMs = Math.max(0, nowMs - latestAt);
+    const gapText = formatElapsedZh(gapMs);
+
+    if (gapMs < 5 * 60000) {
+        return '这是刚接上的一轮对话，可以自然顺着当前话题往下说，不必硬提时间。';
+    }
+    if (gapMs < 30 * 60000) {
+        return `距上一条消息约${gapText}，间隔不长，可继续当前语境，不必刻意解释晚回复。`;
+    }
+    if (gapMs < 6 * 3600000) {
+        return `距上一条消息约${gapText}，可以轻微体现时间感（如“刚忙完”“刚看到”），但不要太刻意。`;
+    }
+    if (gapMs < 24 * 3600000) {
+        return latestMsg.role === 'user'
+            ? `用户上一条消息已过去${gapText}。回复时可以自然承认不是秒回，但不要把场景写成还停留在上一秒。`
+            : `你上一条消息已过去${gapText}。这不是无缝衔接的一口气聊天，可自然补一句、续一句或换个轻话题。`;
+    }
+    if (gapMs < 72 * 3600000) {
+        return `已经隔了${gapText}。请承认这是一段断档后的继续，不要假装上一幕还在即时发生。`;
+    }
+    return `已经过去${gapText}。必须明显承认久未联系的时间感，可自然重开话题，但不要写成无缝接上一句。`;
+}
+
+function buildRealtimeFinishedActivityReminder(realMessages = [], nowMs = Date.now()) {
+    if (!Array.isArray(realMessages) || realMessages.length === 0) return '';
+
+    const recentBlock = [];
+    for (let i = realMessages.length - 1; i >= 0 && recentBlock.length < 15; i--) {
+        const message = realMessages[i];
+        if (!message) continue;
+
+        if (recentBlock.length > 0) {
+            const newerTime = getChatPromptTimestampMs(recentBlock[recentBlock.length - 1].time);
+            const currentTime = getChatPromptTimestampMs(message.time);
+            if (newerTime && currentTime && (newerTime - currentTime > 30 * 60000)) {
+                break;
+            }
+        }
+        recentBlock.push(message);
+    }
+
+    const recentUserMessages = recentBlock.filter(message => message && message.role === 'user');
+    if (!recentUserMessages.length) return '';
+
+    const lastUserMessage = recentUserMessages[0] || null;
+    const lastUserAt = lastUserMessage ? getChatPromptTimestampMs(lastUserMessage.time) : 0;
+    if (!lastUserAt) return '';
+
+    const gapMs = Math.max(0, nowMs - lastUserAt);
+    const recentUserText = recentUserMessages
+        .map(message => getActiveReplyPreviewText(message))
+        .filter(Boolean)
+        .join(' ');
+    if (!recentUserText) return '';
+
+    const activityPatterns = [
+        { patterns: [/开会|會議|会议|meeting|去开会|去開會|要开会|要開會/i], label: '开会', durationMin: 120 },
+        { patterns: [/上课|上課|去学校|去學校|class|lecture/i], label: '上课', durationMin: 180 },
+        { patterns: [/考试|考試|exam|test|测验|測驗/i], label: '考试', durationMin: 120 },
+        { patterns: [/吃饭|吃飯|吃个饭|吃個飯|去吃|用餐|午餐|晚餐|早餐|dinner|lunch|breakfast/i], label: '吃饭', durationMin: 60 },
+        { patterns: [/洗澡|冲澡|沖澡|泡澡|shower|bath/i], label: '洗澡', durationMin: 30 },
+        { patterns: [/睡觉|睡覺|去睡|先睡|晚安|goodnight|sleep/i], label: '睡觉', durationMin: 420 },
+        { patterns: [/出门|出門|出去|外出|go out/i], label: '出门', durationMin: 120 },
+        { patterns: [/运动|運動|健身|跑步|gym|workout|exercise/i], label: '运动', durationMin: 90 },
+        { patterns: [/加班|overtime|work late/i], label: '加班', durationMin: 180 },
+        { patterns: [/看医生|看醫生|看牙|去医院|去醫院|doctor|hospital/i], label: '看医生', durationMin: 120 },
+        { patterns: [/逛街|购物|購物|shopping/i], label: '逛街', durationMin: 120 },
+        { patterns: [/搭车|搭車|坐车|坐車|通勤|commute|搭地铁|搭地鐵|搭捷运|搭捷運/i], label: '通勤', durationMin: 60 },
+        { patterns: [/面试|面試|interview/i], label: '面试', durationMin: 90 },
+        { patterns: [/打工|兼职|兼職|part.?time/i], label: '打工', durationMin: 240 },
+        { patterns: [/上班|去公司|work/i], label: '上班', durationMin: 480 }
+    ];
+
+    const matchedLabels = activityPatterns
+        .filter(item => gapMs >= item.durationMin * 1.5 * 60000 && item.patterns.some(pattern => pattern.test(recentUserText)))
+        .map(item => item.label);
+
+    if (!matchedLabels.length) return '';
+
+    const uniqueLabels = [...new Set(matchedLabels)].slice(0, 3);
+    const gapText = formatElapsedZh(gapMs);
+    return `用户最近提到过：${uniqueLabels.join('、')}。按现在的时间看，距离那时已经过去约${gapText}，这些事情大概率早就结束了。不要再问“还在${uniqueLabels[0]}吗”这种把旧事当成仍在进行中的话；如果要跟进，请改成过去时，例如“你那会儿${uniqueLabels[0]}还顺利吗？”`;
+}
+
 function buildRealtimeTimeContext(contactId) {
     const nowMs = Date.now();
     const now = new Date(nowMs);
     const weekdayMap = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
     const nowStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${weekdayMap[now.getDay()]} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const phaseMeta = getRealtimeDayPhaseMeta(now);
+    const holidaySummary = buildRealtimeHolidaySummary(now);
+    const todayTag = now.getDay() === 0 || now.getDay() === 6 ? '周末' : '工作日';
 
     const history = window.iphoneSimState.chatHistory[contactId] || [];
     const visibleMsgs = history.filter(isRealConversationMsg);
@@ -6249,7 +6477,10 @@ function buildRealtimeTimeContext(contactId) {
         }
     }
 
-    return `\n【当前真实时间】\n现在是：${nowStr}\n时区：${timezone}\n\n【时间间隔感知】\n- 距离用户上一条消息：${userGap}\n- 距离你上一条消息：${aiGap}\n- 当前互动状态：${roundState}\n\n⚠️ 重要提示：\n- 你必须严格以以上时间信息判断“现在”和“间隔”，不要自行编造时间。\n- 若间隔较长，请自然体现时间感（例如“刚忙完”“久等了”），但避免每句都提时间。\n`;
+    const gapGuidance = buildRealtimeConversationGapGuidance(latestMsg, nowMs);
+    const finishedActivityReminder = buildRealtimeFinishedActivityReminder(visibleMsgs, nowMs);
+
+    return `\n【当前真实时间】\n- 现在是：${nowStr}\n- 时区：${timezone}\n- 当前时段：${phaseMeta.label}\n- 今日属性：${todayTag}${holidaySummary ? `；${holidaySummary}` : ''}\n- 当前更自然的问候：${phaseMeta.allowedGreetings}\n- 当前不自然的问候：${phaseMeta.bannedGreetings}\n- 语气参考：${phaseMeta.toneHint}\n\n【时间间隔感知】\n- 距离用户上一条消息：${userGap}\n- 距离你上一条消息：${aiGap}\n- 当前互动状态：${roundState}\n- 续聊建议：${gapGuidance}\n${finishedActivityReminder ? `\n【旧话题时间纠偏】\n- ${finishedActivityReminder}\n` : ''}\n⚠️ 重要提示：\n- 你必须严格以以上时间信息判断“现在”和“间隔”，不要自行编造时间。\n- 问候语、情绪节奏、话题切入要和当前时段一致，不要把深夜写成早上，也不要把隔天后的聊天写成无缝接上一句。\n- 若间隔较长，请自然体现时间感（例如“刚忙完”“久等了”），但不要每句都提时间。\n- 如果之前提过某件事，而按时间看它早就结束了，请用过去时自然跟进，不要把它当成仍在进行。\n`;
 }
 
 function getLastAiBlockJson(contactId) {
