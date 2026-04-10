@@ -737,6 +737,14 @@ function sendMessage(text, isUser, type = 'text', description = null, targetCont
         msg.description = description;
     }
 
+    if (typeof normalizedMeta.triggerSource === 'string' && normalizedMeta.triggerSource.trim()) {
+        msg.triggerSource = normalizedMeta.triggerSource.trim();
+    }
+
+    if (normalizedMeta.isActiveReply === true || msg.triggerSource === 'active') {
+        msg.isActiveReply = true;
+    }
+
     if (normalizedMeta.thought) {
         msg.thought = normalizedMeta.thought;
     }

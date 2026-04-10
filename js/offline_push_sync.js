@@ -98,6 +98,18 @@
             .trim();
     }
 
+    function isRealConversationSnapshotMessage(message) {
+        if (!message) return false;
+        if (message.role !== 'user' && message.role !== 'assistant') return false;
+        if (message.type === 'system_event' || message.type === 'live_sync_hidden' || message.type === 'voice_call_text') return false;
+        if (typeof message.content !== 'string') return false;
+        if (message.type === 'text') {
+            if (typeof window.isHiddenForumWechatSyncText === 'function' && window.isHiddenForumWechatSyncText(message.content)) return false;
+            if (message.content.startsWith('[系统消息]:') || message.content.startsWith('[系统]:') || message.content.startsWith('[系统错误]:') || message.content.startsWith('[系统诊断]:')) return false;
+        }
+        return true;
+    }
+
     function isGenericUnknownImageText(value) {
         const text = String(value || '').trim().toLowerCase();
         if (!text) return true;
@@ -846,7 +858,7 @@
         const state = getState();
         if (!state.enabled || !state.apiBaseUrl || !contactId) return;
         const history = (((window.iphoneSimState || {}).chatHistory || {})[contactId]) || [];
-        const lastMessage = history.length ? history[history.length - 1] : null;
+        const lastMessage = history.length ? [...history].reverse().find(isRealConversationSnapshotMessage) : null;
         if (!lastMessage) return;
         const serializedLastMessage = serializeMessageForOfflineContext(lastMessage);
         try {

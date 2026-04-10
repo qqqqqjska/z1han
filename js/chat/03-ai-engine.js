@@ -5138,6 +5138,12 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                 : (400 + Math.random() * 400);
         };
 
+        const assistantMessageMeta = {
+            channel: deliveryChannel,
+            triggerSource,
+            isActiveReply: triggerSource === 'active'
+        };
+
         // 逐条发送消息
         for (let i = 0; i < messagesList.length; i++) {
             const msg = messagesList[i];
@@ -5192,13 +5198,13 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                 // 用户在聊天界面，使用打字机效果或直接发送
                 if (msg.type === '消息' || msg.type === 'text') {
                     await typewriterEffect(msg.content, contact.avatar, currentThought, currentReplyTo, 'text', contactId, {
+                        ...assistantMessageMeta,
                         bilingualTranslation: bilingualTranslationMeta,
-                        channel: deliveryChannel
                     });
                 } else if (msg.type === '表情包' || msg.type === 'sticker') {
                     const stickerAsset = resolveStickerAssetForContact(contact, msg.content);
                     if (stickerAsset) {
-                        sendMessage(stickerAsset.url, false, 'sticker', stickerAsset.desc || msg.content, contactId, { channel: deliveryChannel });
+                        sendMessage(stickerAsset.url, false, 'sticker', stickerAsset.desc || msg.content, contactId, assistantMessageMeta);
                     } else {
                         // 找不到表情包，直接忽略，不发送文本 fallback，以免破坏沉浸感
                         console.warn(`Sticker not found: ${msg.content}`);
@@ -5220,7 +5226,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                         text: text,
                         isReal: false
                     };
-                    sendMessage(JSON.stringify(voiceData), false, 'voice', null, contactId, { channel: deliveryChannel });
+                    sendMessage(JSON.stringify(voiceData), false, 'voice', null, contactId, assistantMessageMeta);
                 } else if (msg.type === '图片' || msg.type === 'image' || msg.type === 'virtual_image') {
                     let sent = false;
                     const rawImageContent = typeof msg.content === 'string' ? msg.content.trim() : '';
@@ -5231,7 +5237,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                     const globalEnabled = novelaiSettings && novelaiSettings.enabled !== false;
 
                     if (isLikelyChatImageUrl(rawImageContent)) {
-                        sendMessage(rawImageContent, false, 'image', msg.description || null, contactId, { channel: deliveryChannel });
+                        sendMessage(rawImageContent, false, 'image', msg.description || null, contactId, assistantMessageMeta);
                         sent = true;
                     }
                     
@@ -5284,7 +5290,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
 
                             // 先发送占位图片以占据正确的历史记录顺序
                             const placeholderUrl = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Generating...';
-                            const placeholderMsg = sendMessage(placeholderUrl, false, 'virtual_image', msg.content, contactId, { channel: deliveryChannel });
+                            const placeholderMsg = sendMessage(placeholderUrl, false, 'virtual_image', msg.content, contactId, assistantMessageMeta);
                             
                             appendMessageToUI('[系统]: 正在生成图片...', false, 'system', null, null, null, null, false);
 
@@ -5326,10 +5332,10 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                             appendMessageToUI(`[系统诊断]: 无法生成图片 - ${failReason.join('; ')}`, false, 'text', null, null, null, null, false);
                         }
 
-                        sendMessage(imageFallbackText, false, 'text', null, contactId, { channel: deliveryChannel });
+                        sendMessage(imageFallbackText, false, 'text', null, contactId, assistantMessageMeta);
                     }
                 } else if (msg.type === '旁白' || msg.type === 'description') {
-                    await typewriterEffect(msg.content, contact.avatar, null, null, 'description', contactId, { channel: deliveryChannel });
+                    await typewriterEffect(msg.content, contact.avatar, null, null, 'description', contactId, assistantMessageMeta);
                 }
             } else {
                 // 用户不在聊天界面，后台保存并弹窗
@@ -5381,7 +5387,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                 }
                 const descriptionToSave = (msg.type === '图片' || msg.type === 'sticker') ? msg.content : null;
                 sendMessage(contentToSave, false, typeToSave, descriptionToSave, contact.id, {
-                    channel: deliveryChannel,
+                    ...assistantMessageMeta,
                     replyTo: currentReplyTo,
                     thought: currentThought,
                     bilingualTranslation: typeToSave === 'text' ? bilingualTranslationMeta : null,
@@ -5453,7 +5459,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
 
                         // 先发送占位图片
                         const placeholderUrl = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Generating...';
-                        const placeholderMsg = sendMessage(placeholderUrl, false, 'virtual_image', imageToSend.content, contactId, { channel: deliveryChannel });
+                        const placeholderMsg = sendMessage(placeholderUrl, false, 'virtual_image', imageToSend.content, contactId, assistantMessageMeta);
 
                         // 直接调用当前作用域内的函数
                         appendMessageToUI('[系统]: 正在生成图片...', false, 'system', null, null, null, null, false);
@@ -5496,12 +5502,12 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                     if (failReason.length > 0) {
                         appendMessageToUI(`[系统诊断]: 无法生成图片 - ${failReason.join('; ')}`, false, 'text', null, null, null, null, false);
                     }
-                    
+
                     const defaultImageUrl = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Photo';
-                    sendMessage(defaultImageUrl, false, 'virtual_image', imageToSend.content, contactId, { channel: deliveryChannel });
+                    sendMessage(defaultImageUrl, false, 'virtual_image', imageToSend.content, contactId, assistantMessageMeta);
                 }
             } else if (imageToSend.type === 'sticker') {
-                sendMessage(imageToSend.content, false, 'sticker', imageToSend.desc, contactId, { channel: deliveryChannel });
+                sendMessage(imageToSend.content, false, 'sticker', imageToSend.desc, contactId, assistantMessageMeta);
             }
         }
 

@@ -34,6 +34,12 @@
         if (thought) {
             msgData.thought = thought;
         }
+        if (options && typeof options.triggerSource === 'string' && options.triggerSource.trim()) {
+            msgData.triggerSource = options.triggerSource.trim();
+        }
+        if ((options && options.isActiveReply === true) || msgData.triggerSource === 'active') {
+            msgData.isActiveReply = true;
+        }
         if (type === 'text' && options && options.bilingualTranslation && typeof options.bilingualTranslation === 'object') {
             const translatedText = String(options.bilingualTranslation.translatedText || '').trim();
             if (translatedText) {
@@ -5858,6 +5864,353 @@ function formatElapsedZh(ms) {
     return remHours > 0 ? `${days}天${remHours}小时` : `${days}天`;
 }
 
+const ACTIVE_REPLY_RUNTIME_STORAGE_KEY = 'wechatActiveReplyRuntimeStateV1';
+const ACTIVE_REPLY_INITIAL_DELAY_MS = 30000;
+const ACTIVE_REPLY_INTERVAL_MS = 60000;
+const ACTIVE_REPLY_WATCHDOG_INTERVAL_MS = 20000;
+const ACTIVE_REPLY_SCHEDULER_STALE_MS = (ACTIVE_REPLY_INTERVAL_MS * 2) + 15000;
+const ACTIVE_REPLY_SHORT_COOLDOWN_MS = 30000;
+const ACTIVE_REPLY_CONTINUE_PROBABILITY = 0.7;
+const ACTIVE_REPLY_FOREGROUND_SYNC_WAIT_MS = 4200;
+
+function normalizeActiveReplyRuntimeState(raw) {
+    const normalized = { contacts: {} };
+    if (!raw || typeof raw !== 'object') return normalized;
+
+    const source = raw.contacts && typeof raw.contacts === 'object' ? raw.contacts : raw;
+    Object.keys(source).forEach((contactId) => {
+        const entry = source[contactId];
+        if (!entry || typeof entry !== 'object') return;
+        normalized.contacts[String(contactId)] = {
+            lastCheckAt: Number(entry.lastCheckAt) || 0,
+            lastTriggeredAt: Number(entry.lastTriggeredAt) || 0,
+            lastTriggeredAnchorId: entry.lastTriggeredAnchorId ? String(entry.lastTriggeredAnchorId) : '',
+            schedulerHeartbeatAt: Number(entry.schedulerHeartbeatAt) || 0,
+            lastBackgroundedAt: Number(entry.lastBackgroundedAt) || 0
+        };
+    });
+
+    return normalized;
+}
+
+function readActiveReplyRuntimeState() {
+    try {
+        const raw = localStorage.getItem(ACTIVE_REPLY_RUNTIME_STORAGE_KEY);
+        return raw ? normalizeActiveReplyRuntimeState(JSON.parse(raw)) : { contacts: {} };
+    } catch (err) {
+        console.warn('[ActiveReply] 读取运行态失败', err);
+        return { contacts: {} };
+    }
+}
+
+function writeActiveReplyRuntimeState(state) {
+    try {
+        localStorage.setItem(ACTIVE_REPLY_RUNTIME_STORAGE_KEY, JSON.stringify(normalizeActiveReplyRuntimeState(state)));
+    } catch (err) {
+        console.warn('[ActiveReply] 保存运行态失败', err);
+    }
+}
+
+function getActiveReplyRuntimeEntry(state, contactId) {
+    const runtimeState = state && typeof state === 'object' ? state : { contacts: {} };
+    if (!runtimeState.contacts || typeof runtimeState.contacts !== 'object') {
+        runtimeState.contacts = {};
+    }
+    const key = String(contactId);
+    if (!runtimeState.contacts[key] || typeof runtimeState.contacts[key] !== 'object') {
+        runtimeState.contacts[key] = {
+            lastCheckAt: 0,
+            lastTriggeredAt: 0,
+            lastTriggeredAnchorId: '',
+            schedulerHeartbeatAt: 0,
+            lastBackgroundedAt: 0
+        };
+    }
+    return runtimeState.contacts[key];
+}
+
+function updateActiveReplyRuntimeEntry(state, contactId, patch = {}) {
+    const entry = getActiveReplyRuntimeEntry(state, contactId);
+    if (Object.prototype.hasOwnProperty.call(patch, 'lastCheckAt')) {
+        entry.lastCheckAt = Number(patch.lastCheckAt) || 0;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'lastTriggeredAt')) {
+        entry.lastTriggeredAt = Number(patch.lastTriggeredAt) || 0;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'lastTriggeredAnchorId')) {
+        entry.lastTriggeredAnchorId = patch.lastTriggeredAnchorId ? String(patch.lastTriggeredAnchorId) : '';
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'schedulerHeartbeatAt')) {
+        entry.schedulerHeartbeatAt = Number(patch.schedulerHeartbeatAt) || 0;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'lastBackgroundedAt')) {
+        entry.lastBackgroundedAt = Number(patch.lastBackgroundedAt) || 0;
+    }
+    return entry;
+}
+
+function pruneActiveReplyRuntimeState(state) {
+    if (!state || typeof state !== 'object' || !state.contacts || typeof state.contacts !== 'object') return state;
+    const activeContactIds = new Set(
+        ((window.iphoneSimState && Array.isArray(window.iphoneSimState.contacts)) ? window.iphoneSimState.contacts : [])
+            .filter(contact => contact && contact.id !== undefined && contact.activeReplyEnabled)
+            .map(contact => String(contact.id))
+    );
+    Object.keys(state.contacts).forEach((contactId) => {
+        if (!activeContactIds.has(String(contactId))) {
+            delete state.contacts[contactId];
+        }
+    });
+    return state;
+}
+
+function touchActiveReplyHeartbeat(state, now = Date.now()) {
+    const contacts = (window.iphoneSimState && Array.isArray(window.iphoneSimState.contacts)) ? window.iphoneSimState.contacts : [];
+    contacts.forEach((contact) => {
+        if (!contact || !contact.activeReplyEnabled || contact.id === undefined) return;
+        updateActiveReplyRuntimeEntry(state, contact.id, { schedulerHeartbeatAt: now });
+    });
+}
+
+function markActiveReplyBackgrounded(now = Date.now()) {
+    const runtimeState = readActiveReplyRuntimeState();
+    const contacts = (window.iphoneSimState && Array.isArray(window.iphoneSimState.contacts)) ? window.iphoneSimState.contacts : [];
+    contacts.forEach((contact) => {
+        if (!contact || !contact.activeReplyEnabled || contact.id === undefined) return;
+        updateActiveReplyRuntimeEntry(runtimeState, contact.id, {
+            lastBackgroundedAt: now,
+            schedulerHeartbeatAt: now
+        });
+    });
+    pruneActiveReplyRuntimeState(runtimeState);
+    writeActiveReplyRuntimeState(runtimeState);
+}
+
+function isActiveReplySchedulerDisabled() {
+    if (window.offlinePushSync && typeof window.offlinePushSync.getState === 'function') {
+        const syncState = window.offlinePushSync.getState();
+        if (syncState && syncState.enabled && syncState.disableLocalActiveReplyScheduler) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function hasVisibleRealtimeCall() {
+    const voiceScreen = document.getElementById('voice-call-screen');
+    if (voiceScreen && !voiceScreen.classList.contains('hidden')) return true;
+
+    const videoScreen = document.getElementById('video-call-screen');
+    if (videoScreen && !videoScreen.classList.contains('hidden')) return true;
+
+    const videoModal = document.getElementById('video-call-modal');
+    if (videoModal && !videoModal.classList.contains('hidden')) return true;
+
+    return false;
+}
+
+function hasAnyChatReplyGenerationInProgress() {
+    const locks = window.__chatAiReplyLocks;
+    return !!(locks && typeof locks === 'object' && Object.keys(locks).length > 0);
+}
+
+function isWechatSingleChatContact(contact) {
+    if (!contact) return false;
+    const channel = typeof window.getResolvedDeliveryChannel === 'function'
+        ? window.getResolvedDeliveryChannel(contact)
+        : 'wechat';
+    return channel === 'wechat';
+}
+
+function getActiveReplyPreviewText(message) {
+    if (!message) return '';
+    const type = String(message.type || 'text').trim().toLowerCase();
+    if (type === 'sticker') return '[表情包]';
+    if (type === 'voice') return '[语音]';
+    if (type === 'image' || type === 'virtual_image') return '[图片]';
+    if (type === 'description') return String(message.content || '[旁白]').trim() || '[旁白]';
+    const text = String(message.content || '').replace(/\s+/g, ' ').trim();
+    return text || '[空消息]';
+}
+
+function buildActiveReplyRecentFlow(realMessages = []) {
+    const items = realMessages.slice(-6).map((message) => {
+        const speaker = message.role === 'user' ? '用户' : '你';
+        return `- ${speaker}：${getActiveReplyPreviewText(message).slice(0, 42)}`;
+    }).filter(Boolean);
+    if (!items.length) return '';
+    return `\n最近对话流（只作衔接参考）：\n${items.join('\n')}`;
+}
+
+function buildRecentActiveReplySummary(history = []) {
+    const items = history
+        .filter(message => message && message.role === 'assistant' && (message.isActiveReply || String(message.triggerSource || '') === 'active'))
+        .slice(-3)
+        .map(message => `- ${getActiveReplyPreviewText(message).slice(0, 40)}`)
+        .filter(Boolean);
+    if (!items.length) return '';
+    return `\n避免和你最近主动发过的内容过于相似：\n${items.join('\n')}`;
+}
+
+function collectActiveReplyContext(contact, now = Date.now()) {
+    if (!contact || contact.id === undefined) return null;
+    const history = (((window.iphoneSimState || {}).chatHistory || {})[contact.id]) || [];
+    const realMessages = history.filter(isRealConversationMsg);
+    if (!realMessages.length) return null;
+
+    const lastMessage = realMessages[realMessages.length - 1] || null;
+    if (!lastMessage) return null;
+
+    const reversed = [...realMessages].reverse();
+    const lastUserMessage = reversed.find(message => message.role === 'user') || null;
+    const lastAssistantMessage = reversed.find(message => message.role === 'assistant') || null;
+    const intervalSeconds = Math.max(5, Number(contact.activeReplyInterval) || 60);
+    const intervalMs = intervalSeconds * 1000;
+    const anchorTime = Number(lastMessage.time) || 0;
+
+    return {
+        contact,
+        history,
+        realMessages,
+        lastMessage,
+        lastUserMessage,
+        lastAssistantMessage,
+        intervalMs,
+        intervalSeconds,
+        anchorTime,
+        branch: lastMessage.role === 'user' ? 'reply-user' : 'continue-chat',
+        silenceMs: anchorTime > 0 ? Math.max(0, now - anchorTime) : 0
+    };
+}
+
+function shouldTriggerActiveReply(contact, context, runtimeEntry, now = Date.now()) {
+    if (!contact || !context || !runtimeEntry) {
+        return { allow: false, reason: 'missing-context' };
+    }
+
+    if (!contact.activeReplyEnabled) {
+        return { allow: false, reason: 'disabled' };
+    }
+
+    if (!isWechatSingleChatContact(contact)) {
+        return { allow: false, reason: 'non-wechat' };
+    }
+
+    if (typeof window.ensureContactRestWindowFields === 'function') {
+        window.ensureContactRestWindowFields(contact);
+    }
+
+    if (typeof window.getContactRestTriggerDecision === 'function') {
+        const restDecision = window.getContactRestTriggerDecision(contact, 'active', now);
+        if (restDecision && !restDecision.allow) {
+            return { allow: false, reason: restDecision.reason || 'rest-window' };
+        }
+    }
+
+    const anchorId = context.lastMessage && context.lastMessage.id ? String(context.lastMessage.id) : '';
+    if (!anchorId) {
+        return { allow: false, reason: 'missing-anchor' };
+    }
+
+    const activeReplyStartTime = Number(contact.activeReplyStartTime) || 0;
+    if (activeReplyStartTime && Number(context.anchorTime) <= activeReplyStartTime) {
+        return { allow: false, reason: 'before-enabled' };
+    }
+
+    if (String(runtimeEntry.lastTriggeredAnchorId || '') === anchorId) {
+        return { allow: false, reason: 'runtime-anchor-dup' };
+    }
+
+    if (String(contact.lastActiveReplyTriggeredMsgId || '') === anchorId) {
+        return { allow: false, reason: 'contact-anchor-dup' };
+    }
+
+    if (!context.anchorTime || context.silenceMs < context.intervalMs) {
+        return { allow: false, reason: 'interval-not-reached' };
+    }
+
+    if (context.lastAssistantMessage) {
+        const lastAssistantAt = Number(context.lastAssistantMessage.time) || 0;
+        if (lastAssistantAt && now - lastAssistantAt < ACTIVE_REPLY_SHORT_COOLDOWN_MS) {
+            return { allow: false, reason: 'assistant-short-cooldown' };
+        }
+    }
+
+    if (window.__chatAiReplyLocks && window.__chatAiReplyLocks[contact.id]) {
+        return { allow: false, reason: 'contact-generating' };
+    }
+
+    if (hasAnyChatReplyGenerationInProgress()) {
+        return { allow: false, reason: 'global-generating' };
+    }
+
+    if (hasVisibleRealtimeCall()) {
+        return { allow: false, reason: 'call-active' };
+    }
+
+    if (context.branch === 'continue-chat') {
+        const roll = Math.random();
+        if (roll > ACTIVE_REPLY_CONTINUE_PROBABILITY) {
+            return { allow: false, reason: 'probability-miss', probabilityRoll: roll };
+        }
+        return { allow: true, reason: 'continue-chat', probabilityRoll: roll };
+    }
+
+    return { allow: true, reason: 'reply-user' };
+}
+
+function buildActiveReplyInstruction(contact, context, decision, now = Date.now()) {
+    const elapsedText = formatElapsedZh(context && context.silenceMs ? context.silenceMs : 0);
+    const flowSummary = buildActiveReplyRecentFlow(context && context.realMessages ? context.realMessages : []);
+    const activeSummary = buildRecentActiveReplySummary(context && context.history ? context.history : []);
+    const currentTimeContext = typeof buildRealtimeTimeContext === 'function'
+        ? buildRealtimeTimeContext(contact.id)
+        : '';
+
+    if (context.branch === 'reply-user') {
+        return `（系统提示：主动发消息模式触发。距离用户上一条真实消息已过去 ${elapsedText}。请自然接住对方刚才的话，可以轻描淡写解释回复稍晚，也可以直接顺着话题继续。优先延续当前语境，不要突然跳到很远的新话题，不要写成系统通知，不要像任务播报。${flowSummary}${activeSummary}${currentTimeContext ? `\n${currentTimeContext}` : ''}）`;
+    }
+
+    return `（系统提示：主动发消息模式触发。距离你上一条真实消息已过去 ${elapsedText}，用户一直没有继续。请像真人隔了一阵又想起什么：可以补一句、分享你当下的状态/见闻，或自然换一个轻话题，但必须和最近聊天、当前时间或你正在做的事有自然衔接。不要突然抛出完全无关的大话题，不要写成系统通知，也不要重复你最近主动发过的表达。${flowSummary}${activeSummary}${currentTimeContext ? `\n${currentTimeContext}` : ''}）`;
+}
+
+async function triggerSingleActiveReply(contact, runtimeState, options = {}) {
+    const now = Date.now();
+    const runtimeEntry = updateActiveReplyRuntimeEntry(runtimeState, contact.id, {
+        lastCheckAt: now,
+        schedulerHeartbeatAt: now
+    });
+    const context = collectActiveReplyContext(contact, now);
+    if (!context) {
+        return false;
+    }
+
+    const decision = shouldTriggerActiveReply(contact, context, runtimeEntry, now);
+    if (!decision.allow) {
+        return false;
+    }
+
+    const activeInstruction = buildActiveReplyInstruction(contact, context, decision, now);
+    const triggered = await generateAiReply(activeInstruction, contact.id, {
+        triggerSource: 'active'
+    });
+
+    if (!triggered) {
+        return false;
+    }
+
+    const triggerAt = Date.now();
+    updateActiveReplyRuntimeEntry(runtimeState, contact.id, {
+        lastCheckAt: triggerAt,
+        lastTriggeredAt: triggerAt,
+        lastTriggeredAnchorId: context.lastMessage && context.lastMessage.id ? String(context.lastMessage.id) : '',
+        schedulerHeartbeatAt: triggerAt
+    });
+    contact.lastActiveReplyTriggeredMsgId = context.lastMessage && context.lastMessage.id ? context.lastMessage.id : null;
+    saveConfig();
+    return true;
+}
+
 function isRealConversationMsg(msg) {
     if (!msg) return false;
     if (msg.role !== 'user' && msg.role !== 'assistant') return false;
@@ -5964,61 +6317,182 @@ function getLastAiBlockJson(contactId) {
     return JSON.stringify(jsonOutput, null, 2);
 }
 
-function checkActiveReplies() {
-    if (window.offlinePushSync && window.offlinePushSync.getState) {
+async function checkActiveReplies(options = {}) {
+    if (isActiveReplySchedulerDisabled()) {
+        return false;
+    }
+    if (!window.iphoneSimState || !Array.isArray(window.iphoneSimState.contacts)) {
+        return false;
+    }
+
+    const canTryHidden = !!(window.iphoneSimState && window.iphoneSimState.enableBackgroundAudio);
+    if (document.hidden && !canTryHidden && !(options && options.forceWhileHidden)) {
+        return false;
+    }
+
+    if (!window.__activeReplyScheduler) {
+        window.__activeReplyScheduler = {};
+    }
+    if (window.__activeReplyScheduler.running) {
+        return false;
+    }
+
+    window.__activeReplyScheduler.running = true;
+    const runtimeState = readActiveReplyRuntimeState();
+    const tickStartedAt = Date.now();
+
+    try {
+        touchActiveReplyHeartbeat(runtimeState, tickStartedAt);
+
+        const contacts = window.iphoneSimState.contacts.filter(contact => contact && contact.activeReplyEnabled);
+        for (const contact of contacts) {
+            if (!contact || !contact.activeReplyEnabled) continue;
+            if (typeof window.ensureContactRestWindowFields === 'function') {
+                window.ensureContactRestWindowFields(contact);
+            }
+            await triggerSingleActiveReply(contact, runtimeState, options);
+        }
+
+        pruneActiveReplyRuntimeState(runtimeState);
+        writeActiveReplyRuntimeState(runtimeState);
+        window.__activeReplyScheduler.lastTickAt = Date.now();
+        return true;
+    } finally {
+        const tickEndedAt = Date.now();
+        touchActiveReplyHeartbeat(runtimeState, tickEndedAt);
+        pruneActiveReplyRuntimeState(runtimeState);
+        writeActiveReplyRuntimeState(runtimeState);
+        window.__activeReplyScheduler.lastTickAt = tickEndedAt;
+        window.__activeReplyScheduler.running = false;
+    }
+}
+
+function clearActiveReplySchedulerTimers() {
+    const state = window.__activeReplyScheduler;
+    if (!state) return;
+    if (state.initialTimeoutId) {
+        clearTimeout(state.initialTimeoutId);
+        state.initialTimeoutId = null;
+    }
+    if (state.intervalId) {
+        clearInterval(state.intervalId);
+        state.intervalId = null;
+    }
+    if (state.watchdogId) {
+        clearInterval(state.watchdogId);
+        state.watchdogId = null;
+    }
+}
+
+function startActiveReplyScheduler(force = false) {
+    if (!window.__activeReplyScheduler) {
+        window.__activeReplyScheduler = {};
+    }
+
+    const state = window.__activeReplyScheduler;
+    const now = Date.now();
+    const isStale = !state.lastTickAt || (now - Number(state.lastTickAt) > ACTIVE_REPLY_SCHEDULER_STALE_MS);
+    if (!force && state.intervalId && state.watchdogId && !isStale) {
+        return state;
+    }
+
+    clearActiveReplySchedulerTimers();
+    state.initialTimeoutId = window.setTimeout(() => {
+        checkActiveReplies({ source: 'initial' }).catch(err => console.error('[ActiveReply] initial check failed', err));
+    }, ACTIVE_REPLY_INITIAL_DELAY_MS);
+    state.intervalId = window.setInterval(() => {
+        checkActiveReplies({ source: 'interval' }).catch(err => console.error('[ActiveReply] interval check failed', err));
+    }, ACTIVE_REPLY_INTERVAL_MS);
+    state.watchdogId = window.setInterval(() => {
+        const scheduler = window.__activeReplyScheduler || {};
+        if (scheduler.running) return;
+        const stale = !scheduler.lastTickAt || (Date.now() - Number(scheduler.lastTickAt) > ACTIVE_REPLY_SCHEDULER_STALE_MS);
+        if (stale) {
+            console.warn('[ActiveReply] scheduler heartbeat stale, rebuilding timers');
+            startActiveReplyScheduler(true);
+        }
+    }, ACTIVE_REPLY_WATCHDOG_INTERVAL_MS);
+
+    return state;
+}
+
+function getActiveReplyForegroundRecoveryDelay() {
+    if (window.offlinePushSync && typeof window.offlinePushSync.getState === 'function') {
         const syncState = window.offlinePushSync.getState();
-        if (syncState && syncState.enabled && syncState.disableLocalActiveReplyScheduler) {
-            return;
+        if (syncState && syncState.enabled) {
+            return ACTIVE_REPLY_FOREGROUND_SYNC_WAIT_MS;
         }
     }
-    if (!window.iphoneSimState || !window.iphoneSimState.contacts) return;
-    
-    const now = Date.now();
-    
-    window.iphoneSimState.contacts.forEach(contact => {
-        if (!contact.activeReplyEnabled) return;
-        if (typeof window.ensureContactRestWindowFields === 'function') {
-            window.ensureContactRestWindowFields(contact);
-        }
-        
-        const history = window.iphoneSimState.chatHistory[contact.id];
-        if (!history || history.length === 0) return;
+    return 120;
+}
 
-        if (typeof window.getContactRestTriggerDecision === 'function') {
-            const restDecision = window.getContactRestTriggerDecision(contact, 'active', now);
-            if (!restDecision.allow) return;
+function scheduleActiveReplyForegroundCatchUp(reason = 'foreground', delayMs = null) {
+    if (!window.__activeReplyScheduler) {
+        window.__activeReplyScheduler = {};
+    }
+    const state = window.__activeReplyScheduler;
+    if (state.foregroundTimerId) {
+        clearTimeout(state.foregroundTimerId);
+        state.foregroundTimerId = null;
+    }
+    const waitMs = Number.isFinite(Number(delayMs)) ? Number(delayMs) : getActiveReplyForegroundRecoveryDelay();
+    state.foregroundTimerId = window.setTimeout(async () => {
+        state.foregroundTimerId = null;
+        startActiveReplyScheduler();
+
+        if (window.offlinePushSync && typeof window.offlinePushSync.getState === 'function') {
+            const syncState = window.offlinePushSync.getState();
+            if (syncState && syncState.enabled && typeof window.offlinePushSync.syncMessages === 'function') {
+                try {
+                    await window.offlinePushSync.syncMessages();
+                } catch (err) {
+                    console.error('[ActiveReply] foreground syncMessages failed', err);
+                }
+            }
         }
-        
-        const lastMsg = history[history.length - 1];
-        const intervalMs = (contact.activeReplyInterval || 60) * 1000;
-        
-        // Ensure we only count messages sent AFTER the feature was enabled
-        if (contact.activeReplyStartTime && lastMsg.time <= contact.activeReplyStartTime) {
+
+        try {
+            await checkActiveReplies({ source: reason, catchUp: true });
+        } catch (err) {
+            console.error('[ActiveReply] foreground catch-up failed', err);
+        }
+    }, Math.max(0, waitMs));
+}
+
+function setupActiveReplyKeepalive() {
+    if (window.__activeReplyKeepaliveSetup) {
+        startActiveReplyScheduler();
+        return;
+    }
+    window.__activeReplyKeepaliveSetup = true;
+    startActiveReplyScheduler();
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            markActiveReplyBackgrounded();
             return;
         }
+        startActiveReplyScheduler();
+        scheduleActiveReplyForegroundCatchUp('visibility-visible');
+    });
 
-        if (contact.lastActiveReplyTriggeredMsgId === lastMsg.id) return;
-        
-        if (now - lastMsg.time > intervalMs) {
-            console.log(`[ActiveReply] Triggering for ${contact.name}`);
-            
-            contact.lastActiveReplyTriggeredMsgId = lastMsg.id;
-            saveConfig();
-            
-            let activeInstruction = "";
-            const timeDiff = now - lastMsg.time;
-            const minutesPassed = Math.floor(timeDiff / 60000);
-            
-            if (lastMsg.role === 'user') {
-                // User sent last message, AI is replying late
-                activeInstruction = `（系统提示：主动发消息模式触发。距离用户上一条消息已过去 ${minutesPassed} 分钟。请在不打断人设的前提下自然接住对方刚才的话；可以轻描淡写解释回复稍晚，也可以直接顺着话题继续。）`;
-            } else {
-                // AI sent last message, User didn't reply
-                activeInstruction = `（系统提示：主动发消息模式触发。距离你上一条消息已过去 ${minutesPassed} 分钟，用户一直没有回复。请像真人间隔一阵后自然续聊：可以补一句、换个轻话题，或分享当下状态/见闻；不要写成系统通知或任务播报。）`;
-            }
+    window.addEventListener('pagehide', () => {
+        markActiveReplyBackgrounded();
+    });
 
-            generateAiReply(activeInstruction, contact.id, { triggerSource: 'active' });
-        }
+    window.addEventListener('pageshow', () => {
+        startActiveReplyScheduler();
+        scheduleActiveReplyForegroundCatchUp('pageshow');
+    });
+
+    window.addEventListener('focus', () => {
+        startActiveReplyScheduler();
+        scheduleActiveReplyForegroundCatchUp('focus', getActiveReplyForegroundRecoveryDelay() + 400);
+    });
+
+    window.addEventListener('online', () => {
+        startActiveReplyScheduler();
+        scheduleActiveReplyForegroundCatchUp('online', getActiveReplyForegroundRecoveryDelay() + 800);
     });
 }
 
@@ -6076,7 +6550,7 @@ window.startForumAutoPostScheduler = function() {
 if (window.appInitFunctions) {
     window.appInitFunctions.push(setupChatListeners);
     window.appInitFunctions.push(() => {
-        setInterval(checkActiveReplies, 5000);
+        setupActiveReplyKeepalive();
     });
     window.appInitFunctions.push(() => {
         checkRestWindowUpcomingNotices();
