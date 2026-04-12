@@ -1144,7 +1144,8 @@ const knownApps = {
     'bank-app': { name: 'Bank', icon: 'fas fa-building-columns', color: '#1E66F5' },
     'icity-app': { name: 'iCity', icon: 'fas fa-city', color: '#000000' },
     'lookus-app': { name: 'LookUS', icon: 'fas fa-eye', color: '#FF2D55' },
-    'music-app': { name: 'Music', icon: 'fas fa-music', color: '#FF2D55' }
+    'music-app': { name: 'Music', icon: 'fas fa-music', color: '#FF2D55' },
+    'studio-app': { name: '工作室', icon: 'fas fa-pen-ruler', color: '#8B5CF6' }
 };
 
 function compressImage(file, maxWidth = 1024, quality = 0.7) {
@@ -1552,6 +1553,12 @@ function handleAppClick(appId, appName) {
     const screen = document.getElementById(appId);
     if (screen) {
         screen.classList.remove('hidden');
+        if (appId === 'studio-app' && typeof window.renderStudioChatDemo === 'function') {
+            window.renderStudioChatDemo();
+        }
+        if (appId === 'studio-app' && typeof window.refreshStudioToolbarLayout === 'function') {
+            window.refreshStudioToolbarLayout(false);
+        }
         if (appId === 'wechat-app') {
             const chatScreen = document.getElementById('chat-screen');
             if (chatScreen) chatScreen.classList.add('hidden');

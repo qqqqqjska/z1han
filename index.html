@@ -47,6 +47,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css">
     <link rel="stylesheet" href="css/album.css">
     <link rel="stylesheet" href="css/chat_ui_v1_overrides.css">
+    <link rel="stylesheet" href="css/studio_chat.css">
     <link rel="stylesheet" href="css/fire_buddy.css?v=20260324b1">
     <link rel="stylesheet" href="css/screen_share.css">
     <link rel="stylesheet" href="css/calendar_app.css">
@@ -8690,6 +8691,56 @@
         </div>
     </div>
 
+    <div id="studio-app" class="app-screen hidden" style="z-index: 205; overflow: hidden;">
+        <div id="studio-chat-screen" aria-label="&#24037;&#20316;&#23460;&#32842;&#22825;&#31034;&#20363;&#39029;&#38754;">
+            <div class="chat-header">
+                <div class="chat-header-left-actions">
+                    <button id="close-studio-app" class="back-btn" type="button" aria-label="&#20851;&#38381;&#24037;&#20316;&#23460;">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button class="multi-select-cancel hidden" type="button">&#36864;&#20986;</button>
+                </div>
+                <div id="studio-chat-header-main" class="chat-header-main">
+                    <button id="studio-chat-topbar-avatar-main" class="chat-topbar-avatar chat-topbar-avatar-main hidden" type="button" aria-label="&#25171;&#24320;&#32852;&#31995;&#20154;&#36164;&#26009;">
+                        <i class="ri-user-line"></i>
+                    </button>
+                    <div class="chat-header-title-stack">
+                        <span id="studio-chat-title" style="cursor: pointer;">&#24037;&#20316;&#23460;</span>
+                        <div id="studio-chat-status" class="chat-topbar-status hidden"></div>
+                    </div>
+                </div>
+                <div class="chat-header-right-actions">
+                    <button id="studio-chat-topbar-avatar-right" class="wechat-icon-btn chat-topbar-avatar chat-topbar-avatar-right hidden" type="button" aria-label="&#25171;&#24320;&#32842;&#22825;&#35774;&#32622;">
+                        <i class="ri-user-line"></i>
+                    </button>
+                    <button id="studio-chat-settings-btn" class="wechat-icon-btn studio-chat-static-control" type="button" aria-disabled="true" tabindex="-1">
+                        <i class="fas fa-ellipsis-h"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="chat-body" id="studio-chat-messages" aria-live="polite"></div>
+            <div id="studio-toolbar-host"></div>
+
+            <div class="chat-bottom-stack">
+                <div class="chat-input-area studio-chat-input-area">
+                    <button id="studio-chat-more-btn" class="chat-icon-btn studio-chat-static-control" type="button" aria-disabled="true" tabindex="-1">
+                        <i class="ri-add-line"></i>
+                    </button>
+                    <div class="chat-input-shell studio-chat-static-control" aria-hidden="true">
+                        <input type="text" id="studio-chat-input" class="studio-chat-input" placeholder="iMessage" readonly tabindex="-1">
+                        <button id="studio-sticker-btn" class="chat-input-inline-btn studio-chat-static-control" type="button" tabindex="-1">
+                            <i class="ri-sticker-line ri-emoji-sticker-line"></i>
+                        </button>
+                        <button id="studio-trigger-ai-reply-btn" class="chat-input-inline-btn studio-chat-static-control" type="button" tabindex="-1">
+                            <i class="ri-mic-line"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 音频元素 -->
     <audio id="bg-music" loop></audio>
 
@@ -8711,6 +8762,9 @@
     <script src="js/mood_flora.js"></script>
     <script src="js/preset_app.js"></script>
     <script src="js/home.js"></script>
+    <script src="js/studio_app.js"></script>
+    <script src="js/studio_toolbar.js"></script>
+    <script src="js/studio_toolbar_preview.js"></script>
     <script src="js/calendar_app.js"></script>
     <script src="js/music_app_screen.js"></script>
     <script src="js/check_phone.js"></script>
