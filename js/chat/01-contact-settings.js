@@ -1,4 +1,4 @@
-﻿// 聊天功能模块 (聊天, 联系人, AI, 语音)
+// 聊天功能模块 (聊天, 联系人, AI, 语音)
 
 function estimateChatPromptTextTokensLocal(text) {
     if (typeof text !== 'string' || !text) return 0;
@@ -332,13 +332,105 @@ function normalizeChatTopbarAvatarPosition(value) {
 }
 
 function normalizeChatAppearancePreset(value) {
-    return String(value || '').trim().toLowerCase() === 'ios26' ? 'ios26' : 'default';
+    const normalized = String(value || '').trim();
+    if (!normalized) return 'default';
+    if (normalized.toLowerCase() === 'ios26') return 'ios26';
+    if (normalized.toLowerCase() === 'default') return 'default';
+    if (typeof window.isStoredStudioAppearancePresetKey === 'function' && window.isStoredStudioAppearancePresetKey(normalized)) {
+        return normalized;
+    }
+    return 'default';
 }
 
 function ensureContactChatAppearancePresetField(contact) {
     if (!contact || typeof contact !== 'object') return contact;
     contact.chatAppearancePreset = normalizeChatAppearancePreset(contact.chatAppearancePreset);
     return contact;
+}
+
+function getStoredChatAppearancePresetList() {
+    return typeof window.listStoredStudioAppearancePresets === 'function' ? window.listStoredStudioAppearancePresets() : [];
+}
+
+function getStoredChatAppearancePreset(value) {
+    return typeof window.getStoredStudioAppearancePresetByKey === 'function' ? window.getStoredStudioAppearancePresetByKey(value) : null;
+}
+
+function isStoredChatAppearancePreset(value) {
+    return !!getStoredChatAppearancePreset(value);
+}
+
+function ensureChatAppearancePresetDeleteButton() {
+    const select = document.getElementById('chat-setting-appearance-preset');
+    const field = select ? select.closest('.mag-field') : null;
+    if (!field || document.getElementById('chat-setting-appearance-delete-btn')) return;
+
+    const actionRow = document.createElement('div');
+    actionRow.className = 'mag-action-row';
+    actionRow.style.marginTop = '10px';
+    actionRow.innerHTML = '<button type="button" id="chat-setting-appearance-delete-btn" class="mag-btn editorial-ghost-btn">删除当前自定义外观</button>';
+    field.appendChild(actionRow);
+
+    const button = document.getElementById('chat-setting-appearance-delete-btn');
+    if (button) {
+        button.addEventListener('click', handleDeleteChatAppearancePreset);
+    }
+}
+
+function syncChatAppearancePresetDeleteButton() {
+    const select = document.getElementById('chat-setting-appearance-preset');
+    const button = document.getElementById('chat-setting-appearance-delete-btn');
+    if (!select || !button) return;
+    const customPreset = getStoredChatAppearancePreset(select.value);
+    button.style.display = customPreset ? '' : 'none';
+    button.disabled = !customPreset;
+}
+
+function renderChatAppearancePresetOptions(preferredValue = null) {
+    const select = document.getElementById('chat-setting-appearance-preset');
+    if (!select) return;
+
+    const currentValue = preferredValue || select.value || 'default';
+    select.innerHTML = '';
+
+    const createOption = (value, text) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = text;
+        return option;
+    };
+
+    select.appendChild(createOption('default', 'Default / 默认'));
+    select.appendChild(createOption('ios26', 'iOS26 / 信息 App 风格'));
+
+    getStoredChatAppearancePresetList().forEach((preset) => {
+        select.appendChild(createOption(preset.presetKey, `${preset.name} / 自定义`));
+    });
+
+    const normalizedValue = normalizeChatAppearancePreset(currentValue);
+    select.value = Array.from(select.options).some((option) => option.value === normalizedValue) ? normalizedValue : 'default';
+    ensureChatAppearancePresetDeleteButton();
+    syncChatAppearancePresetDeleteButton();
+}
+
+function handleDeleteChatAppearancePreset() {
+    const select = document.getElementById('chat-setting-appearance-preset');
+    if (!select) return;
+    const preset = getStoredChatAppearancePreset(select.value);
+    if (!preset) return;
+    if (!window.confirm(`确定删除快捷外观“${preset.name}”吗？`)) return;
+    if (typeof window.deleteStoredStudioAppearancePresetByKey === 'function') {
+        window.deleteStoredStudioAppearancePresetByKey(preset.presetKey);
+    }
+    renderChatAppearancePresetOptions('default');
+    const currentContact = window.iphoneSimState && Array.isArray(window.iphoneSimState.contacts)
+        ? window.iphoneSimState.contacts.find((item) => item.id === window.iphoneSimState.currentChatContactId)
+        : null;
+    if (currentContact) {
+        currentContact.chatAppearancePreset = 'default';
+        applyChatAppearancePreset(currentContact);
+        applyChatTopbarAppearance(currentContact);
+    }
 }
 
 function applyChatAppearancePreset(contactOrId = null) {
@@ -360,8 +452,22 @@ function applyChatAppearancePreset(contactOrId = null) {
     }
 
     const preset = contact ? normalizeChatAppearancePreset(contact.chatAppearancePreset) : 'default';
+    const customPreset = getStoredChatAppearancePreset(preset);
+
     chatScreen.classList.toggle('chat-appearance-ios26', preset === 'ios26');
     chatScreen.dataset.chatAppearancePreset = preset;
+
+    if (customPreset) {
+        if (typeof window.applyStoredStudioAppearancePresetToWechat === 'function') {
+            window.applyStoredStudioAppearancePresetToWechat(customPreset);
+        }
+        return preset;
+    }
+
+    if (typeof window.clearStudioStylesFromWechat === 'function') {
+        window.clearStudioStylesFromWechat();
+    }
+
     return preset;
 }
 
@@ -512,11 +618,25 @@ window.populateChatSettingsBilingualLanguageSelect = populateChatSettingsBilingu
 window.syncBilingualTranslationSettingsVisibility = syncBilingualTranslationSettingsVisibility;
 window.normalizeChatAppearancePreset = normalizeChatAppearancePreset;
 window.ensureContactChatAppearancePresetField = ensureContactChatAppearancePresetField;
+window.renderChatAppearancePresetOptions = renderChatAppearancePresetOptions;
+window.syncChatAppearancePresetDeleteButton = syncChatAppearancePresetDeleteButton;
 window.applyChatAppearancePreset = applyChatAppearancePreset;
 window.ensureContactTopbarAvatarFields = ensureContactTopbarAvatarFields;
 window.syncChatTopbarAvatarSettingsVisibility = syncChatTopbarAvatarSettingsVisibility;
 window.applyChatTopbarAppearance = applyChatTopbarAppearance;
 window.CHAT_BILINGUAL_LANGUAGE_OPTIONS = CHAT_BILINGUAL_LANGUAGE_OPTIONS.slice();
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+        renderChatAppearancePresetOptions();
+        ensureChatAppearancePresetDeleteButton();
+        syncChatAppearancePresetDeleteButton();
+    });
+} else {
+    renderChatAppearancePresetOptions();
+    ensureChatAppearancePresetDeleteButton();
+    syncChatAppearancePresetDeleteButton();
+}
 
 // ====== AI 位置选择器数据 ======
 const LOCATION_DATA = {
@@ -3490,7 +3610,7 @@ function openChatSettings() {
 
     const appearancePresetSelect = document.getElementById('chat-setting-appearance-preset');
     if (appearancePresetSelect) {
-        appearancePresetSelect.value = normalizeChatAppearancePreset(contact.chatAppearancePreset);
+        renderChatAppearancePresetOptions(normalizeChatAppearancePreset(contact.chatAppearancePreset));
     }
 
     const avatarVisibilitySelect = document.getElementById('chat-setting-avatar-visibility');

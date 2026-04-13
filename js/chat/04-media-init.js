@@ -1,4 +1,4 @@
-﻿function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type = 'text', targetContactId = null, options = {}) {
+function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type = 'text', targetContactId = null, options = {}) {
     return new Promise(resolve => {
         const contactId = targetContactId || window.iphoneSimState.currentChatContactId;
         if (!contactId) {
@@ -4612,6 +4612,7 @@ function setupChatListeners() {
     const bilingualTranslationEnabledInput = document.getElementById('chat-setting-bilingual-translation-enabled');
     const bilingualSourceLangSelect = document.getElementById('chat-setting-bilingual-source-lang');
     const bilingualTargetLangSelect = document.getElementById('chat-setting-bilingual-target-lang');
+    const appearancePresetInput = document.getElementById('chat-setting-appearance-preset');
     const topbarAvatarVisibleInput = document.getElementById('chat-setting-topbar-avatar-visible');
     const topbarAvatarPositionSelect = document.getElementById('chat-setting-topbar-avatar-position');
     const topbarStatusVisibleInput = document.getElementById('chat-setting-topbar-status-visible');

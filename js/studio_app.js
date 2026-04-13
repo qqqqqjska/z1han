@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
     const STUDIO_CHAT_DEMO_META = {
         title: '\u6797\u4e88',
         status: '',
@@ -169,6 +169,7 @@
     ];
 
     const STUDIO_CHAT_SEQUENCE_META = buildStudioSequenceMeta(STUDIO_CHAT_DEMO_MESSAGES);
+    const STUDIO_CHAT_AVATAR_SEQUENCE_META = buildStudioAvatarSequenceMeta(STUDIO_CHAT_DEMO_MESSAGES);
 
     let currentStudioVoiceMsgId = null;
     let currentStudioVoiceIcon = null;
@@ -350,6 +351,13 @@
         return '';
     }
 
+    function buildStudioBubbleDecoMarkup(message) {
+        const previewGroup = getStudioPreviewGroup(message);
+        if (previewGroup !== 'ordinary' && previewGroup !== 'voice') return '';
+
+        return '<span class="studio-bubble-deco deco-1" aria-hidden="true"></span><span class="studio-bubble-deco deco-2" aria-hidden="true"></span>';
+    }
+
     function getStudioPreviewGroup(message) {
         if (message.type === 'voice') return 'voice';
         if (message.type === 'text') return 'ordinary';
@@ -401,6 +409,47 @@
         return meta;
     }
 
+    function buildStudioAvatarSequenceMeta(messages) {
+        const meta = {};
+        let currentRole = '';
+        let currentRun = [];
+
+        function flushRun() {
+            const total = currentRun.length;
+            if (!total) return;
+
+            currentRun.forEach(function (message, index) {
+                let slot = 'single';
+                if (total >= 3) slot = index === 0 ? 'first' : (index === total - 1 ? 'last' : 'middle');
+                else if (total === 2) slot = index === 0 ? 'first' : 'last';
+
+                meta[message.id] = {
+                    slot: slot,
+                    index: index + 1,
+                    count: total
+                };
+            });
+
+            currentRun = [];
+            currentRole = '';
+        }
+
+        messages.forEach(function (message) {
+            const roleKey = message.role === 'user' ? 'user' : ((message.role === 'other' || message.role === 'assistant') ? 'other' : '');
+            if (!roleKey) {
+                flushRun();
+                return;
+            }
+            if (currentRole && currentRole !== roleKey) flushRun();
+            if (!currentRole) currentRole = roleKey;
+            currentRun.push(message);
+        });
+
+        flushRun();
+
+        return meta;
+    }
+
 
     function shouldShowTimestamp(previousTime, currentTime, index) {
         if (!currentTime) return index === 0;
@@ -413,18 +462,21 @@
         const avatar = isUser ? STUDIO_CHAT_DEMO_META.selfAvatar : STUDIO_CHAT_DEMO_META.otherAvatar;
         const extraClass = getMessageExtraClass(message);
         const contentHtml = buildMessageContentMarkup(message);
+        const decoHtml = buildStudioBubbleDecoMarkup(message);
         const replyHtml = buildReplyMarkup(message.replyTo);
-        const timeHtml = '<div class="msg-time">' + escapeHtml(formatClockLabel(message.time)) + '</div>';
+        const timeLabel = formatClockLabel(message.time);
+        const timeHtml = '<div class="msg-time">' + escapeHtml(timeLabel) + '</div>';
         const roleKey = isUser ? 'user' : 'other';
         const previewGroup = getStudioPreviewGroup(message);
         const sequenceMeta = STUDIO_CHAT_SEQUENCE_META[message.id] || { slot: 'single', index: 1, count: 1 };
+        const avatarSequenceMeta = STUDIO_CHAT_AVATAR_SEQUENCE_META[message.id] || { slot: 'single', index: 1, count: 1 };
         const hasReply = message.replyTo ? 'true' : 'false';
 
         return '' +
-            '<div class="chat-message ' + roleKey + ' has-tail" data-msg-id="' + escapeHtml(message.id) + '" data-role="' + roleKey + '" data-kind="' + escapeHtml(message.type || 'text') + '" data-preview-group="' + escapeHtml(previewGroup) + '" data-has-reply="' + hasReply + '" data-series-slot="' + escapeHtml(sequenceMeta.slot) + '" data-series-index="' + escapeHtml(sequenceMeta.index) + '" data-series-count="' + escapeHtml(sequenceMeta.count) + '">' +
-                '<img src="' + escapeHtml(avatar) + '" class="chat-avatar" alt="">' +
+            '<div class="chat-message ' + roleKey + ' has-tail" data-msg-id="' + escapeHtml(message.id) + '" data-role="' + roleKey + '" data-kind="' + escapeHtml(message.type || 'text') + '" data-preview-group="' + escapeHtml(previewGroup) + '" data-has-reply="' + hasReply + '" data-series-slot="' + escapeHtml(sequenceMeta.slot) + '" data-series-index="' + escapeHtml(sequenceMeta.index) + '" data-series-count="' + escapeHtml(sequenceMeta.count) + '" data-avatar-series-slot="' + escapeHtml(avatarSequenceMeta.slot) + '" data-avatar-series-index="' + escapeHtml(avatarSequenceMeta.index) + '" data-avatar-series-count="' + escapeHtml(avatarSequenceMeta.count) + '">' +
+                '<span class="chat-avatar chat-avatar-shell" data-role="' + roleKey + '"><img src="' + escapeHtml(avatar) + '" class="chat-avatar-img" alt=""><span class="chat-avatar-frame" aria-hidden="true"></span></span>' +
                 '<div class="msg-wrapper">' +
-                    '<div class="message-content ' + extraClass + '" data-role="' + roleKey + '" data-kind="' + escapeHtml(message.type || 'text') + '">' + contentHtml + '</div>' +
+                    '<div class="message-content ' + extraClass + '" data-role="' + roleKey + '" data-kind="' + escapeHtml(message.type || 'text') + '">' + contentHtml + decoHtml + ((previewGroup === 'ordinary' || previewGroup === 'voice') ? ('<span class="bubble-inline-time" aria-hidden="true">' + escapeHtml(timeLabel) + '</span>') : '') + '</div>' +
                     replyHtml +
                 '</div>' +
                 timeHtml +
@@ -435,13 +487,21 @@
         const container = document.getElementById('studio-chat-messages');
         const titleEl = document.getElementById('studio-chat-title');
         const statusEl = document.getElementById('studio-chat-status');
+        const topbarAvatarMain = document.getElementById('studio-chat-topbar-avatar-main');
+        const topbarAvatarRight = document.getElementById('studio-chat-topbar-avatar-right');
 
         if (!container || !titleEl || !statusEl) return;
 
         resetStudioVoiceState();
         titleEl.textContent = STUDIO_CHAT_DEMO_META.title;
         statusEl.textContent = STUDIO_CHAT_DEMO_META.status;
+        statusEl.dataset.defaultText = String(STUDIO_CHAT_DEMO_META.status || '').trim() || '5G Online';
         statusEl.classList.toggle('hidden', !STUDIO_CHAT_DEMO_META.status);
+        [topbarAvatarMain, topbarAvatarRight].forEach(function (button) {
+            if (!button) return;
+            button.dataset.avatarUrl = STUDIO_CHAT_DEMO_META.otherAvatar;
+            if (!button.innerHTML) button.innerHTML = '<i class="ri-user-line"></i>';
+        });
         container.innerHTML = '';
 
         let previousTime = null;
@@ -519,3 +579,4 @@
         initStudioApp();
     }
 })();
+

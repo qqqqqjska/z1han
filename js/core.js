@@ -1,4 +1,4 @@
-﻿function createDefaultMemorySettingsV2() {
+function createDefaultMemorySettingsV2() {
     return {
         extractMode: 'hybrid',
         injectQuota: {
@@ -440,6 +440,7 @@ const state = {
     currentWallpaper: null,
     fontPresets: [],
     cssPresets: [],
+    studioAppearancePresets: [],
     meetingCss: '',
     meetingCssPresets: [],
     meetingIcons: {
@@ -1810,6 +1811,7 @@ async function loadConfig() {
             
             if (!state.fontPresets) state.fontPresets = [];
             if (!state.cssPresets) state.cssPresets = [];
+            if (!state.studioAppearancePresets) state.studioAppearancePresets = [];
             if (!state.aiSettings) state.aiSettings = { url: '', key: '', model: '', temperature: 0.7 };
             if (!state.aiPresets) state.aiPresets = [];
             if (!state.aiSettings2) state.aiSettings2 = { url: '', key: '', model: '', temperature: 0.7 };
