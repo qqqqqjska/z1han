@@ -504,6 +504,12 @@
     cursor: pointer;
 }
 
+#messages-compose-btn:disabled {
+    cursor: default;
+    opacity: 1;
+    pointer-events: none;
+}
+
 .messages-bottom-compose-btn img {
     width: 27px;
     height: 27px;

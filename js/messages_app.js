@@ -1364,9 +1364,9 @@
         }
 
         if (composeBtn) {
-            composeBtn.addEventListener('click', () => {
-                if (composeInput) composeInput.focus();
-            });
+            composeBtn.disabled = true;
+            composeBtn.setAttribute('aria-disabled', 'true');
+            composeBtn.setAttribute('tabindex', '-1');
         }
 
         if (plusBtn) {
