@@ -776,8 +776,7 @@
     z-index: 2;
 }
 
-#studio-chat-screen .chat-message[data-preview-group="ordinary"] .bubble-inline-time,
-#studio-chat-screen .chat-message[data-preview-group="voice"] .bubble-inline-time {
+#studio-chat-screen .chat-message .bubble-inline-time {
     display: none;
     position: absolute;
     pointer-events: none;

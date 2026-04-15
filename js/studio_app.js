@@ -476,7 +476,7 @@
             '<div class="chat-message ' + roleKey + ' has-tail" data-msg-id="' + escapeHtml(message.id) + '" data-role="' + roleKey + '" data-kind="' + escapeHtml(message.type || 'text') + '" data-preview-group="' + escapeHtml(previewGroup) + '" data-has-reply="' + hasReply + '" data-series-slot="' + escapeHtml(sequenceMeta.slot) + '" data-series-index="' + escapeHtml(sequenceMeta.index) + '" data-series-count="' + escapeHtml(sequenceMeta.count) + '" data-avatar-series-slot="' + escapeHtml(avatarSequenceMeta.slot) + '" data-avatar-series-index="' + escapeHtml(avatarSequenceMeta.index) + '" data-avatar-series-count="' + escapeHtml(avatarSequenceMeta.count) + '">' +
                 '<span class="chat-avatar chat-avatar-shell" data-role="' + roleKey + '"><img src="' + escapeHtml(avatar) + '" class="chat-avatar-img" alt=""><span class="chat-avatar-frame" aria-hidden="true"></span></span>' +
                 '<div class="msg-wrapper">' +
-                    '<div class="message-content ' + extraClass + '" data-role="' + roleKey + '" data-kind="' + escapeHtml(message.type || 'text') + '">' + contentHtml + decoHtml + ((previewGroup === 'ordinary' || previewGroup === 'voice') ? ('<span class="bubble-inline-time" aria-hidden="true">' + escapeHtml(timeLabel) + '</span>') : '') + '</div>' +
+                    '<div class="message-content ' + extraClass + '" data-role="' + roleKey + '" data-kind="' + escapeHtml(message.type || 'text') + '">' + contentHtml + decoHtml + '<span class="bubble-inline-time" aria-hidden="true">' + escapeHtml(timeLabel) + '</span>' + '</div>' +
                     replyHtml +
                 '</div>' +
                 timeHtml +

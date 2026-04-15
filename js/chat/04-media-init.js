@@ -1,4 +1,4 @@
-function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type = 'text', targetContactId = null, options = {}) {
+﻿function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type = 'text', targetContactId = null, options = {}) {
     return new Promise(resolve => {
         const contactId = targetContactId || window.iphoneSimState.currentChatContactId;
         if (!contactId) {
@@ -33,12 +33,6 @@ function typewriterEffect(text, avatarUrl, thought = null, replyTo = null, type 
         
         if (thought) {
             msgData.thought = thought;
-        }
-        if (options && typeof options.triggerSource === 'string' && options.triggerSource.trim()) {
-            msgData.triggerSource = options.triggerSource.trim();
-        }
-        if ((options && options.isActiveReply === true) || msgData.triggerSource === 'active') {
-            msgData.isActiveReply = true;
         }
         if (type === 'text' && options && options.bilingualTranslation && typeof options.bilingualTranslation === 'object') {
             const translatedText = String(options.bilingualTranslation.translatedText || '').trim();
@@ -6455,9 +6449,6 @@ function buildRealtimeTimeContext(contactId) {
     const weekdayMap = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
     const nowStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${weekdayMap[now.getDay()]} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    const phaseMeta = getRealtimeDayPhaseMeta(now);
-    const holidaySummary = buildRealtimeHolidaySummary(now);
-    const todayTag = now.getDay() === 0 || now.getDay() === 6 ? '周末' : '工作日';
 
     const history = window.iphoneSimState.chatHistory[contactId] || [];
     const visibleMsgs = history.filter(isRealConversationMsg);
@@ -6478,10 +6469,7 @@ function buildRealtimeTimeContext(contactId) {
         }
     }
 
-    const gapGuidance = buildRealtimeConversationGapGuidance(latestMsg, nowMs);
-    const finishedActivityReminder = buildRealtimeFinishedActivityReminder(visibleMsgs, nowMs);
-
-    return `\n【当前真实时间】\n- 现在是：${nowStr}\n- 时区：${timezone}\n- 当前时段：${phaseMeta.label}\n- 今日属性：${todayTag}${holidaySummary ? `；${holidaySummary}` : ''}\n- 当前更自然的问候：${phaseMeta.allowedGreetings}\n- 当前不自然的问候：${phaseMeta.bannedGreetings}\n- 语气参考：${phaseMeta.toneHint}\n\n【时间间隔感知】\n- 距离用户上一条消息：${userGap}\n- 距离你上一条消息：${aiGap}\n- 当前互动状态：${roundState}\n- 续聊建议：${gapGuidance}\n${finishedActivityReminder ? `\n【旧话题时间纠偏】\n- ${finishedActivityReminder}\n` : ''}\n⚠️ 重要提示：\n- 你必须严格以以上时间信息判断“现在”和“间隔”，不要自行编造时间。\n- 问候语、情绪节奏、话题切入要和当前时段一致，不要把深夜写成早上，也不要把隔天后的聊天写成无缝接上一句。\n- 若间隔较长，请自然体现时间感（例如“刚忙完”“久等了”），但不要每句都提时间。\n- 如果之前提过某件事，而按时间看它早就结束了，请用过去时自然跟进，不要把它当成仍在进行。\n`;
+    return `\n【当前真实时间】\n现在是：${nowStr}\n时区：${timezone}\n\n【时间间隔感知】\n- 距离用户上一条消息：${userGap}\n- 距离你上一条消息：${aiGap}\n- 当前互动状态：${roundState}\n\n⚠️ 重要提示：\n- 你必须严格以以上时间信息判断“现在”和“间隔”，不要自行编造时间。\n- 若间隔较长，请自然体现时间感（例如“刚忙完”“久等了”），但避免每句都提时间。\n`;
 }
 
 function getLastAiBlockJson(contactId) {
@@ -6550,53 +6538,60 @@ function getLastAiBlockJson(contactId) {
 }
 
 async function checkActiveReplies(options = {}) {
-    if (isActiveReplySchedulerDisabled()) {
-        return false;
+    if (window.offlinePushSync && window.offlinePushSync.getState) {
+        const syncState = window.offlinePushSync.getState();
+        if (syncState && syncState.enabled && syncState.disableLocalActiveReplyScheduler) {
+            return false;
+        }
     }
-    if (!window.iphoneSimState || !Array.isArray(window.iphoneSimState.contacts)) {
-        return false;
-    }
+    if (!window.iphoneSimState || !window.iphoneSimState.contacts) return false;
 
-    const canTryHidden = !!(window.iphoneSimState && window.iphoneSimState.enableBackgroundAudio);
-    if (document.hidden && !canTryHidden && !(options && options.forceWhileHidden)) {
-        return false;
-    }
+    const now = Date.now();
 
-    if (!window.__activeReplyScheduler) {
-        window.__activeReplyScheduler = {};
-    }
-    if (window.__activeReplyScheduler.running) {
-        return false;
-    }
-
-    window.__activeReplyScheduler.running = true;
-    const runtimeState = readActiveReplyRuntimeState();
-    const tickStartedAt = Date.now();
-
-    try {
-        touchActiveReplyHeartbeat(runtimeState, tickStartedAt);
-
-        const contacts = window.iphoneSimState.contacts.filter(contact => contact && contact.activeReplyEnabled);
-        for (const contact of contacts) {
-            if (!contact || !contact.activeReplyEnabled) continue;
-            if (typeof window.ensureContactRestWindowFields === 'function') {
-                window.ensureContactRestWindowFields(contact);
-            }
-            await triggerSingleActiveReply(contact, runtimeState, options);
+    window.iphoneSimState.contacts.forEach(contact => {
+        if (!contact.activeReplyEnabled) return;
+        if (typeof window.ensureContactRestWindowFields === 'function') {
+            window.ensureContactRestWindowFields(contact);
         }
 
-        pruneActiveReplyRuntimeState(runtimeState);
-        writeActiveReplyRuntimeState(runtimeState);
-        window.__activeReplyScheduler.lastTickAt = Date.now();
-        return true;
-    } finally {
-        const tickEndedAt = Date.now();
-        touchActiveReplyHeartbeat(runtimeState, tickEndedAt);
-        pruneActiveReplyRuntimeState(runtimeState);
-        writeActiveReplyRuntimeState(runtimeState);
-        window.__activeReplyScheduler.lastTickAt = tickEndedAt;
-        window.__activeReplyScheduler.running = false;
-    }
+        const history = window.iphoneSimState.chatHistory[contact.id];
+        if (!history || history.length === 0) return;
+
+        if (typeof window.getContactRestTriggerDecision === 'function') {
+            const restDecision = window.getContactRestTriggerDecision(contact, 'active', now);
+            if (!restDecision.allow) return;
+        }
+
+        const lastMsg = history[history.length - 1];
+        const intervalMs = (contact.activeReplyInterval || 60) * 1000;
+
+        if (contact.activeReplyStartTime && lastMsg.time <= contact.activeReplyStartTime) {
+            return;
+        }
+
+        if (contact.lastActiveReplyTriggeredMsgId === lastMsg.id) return;
+
+        if (now - lastMsg.time > intervalMs) {
+            console.log(`[ActiveReply] Triggering for ${contact.name}`);
+
+            contact.lastActiveReplyTriggeredMsgId = lastMsg.id;
+            saveConfig();
+
+            let activeInstruction = '';
+            const timeDiff = now - lastMsg.time;
+            const minutesPassed = Math.floor(timeDiff / 60000);
+
+            if (lastMsg.role === 'user') {
+                activeInstruction = `（系统提示：主动发消息模式触发。距离用户上一条消息已过去 ${minutesPassed} 分钟。请在不打断人设的前提下自然接住对方刚才的话；可以轻描淡写解释回复稍晚，也可以直接顺着话题继续。）`;
+            } else {
+                activeInstruction = `（系统提示：主动发消息模式触发。距离你上一条消息已过去 ${minutesPassed} 分钟，用户一直没有回复。请像真人间隔一阵后自然续聊：可以补一句、换一个轻话题，或分享当下状态/见闻；不要写成系统通知或任务播报。）`;
+            }
+
+            generateAiReply(activeInstruction, contact.id, { triggerSource: 'active' });
+        }
+    });
+
+    return true;
 }
 
 function clearActiveReplySchedulerTimers() {
@@ -6782,7 +6777,7 @@ window.startForumAutoPostScheduler = function() {
 if (window.appInitFunctions) {
     window.appInitFunctions.push(setupChatListeners);
     window.appInitFunctions.push(() => {
-        setupActiveReplyKeepalive();
+        setInterval(checkActiveReplies, 5000);
     });
     window.appInitFunctions.push(() => {
         checkRestWindowUpcomingNotices();
