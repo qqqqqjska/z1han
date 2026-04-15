@@ -8,7 +8,8 @@
         selectedMessages: new Set(),
         currentEditingMsgId: null,
         longPressTimer: null,
-        menuCloseHandler: null
+        menuCloseHandler: null,
+        quickActionsCloseHandler: null
     };
 
     function escapeHtml(value) {
@@ -129,6 +130,58 @@
 
         const content = String(replyTo.content || replyTo.description || '').trim();
         return content || '[消息]';
+    }
+
+    function isRenderableMediaMessage(message) {
+        if (!message) return false;
+        return message.type === 'image' || message.type === 'virtual_image' || message.type === 'sticker';
+    }
+
+    function buildMediaBubbleMarkup(message) {
+        if (!message || !isRenderableMediaMessage(message)) return '';
+
+        const rawSrc = typeof message.content === 'string' ? message.content.trim() : '';
+        if (!rawSrc) {
+            return `<div class="messages-bubble-text">${escapeHtml(formatBubbleText(message)).replace(/\n/g, '<br>')}</div>`;
+        }
+
+        const isDeferredChatMedia = typeof window.isChatMediaReference === 'function' && window.isChatMediaReference(rawSrc);
+        const initialImageSrc = isDeferredChatMedia
+            ? (window.CHAT_MEDIA_PIXEL_PLACEHOLDER || '')
+            : rawSrc;
+        const deferredAttr = isDeferredChatMedia
+            ? ` data-chat-media-ref="${encodeURIComponent(rawSrc)}"`
+            : '';
+        const mediaKindClass = message.type === 'sticker' ? 'is-sticker' : 'is-image';
+        const altText = message.type === 'sticker'
+            ? (String(message.description || '').trim() || '表情包')
+            : (String(message.description || '').trim() || '图片');
+
+        return `
+            <div class="messages-bubble-media-shell ${mediaKindClass}">
+                <img class="messages-bubble-media ${mediaKindClass}" src="${escapeHtml(initialImageSrc)}"${deferredAttr} alt="${escapeHtml(altText)}" loading="lazy" decoding="async" onclick="showImagePreview(this.src)">
+            </div>
+        `;
+    }
+
+    function hydrateDeferredMessagesMedia(container) {
+        if (!container || typeof window.resolveChatMediaSrc !== 'function') return;
+
+        container.querySelectorAll('img[data-chat-media-ref]').forEach(img => {
+            if (img.dataset.chatMediaHydrated === '1') return;
+            img.dataset.chatMediaHydrated = '1';
+
+            const encodedRef = img.getAttribute('data-chat-media-ref');
+            if (!encodedRef) return;
+
+            const mediaRef = decodeURIComponent(encodedRef);
+            window.resolveChatMediaSrc(mediaRef).then((resolvedSrc) => {
+                if (!resolvedSrc) return;
+                img.src = resolvedSrc;
+            }).catch((error) => {
+                console.warn('信息应用图片加载失败', error);
+            });
+        });
     }
 
     function buildThread(contactId) {
@@ -328,6 +381,21 @@
         });
     }
 
+    function setListHeaderProgress(progress) {
+        const app = document.getElementById('messages-app');
+        if (!app) return;
+
+        const clamped = Math.max(0, Math.min(1, Number(progress) || 0));
+        app.style.setProperty('--messages-list-header-progress', clamped.toFixed(3));
+        app.classList.toggle('list-header-compact', clamped >= 0.72);
+    }
+
+    function syncListHeaderProgress() {
+        const listEl = document.getElementById('messages-thread-list');
+        const progress = listEl ? Math.min((listEl.scrollTop || 0) / 76, 1) : 0;
+        setListHeaderProgress(progress);
+    }
+
     function renderThreadList(filterText = '') {
         const listEl = document.getElementById('messages-thread-list');
         if (!listEl) return;
@@ -340,6 +408,7 @@
 
         if (visibleThreads.length === 0) {
             listEl.innerHTML = '<div class="messages-empty-state">暂无消息</div>';
+            syncListHeaderProgress();
             return;
         }
 
@@ -368,7 +437,8 @@
         }).join('');
 
         enhanceThreadListAvatars(listEl);
-        }
+        syncListHeaderProgress();
+    }
 
     function resolveReplyTargetRoleClass(message) {
         if (!message || !message.replyTo || !message.replyTo.targetMsgId) return '';
@@ -379,7 +449,7 @@
 
     function buildReplySourceBubbleMarkup(message, roleClass) {
         if (!message || !message.replyTo) return '';
-        const targetRoleClass = resolveReplyTargetRoleClass(message) || (roleClass === 'sent' ? 'received' : 'sent');
+        const targetRoleClass = roleClass === 'sent' ? 'received' : 'sent';
         return `
             <div class="messages-reply-source ${targetRoleClass}" aria-hidden="true">
                 <div class="messages-reply-source-text">${escapeHtml(formatReplyPreviewText(message.replyTo)).replace(/\n/g, '<br>')}</div>
@@ -389,7 +459,7 @@
 
     function buildReplyThreadMarkup(message, roleClass) {
         if (!message || !message.replyTo) return '';
-        const targetRoleClass = resolveReplyTargetRoleClass(message) || (roleClass === 'sent' ? 'received' : 'sent');
+        const targetRoleClass = roleClass;
         return `<div class="messages-reply-thread from-${targetRoleClass} to-${roleClass}" aria-hidden="true"></div>`;
     }
 
@@ -408,14 +478,21 @@
             const replyThreadMarkup = hasReply ? buildReplyThreadMarkup(message, roleClass) : '';
             const rowClasses = `messages-bubble-row ${roleClass}${isTail ? ' margin-bottom' : ''}${hasReply ? ' is-inline-reply' : ''}`;
             const selectedClass = state.selectedMessages.has(messageId) ? ' selected' : '';
+            const isMediaMessage = isRenderableMediaMessage(message);
+            const bubbleExtraClasses = isMediaMessage
+                ? ` is-media ${message.type === 'sticker' ? 'is-sticker' : 'is-image'}`
+                : '';
+            const bubbleContentMarkup = isMediaMessage
+                ? buildMediaBubbleMarkup(message)
+                : `<div class="messages-bubble-text">${escapeHtml(formatBubbleText(message)).replace(/\n/g, '<br>')}</div>`;
 
             return `
                 <div class="${rowClasses}${selectedClass}" data-msg-id="${escapeHtml(messageId)}" data-role="${roleClass}">
                     <input type="checkbox" class="messages-msg-select-checkbox" tabindex="-1" aria-hidden="true"${state.selectedMessages.has(messageId) ? ' checked' : ''}>
                     ${replySourceMarkup}
                     ${replyThreadMarkup}
-                    <div class="${bubbleClasses}" data-msg-id="${escapeHtml(messageId)}">
-                        <div class="messages-bubble-text">${escapeHtml(formatBubbleText(message)).replace(/\n/g, '<br>')}</div>
+                    <div class="${bubbleClasses}${bubbleExtraClasses}" data-msg-id="${escapeHtml(messageId)}">
+                        ${bubbleContentMarkup}
                     </div>
                 </div>
             `;
@@ -484,6 +561,100 @@
             document.removeEventListener('touchstart', state.menuCloseHandler, true);
             state.menuCloseHandler = null;
         }
+    }
+
+    function ensureQuickActionsMenu() {
+        const chatView = document.querySelector('#messages-app .messages-chat-view');
+        if (!chatView) return null;
+
+        let menu = document.getElementById('messages-quick-actions-menu');
+        if (menu) return menu;
+
+        menu = document.createElement('div');
+        menu.id = 'messages-quick-actions-menu';
+        menu.className = 'messages-quick-actions-menu';
+        menu.setAttribute('aria-hidden', 'true');
+        menu.innerHTML = `
+            <button type="button" class="messages-quick-action-btn" data-action="regenerate" aria-label="重回">
+                <i class="ri-rewind-mini-line" aria-hidden="true"></i>
+                <span>重回</span>
+            </button>
+            <button type="button" class="messages-quick-action-btn" data-action="continue" aria-label="让TA发消息">
+                <i class="ri-chat-1-line" aria-hidden="true"></i>
+                <span>让TA发消息</span>
+            </button>
+        `;
+
+        menu.querySelector('[data-action="regenerate"]')?.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            closeQuickActionsMenu();
+            await handleMessagesRegenerateReply();
+        });
+
+        menu.querySelector('[data-action="continue"]')?.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            closeQuickActionsMenu();
+            await triggerThreadAiReply('用户没有回复。请继续当前的对话，或者开启一个新的话题。你可以假设已经过了一段时间。');
+        });
+
+        chatView.appendChild(menu);
+        return menu;
+    }
+
+    function closeQuickActionsMenu() {
+        const menu = document.getElementById('messages-quick-actions-menu');
+        const plusBtn = document.getElementById('messages-plus-btn');
+        if (menu) {
+            menu.classList.remove('is-open');
+            menu.setAttribute('aria-hidden', 'true');
+        }
+        if (plusBtn) {
+            plusBtn.classList.remove('is-active');
+            plusBtn.setAttribute('aria-expanded', 'false');
+        }
+        if (state.quickActionsCloseHandler) {
+            document.removeEventListener('click', state.quickActionsCloseHandler, true);
+            document.removeEventListener('touchstart', state.quickActionsCloseHandler, true);
+            state.quickActionsCloseHandler = null;
+        }
+    }
+
+    function openQuickActionsMenu(anchorBtn) {
+        const menu = ensureQuickActionsMenu();
+        if (!menu) return false;
+
+        closeContextMenu();
+
+        menu.classList.add('is-open');
+        menu.setAttribute('aria-hidden', 'false');
+        if (anchorBtn) {
+            anchorBtn.classList.add('is-active');
+            anchorBtn.setAttribute('aria-expanded', 'true');
+        }
+
+        state.quickActionsCloseHandler = (event) => {
+            const target = event.target;
+            if (menu.contains(target) || (anchorBtn && anchorBtn.contains(target))) return;
+            closeQuickActionsMenu();
+        };
+
+        requestAnimationFrame(() => {
+            if (!state.quickActionsCloseHandler) return;
+            document.addEventListener('click', state.quickActionsCloseHandler, true);
+            document.addEventListener('touchstart', state.quickActionsCloseHandler, true);
+        });
+
+        return true;
+    }
+
+    function toggleQuickActionsMenu(anchorBtn) {
+        const menu = ensureQuickActionsMenu();
+        if (!menu) return false;
+        if (menu.classList.contains('is-open')) {
+            closeQuickActionsMenu();
+            return false;
+        }
+        return openQuickActionsMenu(anchorBtn);
     }
     function startReplyToMessage(msgId) {
         const message = findMessageInActiveThread(msgId);
@@ -829,6 +1000,7 @@
             ${buildBubbleMarkup(messages)}
             ${typing ? buildTypingBubbleMarkup() : ''}
         `;
+        hydrateDeferredMessagesMedia(listEl);
         syncMultiSelectUI();
         syncReplyBar();
         listEl.scrollTop = listEl.scrollHeight;
@@ -842,7 +1014,7 @@
         actionBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>';
     }
 
-    async function triggerThreadAiReply() {
+    async function triggerThreadAiReply(instruction = null) {
         if (state.isMultiSelectMode) {
             if (typeof window.showChatToast === 'function') {
                 window.showChatToast('请先退出多选', 1800);
@@ -851,6 +1023,7 @@
         }
 
         closeContextMenu();
+        closeQuickActionsMenu();
 
         const threadId = state.activeThreadId;
         if (!threadId) {
@@ -868,7 +1041,7 @@
         renderChat(threadId);
 
         try {
-            const result = await window.generateAiReply(null, threadId, {
+            const result = await window.generateAiReply(instruction, threadId, {
                 triggerSource: 'manual',
                 deliveryChannel: 'messages-app'
             });
@@ -881,6 +1054,44 @@
             renderThreadList(document.getElementById('messages-search-input')?.value || '');
             renderChat(threadId);
         }
+    }
+
+    async function handleMessagesRegenerateReply() {
+        const threadId = state.activeThreadId;
+        if (!threadId) return false;
+
+        const history = window.iphoneSimState && window.iphoneSimState.chatHistory
+            ? window.iphoneSimState.chatHistory[threadId]
+            : null;
+        if (!Array.isArray(history) || history.length === 0) {
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('没有聊天记录，无法重回', 2200);
+            }
+            return false;
+        }
+
+        let hasDeleted = false;
+        while (history.length > 0) {
+            const lastMsg = history[history.length - 1];
+            const isMessagesAppChannel = typeof window.isChatMessageInChannel === 'function'
+                ? window.isChatMessageInChannel(lastMsg, 'messages-app')
+                : (lastMsg && lastMsg.channel === 'messages-app');
+
+            if (lastMsg && lastMsg.role === 'assistant' && isMessagesAppChannel) {
+                history.pop();
+                hasDeleted = true;
+                continue;
+            }
+            break;
+        }
+
+        if (hasDeleted) {
+            if (typeof saveConfig === 'function') saveConfig();
+            renderThreadList(document.getElementById('messages-search-input')?.value || '');
+            renderChat(threadId);
+        }
+
+        return await triggerThreadAiReply('请基于当前协议重新生成上一轮回复：保持人设、自然聊天感和正确 JSON 格式；如果已开启显示心声，仍需先输出 thought_state；避免重复上一版的不自然表达。');
     }
 
     async function sendCurrentMessage() {
@@ -921,6 +1132,7 @@
         if (threadId == null) return;
         state.activeThreadId = String(threadId);
         closeContextMenu();
+        closeQuickActionsMenu();
         closeEditMessageModal();
         exitMultiSelectMode();
         cancelReply();
@@ -938,6 +1150,7 @@
 
     function closeThread() {
         closeContextMenu();
+        closeQuickActionsMenu();
         closeEditMessageModal();
         exitMultiSelectMode();
         cancelReply();
@@ -948,6 +1161,7 @@
 
     function closeApp() {
         closeContextMenu();
+        closeQuickActionsMenu();
         closeEditMessageModal();
         closeMessagesActiveReplyModal();
         exitMultiSelectMode();
@@ -965,6 +1179,7 @@
         renderThreadList('');
         renderChat(state.activeThreadId);
         syncInputActionState();
+        setListHeaderProgress(0);
     }
 
     function openApp(contactId = null) {
@@ -987,6 +1202,7 @@
         }
 
         syncInputActionState();
+        requestAnimationFrame(syncListHeaderProgress);
     }
 
     function openThreadByContact(contactId) {
@@ -1010,6 +1226,7 @@
         }
 
         syncInputActionState();
+        requestAnimationFrame(syncListHeaderProgress);
     }
 
     function initMessagesApp() {
@@ -1026,6 +1243,7 @@
 
         const closeBtn = document.getElementById('close-messages-app');
         const titleBackBtn = document.getElementById('messages-home-back');
+        const compactBackBtn = document.getElementById('messages-compact-back');
         const backBtn = document.getElementById('messages-chat-back');
         const searchInput = document.getElementById('messages-search-input');
         const threadList = document.getElementById('messages-thread-list');
@@ -1049,6 +1267,7 @@
 
         if (closeBtn) closeBtn.addEventListener('click', closeApp);
         if (titleBackBtn) titleBackBtn.addEventListener('click', closeApp);
+        if (compactBackBtn) compactBackBtn.addEventListener('click', closeApp);
         if (backBtn) backBtn.addEventListener('click', closeThread);
         if (replyCloseBtn) replyCloseBtn.addEventListener('click', cancelReply);
         if (multiCancelBtn) multiCancelBtn.addEventListener('click', exitMultiSelectMode);
@@ -1071,12 +1290,15 @@
         }
 
         if (threadList) {
+            threadList.addEventListener('scroll', syncListHeaderProgress, { passive: true });
             threadList.addEventListener('click', event => {
                 const item = event.target.closest('[data-thread-id]');
                 if (!item) return;
                 openThread(item.dataset.threadId);
             });
         }
+
+        syncListHeaderProgress();
 
         if (chatScroll) {
             chatScroll.addEventListener('click', event => {
@@ -1141,15 +1363,35 @@
             saveActiveReplyBtn.addEventListener('click', saveMessagesActiveReplySettings);
         }
 
-        [plusBtn, composeBtn].forEach(button => {
-            if (!button) return;
-            button.addEventListener('click', () => {
+        if (composeBtn) {
+            composeBtn.addEventListener('click', () => {
                 if (composeInput) composeInput.focus();
             });
-        });
+        }
+
+        if (plusBtn) {
+            plusBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!state.activeThreadId) {
+                    if (typeof window.showChatToast === 'function') {
+                        window.showChatToast('请先打开一个信息对话', 1800);
+                    }
+                    return;
+                }
+                toggleQuickActionsMenu(plusBtn);
+            });
+        }
 
         if (actionBtn) {
             actionBtn.addEventListener('click', async () => {
+                const currentValue = composeInput ? String(composeInput.value || '').trim() : '';
+                if (currentValue) {
+                    await sendCurrentMessage();
+                    return;
+                }
+
+                await triggerThreadAiReply();
             });
         }
 

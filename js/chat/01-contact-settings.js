@@ -2865,13 +2865,21 @@ async function confirmWechatBlockFromSettings() {
 
     returnFromChatSettingsToChat(updatedContact.id);
 
+    const promptTailMessages = [
+        {
+            role: 'user',
+            content: '用户刚刚在微信里把你拉黑了。你接下来对用户可见的消息会显示在“信息”线程里。请自然接住这件事。'
+        }
+    ];
+
     const instruction = '用户刚刚把你在微信里拉黑了。你已经知道接下来可见的聊天不会继续出现在微信，而会进入“信息”里。请自然地接住这件事，像真人一样表达，不要写成系统通知，也不要每句都重复强调被拉黑。';
     try {
         await generateAiReply(instruction, updatedContact.id, {
             triggerSource: 'manual',
             deliveryChannel: 'messages-app',
             ignoreRestWindow: true,
-            showWechatTypingTitle: false
+            showWechatTypingTitle: false,
+            promptTailMessages
         });
     } catch (error) {
         console.error('拉黑后触发信息回复失败', error);

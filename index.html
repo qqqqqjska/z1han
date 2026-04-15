@@ -5351,7 +5351,7 @@
     </div>
 
     <!-- 查手机 - 短信 -->
-    <div id="phone-messages" class="sub-screen hidden messages-app-screen" style="z-index: 200;">
+    <div id="phone-messages" class="sub-screen hidden messages-app-screen messages-ios-list-style" style="z-index: 200;">
         <div class="messages-app-shell">
             <section class="messages-view messages-list-view" aria-label="查手机短信列表页面">
                 <div class="messages-list-header">
@@ -8559,7 +8559,7 @@
         </div>
     </div>
 
-    <div id="messages-app" class="app-screen hidden messages-app-screen">
+    <div id="messages-app" class="app-screen hidden messages-app-screen messages-ios-list-style">
         <button id="close-messages-app" class="messages-app-close" type="button" aria-label="关闭信息应用">
             <i class="fas fa-times"></i>
         </button>
@@ -8569,6 +8569,7 @@
                 <div class="messages-list-header">
                     <div class="messages-list-topbar">
                         <button class="messages-edit-pill" type="button">&#x7F16;&#x8F91;</button>
+                        <button id="messages-compact-back" class="messages-compact-title" type="button" aria-label="返回桌面">&#x4FE1;&#x606F;</button>
                         <button id="messages-settings-btn" class="messages-list-menu-btn" type="button" aria-label="信息设置">
                             <i class="fas fa-bars"></i>
                         </button>

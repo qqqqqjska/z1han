@@ -6944,6 +6944,18 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
     const extraSystemPromptLabel = options && typeof options.extraSystemPromptLabel === 'string'
         ? String(options.extraSystemPromptLabel).trim()
         : '附加场景';
+    const promptTailMessages = Array.isArray(options && options.promptTailMessages)
+        ? options.promptTailMessages.reduce((list, item) => {
+            if (!item || item.role !== 'user') return list;
+            const content = typeof item.content === 'string' ? item.content.trim() : '';
+            if (!content) return list;
+            list.push({
+                role: 'user',
+                content
+            });
+            return list;
+        }, [])
+        : [];
 
     let userPromptInfo = '';
     let currentPersona = null;
@@ -7625,6 +7637,10 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
         } catch (error) {
             console.warn('Failed to build screen share AI context messages.', error);
         }
+    }
+
+    if (promptTailMessages.length > 0) {
+        messages.push(...promptTailMessages.map(message => ({ ...message })));
     }
 
     if (instruction) {
