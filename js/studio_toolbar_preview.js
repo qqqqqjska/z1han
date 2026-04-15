@@ -770,7 +770,7 @@
 
     function applyBottomBarRuntimeState(options) {
 
-        const currentState = options && options.state ? options.state : createDefaultStyleState().bottombar;
+        const currentState = options && options.state ? options.state : createDefaultState().bottombar;
 
         const input = document.getElementById(options && options.inputId);
 
@@ -1716,7 +1716,7 @@
 
         clearIcon(document.getElementById('trigger-ai-reply-btn'), false);
 
-        applyBottomBarRuntimeState({ state: createDefaultStyleState().bottombar, inputId: 'chat-input', menuId: 'chat-more-btn', stickerId: 'sticker-btn', replyId: 'trigger-ai-reply-btn' });
+        applyBottomBarRuntimeState({ state: createDefaultState().bottombar, inputId: 'chat-input', menuId: 'chat-more-btn', stickerId: 'sticker-btn', replyId: 'trigger-ai-reply-btn' });
 
         const rows = document.querySelectorAll('#chat-messages .chat-message');
 

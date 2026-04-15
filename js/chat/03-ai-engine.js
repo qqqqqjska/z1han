@@ -282,6 +282,12 @@ function isLikelyChatImageUrl(value) {
     return /(postimg\.cc|postimg\.org|placehold\.co|imgur\.com|image\.bdstatic\.com|qpic\.cn|alicdn\.com)/i.test(text);
 }
 
+function sendAssistantVirtualImageMessage(description, contactId, meta = null, imageUrl = null) {
+    const normalizedDescription = typeof description === 'string' ? description.trim() : '';
+    const resolvedImageUrl = imageUrl || window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Photo';
+    return sendMessage(resolvedImageUrl, false, 'virtual_image', normalizedDescription || null, contactId, meta);
+}
+
 function formatPlainTextMessageContent(text) {
     const source = String(text || '')
         .replace(/<hidden_img>\s*([\s\S]*?)\s*<\/hidden_img>/gi, '\n$1\n')
@@ -5228,10 +5234,16 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                         ? `[图片] ${rawImageContent}`
                         : '[图片]';
                     const novelaiSettings = window.iphoneSimState.novelaiSettings;
+                    const chatImageGenerationDisabled = !!(novelaiSettings && novelaiSettings.enabled === false);
                     const globalEnabled = novelaiSettings && novelaiSettings.enabled !== false;
 
                     if (isLikelyChatImageUrl(rawImageContent)) {
                         sendMessage(rawImageContent, false, 'image', msg.description || null, contactId, { channel: deliveryChannel });
+                        sent = true;
+                    }
+
+                    if (!sent && chatImageGenerationDisabled) {
+                        sendAssistantVirtualImageMessage(msg.description || rawImageContent, contactId, { channel: deliveryChannel });
                         sent = true;
                     }
                     
@@ -5402,9 +5414,15 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
             if (imageToSend.type === 'virtual_image') {
                 let sent = false;
                 const novelaiSettings = window.iphoneSimState.novelaiSettings;
+                const chatImageGenerationDisabled = !!(novelaiSettings && novelaiSettings.enabled === false);
                 const globalEnabled = novelaiSettings && novelaiSettings.enabled !== false;
+
+                if (chatImageGenerationDisabled) {
+                    sendAssistantVirtualImageMessage(imageToSend.content, contactId, { channel: deliveryChannel });
+                    sent = true;
+                }
                 
-                if (globalEnabled && window.generateNovelAiImageApi && contact.novelaiPreset) {
+                if (!sent && globalEnabled && window.generateNovelAiImageApi && contact.novelaiPreset) {
                     let finalPrompt = "";
                     let presetName = contact.novelaiPreset;
                     let preset = null;
@@ -5497,8 +5515,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                         appendMessageToUI(`[系统诊断]: 无法生成图片 - ${failReason.join('; ')}`, false, 'text', null, null, null, null, false);
                     }
 
-                    const defaultImageUrl = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Photo';
-                    sendMessage(defaultImageUrl, false, 'virtual_image', imageToSend.content, contactId, { channel: deliveryChannel });
+                    sendAssistantVirtualImageMessage(imageToSend.content, contactId, { channel: deliveryChannel });
                 }
             } else if (imageToSend.type === 'sticker') {
                 sendMessage(imageToSend.content, false, 'sticker', imageToSend.desc, contactId, { channel: deliveryChannel });
