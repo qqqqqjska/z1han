@@ -849,24 +849,34 @@ function handleChatPhotoUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
 
-    const fallbackToBase64 = async () => {
+    const fallbackToInlinePayload = async () => {
+        let payload = '';
         if (typeof window.buildInlineChatImagePayload === 'function') {
-            const base64 = await window.buildInlineChatImagePayload(file, 1280, 0.72);
-            sendMessage(base64, true, 'image');
-            return;
+            payload = await window.buildInlineChatImagePayload(file, 1280, 0.72);
+        } else {
+            payload = await compressImage(file, 1280, 0.72);
         }
-        const base64 = await compressImage(file, 1280, 0.72);
-        sendMessage(base64, true, 'image');
+
+        if (payload && typeof window.persistInlineChatImagePayload === 'function') {
+            payload = await window.persistInlineChatImagePayload(payload, {
+                type: file.type || 'image/jpeg',
+                name: file.name || ''
+            });
+        }
+
+        sendMessage(payload, true, 'image', null, null, {
+            fileName: file.name || ''
+        });
     };
 
     Promise.resolve()
         .then(async () => {
             if (typeof window.shouldPreferInlineChatImageStorage === 'function' && window.shouldPreferInlineChatImageStorage(file)) {
-                return fallbackToBase64();
+                return fallbackToInlinePayload();
             }
 
             if (typeof window.compressImageToBlob !== 'function' || typeof window.saveChatMediaBlob !== 'function') {
-                return fallbackToBase64();
+                return fallbackToInlinePayload();
             }
 
             const blob = await window.compressImageToBlob(file, 1280, 0.72);
@@ -874,10 +884,12 @@ function handleChatPhotoUpload(e) {
                 type: blob.type || file.type || 'image/jpeg',
                 name: file.name || ''
             });
-            sendMessage(mediaRef, true, 'image');
+            sendMessage(mediaRef, true, 'image', null, null, {
+                fileName: file.name || ''
+            });
             return null;
         })
-        .catch(() => fallbackToBase64())
+        .catch(() => fallbackToInlinePayload())
         .then(() => {
             document.getElementById('chat-more-panel').classList.add('hidden');
         })

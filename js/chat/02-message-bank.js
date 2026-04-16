@@ -765,6 +765,17 @@ function sendMessage(text, isUser, type = 'text', description = null, targetCont
     }
 
     window.iphoneSimState.chatHistory[contactId].push(msg);
+    const shouldOffloadInlineMedia = (type === 'image' || type === 'sticker')
+        && typeof text === 'string'
+        && text.trim().startsWith('data:image');
+    if (shouldOffloadInlineMedia && typeof window.offloadInlineChatMediaMessage === 'function') {
+        Promise.resolve().then(() => window.offloadInlineChatMediaMessage(contactId, msg.id, {
+            type: type === 'sticker' ? 'image/webp' : 'image/jpeg',
+            name: normalizedMeta.fileName || ''
+        })).catch((error) => {
+            console.warn('聊天图片即时转存失败', error);
+        });
+    }
     if (type === 'text' && window.FloraEngine && typeof window.FloraEngine.analyzeChat === 'function') {
         window.FloraEngine.analyzeChat(text, !isUser, { contactId, type });
     }

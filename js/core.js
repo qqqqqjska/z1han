@@ -1376,6 +1376,83 @@ async function resolveChatMediaDataUrl(reference) {
     return blobToDataUrl(blob);
 }
 
+async function persistInlineChatImagePayload(value, metadata = {}) {
+    const inlineDataUrl = typeof value === 'string' ? value.trim() : '';
+    if (!inlineDataUrl || !inlineDataUrl.startsWith('data:image')) return inlineDataUrl;
+    try {
+        const blob = await dataUrlToBlob(inlineDataUrl);
+        return await saveChatMediaBlob(blob, {
+            type: blob.type || metadata.type || 'image/jpeg',
+            name: metadata.name || ''
+        });
+    } catch (error) {
+        console.warn('聊天图片转存失败，继续使用内联图片', error);
+        return inlineDataUrl;
+    }
+}
+
+const chatMediaOffloadInFlight = new Set();
+
+function refreshRenderedChatMessageMedia(contactId, msgId, mediaRef) {
+    if (!mediaRef || !isChatMediaReference(mediaRef)) return false;
+    if (String((state && state.currentChatContactId) || '') !== String(contactId || '')) return false;
+
+    const container = document.getElementById('chat-messages');
+    if (!container) return false;
+
+    const messageNode = Array.from(container.querySelectorAll('.chat-message[data-msg-id]')).find((node) => {
+        return String(node && node.dataset && node.dataset.msgId || '') === String(msgId || '');
+    });
+    if (!messageNode) return false;
+
+    const imageNode = messageNode.querySelector('.message-content img');
+    if (!imageNode) return false;
+
+    imageNode.setAttribute('data-chat-media-ref', encodeURIComponent(mediaRef));
+    imageNode.dataset.chatMediaHydrated = '0';
+    imageNode.src = CHAT_MEDIA_PIXEL_PLACEHOLDER;
+
+    resolveChatMediaSrc(mediaRef).then((resolvedSrc) => {
+        if (!resolvedSrc) return;
+        imageNode.dataset.chatMediaHydrated = '1';
+        imageNode.src = resolvedSrc;
+    }).catch((error) => {
+        console.warn('刷新聊天图片引用失败', error);
+    });
+
+    return true;
+}
+
+async function offloadInlineChatMediaMessage(contactId, msgId, metadata = {}) {
+    const safeContactId = String(contactId || '').trim();
+    const safeMsgId = String(msgId || '').trim();
+    if (!safeContactId || !safeMsgId || !state.chatHistory || !state.chatHistory[safeContactId]) return '';
+
+    const lockKey = `${safeContactId}::${safeMsgId}`;
+    if (chatMediaOffloadInFlight.has(lockKey)) return '';
+
+    const history = state.chatHistory[safeContactId];
+    const targetMessage = Array.isArray(history)
+        ? history.find((item) => item && String(item.id || '') === safeMsgId)
+        : null;
+    if (!targetMessage) return '';
+
+    const currentContent = typeof targetMessage.content === 'string' ? targetMessage.content.trim() : '';
+    if (!currentContent || !currentContent.startsWith('data:image')) return currentContent;
+
+    chatMediaOffloadInFlight.add(lockKey);
+    try {
+        const nextContent = await persistInlineChatImagePayload(currentContent, metadata);
+        if (nextContent && nextContent !== currentContent) {
+            targetMessage.content = nextContent;
+            refreshRenderedChatMessageMedia(safeContactId, safeMsgId, nextContent);
+        }
+        return nextContent;
+    } finally {
+        chatMediaOffloadInFlight.delete(lockKey);
+    }
+}
+
 async function migrateLegacyChatImageMessages() {
     if (!state.chatHistory || typeof state.chatHistory !== 'object') return false;
 
@@ -1420,6 +1497,8 @@ window.buildInlineChatImagePayload = buildInlineChatImagePayload;
 window.isChatMediaReference = isChatMediaReference;
 window.compressImageToBlob = compressImageToBlob;
 window.saveChatMediaBlob = saveChatMediaBlob;
+window.persistInlineChatImagePayload = persistInlineChatImagePayload;
+window.offloadInlineChatMediaMessage = offloadInlineChatMediaMessage;
 window.resolveChatMediaSrc = resolveChatMediaSrc;
 window.resolveChatMediaDataUrl = resolveChatMediaDataUrl;
 window.getChatMediaBlob = getChatMediaBlob;
