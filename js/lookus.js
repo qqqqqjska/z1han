@@ -12,7 +12,7 @@ const DEVICE_USAGE_SYNC_DEFAULTS = {
     enabled: false,
     apiBaseUrl: '',
     userId: 'default-user',
-    deviceId: 'iphone-main',
+    deviceId: 'phone-main',
     secret: '',
     sharedContactIds: [],
     lastFetchedAt: 0,
@@ -115,7 +115,8 @@ function getDeviceUsageTimezoneOffsetMinutes() {
 
 function buildDeviceUsageShortcutTemplate(state, appName = '微信') {
     const syncState = state || getDeviceUsageSyncState();
-    if (!syncState.apiBaseUrl) return '请先填写后端地址，保存后这里会生成快捷指令 URL 模板。';
+    const base = String(syncState.apiBaseUrl || '').trim().replace(/\/$/, '');
+    if (!base) return '请先填写后端地址，保存后这里会生成 iPhone / Android 自动化 URL 模板。';
     const safeAppName = encodeURIComponent(String(appName || '微信').trim() || '微信');
     const params = new URLSearchParams({
         userId: syncState.userId || DEVICE_USAGE_SYNC_DEFAULTS.userId,
@@ -123,7 +124,39 @@ function buildDeviceUsageShortcutTemplate(state, appName = '微信') {
         secret: syncState.secret || 'YOUR_SECRET',
         tzOffsetMinutes: String(getDeviceUsageTimezoneOffsetMinutes())
     });
-    return `${syncState.apiBaseUrl.replace(/\/$/, '')}/api/screentime/toggle/${safeAppName}?${params.toString()}`;
+    return `${base}/api/screentime/toggle/${safeAppName}?${params.toString()}`;
+}
+
+function buildDeviceUsageAndroidTemplate(state, appName = '{app_name}') {
+    const syncState = state || getDeviceUsageSyncState();
+    const base = String(syncState.apiBaseUrl || '').trim().replace(/\/$/, '');
+    if (!base) return '请先填写后端地址，保存后这里会生成 iPhone / Android 自动化 URL 模板。';
+    const params = new URLSearchParams({
+        userId: syncState.userId || DEVICE_USAGE_SYNC_DEFAULTS.userId,
+        deviceId: syncState.deviceId || DEVICE_USAGE_SYNC_DEFAULTS.deviceId,
+        secret: syncState.secret || 'YOUR_SECRET',
+        tzOffsetMinutes: String(getDeviceUsageTimezoneOffsetMinutes())
+    });
+    const rawAppName = String(appName || '{app_name}').trim() || '{app_name}';
+    const safeAppName = /^\{.+\}$/.test(rawAppName) ? rawAppName : encodeURIComponent(rawAppName);
+    return `${base}/api/screentime/toggle?appName=${safeAppName}&${params.toString()}`;
+}
+
+function buildDeviceUsageTemplatePreviewMarkup(state) {
+    const iosTemplate = buildDeviceUsageShortcutTemplate(state);
+    const androidTemplate = buildDeviceUsageAndroidTemplate(state);
+    return `
+        <div style="margin-top: 12px; display:flex; flex-direction:column; gap:10px;">
+            <div>
+                <div style="font-size: 12px; color: #777; margin-bottom: 6px;">iPhone 快捷指令</div>
+                <div style="padding: 12px; border-radius: 12px; background: #f6f7fb; font-size: 12px; color: #555; line-height: 1.6; white-space: pre-wrap; word-break: break-all;">${escapeLookusHtml(iosTemplate)}</div>
+            </div>
+            <div>
+                <div style="font-size: 12px; color: #777; margin-bottom: 6px;">Android MacroDroid</div>
+                <div style="padding: 12px; border-radius: 12px; background: #f6f7fb; font-size: 12px; color: #555; line-height: 1.6; white-space: pre-wrap; word-break: break-all;">${escapeLookusHtml(androidTemplate)}</div>
+            </div>
+        </div>
+    `;
 }
 
 function buildDeviceUsageSummaryCacheKey(state) {
@@ -236,14 +269,14 @@ async function getUserDeviceUsagePromptContext(contactId) {
 function buildDeviceUsageCardMarkup(summary, options = {}) {
     const state = getDeviceUsageSyncState();
     const errorMessage = String(options.error || '').trim();
-    const shortcutTemplate = buildDeviceUsageShortcutTemplate(state);
+    const templatePreviewMarkup = buildDeviceUsageTemplatePreviewMarkup(state);
     if (!isDeviceUsageSyncConfigured(state)) {
         return `
             <div class="lookus-card-title">你的真实手机使用</div>
             <div style="font-size: 13px; color: #666; line-height: 1.7; margin-top: 12px;">
-                还没有接入 iPhone 快捷指令同步。配置后，这里会显示今日总时长、Top App 和最近行为。
+                还没有接入真实手机使用同步。配置 iPhone 快捷指令或 Android MacroDroid 后，这里会显示今日总时长、Top App 和最近行为。
             </div>
-            <div style="margin-top: 12px; padding: 12px; border-radius: 12px; background: #f6f7fb; font-size: 12px; color: #555; line-height: 1.6; white-space: pre-wrap; word-break: break-all;">${escapeLookusHtml(shortcutTemplate)}</div>
+            ${templatePreviewMarkup}
         `;
     }
 
@@ -251,7 +284,7 @@ function buildDeviceUsageCardMarkup(summary, options = {}) {
         return `
             <div class="lookus-card-title">你的真实手机使用</div>
             <div style="font-size: 13px; color: #d32f2f; line-height: 1.7; margin-top: 12px;">同步失败：${escapeLookusHtml(errorMessage)}</div>
-            <div style="margin-top: 12px; padding: 12px; border-radius: 12px; background: #f6f7fb; font-size: 12px; color: #555; line-height: 1.6; white-space: pre-wrap; word-break: break-all;">${escapeLookusHtml(shortcutTemplate)}</div>
+            ${templatePreviewMarkup}
         `;
     }
 
@@ -309,13 +342,13 @@ function buildDeviceUsageCardMarkup(summary, options = {}) {
 function buildDeviceUsageReportMarkup(summary, options = {}) {
     const state = getDeviceUsageSyncState();
     const errorMessage = String(options.error || '').trim();
-    const shortcutTemplate = buildDeviceUsageShortcutTemplate(state);
+    const templatePreviewMarkup = buildDeviceUsageTemplatePreviewMarkup(state);
     if (!isDeviceUsageSyncConfigured(state)) {
         return `
             <div class="lookus-report-item" style="display:block; margin-bottom: 18px; background: #f7f7fa;">
                 <div style="font-size: 15px; font-weight: 700; color: #111; margin-bottom: 8px;">真实手机使用</div>
-                <div style="font-size: 13px; color: #666; line-height: 1.7;">未配置快捷指令同步。保存后可在 iPhone 自动化里直接使用下面的 URL 模板。</div>
-                <div style="margin-top: 10px; padding: 12px; border-radius: 12px; background: #fff; font-size: 12px; color: #555; line-height: 1.6; white-space: pre-wrap; word-break: break-all;">${escapeLookusHtml(shortcutTemplate)}</div>
+                <div style="font-size: 13px; color: #666; line-height: 1.7;">未配置真实手机使用同步。保存后可在 iPhone 快捷指令或 Android MacroDroid 里直接使用下面的 URL 模板。</div>
+                ${templatePreviewMarkup}
             </div>
         `;
     }
@@ -324,6 +357,7 @@ function buildDeviceUsageReportMarkup(summary, options = {}) {
             <div class="lookus-report-item" style="display:block; margin-bottom: 18px; background: rgba(255,59,48,0.08); border: 1px solid rgba(255,59,48,0.12);">
                 <div style="font-size: 15px; font-weight: 700; color: #111; margin-bottom: 8px;">真实手机使用</div>
                 <div style="font-size: 13px; color: #d32f2f; line-height: 1.7;">同步失败：${escapeLookusHtml(errorMessage)}</div>
+                ${templatePreviewMarkup}
             </div>
         `;
     }
@@ -1230,6 +1264,7 @@ function openLookusSettings() {
     const deviceIdInput = document.getElementById('lookus-device-usage-device-id');
     const secretInput = document.getElementById('lookus-device-usage-secret');
     const templateInput = document.getElementById('lookus-device-usage-shortcut-template');
+    const androidTemplateInput = document.getElementById('lookus-device-usage-android-template');
     const updateShortcutPreview = () => {
         const draftState = Object.assign({}, getDeviceUsageSyncState(), {
             enabled: !!(enabledInput && enabledInput.checked),
@@ -1239,6 +1274,7 @@ function openLookusSettings() {
             secret: secretInput ? String(secretInput.value || '').trim() : syncState.secret
         });
         if (templateInput) templateInput.value = buildDeviceUsageShortcutTemplate(draftState);
+        if (androidTemplateInput) androidTemplateInput.value = buildDeviceUsageAndroidTemplate(draftState);
     };
 
     if (modeSelect) modeSelect.value = mode;
@@ -1289,13 +1325,14 @@ function openLookusSettings() {
         };
     }
 
-    const copyBtn = document.getElementById('lookus-copy-shortcut-template-btn');
-    if (copyBtn) {
-        const newCopyBtn = copyBtn.cloneNode(true);
-        copyBtn.parentNode.replaceChild(newCopyBtn, copyBtn);
-        newCopyBtn.onclick = async () => {
+    const bindTemplateCopyButton = (buttonId, getText, successMessage) => {
+        const button = document.getElementById(buttonId);
+        if (!button) return;
+        const newButton = button.cloneNode(true);
+        button.parentNode.replaceChild(newButton, button);
+        newButton.onclick = async () => {
             updateShortcutPreview();
-            const text = templateInput ? templateInput.value : '';
+            const text = String(getText() || '');
             if (!text) return;
             try {
                 if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1308,13 +1345,16 @@ function openLookusSettings() {
                     document.execCommand('copy');
                     tempInput.remove();
                 }
-                if (typeof window.showChatToast === 'function') window.showChatToast('快捷指令模板已复制');
+                if (typeof window.showChatToast === 'function') window.showChatToast(successMessage);
             } catch (error) {
-                console.warn('[device-usage] copy shortcut template failed', error);
+                console.warn('[device-usage] copy template failed', error);
                 alert('复制失败，请手动复制');
             }
         };
-    }
+    };
+
+    bindTemplateCopyButton('lookus-copy-shortcut-template-btn', () => templateInput ? templateInput.value : '', 'iPhone 模板已复制');
+    bindTemplateCopyButton('lookus-copy-android-template-btn', () => androidTemplateInput ? androidTemplateInput.value : '', '安卓模板已复制');
 
     const resetBtn = document.getElementById('lookus-reset-device-usage-btn');
     if (resetBtn) {
