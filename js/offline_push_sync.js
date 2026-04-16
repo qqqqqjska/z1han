@@ -57,6 +57,33 @@
         return contentType.includes('application/json') ? response.json() : response.text();
     }
 
+    async function fetchBackendHealth() {
+        const state = getState();
+        if (!state.apiBaseUrl) return null;
+        const response = await fetch(`${state.apiBaseUrl.replace(/\/$/, '')}/health`, { cache: 'no-store' });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json().catch(() => null);
+    }
+
+    async function ensureVapidPublicKey() {
+        const state = getState();
+        if (state.vapidPublicKey) return state.vapidPublicKey;
+        try {
+            const health = await fetchBackendHealth();
+            const backendKey = health && typeof health.vapidPublicKey === 'string' ? health.vapidPublicKey.trim() : '';
+            if (backendKey) {
+                state.vapidPublicKey = backendKey;
+                saveState();
+                return backendKey;
+            }
+        } catch (err) {
+            console.error('[offline-push-sync] ensureVapidPublicKey failed', err);
+        }
+        return '';
+    }
+
     function getContactById(contactId) {
         const contacts = Array.isArray(window.iphoneSimState && window.iphoneSimState.contacts)
             ? window.iphoneSimState.contacts
@@ -476,8 +503,13 @@
 
     async function subscribePush() {
         const state = getState();
-        if (!state.enabled || !state.apiBaseUrl || !state.vapidPublicKey) return null;
+        if (!state.enabled || !state.apiBaseUrl) return null;
         if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+
+        if (!state.vapidPublicKey) {
+            await ensureVapidPublicKey();
+        }
+        if (!state.vapidPublicKey) return null;
 
         const permission = await Notification.requestPermission();
         state.pushPermission = permission;
@@ -912,21 +944,34 @@
                 if (typeof window.flushChatPersistence === 'function') {
                     await window.flushChatPersistence();
                 }
+                const contacts = Array.isArray(window.iphoneSimState.contacts) ? window.iphoneSimState.contacts : [];
                 const currentId = window.iphoneSimState.currentChatContactId;
+                const targetContacts = [];
+                const seenContactIds = new Set();
+                const addTarget = (contact) => {
+                    if (!contact || contact.id === undefined || contact.id === null) return;
+                    const key = String(contact.id);
+                    if (seenContactIds.has(key)) return;
+                    seenContactIds.add(key);
+                    targetContacts.push(contact);
+                };
+
                 if (currentId) {
-                    const currentContact = typeof getContactById === 'function' ? getContactById(currentId) : null;
-                    if (currentContact) {
-                        uploadContactConfig(currentContact, { keepalive: true });
-                    }
-                    uploadChatSnapshot(currentId, { keepalive: true, skipContext: true });
-                    return;
+                    addTarget(typeof getContactById === 'function' ? getContactById(currentId) : null);
                 }
-                if (Array.isArray(window.iphoneSimState.contacts)) {
-                    const activeContact = (window.iphoneSimState.contacts || []).find(contact => contact && contact.activeReplyEnabled);
-                    if (activeContact) {
-                        uploadContactConfig(activeContact, { keepalive: true });
+
+                contacts
+                    .filter(contact => contact && contact.activeReplyEnabled)
+                    .forEach(addTarget);
+
+                await Promise.allSettled(targetContacts.flatMap((contact) => {
+                    const tasks = [uploadContactConfig(contact, { keepalive: true })];
+                    const history = ((((window.iphoneSimState || {}).chatHistory || {})[contact.id]) || []);
+                    if (history.length) {
+                        tasks.push(uploadChatSnapshot(contact.id, { keepalive: true, skipContext: true }));
                     }
-                }
+                    return tasks;
+                }));
             } catch (err) {
                 console.error('[offline-push-sync] flushStateToBackend failed', err);
             }
@@ -1015,6 +1060,11 @@
             console.error('[offline-push-sync] registerServiceWorker failed', err);
         }
         try {
+            await ensureVapidPublicKey();
+        } catch (err) {
+            console.error('[offline-push-sync] initial ensureVapidPublicKey failed', err);
+        }
+        try {
             if (state.vapidPublicKey && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
                 await subscribePush();
             }
@@ -1079,6 +1129,8 @@
         init: initOfflinePushSync,
         enableWithConfig,
         subscribePush,
+        fetchBackendHealth,
+        ensureVapidPublicKey,
         syncMessages,
         deleteMessages,
         syncActiveReplyConfig,
