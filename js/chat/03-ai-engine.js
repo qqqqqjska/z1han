@@ -471,8 +471,10 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
         }
     }
 
-    // 处理气泡尾巴逻辑：如果是连续消息且没有时间戳分隔，移除上一条消息的尾巴
-    if (!showTimestamp && lastMsg && lastMsg.classList.contains('chat-message')) {
+    const noBubbleTypes = new Set(['image', 'sticker', 'virtual_image', 'description', 'transfer', 'family_card', 'food_invite', 'route_invite', 'gift_card', 'shopping_gift', 'delivery_share', 'order_progress', 'order_share', 'pay_request', 'product_share', 'icity_card', 'minesweeper_invite', 'pdd_cash_share', 'pdd_bargain_share', 'savings_invite', 'savings_withdraw_request', 'savings_withdraw_result', 'savings_progress', 'music_listen_invite']);
+    const currentMessageUsesBubbleTail = !noBubbleTypes.has(type);
+
+    if (!showTimestamp && currentMessageUsesBubbleTail && lastMsg && lastMsg.classList.contains('chat-message')) {
         const lastIsUser = lastMsg.classList.contains('user');
         if (lastIsUser === isUser) {
             lastMsg.classList.remove('has-tail');
@@ -7104,6 +7106,15 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
         }
     }
 
+    let userDeviceUsageContext = '';
+    if (typeof window.getUserDeviceUsagePromptContext === 'function') {
+        try {
+            userDeviceUsageContext = await window.getUserDeviceUsagePromptContext(contact.id);
+        } catch (error) {
+            userDeviceUsageContext = '';
+        }
+    }
+
     let meetingContext = '';
     if (window.iphoneSimState.meetings && window.iphoneSimState.meetings[contact.id] && window.iphoneSimState.meetings[contact.id].length > 0) {
         const meetings = window.iphoneSimState.meetings[contact.id];
@@ -7272,6 +7283,7 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
     appendAiPromptPart(systemPromptParts, 'systemBase', '朋友圈', momentContext);
     appendAiPromptPart(systemPromptParts, 'systemBase', 'iCity', icityContext);
     appendAiPromptPart(systemPromptParts, 'systemBase', 'LookUs', lookusContext);
+    appendAiPromptPart(systemPromptParts, 'systemBase', '真实设备使用', userDeviceUsageContext);
     appendAiPromptPart(systemPromptParts, 'memory', '记忆', memoryContext);
     appendAiPromptPart(systemPromptParts, 'systemBase', '线下见面', meetingContext);
     appendAiPromptPart(systemPromptParts, 'systemBase', 'iCity书籍', icityBookContext);
@@ -7655,6 +7667,8 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
 
     return messages;
 };
+
+
 
 
 

@@ -4685,6 +4685,14 @@ function setupChatListeners() {
             markChatSettingsDirty();
         });
     }
+    if (appearancePresetInput) {
+        appearancePresetInput.addEventListener('change', () => {
+            if (typeof window.syncChatAppearancePresetDeleteButton === 'function') {
+                window.syncChatAppearancePresetDeleteButton();
+            }
+            markChatSettingsDirty();
+        });
+    }
     if (topbarAvatarVisibleInput) {
         topbarAvatarVisibleInput.addEventListener('change', () => {
             if (typeof window.syncChatTopbarAvatarSettingsVisibility === 'function') {

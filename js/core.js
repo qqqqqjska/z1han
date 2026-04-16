@@ -521,6 +521,16 @@ const state = {
     memorySettingsV2: createDefaultMemorySettingsV2(),
     defaultVirtualImageUrl: '',
     defaultMomentVirtualImageUrl: '',
+    deviceUsageSync: {
+        enabled: false,
+        apiBaseUrl: '',
+        userId: 'default-user',
+        deviceId: 'iphone-main',
+        secret: '',
+        sharedContactIds: [],
+        lastFetchedAt: 0,
+        cacheTtlMs: 60000
+    },
     wallet: {
         balance: 0.00,
         transactions: [] // { id, type: 'income'|'expense', amount, title, time, relatedId }
@@ -1814,6 +1824,16 @@ async function loadConfig() {
             if (!state.studioAppearancePresets) state.studioAppearancePresets = [];
             if (!state.aiSettings) state.aiSettings = { url: '', key: '', model: '', temperature: 0.7 };
             if (!state.aiPresets) state.aiPresets = [];
+            state.deviceUsageSync = Object.assign({
+                enabled: false,
+                apiBaseUrl: '',
+                userId: 'default-user',
+                deviceId: 'iphone-main',
+                secret: '',
+                sharedContactIds: [],
+                lastFetchedAt: 0,
+                cacheTtlMs: 60000
+            }, state.deviceUsageSync || {});
             if (!state.aiSettings2) state.aiSettings2 = { url: '', key: '', model: '', temperature: 0.7 };
             if (!state.aiPresets2) state.aiPresets2 = [];
             if (!state.whisperSettings) state.whisperSettings = { url: '', key: '', model: 'whisper-1' };

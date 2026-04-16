@@ -1070,6 +1070,11 @@
                                 <span class="mag-toggle-text">知晓节假日与日程 <span class="separator">/</span> <span class="mag-en-short">Calendar</span></span>
                                 <label><input type="checkbox" id="chat-setting-calendar-aware" class="mag-toggle-input"><div class="mag-toggle-switch"></div></label>
                             </div>
+
+                            <div class="mag-toggle">
+                                <span class="mag-toggle-text">允许此联系人查看我的设备使用 <span class="separator">/</span> <span class="mag-en-short">Device Usage</span></span>
+                                <label><input type="checkbox" id="chat-setting-device-usage-shared" class="mag-toggle-input"><div class="mag-toggle-switch"></div></label>
+                            </div>
                         </div>
                         <div class="editorial-card-shell mag-card editorial-fire-buddy-card">
                             <div class="chat-settings-card-kicker mag-card-decor"><span class="mag-pulse-symbol">&#10022;</span> FBR-04</div>
@@ -7405,7 +7410,7 @@
 
         <!-- Lookus Settings Modal -->
         <div id="lookus-settings-modal" class="modal hidden" style="z-index: 200; align-items: center; justify-content: center;">
-            <div class="modal-content" style="width: 80%; max-width: 300px; background: #fff; border-radius: 12px; padding: 20px;">
+            <div class="modal-content" style="width: 88%; max-width: 360px; background: #fff; border-radius: 12px; padding: 20px; max-height: 82vh; overflow-y: auto;">
                 <h3 style="text-align: center; margin-top: 0;">状态更新设置</h3>
                 
                 <div class="setting-group">
@@ -7430,6 +7435,45 @@
                 <div class="setting-group" style="margin-top: 15px;">
                     <label>手动操作</label>
                     <button id="lookus-force-update-btn" class="ios-btn-block secondary" style="margin-top: 5px;">立即刷新状态 (AI)</button>
+                </div>
+
+                <div class="setting-group" style="margin-top: 18px; border-top: 1px solid #f0f0f0; padding-top: 16px;">
+                    <label style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                        <span>真实手机使用同步</span>
+                        <input type="checkbox" id="lookus-device-usage-enabled">
+                    </label>
+                    <div style="font-size: 12px; color: #888; margin-top: 6px;">通过 iPhone 快捷指令/自动化，把真实 App 打开与关闭事件同步到后端。</div>
+                </div>
+
+                <div class="setting-group">
+                    <label>后端地址</label>
+                    <input type="text" id="lookus-device-usage-api-base-url" placeholder="https://your-backend.example.com" style="width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #ddd; margin-top: 5px; box-sizing: border-box;">
+                </div>
+
+                <div class="setting-group">
+                    <label>用户 ID</label>
+                    <input type="text" id="lookus-device-usage-user-id" placeholder="default-user" style="width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #ddd; margin-top: 5px; box-sizing: border-box;">
+                </div>
+
+                <div class="setting-group">
+                    <label>设备 ID</label>
+                    <input type="text" id="lookus-device-usage-device-id" placeholder="iphone-main" style="width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #ddd; margin-top: 5px; box-sizing: border-box;">
+                </div>
+
+                <div class="setting-group">
+                    <label>同步密钥</label>
+                    <input type="text" id="lookus-device-usage-secret" placeholder="请填写一个只有你知道的密钥" style="width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #ddd; margin-top: 5px; box-sizing: border-box;">
+                </div>
+
+                <div class="setting-group">
+                    <label>快捷指令 URL 模板</label>
+                    <textarea id="lookus-device-usage-shortcut-template" readonly style="width: 100%; min-height: 84px; padding: 8px; border-radius: 8px; border: 1px solid #ddd; margin-top: 5px; resize: vertical; box-sizing: border-box; background: #f9f9f9;"></textarea>
+                    <div style="font-size: 12px; color: #888; margin-top: 6px;">在 iPhone 自动化中，为每个 App 同时勾选“已打开”和“已关闭”，共用同一条 URL，只替换里面的 APP 名称。</div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 8px;">
+                    <button id="lookus-copy-shortcut-template-btn" class="ios-btn-block secondary" style="flex: 1; margin-bottom: 0;">复制模板</button>
+                    <button id="lookus-reset-device-usage-btn" class="ios-btn-block secondary" style="flex: 1; margin-bottom: 0;">重置状态</button>
                 </div>
 
                 <div style="margin-top: 20px; display: flex; gap: 10px;">

@@ -1,4 +1,4 @@
-// 聊天功能模块 (聊天, 联系人, AI, 语音)
+﻿// 聊天功能模块 (聊天, 联系人, AI, 语音)
 
 function estimateChatPromptTextTokensLocal(text) {
     if (typeof text !== 'string' || !text) return 0;
@@ -456,6 +456,11 @@ function applyChatAppearancePreset(contactOrId = null) {
 
     chatScreen.classList.toggle('chat-appearance-ios26', preset === 'ios26');
     chatScreen.dataset.chatAppearancePreset = preset;
+
+    const chatInput = document.getElementById('chat-input');
+    if (chatInput) {
+        chatInput.placeholder = 'iMessage';
+    }
 
     if (customPreset) {
         if (typeof window.applyStoredStudioAppearancePresetToWechat === 'function') {
@@ -3551,6 +3556,12 @@ function openChatSettings() {
     document.getElementById('chat-setting-thought-visible').checked = contact.thoughtVisible || false;
     document.getElementById('chat-setting-real-time-visible').checked = contact.realTimeVisible || false;
     document.getElementById('chat-setting-calendar-aware').checked = contact.calendarAwareEnabled !== false;
+    const deviceUsageSharedInput = document.getElementById('chat-setting-device-usage-shared');
+    if (deviceUsageSharedInput) {
+        deviceUsageSharedInput.checked = typeof window.isDeviceUsageSharedWithContact === 'function'
+            ? !!window.isDeviceUsageSharedWithContact(contact.id)
+            : false;
+    }
 
     const thoughtStyleSelect = document.getElementById('chat-setting-thought-style');
     const thoughtPetPanel = document.getElementById('chat-setting-thought-pet-panel');
@@ -4201,6 +4212,7 @@ function handleSaveChatSettings() {
     const thoughtVisible = document.getElementById('chat-setting-thought-visible').checked;
     const realTimeVisible = document.getElementById('chat-setting-real-time-visible').checked;
     const calendarAwareEnabled = document.getElementById('chat-setting-calendar-aware').checked;
+    const deviceUsageShared = !!(document.getElementById('chat-setting-device-usage-shared') && document.getElementById('chat-setting-device-usage-shared').checked);
     const thoughtDisplayModeRaw = document.getElementById('chat-setting-thought-style')
         ? document.getElementById('chat-setting-thought-style').value
         : 'title';
@@ -4301,6 +4313,9 @@ function handleSaveChatSettings() {
     contact.thoughtVisible = thoughtVisible;
     contact.realTimeVisible = realTimeVisible;
     contact.calendarAwareEnabled = calendarAwareEnabled;
+    if (typeof window.setDeviceUsageSharedWithContact === 'function') {
+        window.setDeviceUsageSharedWithContact(contact.id, deviceUsageShared, { persist: false });
+    }
     contact.thoughtDisplayMode = thoughtDisplayMode;
     contact.thoughtPetSize = thoughtPetSize;
     contact.thoughtPetPosition = normalizeThoughtPetPositionSetting(contact.thoughtPetPosition);
@@ -4644,6 +4659,7 @@ function ensureChatSettingsTokenPreviewBindings() {
     bindRefresh('chat-setting-thought-visible', ['change']);
     bindRefresh('chat-setting-real-time-visible', ['change']);
     bindRefresh('chat-setting-calendar-aware', ['change']);
+    bindRefresh('chat-setting-device-usage-shared', ['change']);
     bindRefresh('chat-setting-user-persona', ['change']);
 
     const wbList = document.getElementById('chat-setting-wb-list');
@@ -4722,6 +4738,7 @@ async function refreshTokenCountForContact(contactId) {
 }
 
 // --- 聊天界面功能 ---
+
 
 
 
