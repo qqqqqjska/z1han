@@ -518,12 +518,21 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
     msgDiv.style.position = 'relative';
     
     const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(window.iphoneSimState.currentChatContactId));
+    const isGroupChat = !!(contact && typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact));
     let fireBuddySpeakerMeta = null;
     if (!isUser && msgId && typeof window.getFireBuddySpeakerMeta === 'function') {
         try {
             fireBuddySpeakerMeta = window.getFireBuddySpeakerMeta(window.iphoneSimState.currentChatContactId, msgId);
         } catch (fireBuddyMetaError) {
             console.warn('读取小火人发言信息失败', fireBuddyMetaError);
+        }
+    }
+    let groupSpeakerMeta = null;
+    if (msgId && isGroupChat && typeof window.getGroupMessageSpeakerMeta === 'function') {
+        try {
+            groupSpeakerMeta = window.getGroupMessageSpeakerMeta(window.iphoneSimState.currentChatContactId, msgId);
+        } catch (groupSpeakerMetaError) {
+            console.warn('读取群聊发言信息失败', groupSpeakerMetaError);
         }
     }
     
@@ -1368,6 +1377,9 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
         extraClass += ' fire-buddy-msg';
         msgDiv.classList.add('fire-buddy-message');
     }
+    if (groupSpeakerMeta) {
+        msgDiv.classList.add('group-speaker-message');
+    }
 
     // no-bubble card templates are often multiline strings. Trimming avoids
     // leading/trailing text nodes from creating extra vertical blank space.
@@ -1459,6 +1471,20 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
     const msgTimeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
     const timeHtml = `<div class="msg-time">${msgTimeStr}</div>`;
 
+    function buildGroupSpeakerLabelHtml(meta, isSelf = false) {
+        if (!meta || (!meta.name && !meta.title)) return '';
+        const wrapperClass = isSelf
+            ? 'group-speaker-meta group-speaker-meta-self'
+            : 'group-speaker-meta';
+        const titleHtml = meta.title
+            ? `<span class="group-speaker-title-badge">${escapeChatMessageHtml(meta.title)}</span>`
+            : '';
+        const nameHtml = meta.name
+            ? `<span class="group-speaker-label${isSelf ? ' group-speaker-label-self' : ''}">${escapeChatMessageHtml(meta.name)}</span>`
+            : '';
+        return `<div class="${wrapperClass}">${titleHtml}${nameHtml}</div>`;
+    }
+
     if (type === 'description') {
         msgDiv.className = 'chat-message description-row';
         msgDiv.innerHTML = `
@@ -1467,13 +1493,16 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
             </div>
         `;
     } else if (!isUser) {
-        const avatar = fireBuddySpeakerMeta && fireBuddySpeakerMeta.avatar
-            ? fireBuddySpeakerMeta.avatar
+        const assistantSpeakerMeta = fireBuddySpeakerMeta || groupSpeakerMeta;
+        const avatar = assistantSpeakerMeta && assistantSpeakerMeta.avatar
+            ? assistantSpeakerMeta.avatar
             : (contact ? contact.avatar : '');
-        const avatarClass = fireBuddySpeakerMeta ? 'chat-avatar fire-buddy-chat-avatar' : 'chat-avatar';
+        const avatarClass = fireBuddySpeakerMeta
+            ? 'chat-avatar fire-buddy-chat-avatar'
+            : (groupSpeakerMeta ? 'chat-avatar group-speaker-chat-avatar' : 'chat-avatar');
         const speakerLabelHtml = fireBuddySpeakerMeta
             ? `<div class="fire-buddy-speaker-label">${fireBuddySpeakerMeta.name || '小火人'}</div>`
-            : '';
+            : buildGroupSpeakerLabelHtml(groupSpeakerMeta, false);
         msgDiv.innerHTML = `
             <img src="${avatar}" class="${avatarClass}">
             <div class="msg-wrapper">
@@ -1485,6 +1514,9 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
         `;
     } else {
         let myAvatar = 'https://api.dicebear.com/7.x/avataaars/svg?seed=User';
+        const selfSpeakerLabelHtml = isGroupChat
+            ? buildGroupSpeakerLabelHtml(groupSpeakerMeta, true)
+            : '';
         
         if (contact && contact.myAvatar) {
             myAvatar = contact.myAvatar;
@@ -1496,6 +1528,7 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
         msgDiv.innerHTML = `
             <img src="${myAvatar}" class="chat-avatar">
             <div class="msg-wrapper">
+                ${selfSpeakerLabelHtml}
                 <div class="message-content ${extraClass}">${contentHtml}</div>
                 ${replyHtml}
             </div>
@@ -1506,10 +1539,14 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
     if (!isUser) {
         const avatarEl = msgDiv.querySelector('.chat-avatar');
         if (avatarEl) {
-            avatarEl.style.cursor = 'pointer';
             if (fireBuddySpeakerMeta && typeof window.openFireBuddyPanel === 'function') {
+                avatarEl.style.cursor = 'pointer';
                 avatarEl.addEventListener('click', () => window.openFireBuddyPanel(fireBuddySpeakerMeta.contactId || window.iphoneSimState.currentChatContactId));
+            } else if (groupSpeakerMeta && groupSpeakerMeta.speakerContactId && groupSpeakerMeta.speakerContactId !== 'me' && typeof window.openAiProfile === 'function') {
+                avatarEl.style.cursor = 'pointer';
+                avatarEl.addEventListener('click', () => window.openAiProfile(groupSpeakerMeta.speakerContactId));
             } else if (typeof window.openAiProfile === 'function') {
+                avatarEl.style.cursor = 'pointer';
                 avatarEl.addEventListener('click', () => window.openAiProfile());
             }
         }
@@ -1809,7 +1846,12 @@ function handleMessageLongPress(e, content, isUser, type, msgId) {
 
     const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(window.iphoneSimState.currentChatContactId));
     let name = 'AI';
-    if (isUser) {
+    const groupSpeakerMeta = msgId && contact && typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact) && typeof window.getGroupMessageSpeakerMeta === 'function'
+        ? window.getGroupMessageSpeakerMeta(window.iphoneSimState.currentChatContactId, msgId)
+        : null;
+    if (groupSpeakerMeta && groupSpeakerMeta.name) {
+        name = groupSpeakerMeta.name;
+    } else if (isUser) {
         if (contact && contact.userPersonaId) {
             const p = window.iphoneSimState.userPersonas.find(p => p.id === contact.userPersonaId);
             name = p ? p.name : window.iphoneSimState.userProfile.name;
@@ -2247,11 +2289,18 @@ function mergeSplitHtmlMessages(messagesList) {
 function splitLegacyTextContentIntoResults(text, results, options = {}) {
     if (!text) return;
     const speaker = normalizeAiMessageSpeaker(options && options.speaker);
+    const speakerContactId = String(options && (options.speakerContactId || options.speaker_contact_id) || '').trim();
 
     if (isHtmlPayloadForParser(text)) {
         const normalizedHtml = stripHtmlBlockMarkers(String(text || '')).trim();
         if (normalizedHtml) {
-            results.push({ type: 'text_message', content: normalizedHtml, isHtml: true, ...(speaker ? { speaker } : {}) });
+            results.push({
+                type: 'text_message',
+                content: normalizedHtml,
+                isHtml: true,
+                ...(speaker ? { speaker } : {}),
+                ...(speakerContactId ? { speakerContactId } : {})
+            });
         }
         return;
     }
@@ -2267,12 +2316,22 @@ function splitLegacyTextContentIntoResults(text, results, options = {}) {
                 if (/^[。！？!?]+$/.test(seg)) {
                     buffer += seg;
                     if (buffer.trim()) {
-                        results.push({ type: 'text_message', content: buffer.trim(), ...(speaker ? { speaker } : {}) });
+                        results.push({
+                            type: 'text_message',
+                            content: buffer.trim(),
+                            ...(speaker ? { speaker } : {}),
+                            ...(speakerContactId ? { speakerContactId } : {})
+                        });
                     }
                     buffer = '';
                 } else if (/^\n+$/.test(seg)) {
                     if (buffer.trim()) {
-                        results.push({ type: 'text_message', content: buffer.trim(), ...(speaker ? { speaker } : {}) });
+                        results.push({
+                            type: 'text_message',
+                            content: buffer.trim(),
+                            ...(speaker ? { speaker } : {}),
+                            ...(speakerContactId ? { speakerContactId } : {})
+                        });
                     }
                     buffer = '';
                 } else {
@@ -2280,18 +2339,23 @@ function splitLegacyTextContentIntoResults(text, results, options = {}) {
                 }
             }
             if (buffer.trim()) {
-                results.push({ type: 'text_message', content: buffer.trim(), ...(speaker ? { speaker } : {}) });
+                results.push({
+                    type: 'text_message',
+                    content: buffer.trim(),
+                    ...(speaker ? { speaker } : {}),
+                    ...(speakerContactId ? { speakerContactId } : {})
+                });
             }
         } else if (normalizedType === 'sticker_message') {
-            results.push({ type: 'sticker_message', sticker: String(mi.content || '').trim() });
+            results.push({ type: 'sticker_message', sticker: String(mi.content || '').trim(), ...(speakerContactId ? { speakerContactId } : {}) });
         } else if (normalizedType === 'voice') {
-            results.push({ type: 'voice', content: mi.content });
+            results.push({ type: 'voice', content: mi.content, ...(speakerContactId ? { speakerContactId } : {}) });
         } else if (normalizedType === 'image') {
-            results.push({ type: 'image', content: mi.content, prompt: mi.prompt });
+            results.push({ type: 'image', content: mi.content, prompt: mi.prompt, ...(speakerContactId ? { speakerContactId } : {}) });
         } else if (normalizedType === 'description') {
-            results.push({ type: 'description', content: mi.content });
+            results.push({ type: 'description', content: mi.content, ...(speakerContactId ? { speakerContactId } : {}) });
         } else {
-            results.push({ ...mi, type: normalizedType || mi.type });
+            results.push({ ...mi, type: normalizedType || mi.type, ...(speakerContactId ? { speakerContactId } : {}) });
         }
     });
 }
@@ -2302,13 +2366,19 @@ function parseMixedAiResponse(content) {
     const pushSanitizedText = (rawText, options = {}) => {
         const atomic = !!options.atomic;
         const speaker = normalizeAiMessageSpeaker(options && options.speaker);
+        const speakerContactId = String(options && (options.speakerContactId || options.speaker_contact_id) || '').trim();
         const translatedText = normalizeBilingualTranslatedText(options && options.translatedText);
         const recoveredItems = recoverContextRecordItems(rawText);
         if (recoveredItems.length > 0) {
             let translatedTextAttached = false;
             recoveredItems.forEach(item => {
                 const recoveredSpeaker = normalizeAiMessageSpeaker(item && item.speaker) || speaker;
-                const nextItem = recoveredSpeaker ? { ...item, speaker: recoveredSpeaker } : item;
+                const recoveredSpeakerContactId = String(item && (item.speakerContactId || item.speaker_contact_id) || speakerContactId).trim();
+                const nextItem = {
+                    ...item,
+                    ...(recoveredSpeaker ? { speaker: recoveredSpeaker } : {}),
+                    ...(recoveredSpeakerContactId ? { speakerContactId: recoveredSpeakerContactId } : {})
+                };
                 const normalizedRecoveredType = normalizeAiSchemaType(nextItem && nextItem.type);
                 if (!translatedTextAttached && translatedText && normalizedRecoveredType === 'text_message') {
                     nextItem.translatedContent = translatedText;
@@ -2342,7 +2412,8 @@ function parseMixedAiResponse(content) {
                 targetContent: quote.targetContent || '',
                 replyContent: sanitized.cleanText,
                 ...(translatedText ? { translatedReplyContent: translatedText } : {}),
-                ...(speaker ? { speaker } : {})
+                ...(speaker ? { speaker } : {}),
+                ...(speakerContactId ? { speakerContactId } : {})
             });
             return;
         }
@@ -2354,12 +2425,13 @@ function parseMixedAiResponse(content) {
                 type: 'text_message',
                 content: sanitized.cleanText,
                 ...(translatedText ? { translatedContent: translatedText } : {}),
-                ...(speaker ? { speaker } : {})
+                ...(speaker ? { speaker } : {}),
+                ...(speakerContactId ? { speakerContactId } : {})
             });
             return;
         }
 
-        splitLegacyTextContentIntoResults(sanitized.cleanText, results, { speaker });
+        splitLegacyTextContentIntoResults(sanitized.cleanText, results, { speaker, speakerContactId });
     };
 
     const processItem = (item) => {
@@ -2380,6 +2452,7 @@ function parseMixedAiResponse(content) {
         const originalType = String(item.type || '').trim().toLowerCase();
         const normalizedType = normalizeAiSchemaType(item.type);
         const speaker = normalizeAiMessageSpeaker(item && item.speaker);
+        const speakerContactId = String(item && (item.speaker_contact_id || item.speakerContactId) || '').trim();
 
         if (normalizedType === 'thought_state') {
             const displayText = getThoughtStateDisplayText(item);
@@ -2408,7 +2481,8 @@ function parseMixedAiResponse(content) {
                     targetContent: String(item.target_content || item.targetContent || '').trim(),
                     replyContent,
                     ...(translatedReplyContent ? { translatedReplyContent } : {}),
-                    ...(speaker ? { speaker } : {})
+                    ...(speaker ? { speaker } : {}),
+                    ...(speakerContactId ? { speakerContactId } : {})
                 });
             }
             return;
@@ -2418,6 +2492,7 @@ function parseMixedAiResponse(content) {
             pushSanitizedText(item.content || item.text || '', {
                 atomic: originalType === 'text_message',
                 speaker,
+                speakerContactId,
                 translatedText: item.translated_content || item.translatedContent || ''
             });
             return;
@@ -2426,32 +2501,32 @@ function parseMixedAiResponse(content) {
         if (normalizedType === 'sticker_message') {
             const stickerName = String(item.sticker || item.content || '').trim();
             if (stickerName) {
-                results.push({ type: 'sticker_message', sticker: stickerName });
+                results.push({ type: 'sticker_message', sticker: stickerName, ...(speakerContactId ? { speakerContactId } : {}) });
             }
             return;
         }
 
         if (normalizedType === 'voice') {
-            results.push({ type: 'voice', content: `${item.duration || 3} ${item.content || item.text || '语音消息'}` });
+            results.push({ type: 'voice', content: `${item.duration || 3} ${item.content || item.text || '语音消息'}`, ...(speakerContactId ? { speakerContactId } : {}) });
             return;
         }
 
         if (normalizedType === 'action') {
-            results.push({ type: 'action', content: item });
+            results.push({ type: 'action', content: item, ...(speakerContactId ? { speakerContactId } : {}) });
             return;
         }
 
         if (normalizedType === 'image') {
-            results.push({ ...item, type: item.type || 'image', content: item.content || item.description || '' });
+            results.push({ ...item, type: item.type || 'image', content: item.content || item.description || '', ...(speakerContactId ? { speakerContactId } : {}) });
             return;
         }
 
         if (normalizedType === 'description') {
-            results.push({ type: 'description', content: item.content || item.text || '' });
+            results.push({ type: 'description', content: item.content || item.text || '', ...(speakerContactId ? { speakerContactId } : {}) });
             return;
         }
 
-        pushSanitizedText(item.content || item.text || '', { atomic: false, speaker });
+        pushSanitizedText(item.content || item.text || '', { atomic: false, speaker, speakerContactId });
     };
 
     const tryParseCandidate = (candidate) => {
@@ -3264,8 +3339,20 @@ function buildReplyToPayloadFromMessage(targetMsg, contact, fallbackName = '') {
     if (!targetMsg) return null;
 
     let targetName = String(fallbackName || '').trim();
+    const isGroupChat = !!(contact && typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact));
     if (!targetName) {
-        if (targetMsg.role === 'user') {
+        if (isGroupChat && targetMsg.id && typeof window.getGroupMessageSpeakerMeta === 'function') {
+            const speakerMeta = window.getGroupMessageSpeakerMeta(contact.id, targetMsg.id);
+            targetName = speakerMeta && speakerMeta.name ? String(speakerMeta.name).trim() : '';
+        }
+        if (!targetName && isGroupChat && targetMsg.speakerNameSnapshot) {
+            targetName = String(targetMsg.speakerNameSnapshot).trim();
+        }
+        if (!targetName && isGroupChat && targetMsg.speakerContactId === 'me') {
+            targetName = window.iphoneSimState.userProfile && window.iphoneSimState.userProfile.name
+                ? window.iphoneSimState.userProfile.name
+                : '我';
+        } else if (!targetName && targetMsg.role === 'user') {
             targetName = '我';
             if (contact && contact.userPersonaId) {
                 const persona = window.iphoneSimState.userPersonas.find(p => p.id === contact.userPersonaId);
@@ -3273,7 +3360,10 @@ function buildReplyToPayloadFromMessage(targetMsg, contact, fallbackName = '') {
             } else if (window.iphoneSimState.userProfile && window.iphoneSimState.userProfile.name) {
                 targetName = window.iphoneSimState.userProfile.name;
             }
-        } else {
+        } else if (!targetName && isGroupChat && targetMsg.speakerContactId && typeof window.getGroupMemberContacts === 'function') {
+            const member = window.getGroupMemberContacts(contact).find(item => String(item.id) === String(targetMsg.speakerContactId));
+            targetName = member ? (member.remark || member.nickname || member.name || '群成员') : '群成员';
+        } else if (!targetName) {
             targetName = contact ? (contact.remark || contact.name) : 'AI';
         }
     }
@@ -3828,10 +3918,11 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
     
     const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(contactId));
     if (!contact) return false;
+    const isGroupChat = typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact);
     if (typeof window.ensureContactWechatBlockFields === 'function') {
         window.ensureContactWechatBlockFields(contact);
     }
-    if (typeof window.ensureContactRestWindowFields === 'function') {
+    if (!isGroupChat && typeof window.ensureContactRestWindowFields === 'function') {
         window.ensureContactRestWindowFields(contact);
     }
 
@@ -3843,7 +3934,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
     const triggerSource = options && typeof options === 'object' && options.triggerSource
         ? String(options.triggerSource)
         : 'system';
-    if (!ignoreRestWindow && typeof window.getContactRestTriggerDecision === 'function') {
+    if (!isGroupChat && !ignoreRestWindow && typeof window.getContactRestTriggerDecision === 'function') {
         const restDecision = window.getContactRestTriggerDecision(contact, triggerSource);
         if (!restDecision.allow) {
             if (restDecision.shouldToast && typeof window.showChatToast === 'function') {
@@ -3876,7 +3967,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
     const historyLengthBefore = Array.isArray(window.iphoneSimState.chatHistory[contactId])
         ? window.iphoneSimState.chatHistory[contactId].length
         : 0;
-    const initialRestStatus = typeof window.getContactRestWindowStatus === 'function'
+    const initialRestStatus = !isGroupChat && typeof window.getContactRestWindowStatus === 'function'
         ? window.getContactRestWindowStatus(contact)
         : null;
     const shouldClearWakeReplyOnText = !!(
@@ -3909,6 +4000,9 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
     }
 
     const history = window.iphoneSimState.chatHistory[contactId] || [];
+    const groupRoundAnchorMsgId = isGroupChat
+        ? (([...history].reverse().find(msg => msg && !msg.hiddenFromUi && !msg._hiddenBySanitizer && msg.role === 'user') || {}).id || null)
+        : null;
 
     
     // Check for Truth or Dare triggers
@@ -4032,13 +4126,14 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                                    .trim();
 
         let actions = [];
+        let groupActions = [];
         let thoughtContent = null;
         let messagesList = [];
         
         // 使用新的混合解析器
         const parsedItems = parseMixedAiResponse(replyContent);
         
-        if (contact.showThought) {
+        if (!isGroupChat && contact.showThought) {
             const firstParsedType = parsedItems.length > 0 ? normalizeAiSchemaType(parsedItems[0] && parsedItems[0].type) : '';
             if (firstParsedType !== 'thought_state') {
                 console.warn('[AI Protocol] missing leading thought_state item when showThought is enabled', {
@@ -4051,8 +4146,12 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
         // 处理解析结果
         for (const item of parsedItems) {
             const normalizedType = normalizeAiSchemaType(item && item.type);
+            const speakerContactId = String(item && (item.speakerContactId || item.speaker_contact_id) || '').trim();
 
             if (normalizedType === 'thought_state') {
+                if (isGroupChat) {
+                    continue;
+                }
                 const displayText = getThoughtStateDisplayText(item);
                 if (displayText) {
                     thoughtContent = thoughtContent ? (thoughtContent + ' ' + displayText) : displayText;
@@ -4061,6 +4160,14 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
             }
 
             if (normalizedType === 'action') {
+                if (isGroupChat) {
+                    const cmd = String(item && item.content && item.content.command ? item.content.command : item && item.command ? item.command : '').trim().toUpperCase();
+                    const pl = item && item.content ? item.content.payload : item.payload;
+                    if (cmd === 'RENAME_GROUP' || cmd === 'SET_MEMBER_TITLE') {
+                        groupActions.push({ command: cmd, payload: pl, speakerContactId });
+                    }
+                    continue;
+                }
                 const cmd = item && item.content ? item.content.command : item.command;
                 const pl = item && item.content ? item.content.payload : item.payload;
                 let actionStr = cmd ? `ACTION: ${cmd}` : '';
@@ -4083,8 +4190,9 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                     let translatedReplyAttached = false;
                     recoveredQuoteItems.forEach(recoveredItem => {
                         const recoveredType = normalizeAiSchemaType(recoveredItem.type);
+                        const recoveredSpeakerContactId = String(recoveredItem && (recoveredItem.speakerContactId || recoveredItem.speaker_contact_id) || speakerContactId).trim();
                         if (recoveredType === 'sticker_message') {
-                            messagesList.push({ type: '表情包', content: recoveredItem.sticker || recoveredItem.content || '' });
+                            messagesList.push({ type: '表情包', content: recoveredItem.sticker || recoveredItem.content || '', ...(recoveredSpeakerContactId ? { speakerContactId: recoveredSpeakerContactId } : {}) });
                             return;
                         }
                         const recoveredText = String(recoveredItem.content || '').trim();
@@ -4093,7 +4201,13 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                         }
                         const replyTo = !hasAttachedReply && resolvedQuote && resolvedQuote.replyTo ? resolvedQuote.replyTo : null;
                         const recoveredSpeaker = normalizeAiMessageSpeaker(recoveredItem && recoveredItem.speaker) || quoteSpeaker;
-                        const nextMessage = { type: '消息', content: recoveredText, replyTo, ...(recoveredSpeaker ? { speaker: recoveredSpeaker } : {}) };
+                        const nextMessage = {
+                            type: '消息',
+                            content: recoveredText,
+                            replyTo,
+                            ...(recoveredSpeaker ? { speaker: recoveredSpeaker } : {}),
+                            ...(recoveredSpeakerContactId ? { speakerContactId: recoveredSpeakerContactId } : {})
+                        };
                         if (!translatedReplyAttached && translatedReplyContent) {
                             nextMessage.translatedContent = translatedReplyContent;
                             translatedReplyAttached = true;
@@ -4116,14 +4230,16 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                         content: quoteText,
                         ...(translatedReplyContent ? { translatedContent: translatedReplyContent } : {}),
                         replyTo: resolvedQuote.replyTo,
-                        ...(quoteSpeaker ? { speaker: quoteSpeaker } : {})
+                        ...(quoteSpeaker ? { speaker: quoteSpeaker } : {}),
+                        ...(speakerContactId ? { speakerContactId } : {})
                     });
                 } else {
                     messagesList.push({
                         type: '消息',
                         content: quoteText,
                         ...(translatedReplyContent ? { translatedContent: translatedReplyContent } : {}),
-                        ...(quoteSpeaker ? { speaker: quoteSpeaker } : {})
+                        ...(quoteSpeaker ? { speaker: quoteSpeaker } : {}),
+                        ...(speakerContactId ? { speakerContactId } : {})
                     });
                 }
                 continue;
@@ -4139,14 +4255,15 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                 if (item.isHtml || isHtmlPayloadForParser(textContent)) {
                     const htmlContent = stripHtmlBlockMarkers(textContent).trim();
                     if (htmlContent) {
-                        messagesList.push({ type: '消息', content: htmlContent, ...(speaker ? { speaker } : {}) });
+                        messagesList.push({ type: '消息', content: htmlContent, ...(speaker ? { speaker } : {}), ...(speakerContactId ? { speakerContactId } : {}) });
                     }
                 } else {
                     messagesList.push({
                         type: '消息',
                         content: textContent,
                         ...(translatedText ? { translatedContent: translatedText } : {}),
-                        ...(speaker ? { speaker } : {})
+                        ...(speaker ? { speaker } : {}),
+                        ...(speakerContactId ? { speakerContactId } : {})
                     });
                 }
                 continue;
@@ -4156,7 +4273,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                 const stickerName = String(item.sticker || item.content || '').trim();
                 const stickerAsset = resolveStickerAssetForContact(contact, stickerName);
                 if (stickerAsset) {
-                    messagesList.push({ type: '表情包', content: stickerAsset.desc || stickerName });
+                    messagesList.push({ type: '表情包', content: stickerAsset.desc || stickerName, ...(speakerContactId ? { speakerContactId } : {}) });
                 }
                 continue;
             }
@@ -4164,14 +4281,18 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
             if (item.type === '消息' || item.type === 'text') {
                 const subItems = forceSplitMixedContent(item.content);
                 const speaker = normalizeAiMessageSpeaker(item && item.speaker);
-                messagesList.push(...subItems.map(subItem => speaker ? { ...subItem, speaker } : subItem));
+                messagesList.push(...subItems.map(subItem => ({
+                    ...subItem,
+                    ...(speaker ? { speaker } : {}),
+                    ...(speakerContactId ? { speakerContactId } : {})
+                })));
                 continue;
             }
 
             if (item.type === '表情包' || item.type === 'sticker') {
                 const stickerAsset = resolveStickerAssetForContact(contact, item.content);
                 if (stickerAsset) {
-                    messagesList.push({ type: '表情包', content: stickerAsset.desc || String(item.content || '').trim() });
+                    messagesList.push({ type: '表情包', content: stickerAsset.desc || String(item.content || '').trim(), ...(speakerContactId ? { speakerContactId } : {}) });
                 }
                 continue;
             }
@@ -4211,16 +4332,18 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
 
             const sanitized = extractVisibleControlData(rawContent);
 
-            sanitized.thoughtTexts.forEach(text => {
-                if (text) {
-                    thoughtContent = thoughtContent ? (thoughtContent + ' ' + text) : text;
-                }
-            });
+            if (!isGroupChat) {
+                sanitized.thoughtTexts.forEach(text => {
+                    if (text) {
+                        thoughtContent = thoughtContent ? (thoughtContent + ' ' + text) : text;
+                    }
+                });
+            }
 
             sanitized.stickerNames.forEach(name => {
                 const stickerAsset = resolveStickerAssetForContact(contact, name);
                 if (stickerAsset) {
-                    finalMessages.push({ type: '表情包', content: stickerAsset.desc || name });
+                    finalMessages.push({ type: '表情包', content: stickerAsset.desc || name, ...(msg && msg.speakerContactId ? { speakerContactId: msg.speakerContactId } : {}) });
                 }
             });
 
@@ -4228,7 +4351,9 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
             for (const line of sanitized.cleanText.split('\n')) {
                 const actionMatch = line.trim().match(actionRegex);
                 if (actionMatch) {
-                    actions.push('ACTION: ' + actionMatch[1].trim());
+                    if (!isGroupChat) {
+                        actions.push('ACTION: ' + actionMatch[1].trim());
+                    }
                 } else {
                     cleanLines.push(line);
                 }
@@ -4259,6 +4384,38 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
             });
         }
         messagesList = finalMessages;
+        if (isGroupChat) {
+            const allowedGroupTypes = new Set(['消息', 'text', '表情包', 'sticker', '语音', 'voice', '图片', 'image']);
+            messagesList = messagesList.filter(msg => allowedGroupTypes.has(msg && msg.type));
+            actions = [];
+            thoughtContent = null;
+            groupActions.forEach((action) => {
+                const actorId = typeof window.resolveGroupSpeakerContactId === 'function'
+                    ? window.resolveGroupSpeakerContactId(action && action.speakerContactId, contact)
+                    : String(action && action.speakerContactId || '').trim();
+                if (!actorId) return;
+
+                if (action.command === 'RENAME_GROUP' && typeof window.applyGroupRename === 'function') {
+                    window.applyGroupRename(contact, actorId, action.payload, { showNotice: true });
+                    return;
+                }
+
+                if (action.command === 'SET_MEMBER_TITLE' && typeof window.applyGroupMemberTitle === 'function') {
+                    let targetId = '';
+                    let nextTitle = '';
+                    if (action.payload && typeof action.payload === 'object') {
+                        targetId = action.payload.target_member_id || action.payload.targetMemberId || action.payload.target_id || action.payload.targetId || '';
+                        nextTitle = action.payload.title || '';
+                    } else if (typeof action.payload === 'string') {
+                        const [rawTargetId, ...rest] = action.payload.split('|');
+                        targetId = String(rawTargetId || '').trim();
+                        nextTitle = rest.join('|').trim();
+                    }
+                    if (!targetId) return;
+                    window.applyGroupMemberTitle(contact, actorId, targetId, nextTitle, { showNotice: true });
+                }
+            });
+        }
 
         // 处理指令
         let imageToSend = null;
@@ -4404,9 +4561,13 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
             return finalized;
         };
 
-        const inlineStateResult = collectInlineStateActions(actions);
-        actions = inlineStateResult.strippedSegments.filter(segment => String(segment || '').trim());
-        const inlineStateActions = finalizeInlineStateActions(inlineStateResult.collected);
+        const inlineStateResult = isGroupChat
+            ? { strippedSegments: [], collected: [] }
+            : collectInlineStateActions(actions);
+        actions = isGroupChat
+            ? []
+            : inlineStateResult.strippedSegments.filter(segment => String(segment || '').trim());
+        const inlineStateActions = isGroupChat ? [] : finalizeInlineStateActions(inlineStateResult.collected);
 
         if (typeof window.applyInlineStateResolve === 'function') {
             inlineStateActions
@@ -5174,6 +5335,76 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                 continue;
             }
 
+            if (isGroupChat) {
+                const resolvedSpeakerContactId = typeof window.resolveGroupSpeakerContactId === 'function'
+                    ? window.resolveGroupSpeakerContactId(msg && (msg.speakerContactId || msg.speaker_contact_id || msg.speaker), contact)
+                    : String(msg && (msg.speakerContactId || msg.speaker_contact_id) || '').trim();
+                if (!resolvedSpeakerContactId || resolvedSpeakerContactId === 'me') {
+                    continue;
+                }
+
+                const chatScreenEl = document.getElementById('chat-screen');
+                const isChatOpen = !!(chatScreenEl && !chatScreenEl.classList.contains('hidden'));
+                const isSameContact = String(window.iphoneSimState.currentChatContactId || '') === String(contact.id);
+                const shouldNotifyGroup = deliveryChannel === 'wechat' && (!isChatOpen || !isSameContact || document.hidden);
+
+                let contentToSave = msg.content;
+                let typeToSave = 'text';
+                let descriptionToSave = null;
+
+                if (msg.type === '表情包' || msg.type === 'sticker') {
+                    const stickerAsset = resolveStickerAssetForContact(contact, msg.content);
+                    if (!stickerAsset) {
+                        console.warn(`Sticker not found: ${msg.content}`);
+                        continue;
+                    }
+                    contentToSave = stickerAsset.url;
+                    typeToSave = 'sticker';
+                    descriptionToSave = stickerAsset.desc || msg.content;
+                } else if (msg.type === '语音' || msg.type === 'voice') {
+                    let duration = 3;
+                    let text = msg.content;
+                    if (typeof msg.content === 'string') {
+                        const parts = msg.content.match(/(\d+)\s+(.*)/);
+                        if (parts) {
+                            duration = parseInt(parts[1], 10);
+                            text = parts[2];
+                        }
+                    }
+                    contentToSave = JSON.stringify({ duration, text, isReal: false });
+                    typeToSave = 'voice';
+                } else if (msg.type === '图片' || msg.type === 'image' || msg.type === 'virtual_image') {
+                    const rawImageContent = typeof msg.content === 'string' ? msg.content.trim() : '';
+                    if (isLikelyChatImageUrl(rawImageContent)) {
+                        contentToSave = rawImageContent;
+                        typeToSave = 'image';
+                    } else {
+                        contentToSave = rawImageContent && !/^(?:未知图片|\[图片\]|图片)$/i.test(rawImageContent)
+                            ? `[图片] ${rawImageContent}`
+                            : '[图片]';
+                        typeToSave = 'text';
+                    }
+                } else {
+                    typeToSave = 'text';
+                }
+
+                sendMessage(contentToSave, false, typeToSave, descriptionToSave, contact.id, {
+                    channel: deliveryChannel,
+                    replyTo: currentReplyTo,
+                    thought: null,
+                    bilingualTranslation: typeToSave === 'text' ? bilingualTranslationMeta : null,
+                    showNotification: shouldNotifyGroup,
+                    readInMessagesApp: false,
+                    speakerContactId: resolvedSpeakerContactId
+                });
+
+                if (i < messagesList.length - 1) {
+                    const delay = getSpeakerAwareReplyDelay(msg, messagesList[i + 1]);
+                    await new Promise(r => setTimeout(r, delay));
+                }
+                continue;
+            }
+
             // 检查用户是否仍在当前聊天界面
             const isChatOpen = !document.getElementById('chat-screen').classList.contains('hidden');
             const isSameContact = window.iphoneSimState.currentChatContactId === contact.id;
@@ -5408,6 +5639,22 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
             if (i < messagesList.length - 1) {
                 const delay = getSpeakerAwareReplyDelay(msg, messagesList[i + 1]);
                 await new Promise(r => setTimeout(r, delay));
+            }
+        }
+        if (isGroupChat && typeof window.syncGroupRoundToDirectThreads === 'function') {
+            const updatedHistory = Array.isArray(window.iphoneSimState.chatHistory[contactId])
+                ? window.iphoneSimState.chatHistory[contactId]
+                : [];
+            let roundMessages = [];
+            if (groupRoundAnchorMsgId) {
+                const anchorIndex = updatedHistory.findIndex(item => item && String(item.id) === String(groupRoundAnchorMsgId));
+                roundMessages = anchorIndex >= 0 ? updatedHistory.slice(anchorIndex) : updatedHistory.slice(historyLengthBefore);
+            } else {
+                roundMessages = updatedHistory.slice(historyLengthBefore);
+            }
+            roundMessages = roundMessages.filter(item => item && !item.hiddenFromUi && !item._hiddenBySanitizer && item.type !== 'system_event');
+            if (roundMessages.length > 0) {
+                window.syncGroupRoundToDirectThreads(contact, roundMessages);
             }
         }
         await new Promise(r => setTimeout(r, 500));
@@ -6936,6 +7183,11 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
     const contact = options && options.contactOverride
         ? { ...baseContact, ...options.contactOverride }
         : baseContact;
+    if (typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact)) {
+        return typeof window.buildGroupAiPromptMessages === 'function'
+            ? window.buildGroupAiPromptMessages(contactId, instruction, options)
+            : [];
+    }
     if (typeof window.ensureContactBilingualTranslationFields === 'function') {
         window.ensureContactBilingualTranslationFields(contact);
     }

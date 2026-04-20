@@ -1404,11 +1404,86 @@
                     <div class="modal-body">
                         <button id="choose-add-contact-manual" class="ios-btn-block">手动添加</button>
                         <button id="choose-add-contact-import" class="ios-btn-block secondary" style="margin-top: 10px;">导入文件</button>
+                        <button id="choose-create-group-chat" class="ios-btn-block secondary" style="margin-top: 10px;">新建群聊</button>
                         <div style="margin-top: 12px; color: #8e8e93; font-size: 13px; line-height: 1.6;">支持导入 JSON 与 PNG 角色卡；会自动把人设、世界书、正则同步到对应应用。</div>
                     </div>
                 </div>
             </div>
             <input type="file" id="contact-import-file-input" accept=".json,.png,application/json,image/png" class="file-input-hidden">
+
+            <div id="group-chat-create-modal" class="modal hidden" style="z-index: 310;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>新建群聊</h3>
+                        <button class="close-btn" id="close-group-chat-create">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="avatar-upload-container">
+                            <div class="avatar-preview" id="group-chat-avatar-preview">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <input type="file" id="group-chat-avatar-upload" accept="image/*" class="file-input-hidden">
+                        </div>
+                        <div class="setting-group">
+                            <label>群聊名称</label>
+                            <input type="text" id="group-chat-name" placeholder="不填则自动生成">
+                        </div>
+                        <div class="setting-group">
+                            <label>群成员</label>
+                            <button id="group-chat-select-members-btn" class="ios-btn-block secondary" style="margin-bottom: 10px;">选择联系人</button>
+                            <div id="group-chat-selected-members" class="ios-list-group" style="margin: 0; min-height: 48px; max-height: 220px; overflow-y: auto; background: #f7f7fa;"></div>
+                        </div>
+                        <button id="group-chat-create-btn" class="ios-btn-block">创建群聊</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="group-chat-settings-modal" class="modal hidden" style="z-index: 320;">
+                <div class="modal-content" style="max-height: 84vh; display: flex; flex-direction: column;">
+                    <div class="modal-header">
+                        <h3>群设置</h3>
+                        <button class="close-btn" id="close-group-chat-settings">&times;</button>
+                    </div>
+                    <div class="modal-body" style="overflow-y: auto;">
+                        <div class="avatar-upload-container">
+                            <div class="avatar-preview" id="group-settings-avatar-preview">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <input type="file" id="group-settings-avatar-upload" accept="image/*" class="file-input-hidden">
+                        </div>
+                        <div class="setting-group">
+                            <label>群聊名称</label>
+                            <input type="text" id="group-settings-name" placeholder="输入群名称">
+                        </div>
+                        <div class="setting-group">
+                            <label>记忆范围</label>
+                            <select id="group-settings-memory-mode">
+                                <option value="group_only">群聊独立</option>
+                                <option value="group_to_direct">群到单聊</option>
+                                <option value="bidirectional">双向同步</option>
+                            </select>
+                        </div>
+                        <div class="setting-group">
+                            <label>我的权限</label>
+                            <div id="group-settings-my-role" style="padding: 10px 12px; border-radius: 12px; background: #f7f7fa; color: #333; font-size: 14px;">成员</div>
+                        </div>
+                        <div class="setting-group">
+                            <button id="group-settings-save-btn" class="ios-btn-block secondary">保存基础信息</button>
+                        </div>
+                        <div class="setting-group">
+                            <button id="group-settings-invite-btn" class="ios-btn-block secondary">邀请联系人</button>
+                        </div>
+                        <div class="setting-group">
+                            <label>成员管理</label>
+                            <div id="group-chat-member-list" class="ios-list-group" style="margin: 0; background: #f7f7fa;"></div>
+                        </div>
+                        <div class="setting-group">
+                            <button id="group-settings-exit-btn" class="ios-btn-block secondary">退出群聊</button>
+                            <button id="group-settings-dissolve-btn" class="ios-btn-block danger" style="margin-top: 10px;">解散群聊</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- 批量导入表情包弹窗 -->
             <div id="import-sticker-modal" class="modal hidden">
@@ -8841,6 +8916,7 @@
     <script src="js/chat/04-media-init.js"></script>
     <script src="js/chat/05-addressbook-friends.js"></script>
     <script src="js/chat/06-oracle-quick-replies.js"></script>
+    <script src="js/chat/07-group-chat.js"></script>
     <script src="js/fire_buddy.js?v=20260324b1"></script>
     <script src="js/offline_push_sync.js"></script>
     <script src="js/shopping.js"></script>

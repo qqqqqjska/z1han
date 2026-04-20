@@ -414,6 +414,11 @@ window.getWechatChatScreenShareSnapshot = function() {
 
 function ensureContactWechatBlockFields(contact) {
     if (!contact || typeof contact !== 'object') return contact;
+    if (typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact)) {
+        contact.wechatBlockedByUser = false;
+        contact.wechatBlockedAt = null;
+        return contact;
+    }
     if (typeof contact.wechatBlockedByUser !== 'boolean') {
         contact.wechatBlockedByUser = false;
     }
@@ -441,12 +446,14 @@ function getResolvedDeliveryChannel(contactOrId, preferredChannel = 'auto') {
     const preferred = preferredChannel === 'messages-app' || preferredChannel === 'wechat'
         ? preferredChannel
         : 'auto';
-    if (preferred !== 'auto') return preferred;
-
     const contact = typeof contactOrId === 'object' && contactOrId
         ? contactOrId
         : getContactById(contactOrId);
     ensureContactWechatBlockFields(contact);
+    if (typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact)) {
+        return 'wechat';
+    }
+    if (preferred !== 'auto') return preferred;
     return contact && contact.wechatBlockedByUser ? 'messages-app' : 'wechat';
 }
 
@@ -733,6 +740,16 @@ function sendMessage(text, isUser, type = 'text', description = null, targetCont
         replyTo
     };
 
+    if (contact && typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact)) {
+        if (typeof window.decorateGroupChatMessageMeta === 'function') {
+            Object.assign(msg, window.decorateGroupChatMessageMeta(msg, contact, isUser, normalizedMeta));
+        } else if (isUser) {
+            msg.speakerContactId = 'me';
+        } else if (normalizedMeta.speakerContactId || normalizedMeta.speaker_contact_id) {
+            msg.speakerContactId = normalizedMeta.speakerContactId || normalizedMeta.speaker_contact_id;
+        }
+    }
+
     if (description) {
         msg.description = description;
     }
@@ -868,7 +885,7 @@ function sendMessage(text, isUser, type = 'text', description = null, targetCont
 
     if (!isUser && deliveryChannel === 'wechat' && normalizedMeta.showNotification === true && typeof window.showChatNotification === 'function') {
         const notificationText = typeof formatLastMsgPreview === 'function'
-            ? formatLastMsgPreview(msg)
+            ? formatLastMsgPreview(msg, contact)
             : (String(text || '').trim() || '[消息]');
         window.showChatNotification(contactId, notificationText);
     }

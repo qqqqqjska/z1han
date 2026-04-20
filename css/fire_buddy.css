@@ -340,6 +340,55 @@
     color: #c06a1f;
 }
 
+.group-speaker-chat-avatar {
+    margin: 0 6px !important;
+    transform: translateY(-14px);
+}
+
+.group-speaker-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 4px 4px;
+    max-width: 100%;
+}
+
+.group-speaker-meta.group-speaker-meta-self {
+    margin: 0 4px 4px 0;
+    align-self: flex-end;
+    justify-content: flex-end;
+}
+
+.group-speaker-title-badge {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    min-height: 16px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #f4ead0 0%, #e5d4aa 100%);
+    border: 1px solid rgba(177, 140, 64, 0.36);
+    box-shadow: 0 1px 2px rgba(126, 98, 36, 0.12);
+    font-size: 10px;
+    line-height: 1.2;
+    font-weight: 700;
+    color: #8c6a20;
+    white-space: nowrap;
+}
+
+.group-speaker-label {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.2;
+    font-weight: 700;
+    color: #7a7a7a;
+    min-width: 0;
+}
+
+.group-speaker-label.group-speaker-label-self {
+    text-align: right;
+}
+
 #fire-buddy-panel.fire-buddy-v2-panel {
     --bg-base: #fafafa;
     --text-main: #000000;

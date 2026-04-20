@@ -2193,7 +2193,7 @@ function saveContactAndClose(contact) {
 
 window.togglePinContact = function(contactId, event) {
     if (event) event.stopPropagation();
-    const contact = window.iphoneSimState.contacts.find(c => c.id === contactId);
+    const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(contactId));
     if (contact) {
         contact.isPinned = !contact.isPinned;
         saveConfig();
@@ -2343,39 +2343,81 @@ function truncatePreview(text, maxLen = CONTACT_PREVIEW_MAX_LENGTH) {
     return `${normalized.slice(0, maxLen - 1)}…`;
 }
 
-function formatLastMsgPreview(lastMsg) {
+function isVisibleMessageListContact(contact) {
+    if (!contact) return false;
+    if (typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact)) {
+        if (typeof window.isGroupChatActive === 'function') {
+            return window.isGroupChatActive(contact);
+        }
+        return !contact.groupMeta || contact.groupMeta.status === 'active';
+    }
+    return true;
+}
+
+function getContactListDisplayName(contact) {
+    if (!contact) return '联系人';
+    if (typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact) && typeof window.getGroupChatDisplayName === 'function') {
+        return window.getGroupChatDisplayName(contact);
+    }
+    return contact.remark || contact.nickname || contact.name || '联系人';
+}
+
+function formatLastMsgPreview(lastMsg, contact = null) {
     if (!lastMsg || typeof lastMsg !== 'object') return '[消息]';
 
-    if (lastMsg.type === 'image') return '[图片]';
-    if (lastMsg.type === 'sticker') return '[表情包]';
-    if (lastMsg.type === 'transfer') return '[转账]';
-    if (lastMsg.type === 'family_card') return '[亲属卡]';
-    if (lastMsg.type === 'voice') return '[语音]';
-    if (lastMsg.type === 'gift_card') return '[礼物]';
-    if (lastMsg.type === 'shopping_gift') return '[礼物]';
-    if (lastMsg.type === 'pay_request') return '[代付请求]';
-    if (lastMsg.type === 'delivery_share') return '[外卖]';
-    if (lastMsg.type === 'savings_invite') return '[共同存钱邀请]';
-    if (lastMsg.type === 'savings_withdraw_request') return '[共同存钱转出申请]';
-    if (lastMsg.type === 'savings_progress') return '[共同存钱进度]';
-    if (lastMsg.type === 'voice_call_text') return '[通话]';
+    let preview = '[消息]';
 
-    if (lastMsg.type === 'text' || lastMsg.type === 'html') {
+    if (lastMsg.type === 'image') preview = '[图片]';
+    else if (lastMsg.type === 'sticker') preview = '[表情包]';
+    else if (lastMsg.type === 'transfer') preview = '[转账]';
+    else if (lastMsg.type === 'family_card') preview = '[亲属卡]';
+    else if (lastMsg.type === 'voice') preview = '[语音]';
+    else if (lastMsg.type === 'gift_card') preview = '[礼物]';
+    else if (lastMsg.type === 'shopping_gift') preview = '[礼物]';
+    else if (lastMsg.type === 'pay_request') preview = '[代付请求]';
+    else if (lastMsg.type === 'delivery_share') preview = '[外卖]';
+    else if (lastMsg.type === 'savings_invite') preview = '[共同存钱邀请]';
+    else if (lastMsg.type === 'savings_withdraw_request') preview = '[共同存钱转出申请]';
+    else if (lastMsg.type === 'savings_progress') preview = '[共同存钱进度]';
+    else if (lastMsg.type === 'voice_call_text') preview = '[通话]';
+    else if (lastMsg.type === 'text' || lastMsg.type === 'html') {
         const content = typeof lastMsg.content === 'string' ? lastMsg.content : '';
-        if (!content.trim()) return '[消息]';
-
-        if (isLikelyHtmlPayload(content)) {
+        if (!content.trim()) {
+            preview = '[消息]';
+        } else if (isLikelyHtmlPayload(content)) {
             const title = extractHtmlTitle(content);
-            if (title) return truncatePreview(`[HTML] ${title}`);
-            return '[HTML消息]';
+            preview = title ? truncatePreview(`[HTML] ${title}`) : '[HTML消息]';
+        } else {
+            const plainText = stripHtmlToText(content);
+            preview = truncatePreview(plainText || '[消息]');
         }
-
-        const plainText = stripHtmlToText(content);
-        return truncatePreview(plainText || '[消息]');
+    } else {
+        const fallback = stripHtmlToText(typeof lastMsg.content === 'string' ? lastMsg.content : '');
+        preview = truncatePreview(fallback || '[消息]');
     }
 
-    const fallback = stripHtmlToText(typeof lastMsg.content === 'string' ? lastMsg.content : '');
-    return truncatePreview(fallback || '[消息]');
+    const isGroupChat = !!(contact && typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact));
+    const rawContent = String(lastMsg.content || '').trim();
+    const isSystemLike = lastMsg.type === 'system'
+        || lastMsg.type === 'system_event'
+        || rawContent.startsWith('[系统消息]:')
+        || rawContent.startsWith('[系统]:');
+    if (!isGroupChat || isSystemLike) return preview;
+
+    let speakerName = '';
+    if (contact && lastMsg.id && typeof window.getGroupMessageSpeakerMeta === 'function') {
+        const speakerMeta = window.getGroupMessageSpeakerMeta(contact.id, lastMsg.id);
+        speakerName = speakerMeta && speakerMeta.name ? String(speakerMeta.name).trim() : '';
+    }
+    if (!speakerName) {
+        speakerName = String(lastMsg.speakerNameSnapshot || '').trim();
+    }
+    if (!speakerName && lastMsg.speakerContactId === 'me') {
+        speakerName = window.iphoneSimState && window.iphoneSimState.userProfile && window.iphoneSimState.userProfile.name
+            ? window.iphoneSimState.userProfile.name
+            : '我';
+    }
+    return speakerName ? truncatePreview(`${speakerName}: ${preview}`) : preview;
 }
 
 function formatContactListTimeLabel(timestamp) {
@@ -2407,9 +2449,10 @@ function getSortedContactsForCurrentGroup(filterGroup = (window.iphoneSimState &
         ? [...window.iphoneSimState.contacts]
         : [];
 
-    const filteredContacts = filterGroup === 'all'
+    const filteredContacts = (filterGroup === 'all'
         ? contacts
-        : contacts.filter(contact => contact.group === filterGroup);
+        : contacts.filter(contact => contact.group === filterGroup))
+        .filter(isVisibleMessageListContact);
 
     filteredContacts.sort((contactA, contactB) => {
         if (contactA.isPinned && !contactB.isPinned) return -1;
@@ -2452,8 +2495,8 @@ window.getWechatListScreenShareSnapshot = function() {
         items = getSortedContactsForCurrentGroup().slice(0, 8).map(contact => {
             const lastMsg = getLastRenderableChatMessage(contact.id);
             return {
-                name: contact.remark || contact.nickname || contact.name || '联系人',
-                preview: formatLastMsgPreview(lastMsg) || '[消息]',
+                name: getContactListDisplayName(contact),
+                preview: formatLastMsgPreview(lastMsg, contact) || '[消息]',
                 time: formatContactListTimeLabel(lastMsg && lastMsg.time),
                 pinned: !!contact.isPinned
             };
@@ -2501,6 +2544,7 @@ function renderContactList(filterGroup = 'all') {
         if (filterGroup !== 'all') {
             filteredContacts = filteredContacts.filter(c => c.group === filterGroup);
         }
+        filteredContacts = filteredContacts.filter(isVisibleMessageListContact);
 
         // Sorting: Pinned first, then by last message time
         filteredContacts.sort((a, b) => {
@@ -2539,7 +2583,7 @@ function renderContactList(filterGroup = 'all') {
                     lastMsg = msg;
                     break;
                 }
-                lastMsgText = formatLastMsgPreview(lastMsg);
+                lastMsgText = formatLastMsgPreview(lastMsg, contact);
 
                 if (lastMsg && lastMsg.time) {
                     const date = new Date(lastMsg.time);
@@ -2554,12 +2598,13 @@ function renderContactList(filterGroup = 'all') {
                 lastMsgTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
             }
 
-            const name = contact.remark || contact.nickname || contact.name;
+            const name = getContactListDisplayName(contact);
+            const contactIdLiteral = JSON.stringify(contact.id).replace(/"/g, '&quot;');
 
             item.innerHTML = `
                 <div class="contact-actions">
-                    <button class="action-btn contact-pin-btn" onclick="event.stopPropagation(); window.togglePinContact(${contact.id}, event)">${contact.isPinned ? '取消置顶' : '置顶'}</button>
-                    <button class="action-btn contact-delete-btn" onclick="event.stopPropagation(); window.deleteContact(${contact.id}, event)">删除</button>
+                    <button class="action-btn contact-pin-btn" onclick="event.stopPropagation(); window.togglePinContact(${contactIdLiteral}, event)">${contact.isPinned ? '取消置顶' : '置顶'}</button>
+                    <button class="action-btn contact-delete-btn" onclick="event.stopPropagation(); window.deleteContact(${contactIdLiteral}, event)">删除</button>
                 </div>
                 <div class="contact-content-wrapper">
                     <img src="${contact.avatar}" class="contact-avatar">
@@ -3000,7 +3045,7 @@ function openChat(contactId) {
     if (thoughtPetEl) thoughtPetEl.classList.add('hidden');
 
     window.iphoneSimState.currentChatContactId = contactId;
-    document.getElementById('chat-title').textContent = contact.remark || contact.nickname || contact.name;
+    document.getElementById('chat-title').textContent = getContactListDisplayName(contact);
     
     const chatScreen = document.getElementById('chat-screen');
     if (contact.chatBg) {
@@ -3057,8 +3102,15 @@ function getActiveAiProfileContact() {
 window.openAiProfile = async function(contactId = null) {
     const resolvedContactId = contactId || window.iphoneSimState.currentChatContactId;
     if (!resolvedContactId) return;
-    const contact = window.iphoneSimState.contacts.find(c => c.id === resolvedContactId);
+    const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(resolvedContactId));
     if (!contact) return;
+
+    if (typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact)) {
+        if (typeof window.openGroupChatSettings === 'function') {
+            window.openGroupChatSettings(contact.id);
+        }
+        return;
+    }
 
     window.iphoneSimState.currentAiProfileContactId = contact.id;
 
@@ -3496,6 +3548,12 @@ if (!window.__chatSettingsStickyChromeResizeBound) {
 function openChatSettings() {
     const contact = getActiveAiProfileContact();
     if (!contact) return;
+    if (typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact)) {
+        if (typeof window.openGroupChatSettings === 'function') {
+            window.openGroupChatSettings(contact.id);
+        }
+        return;
+    }
     mountChatSettingsEditorialNav();
     bindChatSettingsHeaderInteractions();
     ensureContactRestWindowFields(contact);

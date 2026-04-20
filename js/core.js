@@ -495,7 +495,7 @@ const state = {
     chatWallpapers: [], // { id, data }
     tempSelectedChatBg: null,
     tempSelectedGroup: null,
-    contacts: [], // { id, name, remark, avatar, persona, style, myAvatar, chatBg, group }
+    contacts: [], // { id, name, remark, avatar, persona, style, myAvatar, chatBg, group, chatType, groupMeta }
     contactGroups: [],
     currentChatContactId: null,
     chatHistory: {}, // { contactId: [{ role: 'user'|'assistant', content: '...' }] }
@@ -597,6 +597,140 @@ const state = {
 };
 
 window.iphoneSimState = state;
+
+const GROUP_CHAT_CONTACT_GROUP = '群聊';
+const GROUP_CHAT_MEMORY_MODES = new Set(['group_only', 'group_to_direct', 'bidirectional']);
+const GROUP_CHAT_STATUS = new Set(['active', 'left', 'dissolved']);
+
+function normalizeGroupParticipantId(value) {
+    if (value === 'me') return 'me';
+    const raw = String(value === undefined || value === null ? '' : value).trim();
+    if (!raw) return '';
+    const asNumber = Number(raw);
+    return Number.isFinite(asNumber) && /^-?\d+(?:\.0+)?$/.test(raw)
+        ? asNumber
+        : raw;
+}
+
+function ensureGroupChatTabRegistered() {
+    if (!Array.isArray(state.contactGroups)) state.contactGroups = [];
+    const hasGroupChat = Array.isArray(state.contacts)
+        && state.contacts.some(contact => contact && contact.chatType === 'group');
+    if (hasGroupChat && !state.contactGroups.includes(GROUP_CHAT_CONTACT_GROUP)) {
+        state.contactGroups.push(GROUP_CHAT_CONTACT_GROUP);
+    }
+}
+
+function ensureGroupChatMeta(contact) {
+    if (!contact || typeof contact !== 'object') return contact;
+
+    const meta = contact.groupMeta && typeof contact.groupMeta === 'object'
+        ? contact.groupMeta
+        : {};
+
+    const fallbackName = String(meta.name || contact.remark || contact.nickname || contact.name || '未命名群聊').trim() || '未命名群聊';
+    const fallbackAvatar = String(meta.avatar || contact.avatar || '').trim();
+    const rawMemberIds = Array.isArray(meta.memberIds) ? meta.memberIds : [];
+    const memberIds = [];
+
+    rawMemberIds.forEach((item) => {
+        const normalized = normalizeGroupParticipantId(item);
+        if (!normalized || normalized === 'me' || memberIds.includes(normalized)) return;
+        memberIds.push(normalized);
+    });
+
+    const ownerId = (() => {
+        const normalized = normalizeGroupParticipantId(meta.ownerId);
+        if (normalized === 'me') return 'me';
+        if (memberIds.includes(normalized)) return normalized;
+        return 'me';
+    })();
+
+    const adminIds = [];
+    (Array.isArray(meta.adminIds) ? meta.adminIds : []).forEach((item) => {
+        const normalized = normalizeGroupParticipantId(item);
+        if (!normalized) return;
+        if (normalized !== 'me' && !memberIds.includes(normalized)) return;
+        if (!adminIds.includes(normalized)) adminIds.push(normalized);
+    });
+    if (ownerId === 'me' && !adminIds.includes('me')) {
+        adminIds.push('me');
+    }
+
+    const memoryMode = GROUP_CHAT_MEMORY_MODES.has(meta.memoryMode)
+        ? meta.memoryMode
+        : 'group_only';
+    const status = GROUP_CHAT_STATUS.has(meta.status)
+        ? meta.status
+        : 'active';
+    const memberTitles = {};
+    if (meta.memberTitles && typeof meta.memberTitles === 'object') {
+        Object.keys(meta.memberTitles).forEach((rawKey) => {
+            const normalizedKey = normalizeGroupParticipantId(rawKey);
+            if (!normalizedKey) return;
+            if (normalizedKey !== 'me' && !memberIds.includes(normalizedKey)) return;
+            const title = String(meta.memberTitles[rawKey] || '').replace(/\s+/g, ' ').trim();
+            if (!title) return;
+            memberTitles[String(normalizedKey)] = title.slice(0, 24);
+        });
+    }
+    const memberNicknames = {};
+    if (meta.memberNicknames && typeof meta.memberNicknames === 'object') {
+        Object.keys(meta.memberNicknames).forEach((rawKey) => {
+            const normalizedKey = normalizeGroupParticipantId(rawKey);
+            if (!normalizedKey) return;
+            if (normalizedKey !== 'me' && !memberIds.includes(normalizedKey)) return;
+            const nickname = String(meta.memberNicknames[rawKey] || '').replace(/\s+/g, ' ').trim();
+            if (!nickname) return;
+            memberNicknames[String(normalizedKey)] = nickname.slice(0, 30);
+        });
+    }
+
+    contact.groupMeta = {
+        name: fallbackName,
+        avatar: fallbackAvatar,
+        memberIds,
+        ownerId,
+        adminIds,
+        memberNicknames,
+        memberTitles,
+        memoryMode,
+        status
+    };
+
+    contact.group = GROUP_CHAT_CONTACT_GROUP;
+    contact.name = fallbackName;
+    contact.remark = fallbackName;
+    if (fallbackAvatar) {
+        contact.avatar = fallbackAvatar;
+    }
+    contact.activeReplyEnabled = false;
+    contact.wechatBlockedByUser = false;
+    contact.wechatBlockedAt = null;
+    return contact;
+}
+
+function ensureContactChatTypeFields(contact) {
+    if (!contact || typeof contact !== 'object') return contact;
+    contact.chatType = contact.chatType === 'group' ? 'group' : 'direct';
+    if (contact.chatType === 'group') {
+        ensureGroupChatMeta(contact);
+    } else if (contact.groupMeta && typeof contact.groupMeta === 'object') {
+        contact.groupMeta = null;
+    }
+    return contact;
+}
+
+window.ensureGroupChatMeta = ensureGroupChatMeta;
+window.ensureContactChatTypeFields = ensureContactChatTypeFields;
+window.isGroupChatContact = function(contactOrId) {
+    const contact = typeof contactOrId === 'object' && contactOrId
+        ? contactOrId
+        : (Array.isArray(state.contacts)
+            ? state.contacts.find(item => String(item && item.id) === String(contactOrId))
+            : null);
+    return !!(contact && contact.chatType === 'group');
+};
 
 const CHAT_HISTORY_STORE_NAME = 'iphoneSimChatHistory';
 const CHAT_HISTORY_STORAGE_KEY_PREFIX = 'contact:';
@@ -1954,6 +2088,8 @@ async function loadConfig() {
             }
             if (!state.chatWallpapers) state.chatWallpapers = [];
             if (!state.contacts) state.contacts = [];
+            state.contacts.forEach(ensureContactChatTypeFields);
+            ensureGroupChatTabRegistered();
             if (!state.chatHistory) state.chatHistory = {};
             if (typeof window.ensureContactBilingualTranslationFields === 'function') {
                 state.contacts.forEach(contact => window.ensureContactBilingualTranslationFields(contact));
@@ -1973,6 +2109,7 @@ async function loadConfig() {
             if (!state.iconPresets) state.iconPresets = [];
             if (!state.stickerCategories) state.stickerCategories = [];
             if (!state.contactGroups) state.contactGroups = [];
+            ensureGroupChatTabRegistered();
             if (!state.itineraries) state.itineraries = {};
             if (!state.music) state.music = {
                 playing: false,
