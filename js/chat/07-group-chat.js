@@ -16,6 +16,19 @@
         avatarDataUrl: ''
     };
     let currentSettingsGroupId = null;
+    let currentRelationGroupId = null;
+    let currentMemberDirectoryGroupId = null;
+    let currentMemberDirectoryTargetId = null;
+    const relationGraphRuntime = {
+        selectedNodeId: null,
+        dragNodeId: null,
+        isDragging: false,
+        startX: 0,
+        startY: 0,
+        dragOffsetX: 0,
+        dragOffsetY: 0,
+        nodes: []
+    };
 
     function showGroupToast(text) {
         if (typeof window.showChatToast === 'function') {
@@ -116,6 +129,140 @@
             .filter(contact => contact && contact.chatType !== 'group');
     }
 
+    function getManagedRelationMemberIds(groupContact) {
+        const group = getGroupContact(groupContact);
+        if (!group || !group.groupMeta) return [];
+        return Array.isArray(group.groupMeta.relationshipMemberIds)
+            ? group.groupMeta.relationshipMemberIds
+                .map(id => normalizeParticipantId(id))
+                .filter(id => id && (id === 'me' || getGroupMemberIds(group).some(memberId => String(memberId) === String(id))))
+            : [];
+    }
+
+    function addManagedRelationMember(groupContact, participantId) {
+        const group = getGroupContact(groupContact);
+        const safeId = normalizeParticipantId(participantId);
+        if (!group || !safeId) return false;
+        if (!Array.isArray(group.groupMeta.relationshipMemberIds)) {
+            group.groupMeta.relationshipMemberIds = [];
+        }
+        if (group.groupMeta.relationshipMemberIds.some(id => String(id) === String(safeId))) {
+            return false;
+        }
+        group.groupMeta.relationshipMemberIds.push(safeId);
+        if (!group.groupMeta.relationshipNodePositions || typeof group.groupMeta.relationshipNodePositions !== 'object') {
+            group.groupMeta.relationshipNodePositions = {};
+        }
+        if (typeof window.ensureGroupChatMeta === 'function') {
+            window.ensureGroupChatMeta(group);
+        }
+        return true;
+    }
+
+    function removeManagedRelationMember(groupContact, participantId) {
+        const group = getGroupContact(groupContact);
+        const safeId = normalizeParticipantId(participantId);
+        if (!group || !safeId || !Array.isArray(group.groupMeta.relationshipMemberIds)) return false;
+        const beforeLength = group.groupMeta.relationshipMemberIds.length;
+        group.groupMeta.relationshipMemberIds = group.groupMeta.relationshipMemberIds.filter(id => String(id) !== String(safeId));
+        if (group.groupMeta.relationshipNodePositions && typeof group.groupMeta.relationshipNodePositions === 'object') {
+            delete group.groupMeta.relationshipNodePositions[String(safeId)];
+        }
+        if (Array.isArray(group.groupMeta.relationshipLinks)) {
+            group.groupMeta.relationshipLinks = group.groupMeta.relationshipLinks.filter(link => String(link.sourceId) !== String(safeId) && String(link.targetId) !== String(safeId));
+        }
+        if (typeof window.ensureGroupChatMeta === 'function') {
+            window.ensureGroupChatMeta(group);
+        }
+        return group.groupMeta.relationshipMemberIds.length !== beforeLength;
+    }
+
+    function getGroupRelationshipLinks(groupContact) {
+        const group = getGroupContact(groupContact);
+        if (!group || !group.groupMeta) return [];
+        return Array.isArray(group.groupMeta.relationshipLinks)
+            ? group.groupMeta.relationshipLinks
+                .filter(link => link && link.sourceId && link.targetId && link.relation)
+                .map(link => ({
+                    sourceId: normalizeParticipantId(link.sourceId),
+                    targetId: normalizeParticipantId(link.targetId),
+                    relation: String(link.relation || '').trim()
+                }))
+                .filter(link => link.sourceId && link.targetId && link.sourceId !== link.targetId)
+            : [];
+    }
+
+    function setManagedRelationNodePosition(groupContact, participantId, xRatio, yRatio) {
+        const group = getGroupContact(groupContact);
+        const safeId = normalizeParticipantId(participantId);
+        if (!group || !safeId) return false;
+        if (!group.groupMeta.relationshipNodePositions || typeof group.groupMeta.relationshipNodePositions !== 'object') {
+            group.groupMeta.relationshipNodePositions = {};
+        }
+        group.groupMeta.relationshipNodePositions[String(safeId)] = {
+            xRatio: Math.min(0.92, Math.max(0.08, Number(xRatio) || 0.5)),
+            yRatio: Math.min(0.88, Math.max(0.12, Number(yRatio) || 0.5))
+        };
+        return true;
+    }
+
+    function upsertGroupRelationshipLink(groupContact, sourceId, targetId, relation) {
+        const group = getGroupContact(groupContact);
+        const safeSourceId = normalizeParticipantId(sourceId);
+        const safeTargetId = normalizeParticipantId(targetId);
+        const normalizedRelation = String(relation || '').replace(/\s+/g, ' ').trim().slice(0, 32);
+        if (!group || !safeSourceId || !safeTargetId || safeSourceId === safeTargetId || !normalizedRelation) {
+            return { ok: false };
+        }
+        if (!Array.isArray(group.groupMeta.relationshipLinks)) {
+            group.groupMeta.relationshipLinks = [];
+        }
+        const existingLink = group.groupMeta.relationshipLinks.find(link => String(link.sourceId) === String(safeSourceId) && String(link.targetId) === String(safeTargetId));
+        if (existingLink) {
+            existingLink.relation = normalizedRelation;
+        } else {
+            group.groupMeta.relationshipLinks.push({
+                sourceId: safeSourceId,
+                targetId: safeTargetId,
+                relation: normalizedRelation
+            });
+        }
+        if (typeof window.ensureGroupChatMeta === 'function') {
+            window.ensureGroupChatMeta(group);
+        }
+        if (typeof saveConfig === 'function') saveConfig();
+        return { ok: true, relation: normalizedRelation };
+    }
+
+    function getPendingInviteMemberIds(groupContact) {
+        const group = getGroupContact(groupContact);
+        return group && group.groupMeta && Array.isArray(group.groupMeta.pendingInviteMemberIds)
+            ? [...group.groupMeta.pendingInviteMemberIds]
+            : [];
+    }
+
+    function consumePendingInviteMembers(groupContact, roundMessages) {
+        const group = getGroupContact(groupContact);
+        if (!group || !group.groupMeta || !Array.isArray(group.groupMeta.pendingInviteMemberIds) || group.groupMeta.pendingInviteMemberIds.length === 0) {
+            return;
+        }
+        const spokenIds = new Set((Array.isArray(roundMessages) ? roundMessages : [])
+            .map(message => normalizeParticipantId(message && message.speakerContactId))
+            .filter(id => id && id !== 'me')
+            .map(id => String(id)));
+        if (spokenIds.size === 0) return;
+        const nextPendingIds = group.groupMeta.pendingInviteMemberIds.filter(id => !spokenIds.has(String(id)));
+        if (nextPendingIds.length === group.groupMeta.pendingInviteMemberIds.length) return;
+        group.groupMeta.pendingInviteMemberIds = nextPendingIds;
+        if (nextPendingIds.length === 0) {
+            group.groupMeta.lastInviteAt = 0;
+        }
+        if (typeof window.ensureGroupChatMeta === 'function') {
+            window.ensureGroupChatMeta(group);
+        }
+        if (typeof saveConfig === 'function') saveConfig();
+    }
+
     function getGroupChatDisplayName(groupContact) {
         const group = getGroupContact(groupContact);
         if (!group) return '';
@@ -145,6 +292,78 @@
     function getParticipantName(groupContact, participantId, fallback = '') {
         const nickname = getGroupMemberNickname(groupContact, participantId);
         return nickname || getParticipantBaseName(groupContact, participantId, fallback);
+    }
+
+    function getParticipantDisambiguationHint(groupContact, participantId) {
+        const group = getGroupContact(groupContact);
+        const safeId = normalizeParticipantId(participantId);
+        if (safeId === 'me') return '';
+        const contact = getContactById(safeId);
+        if (!group || !contact) return '';
+
+        const persona = String(contact.persona || '').replace(/\s+/g, ' ').trim();
+        const personaPatterns = [
+            /\d{1,2}岁/,
+            /\d{4}年(?:出生)?/,
+            /(小学|初中|高中|大学|研究生|博士|实习|上班|工作后|毕业后|成年后|童年|儿时)/
+        ];
+        for (const pattern of personaPatterns) {
+            const matched = persona.match(pattern);
+            if (matched && matched[0]) {
+                return String(matched[0]).trim();
+            }
+        }
+
+        const relation = String(contact.relationship || contact.relation || '').replace(/\s+/g, ' ').trim();
+        if (relation) return relation.slice(0, 12);
+
+        const baseName = getParticipantName(group, safeId, '群成员');
+        const rawRemark = String(contact.remark || '').trim();
+        if (rawRemark && rawRemark !== baseName) return rawRemark.slice(0, 12);
+
+        const rawNickname = String(contact.nickname || '').trim();
+        if (rawNickname && rawNickname !== baseName) return rawNickname.slice(0, 12);
+
+        const idText = String(safeId);
+        return idText ? `ID${idText.slice(-4)}` : '';
+    }
+
+    function getParticipantPromptLabel(groupContact, participantId, fallback = '') {
+        const group = getGroupContact(groupContact);
+        const safeId = normalizeParticipantId(participantId);
+        const name = getParticipantName(group, safeId, fallback);
+        if (!group || !name) return name;
+
+        const participantIds = ['me', ...getGroupMemberIds(group)];
+        const duplicateIds = participantIds.filter(id => String(getParticipantName(group, id, fallback) || '').trim() === String(name).trim());
+        if (duplicateIds.length <= 1) return name;
+
+        const hint = getParticipantDisambiguationHint(group, safeId);
+        return hint ? `${name}（${hint}）` : `${name}（${String(safeId)})`;
+    }
+
+    function getParticipantPromptAliasCandidates(groupContact, participantId, fallback = '') {
+        const group = getGroupContact(groupContact);
+        const safeId = normalizeParticipantId(participantId);
+        if (!group || !safeId) return [];
+        const displayName = String(getParticipantName(group, safeId, fallback) || '').trim();
+        const promptLabel = String(getParticipantPromptLabel(group, safeId, fallback) || '').trim();
+        const hint = String(getParticipantDisambiguationHint(group, safeId) || '').trim();
+        const aliases = new Set();
+        [displayName, promptLabel, hint].forEach(item => {
+            if (item) aliases.add(item);
+        });
+        if (displayName && hint) {
+            aliases.add(`${hint}${displayName}`);
+            aliases.add(`${displayName}${hint}`);
+            aliases.add(`${displayName}(${hint})`);
+            aliases.add(`${displayName}（${hint}）`);
+        }
+        if (safeId !== 'me') {
+            aliases.add(`${displayName}#${String(safeId).slice(-4)}`);
+            aliases.add(`${displayName}#${String(safeId)}`);
+        }
+        return [...aliases].map(item => String(item || '').trim()).filter(Boolean);
     }
 
     function getGroupMemberTitle(groupContact, participantId) {
@@ -551,6 +770,9 @@
                 adminIds: ['me'],
                 memberNicknames: {},
                 memberTitles: {},
+                relationshipMemberIds: [],
+                relationshipNodePositions: {},
+                relationshipLinks: [],
                 memoryMode: 'group_only',
                 status: 'active'
             }
@@ -604,13 +826,12 @@
         const lower = speakerText.toLowerCase();
         const matchedContact = getGroupMemberContacts(group).find(contact => {
             const candidates = [
+                ...getParticipantPromptAliasCandidates(group, contact.id, '成员'),
                 getGroupMemberNickname(group, contact.id),
                 contact.remark,
                 contact.nickname,
                 contact.name
-            ]
-                .map(item => String(item || '').trim())
-                .filter(Boolean);
+            ].map(item => String(item || '').trim()).filter(Boolean);
             return candidates.some(name => name.toLowerCase() === lower);
         });
         return matchedContact ? matchedContact.id : '';
@@ -655,7 +876,8 @@
             name: name || (message.role === 'user' ? getUserDisplayName(group) : '群成员'),
             title: title || '',
             avatar: avatar || '',
-            role: message.role || 'assistant'
+            role: message.role || 'assistant',
+            groupRole: getGroupRole(group, speakerContactId || (message.role === 'user' ? 'me' : ''))
         };
     }
 
@@ -768,7 +990,7 @@
         const group = getGroupContact(groupContact);
         if (!group || !message) return '';
         const speakerContactId = normalizeParticipantId(message.speakerContactId || (message.role === 'user' ? 'me' : ''));
-        const speakerName = String(getParticipantName(group, speakerContactId, message.role === 'user' ? getUserDisplayName(group) : '群成员') || message.speakerNameSnapshot || '').trim();
+        const speakerName = String(getParticipantPromptLabel(group, speakerContactId, message.role === 'user' ? getUserDisplayName(group) : '群成员') || message.speakerNameSnapshot || '').trim();
         const speakerTitle = getGroupMemberTitle(group, speakerContactId);
         return `[group_msg msg_id="${escapeHtml(message.id || '')}" timestamp="${escapeHtml(message.time || '')}" speaker_contact_id="${escapeHtml(speakerContactId || '')}" speaker_name="${escapeHtml(speakerName || '')}" speaker_title="${escapeHtml(speakerTitle || '')}" role="${escapeHtml(message.role || '')}" type="${escapeHtml(message.type || 'text')}"]`;
     }
@@ -818,16 +1040,41 @@
             : [];
         const memoryMode = String(group.groupMeta && group.groupMeta.memoryMode || 'group_only');
         const memberContacts = getGroupMemberContacts(group);
+        const pendingInviteMemberIds = getPendingInviteMemberIds(group);
+        const pendingInviteContacts = memberContacts.filter(member => pendingInviteMemberIds.some(id => String(id) === String(member.id)));
+        const relationshipLinks = getGroupRelationshipLinks(group);
         const memberLines = [
-            `- speaker_contact_id=me｜名字=${getParticipantName(group, 'me')}｜身份=${GROUP_ROLE_LABELS[getGroupRole(group, 'me')] || '成员'}｜群头衔=${getGroupMemberTitle(group, 'me') || '无'}｜这是用户本人`
+            `- speaker_contact_id=me｜名字=${getParticipantName(group, 'me')}｜区分标签=${getParticipantPromptLabel(group, 'me')}｜身份=${GROUP_ROLE_LABELS[getGroupRole(group, 'me')] || '成员'}｜群头衔=${getGroupMemberTitle(group, 'me') || '无'}｜这是用户本人`
         ];
         memberLines.push(...memberContacts.map(member => {
             const role = GROUP_ROLE_LABELS[getGroupRole(group, member.id)] || '成员';
             const title = getGroupMemberTitle(group, member.id);
+            const relation = String(member.relationship || member.relation || '无').replace(/\s+/g, ' ').trim() || '无';
             const persona = String(member.persona || '无').replace(/\s+/g, ' ').trim();
-            return `- speaker_contact_id=${member.id}｜名字=${getParticipantName(group, member.id, '成员')}｜身份=${role}｜群头衔=${title || '无'}｜人设=${persona || '无'}`;
+            const recentJoinFlag = pendingInviteMemberIds.some(id => String(id) === String(member.id)) ? '｜最近入群=是' : '';
+            return `- speaker_contact_id=${member.id}｜名字=${getParticipantName(group, member.id, '成员')}｜区分标签=${getParticipantPromptLabel(group, member.id, '成员')}｜身份=${role}｜关系=${relation}｜群头衔=${title || '无'}｜人设=${persona || '无'}${recentJoinFlag}`;
         }));
+        const explicitRelationshipDirectionKeys = new Set(
+            relationshipLinks.map(link => `${String(link.sourceId)}=>${String(link.targetId)}`)
+        );
+        const relationshipLinkLines = [];
+        relationshipLinks.forEach((link) => {
+            const sourceLabel = getParticipantPromptLabel(group, link.sourceId, link.sourceId === 'me' ? getParticipantName(group, 'me') : '成员');
+            const targetLabel = getParticipantPromptLabel(group, link.targetId, link.targetId === 'me' ? getParticipantName(group, 'me') : '成员');
+            relationshipLinkLines.push(`- ${sourceLabel}（speaker_contact_id=${link.sourceId}） -> ${targetLabel}（speaker_contact_id=${link.targetId}）：${link.relation}`);
+
+            const reverseKey = `${String(link.targetId)}=>${String(link.sourceId)}`;
+            if (!explicitRelationshipDirectionKeys.has(reverseKey)) {
+                relationshipLinkLines.push(`- ${targetLabel}（speaker_contact_id=${link.targetId}） -> ${sourceLabel}（speaker_contact_id=${link.sourceId}）：${link.relation}（由同一条关系线按双向理解）`);
+            }
+        });
         const directContext = buildBidirectionalGroupContext(group);
+        const stickerPrompt = typeof window.buildWechatStickerPrompt === 'function'
+            ? window.buildWechatStickerPrompt(group)
+            : '';
+        const worldbookPrompt = typeof window.buildWechatWorldbookPrompt === 'function'
+            ? window.buildWechatWorldbookPrompt(group, history)
+            : '';
         const limit = Number.isFinite(Number(group.contextLimit)) && Number(group.contextLimit) > 0 ? Number(group.contextLimit) : 40;
         const contextMessages = history
             .filter(message => message && !message.hiddenFromUi && !message._hiddenBySanitizer)
@@ -839,20 +1086,34 @@
             `用户本人名字：${getParticipantName(group, 'me')}。用户是群里的${GROUP_ROLE_LABELS[getGroupRole(group, 'me')] || '成员'}。`,
             '【群成员名单】',
             memberLines.length > 0 ? memberLines.join('\n') : '- 当前暂无群成员。',
+            '- 如果群里有同名成员，必须参考“区分标签”与人设来区分他们；不要因为名字相同就跳过不回复。',
+            '【群内关系图】',
+            relationshipLinkLines.length > 0
+                ? `${relationshipLinkLines.join('\n')}\n- 上面这些是群成员之间已经设定好的关系连线，发言互动、站队、亲疏感、称呼和语气时都要参考。若某对成员只有单条关系线而没有相反方向的另一条线，也要默认把它理解成双向关系；只有当同一对成员存在两条相反方向且内容不同的关系线时，才按有方向差异来理解。若没有写出的成员组合，则视为没有额外指定关系。`
+                : '- 当前没有额外设置成员之间的关系连线。',
+            pendingInviteContacts.length > 0
+                ? `【最近新入群成员】\n${pendingInviteContacts.map(member => `- speaker_contact_id=${member.id}｜名字=${getParticipantName(group, member.id, '成员')}｜区分标签=${getParticipantPromptLabel(group, member.id, '成员')}｜人设=${String(member.persona || '无').replace(/\s+/g, ' ').trim() || '无'}`).join('\n')}\n这些成员现在已经在群里，可以自然接话；如果场景允许，优先让至少一位最近入群成员在本轮说 1 句，但不要硬凑所有人都发言。`
+                : '',
+            stickerPrompt || '',
+            worldbookPrompt || '',
             '【输出协议】',
             '- 你必须只输出一个 JSON 数组，不要输出解释、不要输出 Markdown 代码块。',
             '- 允许的可见 type 只有：text_message、quote_reply、sticker_message、voice、image。',
             '- 每一条可见消息都必须带 speaker_contact_id，且必须精确使用上面成员名单里的某个值。',
+            '- 如果你暂时记不住某个同名成员的真实 id，可以先参考其区分标签思考，但最终输出时应尽量填写真实 speaker_contact_id；若误填区分标签，解析器会尝试识别。',
             '- quote_reply 格式：{"type":"quote_reply","speaker_contact_id":"成员ID","target_msg_id":"消息ID","target_timestamp":消息时间戳,"reply_content":"回复内容"}。优先使用 target_msg_id。',
             '- text_message 格式：{"type":"text_message","speaker_contact_id":"成员ID","content":"回复内容"}。',
             '- sticker_message 格式：{"type":"sticker_message","speaker_contact_id":"成员ID","sticker":"表情描述"}。',
             '- voice 格式：{"type":"voice","speaker_contact_id":"成员ID","duration":3,"content":"语音内容"}。',
             '- image 格式：{"type":"image","speaker_contact_id":"成员ID","content":"图片描述"}。',
-            '- 允许额外输出管理动作 action，但仅限两种：',
+            '- 允许额外输出管理动作 action，但仅限三种：',
+            '- 管理动作里的 speaker_contact_id 必须是某位 AI 成员，严禁写 me（用户本人）。',
             '- 改群名：{"type":"action","speaker_contact_id":"成员ID","command":"RENAME_GROUP","payload":"新群名"}。只有管理员或群主能这样做。',
             '- 设群头衔：{"type":"action","speaker_contact_id":"成员ID","command":"SET_MEMBER_TITLE","payload":{"target_member_id":"成员ID","title":"群头衔"}}。只有群主能这样做；若要取消群头衔，title 传空字符串。',
+            '- 撤回消息：{"type":"action","speaker_contact_id":"成员ID","command":"RECALL_GROUP_MESSAGE","payload":{"target_msg_id":"消息ID"}}。只有管理员或群主能这样做；target_msg_id 必须来自上文已有真实消息。',
             '- 一次把整轮群成员要说的话按顺序写完整，不能依赖第二次生成补说话。',
-            '- 除上面两种管理动作外，禁止输出 thought_state、转账、改资料、下单、一起听、屏幕操作等任何副作用指令。',
+            '- 每轮回复总共至少输出 6 条可见消息；action 不计入这 6 条。若群成员较少，可以让同一成员连续说多句，但总可见消息数不能少于 6 条。',
+            '- 除上面三种管理动作外，禁止输出 thought_state、转账、改资料、下单、一起听、屏幕操作等任何副作用指令。',
             '- 谁更可能接话、是否多人连续回复、是否引用消息，都由你一次性自然决定。',
             `【记忆模式】当前模式：${GROUP_MEMORY_MODE_LABELS[memoryMode] || GROUP_MEMORY_MODE_LABELS.group_only}。`,
             directContext || ''
@@ -899,39 +1160,834 @@
         }
     }
 
+    function getGroupMemberRelationsElements() {
+        return {
+            screen: document.getElementById('group-member-relations-screen'),
+            subtitle: document.getElementById('group-member-relations-subtitle'),
+            groupName: document.getElementById('group-member-relations-group-name'),
+            canvas: document.getElementById('group-member-relations-canvas'),
+            svg: document.getElementById('group-member-relations-svg'),
+            nodesLayer: document.getElementById('group-member-relations-nodes'),
+            toast: document.getElementById('group-member-relations-toast'),
+            picker: document.getElementById('group-member-relations-picker'),
+            pickerList: document.getElementById('group-member-relations-picker-list')
+        };
+    }
+
+    function showGroupMemberRelationsToast(text, duration = 3000) {
+        const { toast } = getGroupMemberRelationsElements();
+        if (!toast) return;
+        toast.textContent = text;
+        toast.classList.add('show');
+        clearTimeout(toast.__hideTimer);
+        if (duration > 0) {
+            toast.__hideTimer = setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+    }
+
+    function hideGroupMemberRelationsToast() {
+        const { toast } = getGroupMemberRelationsElements();
+        if (!toast) return;
+        clearTimeout(toast.__hideTimer);
+        toast.classList.remove('show');
+    }
+
+    function clearSelectedGroupRelationNode() {
+        relationGraphRuntime.selectedNodeId = null;
+        relationGraphRuntime.nodes.forEach((node) => {
+            if (node && node.el) {
+                node.el.classList.remove('selected');
+            }
+        });
+        hideGroupMemberRelationsToast();
+    }
+
+    function getGroupMemberRelationNodeById(nodeId) {
+        return relationGraphRuntime.nodes.find(node => String(node.id) === String(nodeId)) || null;
+    }
+
+    function getGroupRelationCanvasMetrics() {
+        const { canvas } = getGroupMemberRelationsElements();
+        const rect = canvas ? canvas.getBoundingClientRect() : null;
+        return {
+            rect,
+            width: rect && rect.width ? rect.width : window.innerWidth,
+            height: rect && rect.height ? rect.height : window.innerHeight
+        };
+    }
+
+    function ensureGroupRelationNodePosition(groupContact, participantId, index = 0, total = 1) {
+        const group = getGroupContact(groupContact);
+        const safeId = normalizeParticipantId(participantId);
+        if (!group || !safeId) return { xRatio: 0.5, yRatio: 0.5 };
+        if (!group.groupMeta.relationshipNodePositions || typeof group.groupMeta.relationshipNodePositions !== 'object') {
+            group.groupMeta.relationshipNodePositions = {};
+        }
+        const existing = group.groupMeta.relationshipNodePositions[String(safeId)];
+        if (existing && Number.isFinite(existing.xRatio) && Number.isFinite(existing.yRatio)) {
+            return existing;
+        }
+        const angle = (Math.PI * 2 * index) / Math.max(total, 1);
+        const xRatio = 0.5 + Math.cos(angle) * 0.24;
+        const yRatio = 0.5 + Math.sin(angle) * 0.18;
+        setManagedRelationNodePosition(group, safeId, xRatio, yRatio);
+        if (typeof saveConfig === 'function') saveConfig();
+        return group.groupMeta.relationshipNodePositions[String(safeId)] || { xRatio: 0.5, yRatio: 0.5 };
+    }
+
+    function buildGroupRelationGraphNodes(groupContact) {
+        const group = getGroupContact(groupContact);
+        if (!group) return [];
+        const { width, height } = getGroupRelationCanvasMetrics();
+        const memberIds = getManagedRelationMemberIds(group);
+        return memberIds.map((participantId, index) => {
+            const contact = participantId === 'me' ? null : getContactById(participantId);
+            if (participantId !== 'me' && (!contact || contact.chatType === 'group')) return null;
+            const position = ensureGroupRelationNodePosition(group, participantId, index, memberIds.length);
+            return {
+                id: String(participantId),
+                participantId,
+                x: (Number(position.xRatio) || 0.5) * width,
+                y: (Number(position.yRatio) || 0.5) * height,
+                label: getParticipantPromptLabel(group, participantId, '成员'),
+                avatar: participantId === 'me' ? getUserAvatar(group) : (contact.avatar || ''),
+                el: null
+            };
+        }).filter(Boolean);
+    }
+
+    function promptForGroupRelationLabel(existing = '') {
+        const result = prompt('LINK TYPE / 输入关联类型:', existing || 'CONNECT');
+        if (result === null) return null;
+        return String(result || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function handleGroupRelationNodeClick(event, node) {
+        event.stopPropagation();
+        if (!node || relationGraphRuntime.isDragging) return;
+
+        if (!relationGraphRuntime.selectedNodeId) {
+            relationGraphRuntime.selectedNodeId = node.id;
+            if (node.el) node.el.classList.add('selected');
+            showGroupMemberRelationsToast('选择第二个成员以建立关系', 0);
+            return;
+        }
+
+        if (String(relationGraphRuntime.selectedNodeId) === String(node.id)) {
+            clearSelectedGroupRelationNode();
+            return;
+        }
+
+        const group = getGroupContact(currentRelationGroupId);
+        const sourceNode = getGroupMemberRelationNodeById(relationGraphRuntime.selectedNodeId);
+        if (!group || !sourceNode) {
+            clearSelectedGroupRelationNode();
+            return;
+        }
+
+        const existingLink = getGroupRelationshipLinks(group).find(link => String(link.sourceId) === String(sourceNode.participantId) && String(link.targetId) === String(node.participantId));
+        const relation = promptForGroupRelationLabel(existingLink ? existingLink.relation : '');
+        if (relation) {
+            const result = upsertGroupRelationshipLink(group, sourceNode.participantId, node.participantId, relation);
+            if (result && result.ok) {
+                renderGroupMemberRelationsScreen(group);
+            }
+        }
+        clearSelectedGroupRelationNode();
+    }
+
+    function startGroupRelationNodeDrag(event, node) {
+        if (!node) return;
+        if (event.button !== undefined && event.button !== 0) return;
+        event.stopPropagation();
+        const { rect } = getGroupRelationCanvasMetrics();
+        if (!rect) return;
+
+        relationGraphRuntime.dragNodeId = node.id;
+        relationGraphRuntime.isDragging = false;
+        relationGraphRuntime.startX = event.clientX;
+        relationGraphRuntime.startY = event.clientY;
+        const nodeRect = node.el.getBoundingClientRect();
+        relationGraphRuntime.dragOffsetX = event.clientX - nodeRect.left - 25;
+        relationGraphRuntime.dragOffsetY = event.clientY - nodeRect.top - 25;
+    }
+
+    function dragGroupRelationNode(event) {
+        if (!relationGraphRuntime.dragNodeId) return;
+        const node = getGroupMemberRelationNodeById(relationGraphRuntime.dragNodeId);
+        if (!node || !node.el) return;
+        const { rect, width, height } = getGroupRelationCanvasMetrics();
+        if (!rect) return;
+
+        if (Math.abs(event.clientX - relationGraphRuntime.startX) > 3 || Math.abs(event.clientY - relationGraphRuntime.startY) > 3) {
+            relationGraphRuntime.isDragging = true;
+            node.el.style.transition = 'none';
+        }
+
+        node.x = Math.min(width - 25, Math.max(25, event.clientX - rect.left - relationGraphRuntime.dragOffsetX));
+        node.y = Math.min(height - 25, Math.max(25, event.clientY - rect.top - relationGraphRuntime.dragOffsetY));
+        node.el.style.left = `${node.x - 25}px`;
+        node.el.style.top = `${node.y - 25}px`;
+        renderGroupRelationGraphLinks();
+    }
+
+    function endGroupRelationNodeDrag() {
+        if (!relationGraphRuntime.dragNodeId) return;
+        const node = getGroupMemberRelationNodeById(relationGraphRuntime.dragNodeId);
+        if (node && node.el) {
+            node.el.style.transition = '';
+            const { width, height } = getGroupRelationCanvasMetrics();
+            setManagedRelationNodePosition(currentRelationGroupId, node.participantId, node.x / Math.max(width, 1), node.y / Math.max(height, 1));
+            if (typeof saveConfig === 'function') saveConfig();
+        }
+        relationGraphRuntime.dragNodeId = null;
+        setTimeout(() => {
+            relationGraphRuntime.isDragging = false;
+        }, 50);
+    }
+
+    function renderGroupRelationGraphLinks() {
+        const group = getGroupContact(currentRelationGroupId);
+        const { svg } = getGroupMemberRelationsElements();
+        if (!group || !svg) return;
+
+        svg.innerHTML = '';
+        const links = getGroupRelationshipLinks(group)
+            .map(link => ({
+                source: getGroupMemberRelationNodeById(link.sourceId),
+                target: getGroupMemberRelationNodeById(link.targetId),
+                relation: link.relation
+            }))
+            .filter(link => link.source && link.target);
+
+        const linkMap = {};
+        links.forEach((link) => {
+            const baseId = String(link.source.id) < String(link.target.id)
+                ? `${link.source.id}-${link.target.id}`
+                : `${link.target.id}-${link.source.id}`;
+            if (!linkMap[baseId]) linkMap[baseId] = [];
+            linkMap[baseId].push(link);
+        });
+        const linkCount = {};
+
+        links.forEach((link) => {
+            const baseId = String(link.source.id) < String(link.target.id)
+                ? `${link.source.id}-${link.target.id}`
+                : `${link.target.id}-${link.source.id}`;
+            const isBidi = linkMap[baseId].length > 1;
+            if (!linkCount[baseId]) linkCount[baseId] = 0;
+            const countIndex = linkCount[baseId]++;
+
+            const sx = link.source.x;
+            const sy = link.source.y;
+            const tx = link.target.x;
+            const ty = link.target.y;
+
+            if (isBidi) {
+                const dx = tx - sx;
+                const dy = ty - sy;
+                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                const dr = dist * 1.5;
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                const sweepFlag = String(link.source.id) < String(link.target.id)
+                    ? (countIndex % 2 === 0 ? 1 : 0)
+                    : (countIndex % 2 === 0 ? 0 : 1);
+                path.setAttribute('d', `M ${sx},${sy} A ${dr},${dr} 0 0,${sweepFlag} ${tx},${ty}`);
+                path.setAttribute('class', 'group-member-relations-line');
+                svg.appendChild(path);
+
+                const offsetX = (-dy / dist) * 35;
+                const offsetY = (dx / dist) * 35;
+                const midX = (sx + tx) / 2 + (sweepFlag ? offsetX : -offsetX);
+                const midY = (sy + ty) / 2 + (sweepFlag ? offsetY : -offsetY);
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', midX);
+                text.setAttribute('y', midY);
+                text.setAttribute('class', 'group-member-relations-link-text');
+                text.textContent = link.relation;
+                svg.appendChild(text);
+                return;
+            }
+
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', sx);
+            line.setAttribute('y1', sy);
+            line.setAttribute('x2', tx);
+            line.setAttribute('y2', ty);
+            line.setAttribute('class', 'group-member-relations-line');
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', (sx + tx) / 2);
+            text.setAttribute('y', (sy + ty) / 2);
+            text.setAttribute('class', 'group-member-relations-link-text');
+            text.textContent = link.relation;
+            svg.appendChild(line);
+            svg.appendChild(text);
+        });
+    }
+
+    function closeGroupMemberRelationsPicker() {
+        const { picker } = getGroupMemberRelationsElements();
+        if (picker) picker.classList.add('hidden');
+    }
+
+    function closeGroupMemberRelationsScreen() {
+        closeGroupMemberRelationsPicker();
+        const { screen } = getGroupMemberRelationsElements();
+        if (screen) screen.classList.add('hidden');
+        clearSelectedGroupRelationNode();
+        relationGraphRuntime.nodes = [];
+        const chatSettingsScreen = document.getElementById('chat-settings-screen');
+        if (chatSettingsScreen && !chatSettingsScreen.classList.contains('hidden') && typeof window.setChatSettingsFloatingSaveVisible === 'function') {
+            window.setChatSettingsFloatingSaveVisible(true);
+        }
+        currentRelationGroupId = null;
+    }
+
+    function renderGroupMemberRelationsPicker(groupContact) {
+        const group = getGroupContact(groupContact);
+        const { pickerList } = getGroupMemberRelationsElements();
+        if (!group || !pickerList) return;
+        const managedIds = new Set(getManagedRelationMemberIds(group).map(id => String(id)));
+        const members = [
+            {
+                id: 'me',
+                avatar: getUserAvatar(group),
+                displayName: getParticipantName(group, 'me', '我'),
+                roleLabel: GROUP_ROLE_LABELS[getGroupRole(group, 'me')] || '成员'
+            },
+            ...getGroupMemberContacts(group).map(member => ({
+                id: member.id,
+                avatar: member.avatar || '',
+                displayName: getParticipantName(group, member.id, '成员'),
+                roleLabel: GROUP_ROLE_LABELS[getGroupRole(group, member.id)] || '成员'
+            }))
+        ];
+        pickerList.innerHTML = '';
+
+        if (members.length === 0) {
+            pickerList.innerHTML = '<div class="group-member-relations-picker-item"><div class="group-member-relations-picker-main"><div class="group-member-relations-picker-name">暂无可选群成员</div><div class="group-member-relations-picker-meta">当前群里还没有可加入关系面板的联系人。</div></div></div>';
+            return;
+        }
+
+        members.forEach((member) => {
+            const isManaged = managedIds.has(String(member.id));
+            const item = document.createElement('div');
+            item.className = 'group-member-relations-picker-item';
+            item.innerHTML = `
+                <img class="group-member-relations-picker-avatar" src="${escapeHtml(member.avatar || '')}" alt="${escapeHtml(member.displayName || '成员')}">
+                <div class="group-member-relations-picker-main">
+                    <div class="group-member-relations-picker-name">${escapeHtml(member.displayName || '成员')}</div>
+                    <div class="group-member-relations-picker-meta">${escapeHtml(member.roleLabel || '成员')} · 点击加入关系图</div>
+                </div>
+                <button type="button" class="group-member-relations-picker-add" ${isManaged ? 'disabled' : ''}>${isManaged ? '已添加' : '添加成员'}</button>
+            `;
+            const addButton = item.querySelector('.group-member-relations-picker-add');
+            if (addButton && !isManaged) {
+                addButton.addEventListener('click', () => {
+                    addManagedRelationMember(group, member.id);
+                    if (typeof saveConfig === 'function') saveConfig();
+                    renderGroupMemberRelationsPicker(group);
+                    renderGroupMemberRelationsScreen(group);
+                    closeGroupMemberRelationsPicker();
+                });
+            }
+            pickerList.appendChild(item);
+        });
+    }
+
+    function renderGroupMemberRelationsScreen(groupContact) {
+        const group = getGroupContact(groupContact || currentRelationGroupId);
+        const { screen, subtitle, groupName, nodesLayer } = getGroupMemberRelationsElements();
+        if (!group || !screen || !nodesLayer) return;
+        currentRelationGroupId = group.id;
+        if (groupName) groupName.textContent = getGroupChatDisplayName(group);
+        if (subtitle) subtitle.textContent = `${getManagedRelationMemberIds(group).length} NODES // RELATION MAP`;
+
+        clearSelectedGroupRelationNode();
+        relationGraphRuntime.nodes = buildGroupRelationGraphNodes(group);
+        nodesLayer.innerHTML = '';
+
+        relationGraphRuntime.nodes.forEach((node) => {
+            const nodeEl = document.createElement('div');
+            nodeEl.className = 'group-member-relations-node';
+            nodeEl.style.left = `${node.x - 25}px`;
+            nodeEl.style.top = `${node.y - 25}px`;
+            nodeEl.innerHTML = `
+                <div class="orbit"></div>
+                <div class="group-member-relations-node-core">
+                    ${node.avatar ? `<img class="group-member-relations-node-avatar" src="${escapeHtml(node.avatar)}" alt="${escapeHtml(node.label)}" draggable="false">` : '<i class="ri-focus-3-line"></i>'}
+                </div>
+                <div class="group-member-relations-node-label">${escapeHtml(node.label)}</div>
+            `;
+            nodeEl.addEventListener('dragstart', (event) => event.preventDefault());
+            nodeEl.addEventListener('pointerdown', (event) => startGroupRelationNodeDrag(event, node));
+            nodeEl.addEventListener('click', (event) => handleGroupRelationNodeClick(event, node));
+            node.el = nodeEl;
+            nodesLayer.appendChild(nodeEl);
+        });
+
+        renderGroupRelationGraphLinks();
+        renderGroupMemberRelationsPicker(group);
+
+        if (relationGraphRuntime.nodes.length === 0) {
+            showGroupMemberRelationsToast('点击 Add Member 添加成员进入关系图', 2600);
+        }
+    }
+
+    function openGroupMemberRelationsScreen(groupId = currentSettingsGroupId) {
+        const group = getGroupContact(groupId);
+        const { screen } = getGroupMemberRelationsElements();
+        if (!group || !screen) return;
+        currentRelationGroupId = group.id;
+        closeGroupMemberRelationsPicker();
+        if (typeof window.setChatSettingsFloatingSaveVisible === 'function') {
+            window.setChatSettingsFloatingSaveVisible(false);
+        }
+        screen.classList.remove('hidden');
+        requestAnimationFrame(() => {
+            renderGroupMemberRelationsScreen(group);
+        });
+    }
+
+    function getInlineGroupSettingsPanel() {
+        return document.getElementById('chat-setting-group-inline-panel');
+    }
+
+    function isInlineGroupSettingsActive() {
+        const panel = getInlineGroupSettingsPanel();
+        return !!(panel && !panel.classList.contains('hidden'));
+    }
+
+    function getGroupSettingsNodes(key) {
+        const nodes = [];
+        const inlinePanel = getInlineGroupSettingsPanel();
+        const legacyIdMap = {
+            name: 'group-settings-name',
+            'memory-mode': 'group-settings-memory-mode',
+            'avatar-preview': 'group-settings-avatar-preview',
+            'avatar-upload': 'group-settings-avatar-upload',
+            'member-list': 'group-chat-member-list'
+        };
+
+        if (inlinePanel) {
+            nodes.push(...Array.from(inlinePanel.querySelectorAll(`[data-group-settings-id="${key}"]`)));
+        }
+
+        const legacyId = legacyIdMap[key];
+        if (legacyId) {
+            const legacyNode = document.getElementById(legacyId);
+            if (legacyNode) nodes.push(legacyNode);
+        }
+
+        return Array.from(new Set(nodes.filter(Boolean)));
+    }
+
+    function getPrimaryGroupSettingsNode(key) {
+        const inlinePanel = getInlineGroupSettingsPanel();
+        if (inlinePanel && !inlinePanel.classList.contains('hidden')) {
+            const inlineNode = inlinePanel.querySelector(`[data-group-settings-id="${key}"]`);
+            if (inlineNode) return inlineNode;
+        }
+        const nodes = getGroupSettingsNodes(key);
+        return nodes.length ? nodes[0] : null;
+    }
+
+    function getGroupSettingsActionNodes(action) {
+        const nodes = [];
+        const inlinePanel = getInlineGroupSettingsPanel();
+        const legacyIdMap = {
+            save: 'group-settings-save-btn',
+            invite: 'group-settings-invite-btn',
+            exit: 'group-settings-exit-btn',
+            dissolve: 'group-settings-dissolve-btn'
+        };
+
+        if (inlinePanel) {
+            nodes.push(...Array.from(inlinePanel.querySelectorAll(`[data-group-settings-action="${action}"]`)));
+        }
+
+        const legacyId = legacyIdMap[action];
+        if (legacyId) {
+            const legacyNode = document.getElementById(legacyId);
+            if (legacyNode) nodes.push(legacyNode);
+        }
+
+        return Array.from(new Set(nodes.filter(Boolean)));
+    }
+
+    function setGroupSettingsAvatarPreview(previewNode, avatarUrl) {
+        if (!previewNode) return;
+        if (avatarUrl) {
+            previewNode.style.backgroundImage = `url(${avatarUrl})`;
+            previewNode.style.backgroundSize = 'cover';
+            previewNode.style.backgroundPosition = 'center';
+            previewNode.innerHTML = '';
+            return;
+        }
+        previewNode.style.backgroundImage = '';
+        previewNode.style.backgroundSize = '';
+        previewNode.style.backgroundPosition = '';
+        previewNode.innerHTML = '<i class="fas fa-users"></i>';
+    }
+
+    function getSortedGroupMemberRows(rows) {
+        const rolePriority = { owner: 0, admin: 1, member: 2 };
+        return rows.slice().sort((left, right) => {
+            const roleDiff = (rolePriority[left.role] ?? 99) - (rolePriority[right.role] ?? 99);
+            if (roleDiff !== 0) return roleDiff;
+            if (!!left.isSelf !== !!right.isSelf) return left.isSelf ? -1 : 1;
+            return String(left.nickname || left.name || '').localeCompare(String(right.nickname || right.name || ''), 'zh-Hans-CN');
+        });
+    }
+
+    function buildGroupSettingsMemberRows(groupContact) {
+        const group = getGroupContact(groupContact);
+        if (!group) return [];
+        const rows = [
+            {
+                id: 'me',
+                name: getUserBaseName(group),
+                baseName: getUserBaseName(group),
+                nickname: getGroupMemberNickname(group, 'me'),
+                avatar: getUserAvatar(group),
+                role: getGroupRole(group, 'me'),
+                title: getGroupMemberTitle(group, 'me'),
+                isSelf: true
+            }
+        ];
+        getGroupMemberContacts(group).forEach((member) => {
+            rows.push({
+                id: member.id,
+                name: member.remark || member.nickname || member.name || '\u6210\u5458',
+                baseName: getParticipantBaseName(group, member.id, '\u6210\u5458'),
+                nickname: getGroupMemberNickname(group, member.id),
+                avatar: member.avatar || '',
+                role: getGroupRole(group, member.id),
+                title: getGroupMemberTitle(group, member.id),
+                isSelf: false,
+                contact: member
+            });
+        });
+        return getSortedGroupMemberRows(rows);
+    }
+
+    function getGroupMemberDisplayName(row, options = {}) {
+        const includeSelfSuffix = options.includeSelfSuffix !== false;
+        const name = String(row && (row.nickname || row.name) || '\u7fa4\u6210\u5458').trim() || '\u7fa4\u6210\u5458';
+        return includeSelfSuffix && row && row.isSelf ? `${name}\uFF08\u6211\uFF09` : name;
+    }
+
+    function getGroupMemberDirectoryElements() {
+        return {
+            screen: document.getElementById('group-member-directory-screen'),
+            subtitle: document.getElementById('group-member-directory-subtitle'),
+            content: document.getElementById('group-member-directory-content'),
+            modal: document.getElementById('group-member-directory-modal'),
+            modalCard: document.getElementById('group-member-directory-modal-card'),
+            modalAvatar: document.getElementById('group-member-directory-modal-avatar'),
+            modalName: document.getElementById('group-member-directory-modal-name'),
+            modalRole: document.getElementById('group-member-directory-modal-role'),
+            modalActions: document.getElementById('group-member-directory-modal-actions')
+        };
+    }
+
+    function getGroupMemberPreviewItems(groupContact, rows) {
+        const group = getGroupContact(groupContact);
+        const safeRows = Array.isArray(rows) ? rows : [];
+        const canInvite = !!(group && canCurrentUserManageMembers(group));
+        const maxVisibleItems = 12;
+        const reservedSlots = canInvite ? 1 : 0;
+        const visibleRows = safeRows.slice(0, Math.max(maxVisibleItems - reservedSlots, 0));
+        const items = visibleRows.map(row => ({
+            type: 'member',
+            row
+        }));
+        if (canInvite && items.length < maxVisibleItems) {
+            items.push({ type: 'invite' });
+        }
+        return items.slice(0, maxVisibleItems);
+    }
+
+    function getGroupMemberDirectoryDescription(row) {
+        const descriptionParts = [];
+        if (row.title) {
+            descriptionParts.push(`\u7fa4\u5934\u8854\uff1a${row.title}`);
+        } else {
+            descriptionParts.push(row.isSelf ? '\u7528\u6237\u672c\u4eba' : '\u672a\u8bbe\u7fa4\u5934\u8854');
+        }
+        if (row.nickname) {
+            descriptionParts.push(`\u539f\u540d\uff1a${row.baseName}`);
+        } else if (!row.isSelf && row.baseName) {
+            descriptionParts.push(row.baseName);
+        }
+        return descriptionParts.join(' / ');
+    }
+
+    function buildGroupMemberModalActions(groupContact, row) {
+        const group = getGroupContact(groupContact);
+        if (!group || !row) return [];
+        const actions = [
+            {
+                action: 'set-nickname',
+                label: row.nickname ? '\u4fee\u6539\u7fa4\u6635\u79f0' : '\u8bbe\u7f6e\u7fa4\u6635\u79f0',
+                icon: 'ri-edit-2-line',
+                danger: false
+            }
+        ];
+
+        if (!row.isSelf && canParticipantManageTitles(group, 'me')) {
+            actions.push({
+                action: 'set-title',
+                label: row.title ? '\u4fee\u6539\u7fa4\u5934\u8854' : '\u8bbe\u7f6e\u7fa4\u5934\u8854',
+                icon: 'ri-bookmark-3-line',
+                danger: false
+            });
+        }
+        if (!row.isSelf && canCurrentUserManageAdmins(group) && row.role !== 'owner') {
+            actions.push({
+                action: 'toggle-admin',
+                label: row.role === 'admin' ? '\u53d6\u6d88\u7ba1\u7406\u5458' : '\u8bbe\u4e3a\u7ba1\u7406\u5458',
+                icon: 'ri-shield-star-line',
+                danger: false
+            });
+            actions.push({
+                action: 'transfer-owner',
+                label: '\u8f6c\u8ba9\u7fa4\u4e3b',
+                icon: 'ri-arrow-left-right-line',
+                danger: false
+            });
+        }
+        if (!row.isSelf && canCurrentUserManageMembers(group) && row.role !== 'owner') {
+            actions.push({
+                action: 'remove-member',
+                label: '\u79fb\u51fa\u7fa4\u804a',
+                icon: 'ri-logout-box-r-line',
+                danger: true
+            });
+        }
+        return actions;
+    }
+
+    function renderGroupSettingsMemberList(container, groupContact, rows) {
+        const group = getGroupContact(groupContact);
+        if (!container || !group) return;
+        const memberRows = Array.isArray(rows) ? rows : [];
+        const previewItems = getGroupMemberPreviewItems(group, memberRows);
+        container.innerHTML = `
+            <div class="group-member-preview-shell" role="button" tabindex="0" aria-label="\u6253\u5f00\u7fa4\u6210\u5458\u5217\u8868">
+                <div class="group-member-preview-head">
+                    <div class="group-member-preview-label">\u7fa4\u6210\u5458</div>
+                    <div class="group-member-preview-meta">${memberRows.length}\u4eba <i class="ri-arrow-right-s-line"></i></div>
+                </div>
+                <div class="group-member-preview-grid"></div>
+            </div>
+        `;
+
+        const shell = container.querySelector('.group-member-preview-shell');
+        const grid = container.querySelector('.group-member-preview-grid');
+        if (!shell || !grid) return;
+
+        shell.addEventListener('click', () => openGroupMemberDirectoryScreen(group.id));
+        shell.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openGroupMemberDirectoryScreen(group.id);
+            }
+        });
+
+        previewItems.forEach((item) => {
+            const tile = document.createElement('button');
+            tile.type = 'button';
+            tile.className = `group-member-preview-item${item.type === 'invite' ? ' is-invite' : ''}`;
+            if (item.type === 'invite') {
+                tile.innerHTML = `
+                    <span class="group-member-preview-avatar group-member-preview-avatar-invite"><i class="ri-add-line"></i></span>
+                    <span class="group-member-preview-name">\u9080\u8bf7</span>
+                `;
+                tile.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    handleInviteGroupMembers(group.id);
+                });
+                grid.appendChild(tile);
+                return;
+            }
+
+            const row = item.row;
+            tile.innerHTML = `
+                <span class="group-member-preview-avatar">${row.avatar ? `<img src="${escapeHtml(row.avatar)}" alt="${escapeHtml(getGroupMemberDisplayName(row))}" draggable="false">` : `<span class="group-member-preview-avatar-fallback">${escapeHtml(getGroupMemberDisplayName(row).slice(0, 1))}</span>`}</span>
+                <span class="group-member-preview-name">${escapeHtml(getGroupMemberDisplayName(row))}</span>
+            `;
+            tile.addEventListener('click', (event) => {
+                event.stopPropagation();
+                openGroupMemberDirectoryScreen(group.id);
+            });
+            grid.appendChild(tile);
+        });
+    }
+
+    function renderGroupMemberDirectoryScreen(groupContact) {
+        const group = getGroupContact(groupContact || currentMemberDirectoryGroupId);
+        const { screen, subtitle, content } = getGroupMemberDirectoryElements();
+        if (!group || !screen || !content) return;
+        const rows = buildGroupSettingsMemberRows(group);
+        currentMemberDirectoryGroupId = group.id;
+        if (subtitle) subtitle.textContent = `${rows.length} Members`;
+        content.innerHTML = '';
+
+        const sections = [
+            { role: 'owner', title: GROUP_ROLE_LABELS.owner || 'Owner' },
+            { role: 'admin', title: GROUP_ROLE_LABELS.admin || 'Admins' },
+            { role: 'member', title: GROUP_ROLE_LABELS.member || 'Members' }
+        ];
+
+        sections.forEach((section) => {
+            const sectionRows = rows.filter(row => String(row.role || 'member') === section.role);
+            if (sectionRows.length === 0) return;
+
+            const sectionTitle = document.createElement('div');
+            sectionTitle.className = 'group-member-directory-section-title';
+            sectionTitle.textContent = section.title;
+            content.appendChild(sectionTitle);
+
+            sectionRows.forEach((row) => {
+                const card = document.createElement('button');
+                card.type = 'button';
+                card.className = `group-member-directory-card is-${escapeHtml(row.role || 'member')}`;
+                card.innerHTML = `
+                    <div class="group-member-directory-avatar-box">
+                        ${row.avatar ? `<img src="${escapeHtml(row.avatar)}" alt="${escapeHtml(getGroupMemberDisplayName(row))}" class="group-member-directory-avatar-img" draggable="false">` : `<span>${escapeHtml(getGroupMemberDisplayName(row).slice(0, 1))}</span>`}
+                    </div>
+                    <div class="group-member-directory-info-box">
+                        <div class="group-member-directory-name-row">
+                            <span class="group-member-directory-name">${escapeHtml(getGroupMemberDisplayName(row))}</span>
+                            <span class="group-member-directory-role-badge is-${escapeHtml(row.role || 'member')}">${escapeHtml(GROUP_ROLE_LABELS[row.role] || '\u6210\u5458')}</span>
+                        </div>
+                        <div class="group-member-directory-desc-row">
+                            <span>${escapeHtml(getGroupMemberDirectoryDescription(row))}</span>
+                        </div>
+                    </div>
+                    <div class="group-member-directory-action-icon"><i class="ri-more-2-line"></i></div>
+                `;
+                card.addEventListener('click', () => openGroupMemberDirectoryModal(group.id, row.id));
+                content.appendChild(card);
+            });
+        });
+
+        if (currentMemberDirectoryTargetId !== null && currentMemberDirectoryTargetId !== undefined && currentMemberDirectoryTargetId !== '') {
+            openGroupMemberDirectoryModal(group.id, currentMemberDirectoryTargetId);
+        } else {
+            closeGroupMemberDirectoryModal({ preserveTarget: true });
+        }
+    }
+
+    function closeGroupMemberDirectoryModal(options = {}) {
+        const { modal } = getGroupMemberDirectoryElements();
+        if (modal) modal.classList.remove('active');
+        if (!options.preserveTarget) {
+            currentMemberDirectoryTargetId = null;
+        }
+    }
+
+    function openGroupMemberDirectoryModal(groupContact, targetId) {
+        const group = getGroupContact(groupContact || currentMemberDirectoryGroupId);
+        const { modal, modalAvatar, modalName, modalRole, modalActions } = getGroupMemberDirectoryElements();
+        if (!group || !modal || !modalAvatar || !modalName || !modalRole || !modalActions) return;
+        const rows = buildGroupSettingsMemberRows(group);
+        const row = rows.find(item => String(item.id) === String(normalizeParticipantId(targetId)));
+        if (!row) {
+            closeGroupMemberDirectoryModal();
+            return;
+        }
+        currentMemberDirectoryTargetId = normalizeParticipantId(targetId);
+        modalAvatar.innerHTML = row.avatar
+            ? `<img src="${escapeHtml(row.avatar)}" alt="${escapeHtml(getGroupMemberDisplayName(row))}" class="group-member-directory-modal-avatar-img" draggable="false">`
+            : `<span>${escapeHtml(getGroupMemberDisplayName(row).slice(0, 1))}</span>`;
+        modalName.textContent = getGroupMemberDisplayName(row);
+        modalRole.textContent = `- ${GROUP_ROLE_LABELS[row.role] || 'member'}${row.title ? ` / ${row.title}` : ''} -`;
+        modalActions.innerHTML = '';
+
+        buildGroupMemberModalActions(group, row).forEach((actionItem) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `group-member-directory-modal-btn${actionItem.danger ? ' is-danger' : ''}`;
+            button.innerHTML = `<i class="${escapeHtml(actionItem.icon)}"></i><span>${escapeHtml(actionItem.label)}</span>`;
+            button.addEventListener('click', () => {
+                closeGroupMemberDirectoryModal();
+                if (actionItem.action === 'set-nickname') {
+                    handleSetGroupMemberNickname(group.id, row.id);
+                } else if (actionItem.action === 'set-title') {
+                    handleSetGroupMemberTitle(group.id, row.id);
+                } else if (actionItem.action === 'toggle-admin') {
+                    handleToggleGroupAdmin(group.id, row.id);
+                } else if (actionItem.action === 'transfer-owner') {
+                    handleTransferGroupOwner(group.id, row.id);
+                } else if (actionItem.action === 'remove-member') {
+                    handleRemoveGroupMember(group.id, row.id);
+                }
+            });
+            modalActions.appendChild(button);
+        });
+
+        modal.classList.add('active');
+        if (navigator.vibrate) navigator.vibrate(30);
+    }
+
+    function openGroupMemberDirectoryScreen(groupId = currentSettingsGroupId) {
+        const group = getGroupContact(groupId || currentSettingsGroupId);
+        const { screen } = getGroupMemberDirectoryElements();
+        if (!group || !screen) return;
+        currentMemberDirectoryGroupId = group.id;
+        renderGroupMemberDirectoryScreen(group);
+        screen.classList.remove('hidden');
+        if (typeof window.setChatSettingsFloatingSaveVisible === 'function') {
+            window.setChatSettingsFloatingSaveVisible(false);
+        }
+    }
+
+    function closeGroupMemberDirectoryScreen() {
+        const { screen } = getGroupMemberDirectoryElements();
+        closeGroupMemberDirectoryModal();
+        if (screen) screen.classList.add('hidden');
+        const chatSettingsScreen = document.getElementById('chat-settings-screen');
+        if (chatSettingsScreen && !chatSettingsScreen.classList.contains('hidden') && typeof window.setChatSettingsFloatingSaveVisible === 'function') {
+            window.setChatSettingsFloatingSaveVisible(true);
+        }
+        currentMemberDirectoryGroupId = null;
+    }
+
     function renderGroupChatSettings(groupContact) {
         const group = getGroupContact(groupContact);
         if (!group) return;
         currentSettingsGroupId = group.id;
         const canRename = canParticipantRenameGroup(group, 'me');
         const canManageTitles = canParticipantManageTitles(group, 'me');
-        const nameInput = document.getElementById('group-settings-name');
-        const memorySelect = document.getElementById('group-settings-memory-mode');
-        const roleBox = document.getElementById('group-settings-my-role');
-        const avatarPreview = document.getElementById('group-settings-avatar-preview');
-        const memberList = document.getElementById('group-chat-member-list');
-        const dissolveBtn = document.getElementById('group-settings-dissolve-btn');
-        const exitBtn = document.getElementById('group-settings-exit-btn');
+        const nameInputs = getGroupSettingsNodes('name');
+        const memorySelects = getGroupSettingsNodes('memory-mode');
+        const avatarPreviews = getGroupSettingsNodes('avatar-preview');
+        const memberLists = getGroupSettingsNodes('member-list');
+        const dissolveButtons = getGroupSettingsActionNodes('dissolve');
+        const exitButtons = getGroupSettingsActionNodes('exit');
 
-        if (nameInput) nameInput.value = getGroupChatDisplayName(group);
-        if (nameInput) {
-            nameInput.disabled = !canRename;
-            nameInput.placeholder = canRename ? '输入群名称' : '仅管理员或群主可修改群名';
-            nameInput.style.opacity = canRename ? '1' : '0.65';
-        }
-        if (memorySelect) memorySelect.value = String(group.groupMeta.memoryMode || 'group_only');
-        if (roleBox) roleBox.textContent = GROUP_ROLE_LABELS[getGroupRole(group, 'me')] || '成员';
-        if (avatarPreview) {
-            if (group.groupMeta.avatar || group.avatar) {
-                avatarPreview.style.backgroundImage = `url(${group.groupMeta.avatar || group.avatar})`;
-                avatarPreview.innerHTML = '';
-            } else {
-                avatarPreview.style.backgroundImage = '';
-                avatarPreview.innerHTML = '<i class="fas fa-users"></i>';
-            }
-        }
-        if (dissolveBtn) dissolveBtn.style.display = getGroupRole(group, 'me') === 'owner' ? '' : 'none';
-        if (exitBtn) exitBtn.textContent = getGroupRole(group, 'me') === 'owner' ? '转让群主后才能退出' : '退出群聊';
+        nameInputs.forEach((input) => {
+            input.value = getGroupChatDisplayName(group);
+            input.disabled = !canRename;
+            input.placeholder = canRename ? '输入群名称' : '仅管理员或群主可修改群名';
+            input.style.opacity = canRename ? '1' : '0.65';
+        });
+        memorySelects.forEach((select) => {
+            select.value = String(group.groupMeta.memoryMode || 'group_only');
+        });
+        avatarPreviews.forEach((previewNode) => {
+            setGroupSettingsAvatarPreview(previewNode, group.groupMeta.avatar || group.avatar || '');
+        });
+        dissolveButtons.forEach((button) => {
+            button.style.display = getGroupRole(group, 'me') === 'owner' ? '' : 'none';
+        });
+        exitButtons.forEach((button) => {
+            button.textContent = getGroupRole(group, 'me') === 'owner' ? '转让群主后才能退出' : '退出群聊';
+        });
 
         const rows = [];
         rows.push({
@@ -958,67 +2014,22 @@
             });
         });
 
-        if (!memberList) return;
-        memberList.innerHTML = '';
-
-        rows.forEach((row) => {
-            const item = document.createElement('div');
-            item.className = 'list-item';
-            item.style.display = 'block';
-
-            const actionHtml = [];
-            actionHtml.push(`<button type="button" class="ios-btn-block secondary group-member-action" data-action="set-nickname" data-target-id="${escapeHtml(row.id)}" style="margin-top:8px;">${row.nickname ? '修改群昵称' : '设置群昵称'}</button>`);
-            if (!row.isSelf) {
-                if (canCurrentUserManageAdmins(group) && row.role !== 'owner') {
-                    actionHtml.push(`<button type="button" class="ios-btn-block secondary group-member-action" data-action="toggle-admin" data-target-id="${escapeHtml(row.id)}" style="margin-top:8px;">${row.role === 'admin' ? '取消管理员' : '设为管理员'}</button>`);
-                    actionHtml.push(`<button type="button" class="ios-btn-block secondary group-member-action" data-action="transfer-owner" data-target-id="${escapeHtml(row.id)}" style="margin-top:8px;">转让群主</button>`);
-                }
-                if (canCurrentUserManageMembers(group) && row.role !== 'owner') {
-                    actionHtml.push(`<button type="button" class="ios-btn-block secondary group-member-action" data-action="remove-member" data-target-id="${escapeHtml(row.id)}" style="margin-top:8px;">移出群聊</button>`);
-                }
-                if (canManageTitles) {
-                    actionHtml.push(`<button type="button" class="ios-btn-block secondary group-member-action" data-action="set-title" data-target-id="${escapeHtml(row.id)}" style="margin-top:8px;">${row.title ? '修改群头衔' : '设置群头衔'}</button>`);
-                }
-            }
-
-            item.innerHTML = `
-                <div style="display:flex;align-items:center;gap:12px;">
-                    <img src="${escapeHtml(row.avatar || '')}" style="width:42px;height:42px;border-radius:50%;object-fit:cover;flex-shrink:0;">
-                    <div style="flex:1;min-width:0;">
-                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                            <span style="font-size:15px;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(row.nickname || row.name)}${row.isSelf ? '（我）' : ''}</span>
-                            <span style="font-size:11px;color:#2563eb;background:#eff6ff;border-radius:999px;padding:2px 8px;">${escapeHtml(GROUP_ROLE_LABELS[row.role] || '成员')}</span>
-                        </div>
-                        ${row.nickname ? `<div style="margin-top:6px;font-size:12px;color:#6b7280;">原名：${escapeHtml(row.baseName)}</div>` : ''}
-                        ${row.title ? `<div style="margin-top:6px;font-size:12px;color:#6b7280;">群头衔：${escapeHtml(row.title)}</div>` : ''}
-                        ${actionHtml.join('')}
-                    </div>
-                </div>
-            `;
-
-            item.querySelectorAll('.group-member-action').forEach((button) => {
-                button.addEventListener('click', () => {
-                    const targetId = normalizeParticipantId(button.dataset.targetId);
-                    const action = button.dataset.action;
-                    if (action === 'set-nickname') {
-                        handleSetGroupMemberNickname(group.id, targetId);
-                    } else if (action === 'toggle-admin') {
-                        handleToggleGroupAdmin(group.id, targetId);
-                    } else if (action === 'transfer-owner') {
-                        handleTransferGroupOwner(group.id, targetId);
-                    } else if (action === 'remove-member') {
-                        handleRemoveGroupMember(group.id, targetId);
-                    } else if (action === 'set-title') {
-                        handleSetGroupMemberTitle(group.id, targetId);
-                    }
-                });
-            });
-
-            memberList.appendChild(item);
+        memberLists.forEach((memberList) => {
+            renderGroupSettingsMemberList(memberList, group, rows, canManageTitles);
         });
+
+        if (String(currentRelationGroupId || '') === String(group.id)) {
+            renderGroupMemberRelationsScreen(group);
+        }
+        if (String(currentMemberDirectoryGroupId || '') === String(group.id)) {
+            renderGroupMemberDirectoryScreen(group);
+        }
     }
 
     function closeGroupChatSettings() {
+        if (currentMemberDirectoryGroupId) {
+            closeGroupMemberDirectoryScreen();
+        }
         const modal = document.getElementById('group-chat-settings-modal');
         if (modal) modal.classList.add('hidden');
     }
@@ -1031,11 +2042,12 @@
         if (modal) modal.classList.remove('hidden');
     }
 
-    function persistGroupSettings() {
-        const group = getGroupContact(currentSettingsGroupId);
-        if (!group) return;
-        const nameInput = document.getElementById('group-settings-name');
-        const memorySelect = document.getElementById('group-settings-memory-mode');
+    function persistGroupSettings(groupId = currentSettingsGroupId, options = {}) {
+        const group = getGroupContact(groupId || currentSettingsGroupId);
+        if (!group) return null;
+        currentSettingsGroupId = group.id;
+        const nameInput = getPrimaryGroupSettingsNode('name');
+        const memorySelect = getPrimaryGroupSettingsNode('memory-mode');
         const nextName = String(nameInput && nameInput.value ? nameInput.value : '').trim() || getGroupChatDisplayName(group);
         const nextMemoryMode = String(memorySelect && memorySelect.value ? memorySelect.value : 'group_only');
         group.groupMeta.memoryMode = nextMemoryMode;
@@ -1048,12 +2060,21 @@
             window.ensureGroupChatMeta(group);
         }
         refreshGroupChatVisualState(group);
-        if (typeof saveConfig === 'function') saveConfig();
-        if (typeof window.renderContactList === 'function') {
+        if (!options.skipSave && typeof saveConfig === 'function') saveConfig();
+        if (!options.skipContactList && typeof window.renderContactList === 'function') {
             window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
         }
-        showGroupToast(renamed ? '群资料已保存' : '群设置已保存');
-        renderGroupChatSettings(group);
+        if (!options.silent) {
+            showGroupToast(renamed ? '群资料已保存' : '群设置已保存');
+        }
+        if (!options.skipRender) {
+            renderGroupChatSettings(group);
+        }
+        return {
+            ok: true,
+            group,
+            renamed
+        };
     }
 
     function handleSetGroupMemberNickname(groupId, targetId) {
@@ -1107,15 +2128,21 @@
                     return;
                 }
                 group.groupMeta.memberIds = [...getGroupMemberIds(group), ...nextIds];
+                group.groupMeta.pendingInviteMemberIds = nextIds.slice(0, 12);
+                group.groupMeta.lastInviteAt = Date.now();
                 if (typeof window.ensureGroupChatMeta === 'function') {
                     window.ensureGroupChatMeta(group);
                 }
+                refreshGroupChatVisualState(group);
                 const names = nextIds.map(id => getParticipantName(group, id)).join('、');
                 pushVisibleGroupSystemNotice(group.id, `${names} 加入了群聊`);
                 if (typeof saveConfig === 'function') saveConfig();
                 renderGroupChatSettings(group);
                 if (typeof window.renderContactList === 'function') {
                     window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
+                }
+                if (String(window.iphoneSimState.currentChatContactId || '') === String(group.id) && typeof window.renderChatHistory === 'function') {
+                    window.renderChatHistory(group.id, true);
                 }
             }
         });
@@ -1176,6 +2203,15 @@
         if (group.groupMeta.memberTitles && typeof group.groupMeta.memberTitles === 'object') {
             delete group.groupMeta.memberTitles[String(targetId)];
         }
+        if (Array.isArray(group.groupMeta.relationshipMemberIds)) {
+            group.groupMeta.relationshipMemberIds = group.groupMeta.relationshipMemberIds.filter(id => String(id) !== String(targetId));
+        }
+        if (Array.isArray(group.groupMeta.pendingInviteMemberIds)) {
+            group.groupMeta.pendingInviteMemberIds = group.groupMeta.pendingInviteMemberIds.filter(id => String(id) !== String(targetId));
+            if (group.groupMeta.pendingInviteMemberIds.length === 0) {
+                group.groupMeta.lastInviteAt = 0;
+            }
+        }
         if (typeof window.ensureGroupChatMeta === 'function') {
             window.ensureGroupChatMeta(group);
         }
@@ -1193,6 +2229,19 @@
         }
         if (typeof saveConfig === 'function') saveConfig();
         closeGroupChatSettings();
+        if (String(currentRelationGroupId || '') === String(group.id)) {
+            closeGroupMemberRelationsScreen();
+        }
+        if (String(currentMemberDirectoryGroupId || '') === String(group.id)) {
+            closeGroupMemberDirectoryScreen();
+        }
+        const chatSettingsScreen = document.getElementById('chat-settings-screen');
+        if (chatSettingsScreen && !chatSettingsScreen.classList.contains('hidden')) {
+            chatSettingsScreen.classList.add('hidden');
+            if (typeof window.setChatSettingsFloatingSaveVisible === 'function') {
+                window.setChatSettingsFloatingSaveVisible(false);
+            }
+        }
         if (String(window.iphoneSimState.currentChatContactId) === String(group.id)) {
             const chatScreen = document.getElementById('chat-screen');
             if (chatScreen) chatScreen.classList.add('hidden');
@@ -1230,13 +2279,14 @@
         const createAvatarPreview = document.getElementById('group-chat-avatar-preview');
         const createAvatarInput = document.getElementById('group-chat-avatar-upload');
         const closeSettingsBtn = document.getElementById('close-group-chat-settings');
-        const saveSettingsBtn = document.getElementById('group-settings-save-btn');
-        const inviteBtn = document.getElementById('group-settings-invite-btn');
-        const exitBtn = document.getElementById('group-settings-exit-btn');
-        const dissolveBtn = document.getElementById('group-settings-dissolve-btn');
-        const settingsAvatarPreview = document.getElementById('group-settings-avatar-preview');
-        const settingsAvatarInput = document.getElementById('group-settings-avatar-upload');
-
+        const closeMemberDirectoryBtn = document.getElementById('close-group-member-directory');
+        const closeMemberDirectoryModalBtn = document.getElementById('close-group-member-directory-modal');
+        const memberDirectoryModal = document.getElementById('group-member-directory-modal');
+        const closeMemberRelationsBtn = document.getElementById('close-group-member-relations');
+        const addMemberRelationsBtn = document.getElementById('group-member-relations-add-btn');
+        const closeMemberRelationsPickerBtn = document.getElementById('close-group-member-relations-picker');
+        const closeMemberRelationsPickerMask = document.getElementById('close-group-member-relations-picker-mask');
+        const relationCanvas = document.getElementById('group-member-relations-canvas');
         if (openBtn) openBtn.addEventListener('click', openGroupCreateModal);
         if (closeCreateBtn) closeCreateBtn.addEventListener('click', closeGroupCreateModal);
         if (selectMembersBtn) selectMembersBtn.addEventListener('click', openGroupCreateMemberPicker);
@@ -1260,14 +2310,110 @@
         }
 
         if (closeSettingsBtn) closeSettingsBtn.addEventListener('click', closeGroupChatSettings);
-        if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', persistGroupSettings);
-        if (inviteBtn) inviteBtn.addEventListener('click', () => handleInviteGroupMembers(currentSettingsGroupId));
-        if (exitBtn) exitBtn.addEventListener('click', () => handleExitGroup(currentSettingsGroupId));
-        if (dissolveBtn) dissolveBtn.addEventListener('click', () => handleDissolveGroup(currentSettingsGroupId));
+        getGroupSettingsActionNodes('save').forEach((button) => {
+            if (button.dataset.groupSettingsSaveBound === '1') return;
+            button.dataset.groupSettingsSaveBound = '1';
+            button.addEventListener('click', () => persistGroupSettings());
+        });
+        getGroupSettingsActionNodes('invite').forEach((button) => {
+            if (button.dataset.groupSettingsInviteBound === '1') return;
+            button.dataset.groupSettingsInviteBound = '1';
+            button.addEventListener('click', () => handleInviteGroupMembers(currentSettingsGroupId));
+        });
+        getGroupSettingsActionNodes('exit').forEach((button) => {
+            if (button.dataset.groupSettingsExitBound === '1') return;
+            button.dataset.groupSettingsExitBound = '1';
+            button.addEventListener('click', () => handleExitGroup(currentSettingsGroupId));
+        });
+        getGroupSettingsActionNodes('dissolve').forEach((button) => {
+            if (button.dataset.groupSettingsDissolveBound === '1') return;
+            button.dataset.groupSettingsDissolveBound = '1';
+            button.addEventListener('click', () => handleDissolveGroup(currentSettingsGroupId));
+        });
+        getGroupSettingsActionNodes('manage-relations').forEach((button) => {
+            if (button.dataset.groupSettingsManageRelationsBound === '1') return;
+            button.dataset.groupSettingsManageRelationsBound = '1';
+            button.addEventListener('click', () => openGroupMemberRelationsScreen(currentSettingsGroupId));
+        });
 
-        if (settingsAvatarPreview && settingsAvatarInput) {
-            settingsAvatarPreview.addEventListener('click', () => settingsAvatarInput.click());
-            settingsAvatarInput.addEventListener('change', async (event) => {
+        if (closeMemberDirectoryBtn && closeMemberDirectoryBtn.dataset.bound !== '1') {
+            closeMemberDirectoryBtn.dataset.bound = '1';
+            closeMemberDirectoryBtn.addEventListener('click', closeGroupMemberDirectoryScreen);
+        }
+        if (closeMemberDirectoryModalBtn && closeMemberDirectoryModalBtn.dataset.bound !== '1') {
+            closeMemberDirectoryModalBtn.dataset.bound = '1';
+            closeMemberDirectoryModalBtn.addEventListener('click', () => closeGroupMemberDirectoryModal());
+        }
+        if (memberDirectoryModal && memberDirectoryModal.dataset.bound !== '1') {
+            memberDirectoryModal.dataset.bound = '1';
+            memberDirectoryModal.addEventListener('click', (event) => {
+                if (event.target === memberDirectoryModal) {
+                    closeGroupMemberDirectoryModal();
+                }
+            });
+        }
+
+        if (closeMemberRelationsBtn && closeMemberRelationsBtn.dataset.bound !== '1') {
+            closeMemberRelationsBtn.dataset.bound = '1';
+            closeMemberRelationsBtn.addEventListener('click', closeGroupMemberRelationsScreen);
+        }
+        if (addMemberRelationsBtn && addMemberRelationsBtn.dataset.bound !== '1') {
+            addMemberRelationsBtn.dataset.bound = '1';
+            addMemberRelationsBtn.addEventListener('click', () => {
+                if (!currentRelationGroupId) return;
+                renderGroupMemberRelationsPicker(currentRelationGroupId);
+                const { picker } = getGroupMemberRelationsElements();
+                if (picker) picker.classList.remove('hidden');
+            });
+        }
+        if (closeMemberRelationsPickerBtn && closeMemberRelationsPickerBtn.dataset.bound !== '1') {
+            closeMemberRelationsPickerBtn.dataset.bound = '1';
+            closeMemberRelationsPickerBtn.addEventListener('click', closeGroupMemberRelationsPicker);
+        }
+        if (closeMemberRelationsPickerMask && closeMemberRelationsPickerMask.dataset.bound !== '1') {
+            closeMemberRelationsPickerMask.dataset.bound = '1';
+            closeMemberRelationsPickerMask.addEventListener('click', closeGroupMemberRelationsPicker);
+        }
+        if (relationCanvas && relationCanvas.dataset.bound !== '1') {
+            relationCanvas.dataset.bound = '1';
+            relationCanvas.addEventListener('click', (event) => {
+                if (event.target === relationCanvas || event.target.id === 'group-member-relations-nodes' || event.target.id === 'group-member-relations-svg') {
+                    clearSelectedGroupRelationNode();
+                }
+            });
+        }
+        if (!document.body.dataset.groupRelationGraphBound) {
+            document.body.dataset.groupRelationGraphBound = '1';
+            document.addEventListener('pointermove', dragGroupRelationNode);
+            document.addEventListener('pointerup', endGroupRelationNodeDrag);
+            window.addEventListener('resize', () => {
+                if (currentRelationGroupId) {
+                    renderGroupMemberRelationsScreen(currentRelationGroupId);
+                }
+                if (currentMemberDirectoryGroupId) {
+                    renderGroupMemberDirectoryScreen(currentMemberDirectoryGroupId);
+                }
+            });
+        }
+
+        [
+            {
+                preview: document.getElementById('group-settings-avatar-preview'),
+                input: document.getElementById('group-settings-avatar-upload')
+            },
+            {
+                preview: getPrimaryGroupSettingsNode('avatar-preview'),
+                input: getPrimaryGroupSettingsNode('avatar-upload')
+            }
+        ].forEach(({ preview, input }) => {
+            if (!preview || !input) return;
+            if (preview.dataset.groupAvatarPreviewBound !== '1') {
+                preview.dataset.groupAvatarPreviewBound = '1';
+                preview.addEventListener('click', () => input.click());
+            }
+            if (input.dataset.groupAvatarInputBound === '1') return;
+            input.dataset.groupAvatarInputBound = '1';
+            input.addEventListener('change', async (event) => {
                 const group = getGroupContact(currentSettingsGroupId);
                 const file = event.target.files && event.target.files[0];
                 if (!group || !file) return;
@@ -1285,7 +2431,7 @@
                     showGroupToast('群头像更新失败');
                 }
             });
-        }
+        });
 
         bindModalMaskClose('group-chat-create-modal', closeGroupCreateModal);
         bindModalMaskClose('group-chat-settings-modal', closeGroupChatSettings);
@@ -1296,6 +2442,7 @@
     window.getGroupRole = getGroupRole;
     window.getGroupMessageSpeakerMeta = getGroupMessageSpeakerMeta;
     window.getGroupMemberContacts = getGroupMemberContacts;
+    window.getPendingInviteMemberIds = getPendingInviteMemberIds;
     window.getGroupMemberNickname = getGroupMemberNickname;
     window.getGroupMemberTitle = getGroupMemberTitle;
     window.canGroupParticipantRenameGroup = canParticipantRenameGroup;
@@ -1306,8 +2453,13 @@
     window.resolveGroupSpeakerContactId = resolveGroupSpeakerContactId;
     window.decorateGroupChatMessageMeta = decorateGroupChatMessageMeta;
     window.buildGroupAiPromptMessages = buildGroupAiPromptMessages;
+    window.consumePendingInviteMembers = consumePendingInviteMembers;
     window.syncGroupRoundToDirectThreads = syncGroupRoundToDirectThreads;
     window.openGroupChatSettings = openGroupChatSettings;
+    window.openGroupMemberRelationsScreen = openGroupMemberRelationsScreen;
+    window.openGroupMemberDirectoryScreen = openGroupMemberDirectoryScreen;
+    window.renderGroupChatSettings = renderGroupChatSettings;
+    window.persistGroupSettings = persistGroupSettings;
     window.isGroupChatActive = isGroupActive;
 
     bindGroupChatUi();

@@ -351,6 +351,105 @@ function findChatHistoryMessageByIdForRender(msgId) {
     return null;
 }
 
+function cloneRecallMessageMeta(value) {
+    if (!value || typeof value !== 'object') return null;
+    try {
+        return JSON.parse(JSON.stringify(value));
+    } catch (error) {
+        console.warn('克隆撤回消息元数据失败', error);
+        return null;
+    }
+}
+
+function buildRecalledMessageSnapshot(message) {
+    if (!message || typeof message !== 'object') return null;
+    return {
+        type: String(message.type || 'text').trim() || 'text',
+        content: message.content,
+        description: message.description || null,
+        role: message.role || 'assistant',
+        speakerContactId: message.speakerContactId === undefined ? null : message.speakerContactId,
+        speakerNameSnapshot: message.speakerNameSnapshot || '',
+        speakerAvatarSnapshot: message.speakerAvatarSnapshot || '',
+        replyTo: cloneRecallMessageMeta(message.replyTo),
+        time: Number(message.time || 0) > 0 ? Number(message.time) : null
+    };
+}
+
+function getRecalledMessageTypeLabel(type) {
+    const normalizedType = String(type || 'text').trim().toLowerCase();
+    if (normalizedType === 'text') return '文本消息';
+    if (normalizedType === 'image' || normalizedType === 'virtual_image') return '图片';
+    if (normalizedType === 'sticker') return '表情包';
+    if (normalizedType === 'voice') return '语音';
+    if (normalizedType === 'quote_reply') return '引用回复';
+    return '消息';
+}
+
+function getRecalledMessageContentPreview(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return '[消息]';
+    const normalizedType = String(snapshot.type || 'text').trim().toLowerCase();
+
+    if (normalizedType === 'text') {
+        const text = String(snapshot.content || '')
+            .replace(/<hidden_img>.*?<\/hidden_img>/gi, '')
+            .trim();
+        return text || '[空文本]';
+    }
+
+    if (normalizedType === 'image' || normalizedType === 'virtual_image') {
+        const desc = String(snapshot.description || '').trim();
+        return desc ? `[图片] ${desc}` : '[图片]';
+    }
+
+    if (normalizedType === 'sticker') {
+        const desc = String(snapshot.description || snapshot.content || '').trim();
+        return desc ? `[表情包] ${desc}` : '[表情包]';
+    }
+
+    if (normalizedType === 'voice') {
+        let voiceText = '';
+        let durationText = '';
+        try {
+            const voiceData = typeof snapshot.content === 'string' ? JSON.parse(snapshot.content) : (snapshot.content || {});
+            voiceText = String(voiceData.text || '').trim();
+            const durationSec = Number(voiceData.duration || 0);
+            if (durationSec > 0) durationText = `（${Math.max(1, Math.round(durationSec))}秒）`;
+        } catch (error) {
+            voiceText = String(snapshot.content || '').trim();
+        }
+        return voiceText ? `[语音${durationText}] ${voiceText}` : `[语音${durationText}]`;
+    }
+
+    const fallbackText = String(snapshot.description || snapshot.content || '').trim();
+    return fallbackText ? `[${getRecalledMessageTypeLabel(normalizedType)}] ${fallbackText}` : `[${getRecalledMessageTypeLabel(normalizedType)}]`;
+}
+
+function buildRecalledMessagePreviewText(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return '';
+    const lines = ['被撤回的原消息'];
+    const speakerName = String(snapshot.speakerNameSnapshot || '').trim();
+    if (speakerName) {
+        lines.push(`发送人：${speakerName}`);
+    }
+    if (Number(snapshot.time) > 0) {
+        const sentAt = new Date(Number(snapshot.time));
+        if (!Number.isNaN(sentAt.getTime())) {
+            lines.push(`时间：${sentAt.toLocaleString()}`);
+        }
+    }
+    lines.push(`类型：${getRecalledMessageTypeLabel(snapshot.type)}`);
+    lines.push(`内容：${getRecalledMessageContentPreview(snapshot)}`);
+    return lines.join('\n');
+}
+
+function openRecalledMessagePreview(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return;
+    const text = buildRecalledMessagePreviewText(snapshot);
+    if (!text) return;
+    alert(text);
+}
+
 function normalizeBilingualTranslatedText(rawText) {
     const text = String(rawText || '').trim();
     if (!text) return '';
@@ -502,8 +601,41 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
 
     if (isSystemMsg) {
         msgDiv.className = 'chat-message system';
+        if (msgId) msgDiv.dataset.msgId = msgId;
         const systemText = text.replace(/^\[系统(消息)?\][:：]?\s*/, '').trim();
         msgDiv.innerHTML = `<div class="system-tip">${systemText}</div>`;
+        const systemTipEl = msgDiv.querySelector('.system-tip');
+        const isRecallNoticeText = /撤回了一条消息/.test(systemText);
+        const relatedMessage = msgId ? findChatHistoryMessageByIdForRender(msgId) : null;
+        const hasSnapshotAtRenderTime = !!(relatedMessage && relatedMessage.recalledMessageSnapshot && typeof relatedMessage.recalledMessageSnapshot === 'object');
+        if (systemTipEl && msgId && (isRecallNoticeText || hasSnapshotAtRenderTime)) {
+            const openPreview = (event) => {
+                if (event) event.stopPropagation();
+                const latestMessage = findChatHistoryMessageByIdForRender(msgId);
+                const latestSnapshot = latestMessage && latestMessage.recalledMessageSnapshot && typeof latestMessage.recalledMessageSnapshot === 'object'
+                    ? latestMessage.recalledMessageSnapshot
+                    : null;
+                if (!latestSnapshot) {
+                    if (typeof window.showChatToast === 'function') {
+                        window.showChatToast('这条撤回提示没有可查看的原消息', 1800);
+                    } else {
+                        alert('这条撤回提示没有可查看的原消息');
+                    }
+                    return;
+                }
+                openRecalledMessagePreview(latestSnapshot);
+            };
+            systemTipEl.classList.add('recall-system-tip');
+            systemTipEl.title = '点击查看被撤回的原消息';
+            systemTipEl.setAttribute('role', 'button');
+            systemTipEl.setAttribute('tabindex', '0');
+            systemTipEl.addEventListener('click', openPreview);
+            systemTipEl.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                openPreview(event);
+            });
+        }
         container.appendChild(msgDiv);
         return;
     }
@@ -1476,8 +1608,21 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
         const wrapperClass = isSelf
             ? 'group-speaker-meta group-speaker-meta-self'
             : 'group-speaker-meta';
+        const groupRole = (() => {
+            const normalized = String(meta.groupRole || '').trim().toLowerCase();
+            if (normalized === 'owner' || normalized === 'admin' || normalized === 'member') {
+                return normalized;
+            }
+            if (contact && meta.speakerContactId && typeof window.getGroupRole === 'function') {
+                const resolvedRole = String(window.getGroupRole(contact, meta.speakerContactId) || '').trim().toLowerCase();
+                if (resolvedRole === 'owner' || resolvedRole === 'admin' || resolvedRole === 'member') {
+                    return resolvedRole;
+                }
+            }
+            return 'member';
+        })();
         const titleHtml = meta.title
-            ? `<span class="group-speaker-title-badge">${escapeChatMessageHtml(meta.title)}</span>`
+            ? `<span class="group-speaker-title-badge is-${groupRole}">${escapeChatMessageHtml(meta.title)}</span>`
             : '';
         const nameHtml = meta.name
             ? `<span class="group-speaker-label${isSelf ? ' group-speaker-label-self' : ''}">${escapeChatMessageHtml(meta.name)}</span>`
@@ -1821,6 +1966,112 @@ async function deleteSelectedMessages() {
     renderChatHistory(window.iphoneSimState.currentChatContactId);
 }
 
+async function recallGroupMessageById(groupId, msgId, options = {}) {
+    const contact = groupId ? getContactById(groupId) : null;
+    const isGroupChat = !!(contact && typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact));
+    if (!isGroupChat) return false;
+    const normalizedMsgId = String(msgId || '').trim();
+    const hasTargetTimestamp = Number.isFinite(Number(options.targetTimestamp)) && Number(options.targetTimestamp) > 0;
+    if (!normalizedMsgId && !hasTargetTimestamp) return false;
+
+    const silent = !!options.silent;
+    const rawActorId = options.actorId === undefined || options.actorId === null ? 'me' : String(options.actorId).trim();
+    const actorId = (() => {
+        if (!rawActorId) return 'me';
+        if (rawActorId === 'me') return 'me';
+        if (typeof window.resolveGroupSpeakerContactId === 'function') {
+            const resolved = window.resolveGroupSpeakerContactId(rawActorId, contact);
+            if (resolved) return resolved;
+        }
+        return rawActorId;
+    })();
+
+    const role = typeof window.getGroupRole === 'function' ? window.getGroupRole(contact, actorId) : 'member';
+    const canRecall = role === 'owner' || role === 'admin';
+    if (!canRecall) {
+        if (!silent) alert('仅群主或管理员可撤回群消息');
+        return false;
+    }
+
+    const history = Array.isArray(window.iphoneSimState.chatHistory[groupId]) ? window.iphoneSimState.chatHistory[groupId] : [];
+    let targetIndex = normalizedMsgId
+        ? history.findIndex(item => item && String(item.id) === normalizedMsgId)
+        : -1;
+    if (targetIndex < 0 && hasTargetTimestamp) {
+        const targetTs = Number(options.targetTimestamp);
+        for (let index = history.length - 1; index >= 0; index -= 1) {
+            const message = history[index];
+            if (!message || Number(message.time || 0) !== targetTs) continue;
+            targetIndex = index;
+            break;
+        }
+    }
+    if (targetIndex < 0) return false;
+
+    const targetMsg = history[targetIndex];
+    const isSystemVisibleMessage = !!(targetMsg && typeof targetMsg.content === 'string' && /^\s*\[系统消息\]:/.test(targetMsg.content));
+    if (!targetMsg || targetMsg.hiddenFromUi || targetMsg._hiddenBySanitizer || targetMsg.type === 'system_event' || targetMsg.type === 'voice_call_text' || isSystemVisibleMessage) {
+        if (!silent) alert('该消息无法撤回');
+        return false;
+    }
+
+    const recalledSnapshot = buildRecalledMessageSnapshot(targetMsg);
+    const recalledMessageId = String(targetMsg && targetMsg.id || normalizedMsgId || '').trim();
+
+    history.splice(targetIndex, 1);
+
+    const actorName = (() => {
+        const nickname = typeof window.getGroupMemberNickname === 'function'
+            ? String(window.getGroupMemberNickname(contact, actorId) || '').trim()
+            : '';
+        if (nickname) return nickname;
+        if (actorId && actorId !== 'me' && typeof window.getGroupMemberContacts === 'function') {
+            const member = window.getGroupMemberContacts(contact).find(item => String(item && item.id) === String(actorId));
+            if (member) {
+                const memberName = String(member.remark || member.nickname || member.name || '').trim();
+                if (memberName) return memberName;
+            }
+        }
+        if (window.iphoneSimState && window.iphoneSimState.userProfile && window.iphoneSimState.userProfile.name) {
+            return window.iphoneSimState.userProfile.name;
+        }
+        return '你';
+    })();
+
+    let recallNoticeMsg = null;
+    if (typeof window.sendMessage === 'function') {
+        recallNoticeMsg = window.sendMessage(`[系统消息]: ${actorName} 撤回了一条消息`, false, 'text', null, groupId, {
+            ignoreReplyingState: true,
+            bypassWechatBlock: true,
+            showNotification: false
+        });
+    }
+    if (recallNoticeMsg && recalledSnapshot) {
+        recallNoticeMsg.isRecallNotice = true;
+        recallNoticeMsg.recalledMessageId = recalledMessageId || null;
+        recallNoticeMsg.recalledMessageSnapshot = recalledSnapshot;
+    }
+
+    const remoteMessageId = String(targetMsg.remoteId || targetMsg.id || '').trim();
+    if (remoteMessageId && window.offlinePushSync && typeof window.offlinePushSync.deleteMessages === 'function') {
+        try {
+            await window.offlinePushSync.deleteMessages([remoteMessageId]);
+        } catch (err) {
+            console.error('[offline-push-sync] recall remote message failed', err);
+        }
+    }
+
+    saveConfig();
+
+    if (String(window.iphoneSimState.currentChatContactId || '') === String(groupId) && typeof renderChatHistory === 'function') {
+        renderChatHistory(groupId, true);
+    }
+    if (typeof window.renderContactList === 'function') {
+        window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
+    }
+    return true;
+}
+
 function handleMessageLongPress(e, content, isUser, type, msgId) {
     if (e.type === 'contextmenu') {
         e.preventDefault();
@@ -1876,6 +2127,21 @@ function showContextMenu(targetEl, msgData) {
     const fullMsg = Array.isArray(currentHistory) && msgData.msgId
         ? currentHistory.find(m => m && m.id === msgData.msgId)
         : null;
+    const currentContact = getContactById(currentContactId);
+    const isGroupChat = !!(currentContact && typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(currentContact));
+    const groupRole = isGroupChat && typeof window.getGroupRole === 'function'
+        ? window.getGroupRole(currentContact, 'me')
+        : 'member';
+    const canRecallGroupMessages = isGroupChat && (groupRole === 'owner' || groupRole === 'admin');
+    const canRecallCurrentMessage = !!(
+        canRecallGroupMessages &&
+        msgData.msgId &&
+        fullMsg &&
+        !fullMsg.hiddenFromUi &&
+        !fullMsg._hiddenBySanitizer &&
+        fullMsg.type !== 'system_event' &&
+        fullMsg.type !== 'voice_call_text'
+    );
     if (fullMsg) {
         msgData.timestamp = fullMsg.time || msgData.timestamp || null;
         msgData.role = fullMsg.role || msgData.role || null;
@@ -1897,6 +2163,7 @@ function showContextMenu(targetEl, msgData) {
         <div class="context-menu-item" id="menu-copy">复制</div>
         ${(msgData.type === 'image' || msgData.type === 'sticker' || msgData.type === 'virtual_image') ? '<div class="context-menu-item" id="menu-set-avatar">设为头像</div>' : ''}
         ${canSaveAiImageToAlbum ? '<div class="context-menu-item" id="menu-save-to-album">保存到相册</div>' : ''}
+        ${canRecallCurrentMessage ? '<div class="context-menu-item" id="menu-recall">撤回</div>' : ''}
         <div class="context-menu-item" id="menu-edit">编辑</div>
         <div class="context-menu-item" id="menu-delete" style="color: #ff3b30;">删除</div>
     `;
@@ -1952,6 +2219,16 @@ function showContextMenu(targetEl, msgData) {
         }
         menu.remove();
     };
+    const recallBtn = menu.querySelector('#menu-recall');
+    if (recallBtn) {
+        recallBtn.onclick = async () => {
+            menu.remove();
+            const ok = await recallGroupMessageById(currentContactId, msgData.msgId);
+            if (!ok) {
+                alert('撤回失败');
+            }
+        };
+    }
     const setAvatarBtn = menu.querySelector('#menu-set-avatar');
     if (setAvatarBtn) {
         setAvatarBtn.onclick = async () => {
@@ -4145,8 +4422,8 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
 
         // 处理解析结果
         for (const item of parsedItems) {
-            const normalizedType = normalizeAiSchemaType(item && item.type);
-            const speakerContactId = String(item && (item.speakerContactId || item.speaker_contact_id) || '').trim();
+        const normalizedType = normalizeAiSchemaType(item && item.type);
+        const speakerContactId = String(item && (item.speakerContactId || item.speaker_contact_id) || '').trim();
 
             if (normalizedType === 'thought_state') {
                 if (isGroupChat) {
@@ -4163,7 +4440,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                 if (isGroupChat) {
                     const cmd = String(item && item.content && item.content.command ? item.content.command : item && item.command ? item.command : '').trim().toUpperCase();
                     const pl = item && item.content ? item.content.payload : item.payload;
-                    if (cmd === 'RENAME_GROUP' || cmd === 'SET_MEMBER_TITLE') {
+                    if (cmd === 'RENAME_GROUP' || cmd === 'SET_MEMBER_TITLE' || cmd === 'RECALL_GROUP_MESSAGE') {
                         groupActions.push({ command: cmd, payload: pl, speakerContactId });
                     }
                     continue;
@@ -4393,14 +4670,21 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                 const actorId = typeof window.resolveGroupSpeakerContactId === 'function'
                     ? window.resolveGroupSpeakerContactId(action && action.speakerContactId, contact)
                     : String(action && action.speakerContactId || '').trim();
-                if (!actorId) return;
+                if (!actorId || String(actorId) === 'me') return;
+                const actorRole = typeof window.getGroupRole === 'function'
+                    ? window.getGroupRole(contact, actorId)
+                    : 'member';
+                const canActorManageGroup = actorRole === 'owner' || actorRole === 'admin';
+                const canActorManageTitles = actorRole === 'owner';
 
                 if (action.command === 'RENAME_GROUP' && typeof window.applyGroupRename === 'function') {
+                    if (!canActorManageGroup) return;
                     window.applyGroupRename(contact, actorId, action.payload, { showNotice: true });
                     return;
                 }
 
                 if (action.command === 'SET_MEMBER_TITLE' && typeof window.applyGroupMemberTitle === 'function') {
+                    if (!canActorManageTitles) return;
                     let targetId = '';
                     let nextTitle = '';
                     if (action.payload && typeof action.payload === 'object') {
@@ -4411,8 +4695,36 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                         targetId = String(rawTargetId || '').trim();
                         nextTitle = rest.join('|').trim();
                     }
+                    targetId = typeof window.resolveGroupSpeakerContactId === 'function'
+                        ? window.resolveGroupSpeakerContactId(targetId, contact) || String(targetId || '').trim()
+                        : String(targetId || '').trim();
                     if (!targetId) return;
                     window.applyGroupMemberTitle(contact, actorId, targetId, nextTitle, { showNotice: true });
+                    return;
+                }
+
+                if (action.command === 'RECALL_GROUP_MESSAGE') {
+                    if (!canActorManageGroup) return;
+                    let targetMsgId = '';
+                    let targetTimestamp = null;
+                    if (action.payload && typeof action.payload === 'object') {
+                        targetMsgId = action.payload.target_msg_id || action.payload.targetMsgId || action.payload.msg_id || action.payload.msgId || action.payload.message_id || action.payload.messageId || '';
+                        targetTimestamp = Number(action.payload.target_timestamp || action.payload.targetTimestamp || action.payload.timestamp || action.payload.time || 0) || null;
+                    } else if (typeof action.payload === 'string') {
+                        const payloadText = String(action.payload || '').trim();
+                        if (payloadText) {
+                            const [firstPart, secondPart] = payloadText.split('|').map(item => String(item || '').trim());
+                            targetMsgId = firstPart || '';
+                            const secondNumber = Number(secondPart || 0);
+                            targetTimestamp = Number.isFinite(secondNumber) && secondNumber > 0 ? secondNumber : null;
+                        }
+                    }
+                    if (!targetMsgId && !targetTimestamp) return;
+                    recallGroupMessageById(contact.id, targetMsgId, {
+                        actorId,
+                        targetTimestamp,
+                        silent: true
+                    });
                 }
             });
         }
@@ -5654,6 +5966,9 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
             }
             roundMessages = roundMessages.filter(item => item && !item.hiddenFromUi && !item._hiddenBySanitizer && item.type !== 'system_event');
             if (roundMessages.length > 0) {
+                if (typeof window.consumePendingInviteMembers === 'function') {
+                    window.consumePendingInviteMembers(contact, roundMessages);
+                }
                 window.syncGroupRoundToDirectThreads(contact, roundMessages);
             }
         }
@@ -6103,6 +6418,8 @@ function buildWechatWorldbookPrompt(contact, history) {
 }
 
 window.estimateAiTextTokens = estimateAiTextTokens;
+window.buildWechatStickerPrompt = buildWechatStickerPrompt;
+window.buildWechatWorldbookPrompt = buildWechatWorldbookPrompt;
 
 window.buildAiPromptTokenPreview = async function(contactId, options = {}) {
     const emptySections = {

@@ -4889,7 +4889,10 @@ function setupChatListeners() {
     if (aiProfileBgInput) aiProfileBgInput.addEventListener('change', handleAiProfileBgUpload);
     
     if (aiRelationItem) aiRelationItem.addEventListener('click', openRelationSelect);
-    if (closeRelationSelectBtn) closeRelationSelectBtn.addEventListener('click', () => relationSelectModal.classList.add('hidden'));
+    if (closeRelationSelectBtn) closeRelationSelectBtn.addEventListener('click', () => {
+        window.__relationSelectContext = null;
+        relationSelectModal.classList.add('hidden');
+    });
     
     if (aiMomentsEntry) aiMomentsEntry.addEventListener('click', window.openAiMoments);
 

@@ -835,6 +835,47 @@
 
                     <!-- AI Tab -->
                     <div id="chat-setting-tab-ai" class="chat-setting-tab-content mag-section active">
+                        <div id="chat-setting-group-inline-panel" class="hidden" style="display:flex;flex-direction:column;gap:24px;">
+                            <div class="editorial-card-shell mag-card">
+                                <div class="chat-settings-card-kicker mag-card-decor"><span class="mag-pulse-symbol">&#10022;</span> GRP-01</div>
+                                <div class="chat-settings-card-title mag-card-title"><i class="ri-group-line"></i><span>Group Profile</span></div>
+                                <div class="editorial-identity-inline mag-avatar-upload mag-target-identity">
+                                    <div class="ai-setting-avatar-container">
+                                        <input type="file" id="chat-setting-group-avatar-upload" data-group-settings-id="avatar-upload" accept="image/*" class="file-input-hidden">
+                                        <label for="chat-setting-group-avatar-upload" class="ai-setting-avatar-wrapper mag-avatar-preview is-clickable">
+                                            <div data-group-settings-id="avatar-preview" style="width:100%;height:100%;background:#f3f4f6 center/cover no-repeat;display:flex;align-items:center;justify-content:center;border-radius:inherit;color:#9ca3af;"><i class="fas fa-users"></i></div>
+                                        </label>
+                                    </div>
+                                    <div class="editorial-identity-meta mag-target-meta">
+                                        <div class="chat-setting-target-name-row mag-field is-compact">
+                                            <input type="text" data-group-settings-id="name" class="chat-setting-target-name-input mag-input" placeholder="群名称" style="width:100% !important; text-align:left !important; text-align-last:left !important; display:block !important; margin:0 !important; padding-left:26px !important; padding-right:0 !important; background:transparent !important;">
+                                        </div>
+                                        <div class="mag-field">
+                                            <label class="mag-label">Memory Mode <span class="separator">/</span> <span class="mag-zh">记忆范围</span></label>
+                                            <select data-group-settings-id="memory-mode" class="mag-select">
+                                                <option value="group_only">群聊独立</option>
+                                                <option value="group_to_direct">群到单聊</option>
+                                                <option value="bidirectional">双向同步</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mag-action-row">
+                                    <button type="button" class="mag-btn" data-group-settings-action="save"><i class="ri-save-line"></i> 保存群资料</button>
+                                    <button type="button" class="mag-btn" data-group-settings-action="invite"><i class="ri-user-add-line"></i> 邀请成员</button>
+                                </div>
+                            </div>
+                            <div class="editorial-card-shell mag-card">
+                                <div class="chat-settings-card-kicker mag-card-decor"><span class="mag-pulse-symbol">&#10022;</span> GRP-02</div>
+                                <div class="chat-settings-card-title mag-card-title"><i class="ri-team-line"></i><span>Members</span></div>
+                                <div data-group-settings-id="member-list" class="ios-list-group" style="margin:0;background:#f7f7fa;"></div>
+                                <div class="mag-action-row">
+                                    <button type="button" class="mag-btn" data-group-settings-action="manage-relations"><i class="ri-node-tree"></i> 管理群成员关系</button>
+                                    <button type="button" class="mag-btn" data-group-settings-action="exit"><i class="ri-logout-box-r-line"></i> 退出群聊</button>
+                                    <button type="button" class="mag-btn" data-group-settings-action="dissolve" style="border-color: var(--soft-danger, #d39a94); color: var(--soft-danger, #d39a94);"><i class="ri-delete-bin-line"></i> 解散群聊</button>
+                                </div>
+                            </div>
+                        </div>
                         <!-- AI 设置卡片 -->
                         <div class="ai-setting-card editorial-primary-card editorial-target-card mag-card">
                             <div class="chat-settings-card-kicker mag-card-decor"><span class="mag-pulse-symbol">&#10022;</span> ID-01</div>
@@ -1464,10 +1505,6 @@
                             </select>
                         </div>
                         <div class="setting-group">
-                            <label>我的权限</label>
-                            <div id="group-settings-my-role" style="padding: 10px 12px; border-radius: 12px; background: #f7f7fa; color: #333; font-size: 14px;">成员</div>
-                        </div>
-                        <div class="setting-group">
                             <button id="group-settings-save-btn" class="ios-btn-block secondary">保存基础信息</button>
                         </div>
                         <div class="setting-group">
@@ -1485,7 +1522,85 @@
                 </div>
             </div>
 
-            <!-- 批量导入表情包弹窗 -->
+            <div id="group-member-relations-screen" class="app-screen hidden group-member-relations-screen" style="z-index: 335; background: #09090b;">
+                <div class="group-member-relations-stars" aria-hidden="true">
+                    <div class="group-member-relations-stars-layer group-member-relations-stars-layer-1"></div>
+                    <div class="group-member-relations-stars-layer group-member-relations-stars-layer-2"></div>
+                    <div class="group-member-relations-stars-layer group-member-relations-stars-layer-3"></div>
+                </div>
+                <div class="group-member-relations-meteors" aria-hidden="true">
+                    <span class="group-member-relations-meteor"></span>
+                    <span class="group-member-relations-meteor"></span>
+                    <span class="group-member-relations-meteor"></span>
+                </div>
+                <div class="group-member-relations-topbar">
+                    <button id="close-group-member-relations" class="group-member-relations-back-btn" type="button" aria-label="返回">
+                        <i class="ri-arrow-left-line"></i>
+                    </button>
+                    <div class="group-member-relations-heading">
+                        <div class="group-member-relations-title">Member Nexus</div>
+                        <div id="group-member-relations-subtitle" class="group-member-relations-subtitle">GROUP LINK MAP</div>
+                    </div>
+                </div>
+                <div id="group-member-relations-canvas" class="group-member-relations-canvas">
+                    <svg id="group-member-relations-svg" class="group-member-relations-svg"></svg>
+                    <div id="group-member-relations-nodes" class="group-member-relations-nodes"></div>
+                </div>
+                <div id="group-member-relations-toast" class="group-member-relations-toast">选择第二个成员以建立关系</div>
+                <button id="group-member-relations-add-btn" class="group-member-relations-add-btn" type="button">
+                    <i class="ri-add-line"></i>
+                    <span>Add Member</span>
+                </button>
+                <div id="group-member-relations-picker" class="group-member-relations-picker hidden">
+                    <div id="close-group-member-relations-picker-mask" class="group-member-relations-picker-mask"></div>
+                    <div class="group-member-relations-picker-sheet">
+                        <div class="group-member-relations-picker-head">
+                            <div>
+                                <div class="group-member-relations-picker-title">Group Members</div>
+                                <div class="group-member-relations-picker-subtitle">选择后加入关系面板</div>
+                            </div>
+                            <button id="close-group-member-relations-picker" class="group-member-relations-picker-close" type="button" aria-label="关闭">
+                                <i class="ri-close-line"></i>
+                            </button>
+                        </div>
+                        <div id="group-member-relations-picker-list" class="group-member-relations-picker-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Group Member Directory -->
+            <div id="group-member-directory-screen" class="app-screen hidden group-member-directory-screen" style="z-index: 336;">
+                <div class="group-member-directory-ambient group-member-directory-ambient-1" aria-hidden="true"></div>
+                <div class="group-member-directory-ambient group-member-directory-ambient-2" aria-hidden="true"></div>
+                <div class="group-member-directory-header">
+                    <button id="close-group-member-directory" class="group-member-directory-header-btn" type="button" aria-label="返回">
+                        <i class="ri-arrow-left-line"></i>
+                    </button>
+                    <div class="group-member-directory-title-wrap">
+                        <div class="group-member-directory-title"><span>Member Directory</span></div>
+                        <div id="group-member-directory-subtitle" class="group-member-directory-subtitle">0 Members</div>
+                    </div>
+                    <div class="group-member-directory-header-btn is-placeholder" aria-hidden="true">
+                        <i class="ri-search-2-line"></i>
+                    </div>
+                </div>
+                <div id="group-member-directory-content" class="group-member-directory-content"></div>
+                <div id="group-member-directory-modal" class="group-member-directory-modal">
+                    <div id="group-member-directory-modal-card" class="group-member-directory-modal-card">
+                        <button id="close-group-member-directory-modal" class="group-member-directory-close-modal" type="button" aria-label="关闭">
+                            <i class="ri-close-line"></i>
+                        </button>
+                        <div class="group-member-directory-modal-header">
+                            <div id="group-member-directory-modal-avatar" class="group-member-directory-modal-avatar">A</div>
+                            <div id="group-member-directory-modal-name" class="group-member-directory-modal-name">群成员</div>
+                            <div id="group-member-directory-modal-role" class="group-member-directory-modal-role">- Member -</div>
+                        </div>
+                        <div id="group-member-directory-modal-actions" class="group-member-directory-modal-actions"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Import Sticker Modal -->
             <div id="import-sticker-modal" class="modal hidden">
                 <div class="modal-content">
                     <div class="modal-header">
@@ -3075,7 +3190,7 @@
             </div>
 
             <!-- 关系选择弹窗 -->
-            <div id="relation-select-modal" class="modal hidden">
+            <div id="relation-select-modal" class="modal hidden" style="z-index: 360;">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h3>设置关系</h3>

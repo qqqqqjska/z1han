@@ -3106,9 +3106,8 @@ window.openAiProfile = async function(contactId = null) {
     if (!contact) return;
 
     if (typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact)) {
-        if (typeof window.openGroupChatSettings === 'function') {
-            window.openGroupChatSettings(contact.id);
-        }
+        window.iphoneSimState.currentAiProfileContactId = contact.id;
+        openChatSettings();
         return;
     }
 
@@ -3392,12 +3391,22 @@ function handleAiProfileBgUpload(e) {
 
 window.handleAiProfileBgUpload = handleAiProfileBgUpload;
 
-function openRelationSelect() {
+function openRelationSelect(config = null) {
     const modal = document.getElementById('relation-select-modal');
     const list = document.getElementById('relation-options');
+    const title = modal ? modal.querySelector('.modal-header h3') : null;
+    const options = config && typeof config === 'object' && !Array.isArray(config) ? config : {};
     list.innerHTML = '';
 
-    const relations = ['情侣', '闺蜜', '死党', '基友', '同事', '同学', '家人', '普通朋友'];
+    const relations = Array.isArray(options.relations) && options.relations.length
+        ? options.relations
+        : ['情侣', '闺蜜', '死党', '基友', '同事', '同学', '家人', '普通朋友'];
+    if (title) {
+        title.textContent = options.title || '设置关系';
+    }
+    window.__relationSelectContext = {
+        onSelect: typeof options.onSelect === 'function' ? options.onSelect : null
+    };
     
     relations.forEach(rel => {
         const item = document.createElement('div');
@@ -3407,16 +3416,35 @@ function openRelationSelect() {
         list.appendChild(item);
     });
 
+    if (options.allowClear) {
+        const clearItem = document.createElement('div');
+        clearItem.className = 'list-item center-content';
+        clearItem.textContent = options.clearLabel || '清除关系';
+        clearItem.onclick = () => setRelation('');
+        list.appendChild(clearItem);
+    }
+
     modal.classList.remove('hidden');
 }
 
 function setRelation(relation) {
+    const relationText = String(relation || '').trim();
+    const relationContext = window.__relationSelectContext;
+    if (relationContext && typeof relationContext.onSelect === 'function') {
+        relationContext.onSelect(relationText);
+        window.__relationSelectContext = null;
+        document.getElementById('relation-select-modal').classList.add('hidden');
+        return;
+    }
+
     const contact = getActiveAiProfileContact();
     if (!contact) return;
 
-    contact.relation = relation;
-    document.getElementById('ai-profile-relation').textContent = relation;
+    contact.relation = relationText;
+    contact.relationship = relationText;
+    document.getElementById('ai-profile-relation').textContent = relationText || '未设置';
     saveConfig();
+    window.__relationSelectContext = null;
     document.getElementById('relation-select-modal').classList.add('hidden');
 }
 
@@ -3545,15 +3573,101 @@ if (!window.__chatSettingsStickyChromeResizeBound) {
     });
 }
 
+function getChatSettingsTargetModeElements() {
+    const activeReplyToggle = document.getElementById('chat-setting-active-reply');
+    const activeReplyToggleRow = activeReplyToggle ? activeReplyToggle.closest('.mag-toggle') : null;
+    const activeReplyLabel = activeReplyToggleRow && activeReplyToggleRow.previousElementSibling && activeReplyToggleRow.previousElementSibling.classList && activeReplyToggleRow.previousElementSibling.classList.contains('mag-label')
+        ? activeReplyToggleRow.previousElementSibling
+        : null;
+
+    return {
+        screen: document.getElementById('chat-settings-screen'),
+        groupPanel: document.getElementById('chat-setting-group-inline-panel'),
+        directIdentityBlock: document.getElementById('chat-setting-avatar') ? document.getElementById('chat-setting-avatar').closest('.editorial-identity-inline') : null,
+        directRemarkGroupField: document.getElementById('chat-setting-remark') ? document.getElementById('chat-setting-remark').closest('.editorial-remark-group-field') : null,
+        directPersonaField: document.getElementById('chat-setting-persona') ? document.getElementById('chat-setting-persona').closest('.ai-setting-persona-container') : null,
+        contextField: document.getElementById('chat-setting-context-limit') ? document.getElementById('chat-setting-context-limit').closest('.mag-field') : null,
+        bilingualToggle: document.getElementById('chat-setting-bilingual-translation-enabled') ? document.getElementById('chat-setting-bilingual-translation-enabled').closest('.mag-toggle') : null,
+        bilingualPanel: document.getElementById('chat-setting-bilingual-translation-panel'),
+        tokenField: document.getElementById('chat-setting-token-preview') ? document.getElementById('chat-setting-token-preview').closest('.mag-field') : null,
+        summaryField: document.getElementById('chat-setting-summary-limit') ? document.getElementById('chat-setting-summary-limit').closest('.mag-field') : null,
+        logicDivider: document.querySelector('#chat-setting-tab-ai .mag-block-decor'),
+        activeReplyLabel,
+        activeReplyToggle: activeReplyToggleRow,
+        activeReplyIntervalField: document.getElementById('chat-setting-active-interval') ? document.getElementById('chat-setting-active-interval').closest('.mag-field') : null,
+        restWindowToggle: document.getElementById('chat-setting-rest-window-enabled') ? document.getElementById('chat-setting-rest-window-enabled').closest('.mag-toggle') : null,
+        restWindowPanel: document.getElementById('chat-setting-rest-window-time-panel'),
+        thoughtCard: document.getElementById('chat-setting-show-thought') ? document.getElementById('chat-setting-show-thought').closest('.editorial-thought-card') : null,
+        fireBuddyCard: document.getElementById('chat-setting-fire-buddy-enabled') ? document.getElementById('chat-setting-fire-buddy-enabled').closest('.editorial-fire-buddy-card') : null,
+        assetsCard: document.getElementById('chat-setting-tts-enabled') ? document.getElementById('chat-setting-tts-enabled').closest('.editorial-card-shell') : null
+    };
+}
+
+function setChatSettingsElementHidden(element, hidden) {
+    if (!element) return;
+    element.classList.toggle('hidden', !!hidden);
+}
+
+function syncChatSettingsTargetMode(contact) {
+    const isGroupChat = !!(contact && typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact));
+    const {
+        screen,
+        groupPanel,
+        directIdentityBlock,
+        directRemarkGroupField,
+        directPersonaField,
+        contextField,
+        bilingualToggle,
+        bilingualPanel,
+        tokenField,
+        summaryField,
+        logicDivider,
+        activeReplyLabel,
+        activeReplyToggle,
+        activeReplyIntervalField,
+        restWindowToggle,
+        restWindowPanel,
+        thoughtCard,
+        fireBuddyCard,
+        assetsCard
+    } = getChatSettingsTargetModeElements();
+
+    if (screen) {
+        screen.classList.toggle('chat-settings-group-mode', isGroupChat);
+    }
+
+    setChatSettingsElementHidden(groupPanel, !isGroupChat);
+
+    [
+        directIdentityBlock,
+        directRemarkGroupField,
+        directPersonaField,
+        contextField,
+        bilingualToggle,
+        bilingualPanel,
+        tokenField,
+        logicDivider,
+        restWindowToggle,
+        restWindowPanel,
+        thoughtCard,
+        fireBuddyCard,
+        assetsCard
+    ].forEach((element) => setChatSettingsElementHidden(element, isGroupChat));
+
+    [summaryField, activeReplyLabel, activeReplyToggle, activeReplyIntervalField].forEach((element) => {
+        setChatSettingsElementHidden(element, false);
+    });
+
+    if (!isGroupChat) {
+        syncBilingualTranslationSettingsVisibility();
+        syncRestWindowSettingsVisibility();
+    }
+}
+
 function openChatSettings() {
     const contact = getActiveAiProfileContact();
     if (!contact) return;
-    if (typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact)) {
-        if (typeof window.openGroupChatSettings === 'function') {
-            window.openGroupChatSettings(contact.id);
-        }
-        return;
-    }
+    const isGroupChat = !!(typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact));
     mountChatSettingsEditorialNav();
     bindChatSettingsHeaderInteractions();
     ensureContactRestWindowFields(contact);
@@ -3565,6 +3679,10 @@ function openChatSettings() {
     }
     setChatSettingsFloatingSaveVisible(true);
     setChatSettingsFloatingSaveState(false);
+    syncChatSettingsTargetMode(contact);
+    if (isGroupChat && typeof window.renderGroupChatSettings === 'function') {
+        window.renderGroupChatSettings(contact);
+    }
 
     document.getElementById('chat-setting-name').value = contact.name || '';
     document.getElementById('chat-setting-avatar-preview').src = contact.avatar || '';
@@ -3853,6 +3971,9 @@ function openChatSettings() {
     }, 120);
     if (contact.id) {
         refreshTokenCountForContact(contact.id);
+    }
+    if (isGroupChat && typeof window.renderGroupChatSettings === 'function') {
+        window.renderGroupChatSettings(contact);
     }
 }
 
@@ -4247,6 +4368,7 @@ function handleSaveChatSettings() {
     if (!window.iphoneSimState.currentChatContactId) return;
     const contact = window.iphoneSimState.contacts.find(c => c.id === window.iphoneSimState.currentChatContactId);
     if (!contact) return;
+    const isGroupChat = !!(typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact));
     ensureContactRestWindowFields(contact);
     ensureContactBilingualTranslationFields(contact);
     ensureContactChatAppearancePresetField(contact);
@@ -4340,45 +4462,49 @@ function handleSaveChatSettings() {
     });
     contact.linkedStickerCategories = selectedStickerCategories;
 
-    contact.name = name;
-    contact.remark = remark;
-    contact.group = window.iphoneSimState.tempSelectedGroup;
-    contact.persona = persona;
-    {
-        const nextLocation = getLocationFromSelectors();
-        const prevQuery = contact.location && contact.location.query ? String(contact.location.query) : '';
-        const nextQuery = nextLocation && nextLocation.query ? String(nextLocation.query) : '';
-        contact.location = nextLocation;
-        if (prevQuery !== nextQuery) {
-            contact.locationResolved = null;
-            if (window.iphoneSimState && window.iphoneSimState.amapRuntime && window.iphoneSimState.amapRuntime.lastResolvedContacts) {
-                delete window.iphoneSimState.amapRuntime.lastResolvedContacts[contact.id];
-            }
-            if (window.iphoneSimState && window.iphoneSimState.amapRuntime && window.iphoneSimState.amapRuntime.lastWeather) {
-                delete window.iphoneSimState.amapRuntime.lastWeather[contact.id];
-            }
-            if (window.iphoneSimState && window.iphoneSimState.amapRuntime && window.iphoneSimState.amapRuntime.lastRoutes) {
-                delete window.iphoneSimState.amapRuntime.lastRoutes[contact.id];
+    if (!isGroupChat) {
+        contact.name = name;
+        contact.remark = remark;
+        contact.group = window.iphoneSimState.tempSelectedGroup;
+        contact.persona = persona;
+        {
+            const nextLocation = getLocationFromSelectors();
+            const prevQuery = contact.location && contact.location.query ? String(contact.location.query) : '';
+            const nextQuery = nextLocation && nextLocation.query ? String(nextLocation.query) : '';
+            contact.location = nextLocation;
+            if (prevQuery !== nextQuery) {
+                contact.locationResolved = null;
+                if (window.iphoneSimState && window.iphoneSimState.amapRuntime && window.iphoneSimState.amapRuntime.lastResolvedContacts) {
+                    delete window.iphoneSimState.amapRuntime.lastResolvedContacts[contact.id];
+                }
+                if (window.iphoneSimState && window.iphoneSimState.amapRuntime && window.iphoneSimState.amapRuntime.lastWeather) {
+                    delete window.iphoneSimState.amapRuntime.lastWeather[contact.id];
+                }
+                if (window.iphoneSimState && window.iphoneSimState.amapRuntime && window.iphoneSimState.amapRuntime.lastRoutes) {
+                    delete window.iphoneSimState.amapRuntime.lastRoutes[contact.id];
+                }
             }
         }
+        contact.contextLimit = contextLimit ? parseInt(contextLimit) : 0;
+        contact.bilingualTranslationEnabled = bilingualTranslationEnabled;
+        contact.bilingualSourceLang = bilingualSourceLang;
+        contact.bilingualTargetLang = bilingualTargetLang;
     }
-    contact.contextLimit = contextLimit ? parseInt(contextLimit) : 0;
-    contact.bilingualTranslationEnabled = bilingualTranslationEnabled;
-    contact.bilingualSourceLang = bilingualSourceLang;
-    contact.bilingualTargetLang = bilingualTargetLang;
     contact.summaryLimit = summaryLimit ? parseInt(summaryLimit) : 0;
-    contact.showThought = showThought;
-    contact.thoughtVisible = thoughtVisible;
-    contact.realTimeVisible = realTimeVisible;
-    contact.calendarAwareEnabled = calendarAwareEnabled;
-    if (typeof window.setDeviceUsageSharedWithContact === 'function') {
-        window.setDeviceUsageSharedWithContact(contact.id, deviceUsageShared, { persist: false });
+    if (!isGroupChat) {
+        contact.showThought = showThought;
+        contact.thoughtVisible = thoughtVisible;
+        contact.realTimeVisible = realTimeVisible;
+        contact.calendarAwareEnabled = calendarAwareEnabled;
+        if (typeof window.setDeviceUsageSharedWithContact === 'function') {
+            window.setDeviceUsageSharedWithContact(contact.id, deviceUsageShared, { persist: false });
+        }
+        contact.thoughtDisplayMode = thoughtDisplayMode;
+        contact.thoughtPetSize = thoughtPetSize;
+        contact.thoughtPetPosition = normalizeThoughtPetPositionSetting(contact.thoughtPetPosition);
+        contact.ttsEnabled = ttsEnabled;
+        contact.ttsVoiceId = ttsVoiceId;
     }
-    contact.thoughtDisplayMode = thoughtDisplayMode;
-    contact.thoughtPetSize = thoughtPetSize;
-    contact.thoughtPetPosition = normalizeThoughtPetPositionSetting(contact.thoughtPetPosition);
-    contact.ttsEnabled = ttsEnabled;
-    contact.ttsVoiceId = ttsVoiceId;
     contact.userPersonaId = userPersonaId ? parseInt(userPersonaId) : null;
     if (userPromptOverride !== null) {
         contact.userPersonaPromptOverride = userPromptOverride;
@@ -4411,8 +4537,29 @@ function handleSaveChatSettings() {
             contact.restWindowWakeReplyForStartMs = null;
         }
     }
-    contact.novelaiPreset = novelaiPreset;
-    
+    if (!isGroupChat) {
+        contact.novelaiPreset = novelaiPreset;
+    }
+
+    if (isGroupChat) {
+        if (typeof window.persistGroupSettings === 'function') {
+            window.persistGroupSettings(contact.id, {
+                silent: true,
+                skipSave: true,
+                skipContactList: true
+            });
+        } else if (contact.groupMeta && typeof contact.groupMeta === 'object') {
+            const groupNameInput = document.querySelector('#chat-setting-group-inline-panel [data-group-settings-id="name"]');
+            const groupMemorySelect = document.querySelector('#chat-setting-group-inline-panel [data-group-settings-id="memory-mode"]');
+            if (groupMemorySelect) {
+                contact.groupMeta.memoryMode = String(groupMemorySelect.value || 'group_only');
+            }
+            if (groupNameInput && typeof window.applyGroupRename === 'function') {
+                window.applyGroupRename(contact, 'me', groupNameInput.value, { actorName: '你', showNotice: false });
+            }
+        }
+    }
+
     if (activeReplyEnabled) {
         // Start timing from now (or keep existing start time if already enabled?)
         // Requirement: "Change to timing from the last message sent AFTER enabling".
@@ -4426,13 +4573,15 @@ function handleSaveChatSettings() {
         contact.activeReplyStartTime = null;
     }
 
-    document.getElementById('chat-title').textContent = remark || contact.name;
+    if (!isGroupChat) {
+        document.getElementById('chat-title').textContent = remark || contact.name;
+    }
     
     contact.chatBg = window.iphoneSimState.tempSelectedChatBg;
 
     const promises = [];
 
-    if (avatarInput.files && avatarInput.files[0]) {
+    if (!isGroupChat && avatarInput.files && avatarInput.files[0]) {
         promises.push(new Promise(resolve => {
             compressImage(avatarInput.files[0], 300, 0.7).then(base64 => {
                 contact.avatar = base64;
@@ -4480,7 +4629,7 @@ function handleSaveChatSettings() {
         }));
     }
 
-    if (thoughtPetImageInput && thoughtPetImageInput.files && thoughtPetImageInput.files[0]) {
+    if (!isGroupChat && thoughtPetImageInput && thoughtPetImageInput.files && thoughtPetImageInput.files[0]) {
         promises.push(new Promise(resolve => {
             compressImagePreserveAlpha(thoughtPetImageInput.files[0], 512, 0.85).then(base64 => {
                 contact.thoughtPetImage = base64;
@@ -4492,7 +4641,7 @@ function handleSaveChatSettings() {
         }));
     }
 
-    if (typeof window.persistFireBuddySettings === 'function') {
+    if (!isGroupChat && typeof window.persistFireBuddySettings === 'function') {
         promises.push(
             Promise.resolve()
                 .then(() => window.persistFireBuddySettings())
@@ -4535,6 +4684,13 @@ function handleSaveChatSettings() {
         const chatBody = document.getElementById('chat-messages');
         if (chatBody) {
             chatBody.style.fontSize = (contact.chatFontSize || 16) + 'px';
+        }
+
+        const chatTitle = document.getElementById('chat-title');
+        if (chatTitle) {
+            chatTitle.textContent = isGroupChat && typeof window.getGroupChatDisplayName === 'function'
+                ? window.getGroupChatDisplayName(contact)
+                : (remark || contact.name);
         }
 
         applyChatAppearancePreset(contact);

@@ -271,7 +271,11 @@
 
 .fire-buddy-mention-menu {
     display: flex;
+    flex-direction: column;
+    gap: 8px;
     padding: 0 10px 8px;
+    max-height: 240px;
+    overflow-y: auto;
 }
 
 .fire-buddy-mention-menu.hidden {
@@ -284,12 +288,18 @@
     align-items: center;
     gap: 10px;
     padding: 10px 12px;
-    border: 1px solid rgba(255, 173, 92, 0.22);
+    border: 1px solid rgba(15, 23, 42, 0.08);
     border-radius: 18px;
-    background: rgba(255, 247, 239, 0.96);
-    box-shadow: 0 8px 20px rgba(255, 122, 69, 0.08);
+    background: #ffffff;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
     color: #1c1c1e;
     text-align: left;
+}
+
+.fire-buddy-mention-option-all {
+    border-color: rgba(68, 125, 255, 0.18);
+    background: #ffffff;
+    box-shadow: 0 8px 20px rgba(68, 125, 255, 0.06);
 }
 
 .fire-buddy-mention-avatar {
@@ -299,6 +309,16 @@
     object-fit: cover;
     flex-shrink: 0;
     background: linear-gradient(135deg, #ffd5ab, #ff9c58);
+}
+
+.fire-buddy-mention-avatar-all {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 800;
+    color: #3f6fff;
+    background: linear-gradient(135deg, #e8f0ff, #d9e7ff);
 }
 
 .fire-buddy-mention-copy {
@@ -312,13 +332,13 @@
 .fire-buddy-mention-name {
     font-size: 14px;
     font-weight: 700;
-    color: #8d4900;
+    color: #4b5563;
 }
 
 .fire-buddy-mention-desc {
     font-size: 12px;
     line-height: 1.4;
-    color: #a5662f;
+    color: #9ca3af;
 }
 
 .chat-message.fire-buddy-message .message-content.fire-buddy-msg,
@@ -362,18 +382,33 @@
 .group-speaker-title-badge {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     flex-shrink: 0;
-    min-height: 16px;
-    padding: 0 6px;
-    border-radius: 999px;
-    background: linear-gradient(180deg, #f4ead0 0%, #e5d4aa 100%);
-    border: 1px solid rgba(177, 140, 64, 0.36);
-    box-shadow: 0 1px 2px rgba(126, 98, 36, 0.12);
-    font-size: 10px;
-    line-height: 1.2;
-    font-weight: 700;
-    color: #8c6a20;
+    min-height: 20px;
+    padding:0 8px;
+    border-radius: 12px;
+    background: #f4be34;
+    border: none;
+    box-shadow: none;
+    font-size: 11px;
+    line-height: 1;
+    font-weight: 500;
+    color: #ffffff;
+    text-shadow: none;
+    letter-spacing: .1px;
     white-space: nowrap;
+}
+
+.group-speaker-title-badge.is-owner {
+    background: #f4be34;
+}
+
+.group-speaker-title-badge.is-admin {
+    background: #35c9b8;
+}
+
+.group-speaker-title-badge.is-member {
+    background: #b884ff;
 }
 
 .group-speaker-label {

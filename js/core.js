@@ -685,6 +685,55 @@ function ensureGroupChatMeta(contact) {
             memberNicknames[String(normalizedKey)] = nickname.slice(0, 30);
         });
     }
+    const pendingInviteMemberIds = [];
+    (Array.isArray(meta.pendingInviteMemberIds) ? meta.pendingInviteMemberIds : []).forEach((item) => {
+        const normalized = normalizeGroupParticipantId(item);
+        if (!normalized || normalized === 'me' || !memberIds.includes(normalized)) return;
+        if (!pendingInviteMemberIds.includes(normalized)) {
+            pendingInviteMemberIds.push(normalized);
+        }
+    });
+    const relationshipMemberIds = [];
+    (Array.isArray(meta.relationshipMemberIds) ? meta.relationshipMemberIds : []).forEach((item) => {
+        const normalized = normalizeGroupParticipantId(item);
+        if (!normalized) return;
+        if (normalized !== 'me' && !memberIds.includes(normalized)) return;
+        if (!relationshipMemberIds.includes(normalized)) {
+            relationshipMemberIds.push(normalized);
+        }
+    });
+    const relationshipNodePositions = {};
+    if (meta.relationshipNodePositions && typeof meta.relationshipNodePositions === 'object') {
+        Object.keys(meta.relationshipNodePositions).forEach((rawKey) => {
+            const normalizedKey = normalizeGroupParticipantId(rawKey);
+            if (!normalizedKey || !relationshipMemberIds.includes(normalizedKey)) return;
+            const rawPosition = meta.relationshipNodePositions[rawKey];
+            if (!rawPosition || typeof rawPosition !== 'object') return;
+            const xRatio = Number(rawPosition.xRatio);
+            const yRatio = Number(rawPosition.yRatio);
+            if (!Number.isFinite(xRatio) || !Number.isFinite(yRatio)) return;
+            relationshipNodePositions[String(normalizedKey)] = {
+                xRatio: Math.min(0.92, Math.max(0.08, xRatio)),
+                yRatio: Math.min(0.88, Math.max(0.12, yRatio))
+            };
+        });
+    }
+    const relationshipLinks = [];
+    (Array.isArray(meta.relationshipLinks) ? meta.relationshipLinks : []).forEach((link) => {
+        if (!link || typeof link !== 'object') return;
+        const sourceId = normalizeGroupParticipantId(link.sourceId);
+        const targetId = normalizeGroupParticipantId(link.targetId);
+        if (!sourceId || !targetId || sourceId === targetId) return;
+        if (!relationshipMemberIds.includes(sourceId) || !relationshipMemberIds.includes(targetId)) return;
+        const relation = String(link.relation || '').replace(/\s+/g, ' ').trim();
+        if (!relation) return;
+        relationshipLinks.push({
+            sourceId,
+            targetId,
+            relation: relation.slice(0, 32)
+        });
+    });
+    const lastInviteAt = Number(meta.lastInviteAt);
 
     contact.groupMeta = {
         name: fallbackName,
@@ -694,6 +743,11 @@ function ensureGroupChatMeta(contact) {
         adminIds,
         memberNicknames,
         memberTitles,
+        pendingInviteMemberIds,
+        relationshipMemberIds,
+        relationshipNodePositions,
+        relationshipLinks,
+        lastInviteAt: Number.isFinite(lastInviteAt) && lastInviteAt > 0 ? lastInviteAt : 0,
         memoryMode,
         status
     };
