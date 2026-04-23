@@ -1725,6 +1725,45 @@
                     </div>
                 </div>
             </div>
+            <!-- 群红包弹窗 -->
+            <div id="group-red-packet-modal" class="modal hidden" style="z-index: 201; align-items: center;">
+                <div class="modal-content" style="height: auto; border-radius: 12px; width: 88%; max-width: 360px; background-color: #fff;">
+                    <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
+                        <h3 style="width: 100%; text-align: center;">发红包</h3>
+                        <button class="close-btn" id="close-group-red-packet-modal" style="position: absolute; right: 15px;">&times;</button>
+                    </div>
+                    <div class="modal-body" style="padding: 18px 20px 20px;">
+                        <div class="setting-group">
+                            <label for="group-red-packet-mode">红包类型</label>
+                            <select id="group-red-packet-mode">
+                                <option value="targeted">指定成员红包</option>
+                                <option value="random">拼手气红包</option>
+                            </select>
+                        </div>
+                        <div class="setting-group" style="margin-top: 12px;">
+                            <label>总金额</label>
+                            <div style="display:flex;align-items:center;border-bottom:1px solid #eee;padding-bottom:5px;">
+                                <span style="font-size:24px;font-weight:700;">¥</span>
+                                <input type="number" id="group-red-packet-amount" placeholder="0.00" step="0.01" min="0.01" style="border:none;font-size:24px;font-weight:700;width:100%;background:transparent;outline:none;">
+                            </div>
+                        </div>
+                        <div class="setting-group" style="margin-top: 12px;">
+                            <label for="group-red-packet-remark">红包祝福</label>
+                            <input type="text" id="group-red-packet-remark" maxlength="40" placeholder="恭喜发财，大吉大利">
+                        </div>
+                        <div id="group-red-packet-targeted-group" class="setting-group" style="margin-top: 12px;">
+                            <label>指定成员</label>
+                            <button id="group-red-packet-select-members-btn" class="ios-btn-block secondary" style="margin-bottom: 10px;">选择群成员</button>
+                            <div id="group-red-packet-selected-members" class="ios-list-group" style="margin:0;min-height:48px;max-height:180px;overflow-y:auto;background:#f7f7fa;"></div>
+                        </div>
+                        <div id="group-red-packet-random-group" class="setting-group hidden" style="margin-top: 12px;">
+                            <label for="group-red-packet-random-count">红包个数</label>
+                            <input type="number" id="group-red-packet-random-count" min="1" step="1" value="1">
+                        </div>
+                        <button id="do-group-red-packet-btn" class="ios-btn-block" style="margin-top: 18px; background-color: #fa5151;">发红包</button>
+                    </div>
+                </div>
+            </div>
             <!-- 导航弹窗 -->
             <div id="chat-nav-modal" class="modal hidden" style="z-index: 205; align-items: center;">
                 <div class="modal-content chat-nav-modal-card">
@@ -2000,6 +2039,10 @@
                             <div class="more-item" id="chat-more-transfer-btn">
                                 <div class="more-icon"><i class="fas fa-exchange-alt"></i></div>
                                 <div class="more-label">转账</div>
+                            </div>
+                            <div class="more-item" id="chat-more-red-packet-btn">
+                                <div class="more-icon"><i class="fas fa-envelope-open-text"></i></div>
+                                <div class="more-label">发红包</div>
                             </div>
                             <div class="more-item" id="chat-more-voice-btn">
                                 <div class="more-icon"><i class="fas fa-microphone"></i></div>

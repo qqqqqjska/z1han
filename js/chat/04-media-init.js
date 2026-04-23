@@ -4999,6 +4999,36 @@ function setupChatListeners() {
     // 分页相关元素
     const chatMorePages = document.getElementById('chat-more-pages');
     const chatMoreIndicators = document.querySelectorAll('.chat-more-dot');
+    const GROUP_ONLY_MORE_ITEM_IDS = ['chat-more-red-packet-btn'];
+    const DIRECT_ONLY_MORE_ITEM_IDS = [
+        'chat-more-fire-buddy-btn',
+        'chat-more-food-btn',
+        'chat-more-nav-btn',
+        'chat-more-screen-share-btn',
+        'chat-more-location-btn'
+    ];
+
+    function refreshChatMoreFeatureVisibility() {
+        const contactId = window.iphoneSimState.currentChatContactId;
+        const currentContact = Array.isArray(window.iphoneSimState && window.iphoneSimState.contacts)
+            ? window.iphoneSimState.contacts.find(item => String(item.id) === String(contactId)) || null
+            : null;
+        const isGroupChat = !!(currentContact && typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(currentContact));
+
+        GROUP_ONLY_MORE_ITEM_IDS.forEach((itemId) => {
+            const itemEl = document.getElementById(itemId);
+            if (!itemEl) return;
+            itemEl.style.display = isGroupChat ? '' : 'none';
+        });
+        DIRECT_ONLY_MORE_ITEM_IDS.forEach((itemId) => {
+            const itemEl = document.getElementById(itemId);
+            if (!itemEl) return;
+            itemEl.style.display = isGroupChat ? 'none' : '';
+        });
+    }
+
+    window.refreshChatMoreFeatureVisibility = refreshChatMoreFeatureVisibility;
+    refreshChatMoreFeatureVisibility();
 
     if (chatMorePages) {
         chatMorePages.addEventListener('scroll', () => {
@@ -5025,6 +5055,7 @@ function setupChatListeners() {
     if (chatMoreBtn && chatMorePanel) {
         chatMoreBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+            refreshChatMoreFeatureVisibility();
             
             if (chatMorePanel.classList.contains('slide-in')) {
                 closeAllPanels();
@@ -5088,7 +5119,7 @@ function setupChatListeners() {
                     return;
                 }
 
-                if (item.id === 'chat-more-photo-btn' || item.id === 'chat-more-camera-btn' || item.id === 'chat-more-transfer-btn' || item.id === 'chat-more-memory-btn' || item.id === 'chat-more-location-btn' || item.id === 'chat-more-regenerate-btn' || item.id === 'chat-more-voice-btn' || item.id === 'chat-more-video-call-btn' || item.id === 'chat-more-screen-share-btn' || item.id === 'chat-more-fire-buddy-btn' || item.id === 'chat-more-food-btn' || item.id === 'chat-more-nav-btn') return;
+                if (item.id === 'chat-more-photo-btn' || item.id === 'chat-more-camera-btn' || item.id === 'chat-more-transfer-btn' || item.id === 'chat-more-red-packet-btn' || item.id === 'chat-more-memory-btn' || item.id === 'chat-more-location-btn' || item.id === 'chat-more-regenerate-btn' || item.id === 'chat-more-voice-btn' || item.id === 'chat-more-video-call-btn' || item.id === 'chat-more-screen-share-btn' || item.id === 'chat-more-fire-buddy-btn' || item.id === 'chat-more-food-btn' || item.id === 'chat-more-nav-btn') return;
                 
                 e.stopPropagation();
                 const label = item.querySelector('.more-label').textContent;
@@ -5326,6 +5357,195 @@ function setupChatListeners() {
 
     if (doTransferBtn) {
         doTransferBtn.addEventListener('click', handleTransfer);
+    }
+
+    const chatMoreRedPacketBtn = document.getElementById('chat-more-red-packet-btn');
+    const groupRedPacketModal = document.getElementById('group-red-packet-modal');
+    const closeGroupRedPacketBtn = document.getElementById('close-group-red-packet-modal');
+    const doGroupRedPacketBtn = document.getElementById('do-group-red-packet-btn');
+    const groupRedPacketModeSelect = document.getElementById('group-red-packet-mode');
+    const groupRedPacketAmountInput = document.getElementById('group-red-packet-amount');
+    const groupRedPacketRemarkInput = document.getElementById('group-red-packet-remark');
+    const groupRedPacketTargetedGroup = document.getElementById('group-red-packet-targeted-group');
+    const groupRedPacketRandomGroup = document.getElementById('group-red-packet-random-group');
+    const groupRedPacketCountInput = document.getElementById('group-red-packet-random-count');
+    const groupRedPacketSelectMembersBtn = document.getElementById('group-red-packet-select-members-btn');
+    const groupRedPacketSelectedMembers = document.getElementById('group-red-packet-selected-members');
+
+    const groupRedPacketState = {
+        selectedTargetIds: []
+    };
+
+    function getCurrentGroupContactForRedPacket() {
+        const contactId = window.iphoneSimState.currentChatContactId;
+        if (!contactId || !Array.isArray(window.iphoneSimState && window.iphoneSimState.contacts)) return null;
+        const contact = window.iphoneSimState.contacts.find(item => String(item.id) === String(contactId));
+        if (!contact) return null;
+        return (typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact)) ? contact : null;
+    }
+
+    function renderGroupRedPacketSelectedMembers() {
+        if (!groupRedPacketSelectedMembers) return;
+        const group = getCurrentGroupContactForRedPacket();
+        if (!group || !Array.isArray(groupRedPacketState.selectedTargetIds) || groupRedPacketState.selectedTargetIds.length === 0) {
+            groupRedPacketSelectedMembers.innerHTML = '<div class="list-item center-content" style="color:#8e8e93;">未选择成员</div>';
+            return;
+        }
+        const members = typeof window.getGroupMemberContacts === 'function'
+            ? window.getGroupMemberContacts(group)
+            : [];
+        const selected = members.filter(member => groupRedPacketState.selectedTargetIds.some(id => String(id) === String(member.id)));
+        if (selected.length === 0) {
+            groupRedPacketSelectedMembers.innerHTML = '<div class="list-item center-content" style="color:#8e8e93;">未选择成员</div>';
+            return;
+        }
+        groupRedPacketSelectedMembers.innerHTML = selected.map(member => `
+            <div class="list-item" style="display:flex;align-items:center;gap:10px;">
+                <img src="${String(member.avatar || '')}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;">
+                <div style="min-width:0;flex:1;">
+                    <div style="font-size:14px;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${String(member.remark || member.nickname || member.name || '群成员')}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function syncGroupRedPacketModeUi() {
+        const mode = String(groupRedPacketModeSelect && groupRedPacketModeSelect.value || 'targeted');
+        if (groupRedPacketTargetedGroup) {
+            groupRedPacketTargetedGroup.classList.toggle('hidden', mode !== 'targeted');
+        }
+        if (groupRedPacketRandomGroup) {
+            groupRedPacketRandomGroup.classList.toggle('hidden', mode !== 'random');
+        }
+    }
+
+    function closeGroupRedPacketModal() {
+        if (groupRedPacketModal) groupRedPacketModal.classList.add('hidden');
+    }
+
+    function openGroupRedPacketModal() {
+        const group = getCurrentGroupContactForRedPacket();
+        if (!group) {
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('仅群聊支持发红包', 2000);
+            }
+            return;
+        }
+        groupRedPacketState.selectedTargetIds = [];
+        if (groupRedPacketModeSelect) groupRedPacketModeSelect.value = 'targeted';
+        if (groupRedPacketAmountInput) groupRedPacketAmountInput.value = '';
+        if (groupRedPacketRemarkInput) groupRedPacketRemarkInput.value = '';
+        if (groupRedPacketCountInput) {
+            const groupMembers = typeof window.getGroupMemberContacts === 'function'
+                ? window.getGroupMemberContacts(group)
+                : [];
+            groupRedPacketCountInput.value = Math.max(1, Math.min(3, groupMembers.length || 1));
+        }
+        syncGroupRedPacketModeUi();
+        renderGroupRedPacketSelectedMembers();
+        if (groupRedPacketModal) groupRedPacketModal.classList.remove('hidden');
+        if (groupRedPacketAmountInput) {
+            setTimeout(() => groupRedPacketAmountInput.focus(), 20);
+        }
+    }
+
+    function openGroupRedPacketMemberPicker() {
+        const group = getCurrentGroupContactForRedPacket();
+        if (!group) return;
+        if (typeof window.openGroupContactMultiPicker !== 'function') {
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('成员选择器暂不可用', 1800);
+            }
+            return;
+        }
+        const contacts = typeof window.getGroupMemberContacts === 'function'
+            ? window.getGroupMemberContacts(group)
+            : [];
+        window.openGroupContactMultiPicker({
+            title: '选择指定成员',
+            confirmText: '确认成员',
+            contacts,
+            initialSelectedIds: groupRedPacketState.selectedTargetIds,
+            onConfirm: (ids) => {
+                groupRedPacketState.selectedTargetIds = (Array.isArray(ids) ? ids : [])
+                    .map(item => String(item || '').trim())
+                    .filter(Boolean);
+                const pickerModal = document.getElementById('contact-picker-modal');
+                if (pickerModal) pickerModal.classList.add('hidden');
+                renderGroupRedPacketSelectedMembers();
+            }
+        });
+    }
+
+    function handleSendGroupRedPacket() {
+        const group = getCurrentGroupContactForRedPacket();
+        if (!group || typeof window.createGroupRedPacket !== 'function') return;
+
+        const mode = String(groupRedPacketModeSelect && groupRedPacketModeSelect.value || 'targeted');
+        const amount = Number(groupRedPacketAmountInput && groupRedPacketAmountInput.value || 0);
+        const remark = String(groupRedPacketRemarkInput && groupRedPacketRemarkInput.value || '').trim();
+        const packetCount = Number(groupRedPacketCountInput && groupRedPacketCountInput.value || 0);
+        const payload = mode === 'targeted'
+            ? {
+                mode: 'targeted',
+                amount,
+                target_member_ids: groupRedPacketState.selectedTargetIds,
+                remark
+            }
+            : {
+                mode: 'random',
+                amount,
+                count: packetCount,
+                remark
+            };
+        const result = window.createGroupRedPacket(group, 'me', payload, {
+            showNotice: false,
+            allowWalletDebit: true
+        });
+        if (!result || !result.ok) {
+            const reason = String(result && result.reason || '');
+            if (reason === 'insufficient_balance') {
+                alert('余额不足，请先充值');
+            } else if (reason === 'empty_target_members') {
+                if (typeof window.showChatToast === 'function') {
+                    window.showChatToast('请至少选择 1 位指定成员', 2200);
+                }
+            } else if (reason === 'amount_too_small') {
+                if (typeof window.showChatToast === 'function') {
+                    window.showChatToast('金额太小，请提高红包金额', 2200);
+                }
+            } else {
+                if (typeof window.showChatToast === 'function') {
+                    window.showChatToast('红包发送失败，请检查输入', 2200);
+                }
+            }
+            return;
+        }
+        closeGroupRedPacketModal();
+    }
+
+    if (chatMoreRedPacketBtn) {
+        chatMoreRedPacketBtn.addEventListener('click', () => {
+            document.getElementById('chat-more-panel').classList.add('hidden');
+            openGroupRedPacketModal();
+        });
+    }
+    if (closeGroupRedPacketBtn) {
+        closeGroupRedPacketBtn.addEventListener('click', closeGroupRedPacketModal);
+    }
+    if (groupRedPacketModal) {
+        groupRedPacketModal.addEventListener('click', (event) => {
+            if (event.target === groupRedPacketModal) closeGroupRedPacketModal();
+        });
+    }
+    if (groupRedPacketModeSelect) {
+        groupRedPacketModeSelect.addEventListener('change', syncGroupRedPacketModeUi);
+    }
+    if (groupRedPacketSelectMembersBtn) {
+        groupRedPacketSelectMembersBtn.addEventListener('click', openGroupRedPacketMemberPicker);
+    }
+    if (doGroupRedPacketBtn) {
+        doGroupRedPacketBtn.addEventListener('click', handleSendGroupRedPacket);
     }
 
     const chatNavModal = document.getElementById('chat-nav-modal');

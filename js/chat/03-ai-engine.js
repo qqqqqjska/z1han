@@ -570,7 +570,7 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
         }
     }
 
-    const noBubbleTypes = new Set(['image', 'sticker', 'virtual_image', 'description', 'transfer', 'family_card', 'food_invite', 'route_invite', 'gift_card', 'shopping_gift', 'delivery_share', 'order_progress', 'order_share', 'pay_request', 'product_share', 'icity_card', 'minesweeper_invite', 'pdd_cash_share', 'pdd_bargain_share', 'savings_invite', 'savings_withdraw_request', 'savings_withdraw_result', 'savings_progress', 'music_listen_invite']);
+    const noBubbleTypes = new Set(['image', 'sticker', 'virtual_image', 'description', 'transfer', 'red_packet', 'family_card', 'food_invite', 'route_invite', 'gift_card', 'shopping_gift', 'delivery_share', 'order_progress', 'order_share', 'pay_request', 'product_share', 'icity_card', 'minesweeper_invite', 'pdd_cash_share', 'pdd_bargain_share', 'savings_invite', 'savings_withdraw_request', 'savings_withdraw_result', 'savings_progress', 'music_listen_invite']);
     const currentMessageUsesBubbleTail = !noBubbleTypes.has(type);
 
     if (!showTimestamp && currentMessageUsesBubbleTail && lastMsg && lastMsg.classList.contains('chat-message')) {
@@ -756,6 +756,44 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
                 </div>
             `;
         }
+    } else if (type === 'red_packet') {
+        let packetData = {
+            id: '',
+            amount: '0.00',
+            remark: '恭喜发财，大吉大利',
+            mode: 'random',
+            totalCount: 1,
+            claims: [],
+            status: 'pending'
+        };
+        try {
+            packetData = typeof text === 'string' ? JSON.parse(text) : (text || packetData);
+        } catch (e) {
+            console.error('解析红包数据失败', e);
+        }
+        const packetId = String(packetData.id || '').trim();
+        const amount = Number(packetData.amount || 0);
+        const mode = String(packetData.mode || 'random') === 'targeted' ? 'targeted' : 'random';
+        const modeLabel = mode === 'targeted' ? '专属红包' : '拼手气红包';
+        const totalCount = Math.max(1, Number(packetData.totalCount || 1));
+        const claims = Array.isArray(packetData.claims) ? packetData.claims : [];
+        const claimedCount = claims.length;
+        const isFinished = String(packetData.status || '').toLowerCase() === 'finished' || claimedCount >= totalCount;
+        const remainCount = Math.max(0, totalCount - claimedCount);
+        const remark = String(packetData.remark || '恭喜发财，大吉大利').trim() || '恭喜发财，大吉大利';
+        const safeLookupToken = String(packetId || msgId || '').replace(/'/g, "\\'");
+        const statusText = isFinished ? '已抢完' : `剩余 ${remainCount}/${totalCount}`;
+        contentHtml = `
+            <div class="red-packet-card glass-card ${isFinished ? 'finished' : ''}" onclick="window.handleGroupRedPacketClick && window.handleGroupRedPacketClick('${safeLookupToken}')">
+                <div class="card-watermark">RP</div>
+                <div class="card-top">
+                    <div class="card-icon-box"><i class="fas fa-envelope-open-text"></i></div>
+                    <div class="card-tag">${modeLabel}</div>
+                </div>
+                <div class="card-value">¥${Number.isFinite(amount) ? amount.toFixed(2) : '0.00'}</div>
+                <div class="card-label">${remark} · ${statusText}</div>
+            </div>
+        `;
     } else if (type === 'family_card') {
         let familyData = {
             id: '',
@@ -861,7 +899,7 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
 
     let extraClass = '';
     const isHtmlTextMessage = type === 'text' && isHtmlPayloadForParser(text);
-    const cardTypes = ['transfer', 'family_card', 'food_invite', 'route_invite', 'gift_card', 'shopping_gift', 'delivery_share', 'order_progress', 'order_share', 'pay_request', 'product_share', 'icity_card', 'minesweeper_invite', 'pdd_cash_share', 'pdd_bargain_share', 'savings_invite', 'savings_withdraw_request', 'savings_withdraw_result', 'savings_progress', 'music_listen_invite'];
+    const cardTypes = ['transfer', 'red_packet', 'family_card', 'food_invite', 'route_invite', 'gift_card', 'shopping_gift', 'delivery_share', 'order_progress', 'order_share', 'pay_request', 'product_share', 'icity_card', 'minesweeper_invite', 'pdd_cash_share', 'pdd_bargain_share', 'savings_invite', 'savings_withdraw_request', 'savings_withdraw_result', 'savings_progress', 'music_listen_invite'];
     if (cardTypes.includes(type)) {
         extraClass += ' no-bubble';
     }
@@ -873,6 +911,8 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
             if (data.status === 'accepted') extraClass += ' accepted';
             if (data.status === 'returned') extraClass += ' returned';
         } catch(e) {}
+    } else if (type === 'red_packet') {
+        extraClass += ' red-packet-msg';
     } else if (type === 'family_card') {
         extraClass += ' family-card-msg';
     } else if (type === 'food_invite' || type === 'route_invite') {
@@ -2373,6 +2413,7 @@ function handleQuote(msgData) {
     if (msgData.type === 'image') previewText = '[图片]';
     else if (msgData.type === 'sticker') previewText = '[表情包]';
     else if (msgData.type === 'transfer') previewText = '[转账]';
+    else if (msgData.type === 'red_packet') previewText = '[红包]';
     else if (msgData.type === 'family_card') previewText = '[亲属卡]';
     else if (msgData.type === 'pay_request') previewText = '[代付请求]';
     else if (msgData.type === 'music_listen_invite') previewText = '[一起听邀请]';
@@ -4195,6 +4236,8 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
     
     const contact = window.iphoneSimState.contacts.find(c => String(c.id) === String(contactId));
     if (!contact) return false;
+    const bypassReplyLock = !!(options && options.__bypassReplyLock === true);
+    const requestTimeoutMs = Math.max(15000, Number(options && options.requestTimeoutMs) || 90000);
     const isGroupChat = typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact);
     if (typeof window.ensureContactWechatBlockFields === 'function') {
         window.ensureContactWechatBlockFields(contact);
@@ -4227,16 +4270,18 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
         return false;
     }
 
-    if (!window.__chatAiReplyLocks) {
-        window.__chatAiReplyLocks = {};
-    }
-    if (window.__chatAiReplyLocks[contactId]) {
-        if (typeof window.showChatToast === 'function') {
-            window.showChatToast('正在生成回复，请稍等', 1600);
+    if (!bypassReplyLock) {
+        if (!window.__chatAiReplyLocks) {
+            window.__chatAiReplyLocks = {};
         }
-        return false;
+        if (window.__chatAiReplyLocks[contactId]) {
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('正在生成回复，请稍等', 1600);
+            }
+            return false;
+        }
+        window.__chatAiReplyLocks[contactId] = true;
     }
-    window.__chatAiReplyLocks[contactId] = true;
 
     const titleEl = document.getElementById('chat-title');
     const chatScreen = document.getElementById('chat-screen');
@@ -4351,18 +4396,39 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                     : { type: part && part.type ? part.type : typeof part, text: part && part.text ? String(part.text).slice(0, 120) : '' })
                 : String((lastUserMessage && lastUserMessage.content) || '').slice(0, 240)
         });
-        const response = await fetch(fetchUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${cleanKey}`
-            },
-            body: JSON.stringify({
-                model: settings.model,
-                messages: messages,
-                temperature: settings.temperature
-            })
-        });
+        const requestController = typeof AbortController === 'function' ? new AbortController() : null;
+        const requestTimeout = requestController
+            ? setTimeout(() => {
+                try {
+                    requestController.abort();
+                } catch (abortError) {}
+            }, requestTimeoutMs)
+            : null;
+        let response = null;
+        try {
+            response = await fetch(fetchUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${cleanKey}`
+                },
+                body: JSON.stringify({
+                    model: settings.model,
+                    messages: messages,
+                    temperature: settings.temperature
+                }),
+                signal: requestController ? requestController.signal : undefined
+            });
+        } catch (requestError) {
+            if (requestController && requestController.signal && requestController.signal.aborted) {
+                throw new Error(`AI 请求超时（${Math.round(requestTimeoutMs / 1000)}秒），请重试`);
+            }
+            throw requestError;
+        } finally {
+            if (requestTimeout) {
+                clearTimeout(requestTimeout);
+            }
+        }
 
         if (!response.ok) {
             throw new Error(`API Error: ${response.status}`);
@@ -4440,7 +4506,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                 if (isGroupChat) {
                     const cmd = String(item && item.content && item.content.command ? item.content.command : item && item.command ? item.command : '').trim().toUpperCase();
                     const pl = item && item.content ? item.content.payload : item.payload;
-                    if (cmd === 'RENAME_GROUP' || cmd === 'SET_MEMBER_TITLE' || cmd === 'RECALL_GROUP_MESSAGE') {
+                    if (cmd === 'RENAME_GROUP' || cmd === 'SET_MEMBER_TITLE' || cmd === 'RECALL_GROUP_MESSAGE' || cmd === 'SEND_GROUP_RED_PACKET' || cmd === 'CLAIM_GROUP_RED_PACKET') {
                         groupActions.push({ command: cmd, payload: pl, speakerContactId });
                     }
                     continue;
@@ -4661,9 +4727,24 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
             });
         }
         messagesList = finalMessages;
+        let appliedGroupActionCount = 0;
         if (isGroupChat) {
             const allowedGroupTypes = new Set(['消息', 'text', '表情包', 'sticker', '语音', 'voice', '图片', 'image']);
             messagesList = messagesList.filter(msg => allowedGroupTypes.has(msg && msg.type));
+            const normalizedGroupMessages = [];
+            messagesList.forEach((msg) => {
+                const resolvedSpeakerContactId = typeof window.resolveGroupSpeakerContactId === 'function'
+                    ? window.resolveGroupSpeakerContactId(msg && (msg.speakerContactId || msg.speaker_contact_id || msg.speaker), contact)
+                    : String(msg && (msg.speakerContactId || msg.speaker_contact_id || msg.speaker) || '').trim();
+                if (!resolvedSpeakerContactId || String(resolvedSpeakerContactId) === 'me') {
+                    return;
+                }
+                normalizedGroupMessages.push({
+                    ...msg,
+                    speakerContactId: resolvedSpeakerContactId
+                });
+            });
+            messagesList = normalizedGroupMessages;
             actions = [];
             thoughtContent = null;
             groupActions.forEach((action) => {
@@ -4680,6 +4761,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                 if (action.command === 'RENAME_GROUP' && typeof window.applyGroupRename === 'function') {
                     if (!canActorManageGroup) return;
                     window.applyGroupRename(contact, actorId, action.payload, { showNotice: true });
+                    appliedGroupActionCount += 1;
                     return;
                 }
 
@@ -4700,6 +4782,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                         : String(targetId || '').trim();
                     if (!targetId) return;
                     window.applyGroupMemberTitle(contact, actorId, targetId, nextTitle, { showNotice: true });
+                    appliedGroupActionCount += 1;
                     return;
                 }
 
@@ -4725,8 +4808,49 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                         targetTimestamp,
                         silent: true
                     });
+                    appliedGroupActionCount += 1;
+                    return;
+                }
+
+                if (action.command === 'SEND_GROUP_RED_PACKET' && typeof window.createGroupRedPacket === 'function') {
+                    const created = window.createGroupRedPacket(contact, actorId, action.payload, {
+                        showNotice: true,
+                        allowWalletDebit: false
+                    });
+                    if (created && created.ok) {
+                        appliedGroupActionCount += 1;
+                    }
+                    return;
+                }
+
+                if (action.command === 'CLAIM_GROUP_RED_PACKET' && typeof window.claimGroupRedPacket === 'function') {
+                    let packetIdOrMsgId = '';
+                    if (action.payload && typeof action.payload === 'object') {
+                        packetIdOrMsgId = action.payload.packet_id
+                            || action.payload.packetId
+                            || action.payload.target_packet_id
+                            || action.payload.targetPacketId
+                            || action.payload.msg_id
+                            || action.payload.target_msg_id
+                            || action.payload.message_id
+                            || '';
+                    } else if (typeof action.payload === 'string') {
+                        packetIdOrMsgId = String(action.payload || '').trim();
+                    }
+                    const claimed = window.claimGroupRedPacket(contact, actorId, packetIdOrMsgId, { showNotice: true });
+                    if (claimed && claimed.ok) {
+                        appliedGroupActionCount += 1;
+                    }
                 }
             });
+        }
+
+        const hasRunnableGroupAction = isGroupChat && appliedGroupActionCount > 0;
+        if (messagesList.length === 0 && actions.length === 0 && (isGroupChat ? !hasRunnableGroupAction : groupActions.length === 0)) {
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('AI 本轮没有生成可显示消息，请重试', 2600);
+            }
+            return false;
         }
 
         // 处理指令
@@ -5648,9 +5772,12 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
             }
 
             if (isGroupChat) {
-                const resolvedSpeakerContactId = typeof window.resolveGroupSpeakerContactId === 'function'
-                    ? window.resolveGroupSpeakerContactId(msg && (msg.speakerContactId || msg.speaker_contact_id || msg.speaker), contact)
-                    : String(msg && (msg.speakerContactId || msg.speaker_contact_id) || '').trim();
+                const normalizedSpeakerContactId = String(msg && msg.speakerContactId || '').trim();
+                const resolvedSpeakerContactId = normalizedSpeakerContactId || (
+                    typeof window.resolveGroupSpeakerContactId === 'function'
+                        ? window.resolveGroupSpeakerContactId(msg && (msg.speaker_contact_id || msg.speaker), contact)
+                        : String(msg && msg.speaker_contact_id || '').trim()
+                );
                 if (!resolvedSpeakerContactId || resolvedSpeakerContactId === 'me') {
                     continue;
                 }
@@ -5736,6 +5863,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                         else if (msg.type === 'music_listen_invite') notifContent = '[一起听邀请]';
                         else if (msg.type === 'virtual_image') notifContent = '[图片]';
                         else if (msg.type === 'sticker') notifContent = '[表情包]';
+                        else if (msg.type === 'red_packet') notifContent = '[红包]';
                     
                     sendSystemNotification(contact, notifContent);
                 }
@@ -6105,6 +6233,10 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
             saveConfig();
         }
 
+        if (!hasVisibleReply && typeof window.showChatToast === 'function') {
+            window.showChatToast('AI 本轮没有生成可显示消息，请重试', 2600);
+        }
+
         return hasVisibleReply;
 
     } catch (error) {
@@ -6117,7 +6249,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
         }
         return false;
     } finally {
-        if (window.__chatAiReplyLocks) {
+        if (!bypassReplyLock && window.__chatAiReplyLocks) {
             delete window.__chatAiReplyLocks[contactId];
         }
         if (shouldShowWechatTypingBubble) {
@@ -8116,7 +8248,13 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
             } else {
                 if (typeof content === 'string' && (content.startsWith('{') || content.startsWith('['))) {
                      try {
-                         if (h.type === 'transfer') {
+                         if (h.type === 'red_packet') {
+                             const data = JSON.parse(content);
+                             const modeText = String(data.mode || '') === 'targeted' ? '专属红包' : '拼手气红包';
+                             const claimCount = Array.isArray(data.claims) ? data.claims.length : 0;
+                             const totalCount = Number(data.totalCount || 0) || 1;
+                             return { role: h.role, content: joinContextTextParts(structuredPrefix, `[红包: ${modeText}, ${data.amount}元, 已领取${claimCount}/${totalCount}] (红包ID: ${data.id || 'unknown'})`) };
+                         } else if (h.type === 'transfer') {
                              const data = JSON.parse(content);
                              return { role: h.role, content: joinContextTextParts(structuredPrefix, `[转账: ${data.amount}元] (ID: ${data.id})`) };
                          } else if (h.type === 'family_card') {

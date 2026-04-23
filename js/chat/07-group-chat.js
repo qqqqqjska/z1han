@@ -495,6 +495,487 @@
         return { ok: true, changed: previousTitle !== normalizedTitle, title: normalizedTitle };
     }
 
+    function normalizeMoneyAmount(value, fallback = 0) {
+        const amount = Number(value);
+        if (!Number.isFinite(amount) || amount <= 0) return Number(fallback) || 0;
+        return Number(amount.toFixed(2));
+    }
+
+    function buildRandomAllocationCents(totalCents, count) {
+        const result = [];
+        let remaining = Math.max(count, Math.floor(Number(totalCents) || 0));
+        const safeCount = Math.max(1, Math.floor(Number(count) || 1));
+        for (let i = 0; i < safeCount; i++) {
+            if (i === safeCount - 1) {
+                result.push(remaining);
+                break;
+            }
+            const remainingSlots = safeCount - i - 1;
+            const minCents = 1;
+            const maxCents = Math.max(minCents, remaining - remainingSlots);
+            const avg = Math.max(minCents, Math.floor(remaining / (remainingSlots + 1)));
+            const sampledUpper = Math.min(maxCents, Math.max(minCents, Math.floor(avg * 1.8)));
+            const sampled = sampledUpper <= minCents
+                ? minCents
+                : (minCents + Math.floor(Math.random() * (sampledUpper - minCents + 1)));
+            result.push(sampled);
+            remaining -= sampled;
+        }
+        return result;
+    }
+
+    function buildEqualAllocationCents(totalCents, count) {
+        const safeCount = Math.max(1, Math.floor(Number(count) || 1));
+        const safeTotal = Math.max(safeCount, Math.floor(Number(totalCents) || 0));
+        const base = Math.floor(safeTotal / safeCount);
+        const remainder = safeTotal - base * safeCount;
+        return Array.from({ length: safeCount }, (_, index) => base + (index < remainder ? 1 : 0));
+    }
+
+    function ensureWalletState() {
+        if (!window.iphoneSimState.wallet || typeof window.iphoneSimState.wallet !== 'object') {
+            window.iphoneSimState.wallet = { balance: 0.00, transactions: [] };
+        }
+        if (!Array.isArray(window.iphoneSimState.wallet.transactions)) {
+            window.iphoneSimState.wallet.transactions = [];
+        }
+        if (!Number.isFinite(Number(window.iphoneSimState.wallet.balance))) {
+            window.iphoneSimState.wallet.balance = 0.00;
+        }
+        return window.iphoneSimState.wallet;
+    }
+
+    function applyWalletExpense(amount, title, relatedId) {
+        const wallet = ensureWalletState();
+        const debit = normalizeMoneyAmount(amount, 0);
+        if (debit <= 0) return { ok: false, reason: 'invalid_amount' };
+        if (Number(wallet.balance || 0) < debit) {
+            return { ok: false, reason: 'insufficient_balance' };
+        }
+        wallet.balance = Number((Number(wallet.balance || 0) - debit).toFixed(2));
+        wallet.transactions.unshift({
+            id: Date.now(),
+            type: 'expense',
+            amount: debit,
+            title: title || '支出',
+            time: Date.now(),
+            relatedId: relatedId || null
+        });
+        return { ok: true, amount: debit };
+    }
+
+    function applyWalletIncome(amount, title, relatedId) {
+        const wallet = ensureWalletState();
+        const credit = normalizeMoneyAmount(amount, 0);
+        if (credit <= 0) return { ok: false, reason: 'invalid_amount' };
+        wallet.balance = Number((Number(wallet.balance || 0) + credit).toFixed(2));
+        wallet.transactions.unshift({
+            id: Date.now(),
+            type: 'income',
+            amount: credit,
+            title: title || '收入',
+            time: Date.now(),
+            relatedId: relatedId || null
+        });
+        return { ok: true, amount: credit };
+    }
+
+    function parseGroupRedPacketPayload(group, actorId, rawPayload) {
+        const memberIds = getGroupMemberIds(group).map(id => normalizeParticipantId(id)).filter(Boolean);
+        const safeActorId = normalizeParticipantId(actorId);
+        const eligibleMemberIds = memberIds.filter(id => String(id) !== String(safeActorId));
+        if (eligibleMemberIds.length === 0) {
+            return { ok: false, reason: 'no_eligible_members' };
+        }
+
+        let payload = rawPayload && typeof rawPayload === 'object'
+            ? rawPayload
+            : {};
+        if (typeof rawPayload === 'string') {
+            const rawText = String(rawPayload || '').trim();
+            if (rawText) {
+                if ((rawText.startsWith('{') && rawText.endsWith('}')) || (rawText.startsWith('[') && rawText.endsWith(']'))) {
+                    try {
+                        const parsed = JSON.parse(rawText);
+                        if (parsed && typeof parsed === 'object') {
+                            payload = parsed;
+                        }
+                    } catch (error) {}
+                } else {
+                    const parts = rawText.split('|').map(item => String(item || '').trim());
+                    payload = {
+                        mode: parts[0] || 'random',
+                        amount: parts[1] || '',
+                        count: parts[2] || '',
+                        remark: parts.slice(3).join('|')
+                    };
+                }
+            }
+        }
+        let mode = String(payload.mode || payload.packet_mode || payload.type || '').trim().toLowerCase();
+        mode = mode === 'targeted' || mode === '指定' || mode === 'direct'
+            ? 'targeted'
+            : 'random';
+
+        const amount = normalizeMoneyAmount(
+            payload.amount
+            || payload.total_amount
+            || payload.totalAmount
+            || payload.money
+            || payload.value,
+            0
+        );
+        if (amount <= 0) {
+            return { ok: false, reason: 'invalid_amount' };
+        }
+        const totalCents = Math.round(amount * 100);
+
+        const remark = String(payload.remark || payload.greeting || payload.text || '恭喜发财，大吉大利')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 40) || '恭喜发财，大吉大利';
+
+        if (mode === 'targeted') {
+            const rawTargets = Array.isArray(payload.target_member_ids)
+                ? payload.target_member_ids
+                : Array.isArray(payload.targetMemberIds)
+                    ? payload.targetMemberIds
+                    : Array.isArray(payload.targets)
+                        ? payload.targets
+                        : [];
+            const targetMemberIds = rawTargets
+                .map(id => normalizeParticipantId(id))
+                .filter(id => id && eligibleMemberIds.some(memberId => String(memberId) === String(id)));
+            const dedupedTargetIds = [];
+            targetMemberIds.forEach((id) => {
+                if (!dedupedTargetIds.some(existing => String(existing) === String(id))) {
+                    dedupedTargetIds.push(id);
+                }
+            });
+            if (dedupedTargetIds.length === 0) {
+                return { ok: false, reason: 'empty_target_members' };
+            }
+            if (totalCents < dedupedTargetIds.length) {
+                return { ok: false, reason: 'amount_too_small' };
+            }
+            const allocationCents = buildEqualAllocationCents(totalCents, dedupedTargetIds.length);
+            return {
+                ok: true,
+                mode: 'targeted',
+                amount,
+                remark,
+                totalCount: dedupedTargetIds.length,
+                targetMemberIds: dedupedTargetIds,
+                allocations: allocationCents.map(cents => Number((cents / 100).toFixed(2)))
+            };
+        }
+
+        const requestedCountRaw = Number(
+            payload.count
+            || payload.packet_count
+            || payload.packetCount
+            || payload.total_count
+            || payload.totalCount
+            || payload.num
+            || payload.member_count
+            || 0
+        );
+        const fallbackCount = Math.min(3, eligibleMemberIds.length);
+        const totalCount = Math.max(
+            1,
+            Math.min(
+                eligibleMemberIds.length,
+                Number.isFinite(requestedCountRaw) && requestedCountRaw > 0 ? Math.floor(requestedCountRaw) : fallbackCount
+            )
+        );
+        if (totalCents < totalCount) {
+            return { ok: false, reason: 'amount_too_small' };
+        }
+        const allocationCents = buildRandomAllocationCents(totalCents, totalCount);
+        return {
+            ok: true,
+            mode: 'random',
+            amount,
+            remark,
+            totalCount,
+            targetMemberIds: [],
+            allocations: allocationCents.map(cents => Number((cents / 100).toFixed(2)))
+        };
+    }
+
+    function findGroupRedPacketEntry(groupContact, packetIdOrMsgId = null) {
+        const group = getGroupContact(groupContact);
+        if (!group) return null;
+        const targetToken = String(packetIdOrMsgId || '').trim();
+        const history = Array.isArray(window.iphoneSimState && window.iphoneSimState.chatHistory && window.iphoneSimState.chatHistory[group.id])
+            ? window.iphoneSimState.chatHistory[group.id]
+            : [];
+        for (let i = history.length - 1; i >= 0; i--) {
+            const message = history[i];
+            if (!message || message.type !== 'red_packet') continue;
+            let payload = null;
+            try {
+                payload = typeof message.content === 'string' ? JSON.parse(message.content) : message.content;
+            } catch (error) {
+                payload = null;
+            }
+            if (!payload || !payload.id) continue;
+            const packetId = String(payload.id);
+            const msgId = String(message.id || '');
+            if (!targetToken || targetToken === packetId || targetToken === msgId) {
+                return { group, message, payload, index: i };
+            }
+        }
+        return null;
+    }
+
+    function getGroupRedPacketClaimState(groupContact, payload, actorId = 'me') {
+        const group = getGroupContact(groupContact);
+        const safeActorId = normalizeParticipantId(actorId);
+        const senderId = normalizeParticipantId(payload && payload.senderId || '');
+        const claims = Array.isArray(payload && payload.claims) ? payload.claims : [];
+        const mode = String(payload && payload.mode || 'random') === 'targeted' ? 'targeted' : 'random';
+        const targetMemberIds = Array.isArray(payload && payload.targetMemberIds)
+            ? payload.targetMemberIds.map(id => normalizeParticipantId(id)).filter(Boolean)
+            : [];
+        const allocations = Array.isArray(payload && payload.allocations)
+            ? payload.allocations.map(item => normalizeMoneyAmount(item, 0)).filter(item => item > 0)
+            : [];
+        const totalCount = Math.max(1, Number(payload && payload.totalCount) || (mode === 'targeted' ? targetMemberIds.length : allocations.length || 1));
+        const claimedCount = claims.length;
+
+        const claimedEntry = claims.find(item => String(normalizeParticipantId(item && item.memberId)) === String(safeActorId));
+        if (claimedEntry) {
+            return {
+                alreadyClaimed: true,
+                canClaim: false,
+                reason: 'already_claimed',
+                claimedAmount: normalizeMoneyAmount(claimedEntry.amount, 0)
+            };
+        }
+        if (!group || !safeActorId || String(senderId) === String(safeActorId)) {
+            return { alreadyClaimed: false, canClaim: false, reason: 'self' };
+        }
+        if (claimedCount >= totalCount || String(payload && payload.status || '') === 'finished') {
+            return { alreadyClaimed: false, canClaim: false, reason: 'finished' };
+        }
+        if (mode === 'targeted') {
+            const isTarget = targetMemberIds.some(id => String(id) === String(safeActorId));
+            if (!isTarget) {
+                return { alreadyClaimed: false, canClaim: false, reason: 'not_target' };
+            }
+        }
+        return { alreadyClaimed: false, canClaim: true, reason: '' };
+    }
+
+    function createGroupRedPacket(groupContact, actorId = 'me', rawPayload = {}, options = {}) {
+        const group = getGroupContact(groupContact);
+        const safeActorId = normalizeParticipantId(actorId || 'me');
+        if (!group || !safeActorId) return { ok: false, reason: 'invalid_group_or_actor' };
+
+        const isActorUser = String(safeActorId) === 'me';
+        const actorInGroup = isActorUser || getGroupMemberIds(group).some(id => String(id) === String(safeActorId));
+        if (!actorInGroup) return { ok: false, reason: 'actor_not_in_group' };
+
+        const parsed = parseGroupRedPacketPayload(group, safeActorId, rawPayload);
+        if (!parsed.ok) return parsed;
+
+        const packetId = Date.now() + Math.floor(Math.random() * 10000);
+        const packetData = {
+            id: packetId,
+            amount: Number(parsed.amount.toFixed(2)),
+            remark: parsed.remark,
+            mode: parsed.mode,
+            totalCount: parsed.totalCount,
+            targetMemberIds: parsed.targetMemberIds,
+            allocations: parsed.allocations,
+            claims: [],
+            status: 'pending',
+            senderId: safeActorId,
+            createdAt: Date.now()
+        };
+
+        if (isActorUser && options.allowWalletDebit !== false) {
+            const debitResult = applyWalletExpense(parsed.amount, '群红包支出', packetId);
+            if (!debitResult.ok) return debitResult;
+        }
+
+        const message = typeof window.sendMessage === 'function'
+            ? window.sendMessage(
+                JSON.stringify(packetData),
+                isActorUser,
+                'red_packet',
+                null,
+                group.id,
+                {
+                    bypassWechatBlock: true,
+                    ignoreReplyingState: true,
+                    showNotification: true,
+                    speakerContactId: safeActorId
+                }
+            )
+            : null;
+
+        if (!message) {
+            if (isActorUser && options.allowWalletDebit !== false) {
+                applyWalletIncome(parsed.amount, '群红包回退', packetId);
+            }
+            return { ok: false, reason: 'send_failed' };
+        }
+
+        if (typeof saveConfig === 'function') saveConfig();
+        if (options.showNotice) {
+            const actorName = safeActorId === 'me' ? '你' : getParticipantName(group, safeActorId, '群成员');
+            const modeText = parsed.mode === 'targeted' ? '专属红包' : '拼手气红包';
+            pushVisibleGroupSystemNotice(group.id, `${actorName} 发了一个${modeText}（¥${parsed.amount.toFixed(2)}）`);
+        }
+        return { ok: true, packetData, message };
+    }
+
+    function claimGroupRedPacket(groupContact, actorId = 'me', packetIdOrMsgId = null, options = {}) {
+        const entry = findGroupRedPacketEntry(groupContact, packetIdOrMsgId);
+        if (!entry) return { ok: false, reason: 'not_found' };
+        const { group, message, payload } = entry;
+        const safeActorId = normalizeParticipantId(actorId || 'me');
+        const senderId = normalizeParticipantId(payload.senderId || '');
+        const claims = Array.isArray(payload.claims) ? payload.claims : [];
+        const allocations = Array.isArray(payload.allocations)
+            ? payload.allocations.map(item => normalizeMoneyAmount(item, 0))
+            : [];
+        const mode = String(payload.mode || 'random') === 'targeted' ? 'targeted' : 'random';
+        const targetMemberIds = Array.isArray(payload.targetMemberIds)
+            ? payload.targetMemberIds.map(id => normalizeParticipantId(id)).filter(Boolean)
+            : [];
+        const totalCount = Math.max(1, Number(payload.totalCount) || (mode === 'targeted' ? targetMemberIds.length : allocations.length || 1));
+
+        const claimState = getGroupRedPacketClaimState(group, payload, safeActorId);
+        if (!claimState.canClaim) {
+            return { ok: false, reason: claimState.reason, claimedAmount: claimState.claimedAmount || 0 };
+        }
+
+        let claimAmount = 0;
+        if (mode === 'targeted') {
+            const targetIndex = targetMemberIds.findIndex(id => String(id) === String(safeActorId));
+            claimAmount = normalizeMoneyAmount(allocations[targetIndex], 0);
+        } else {
+            claimAmount = normalizeMoneyAmount(allocations[claims.length], 0);
+        }
+        if (claimAmount <= 0) {
+            return { ok: false, reason: 'invalid_claim_amount' };
+        }
+
+        claims.push({
+            memberId: safeActorId,
+            amount: Number(claimAmount.toFixed(2)),
+            time: Date.now()
+        });
+        payload.claims = claims;
+        payload.status = claims.length >= totalCount ? 'finished' : 'pending';
+        message.content = JSON.stringify(payload);
+
+        if (String(safeActorId) === 'me') {
+            applyWalletIncome(claimAmount, '群红包收入', payload.id || null);
+        }
+
+        if (typeof saveConfig === 'function') saveConfig();
+        if (String(window.iphoneSimState.currentChatContactId || '') === String(group.id) && typeof window.renderChatHistory === 'function') {
+            window.renderChatHistory(group.id, true);
+        }
+        if (typeof window.renderContactList === 'function') {
+            window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
+        }
+
+        if (options.showNotice !== false) {
+            const actorName = safeActorId === 'me' ? '你' : getParticipantName(group, safeActorId, '群成员');
+            pushVisibleGroupSystemNotice(group.id, `${actorName} 抢到了 ¥${claimAmount.toFixed(2)} 红包`);
+            if (payload.status === 'finished') {
+                pushVisibleGroupSystemNotice(group.id, '红包已被抢完');
+            }
+        }
+
+        return {
+            ok: true,
+            amount: Number(claimAmount.toFixed(2)),
+            finished: payload.status === 'finished',
+            packetId: payload.id || null,
+            messageId: message.id || null
+        };
+    }
+
+    function openGroupRedPacketDetail(packetIdOrMsgId = null) {
+        const group = getGroupContact(window.iphoneSimState.currentChatContactId);
+        if (!group) return;
+        const entry = findGroupRedPacketEntry(group, packetIdOrMsgId);
+        if (!entry) {
+            showGroupToast('未找到红包记录');
+            return;
+        }
+        const { payload } = entry;
+        const claimState = getGroupRedPacketClaimState(group, payload, 'me');
+        const claims = Array.isArray(payload.claims) ? payload.claims : [];
+        const totalCount = Math.max(1, Number(payload.totalCount) || 1);
+        const modeText = String(payload.mode || '') === 'targeted' ? '专属红包' : '拼手气红包';
+        const senderId = normalizeParticipantId(payload.senderId || '');
+        const senderName = senderId === 'me' ? '你' : getParticipantName(group, senderId, '群成员');
+        const claimLines = claims.map((item) => {
+            const memberId = normalizeParticipantId(item && item.memberId);
+            const memberName = memberId === 'me' ? '你' : getParticipantName(group, memberId, '群成员');
+            const amountText = normalizeMoneyAmount(item && item.amount, 0).toFixed(2);
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f1f3f5;"><span>${escapeHtml(memberName)}</span><span style="font-weight:600;">¥${escapeHtml(amountText)}</span></div>`;
+        }).join('');
+
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.style.zIndex = '360';
+        modal.style.alignItems = 'flex-end';
+        modal.innerHTML = `
+            <div class="modal-content" style="height:auto;border-radius:16px 16px 0 0;max-height:75vh;overflow:auto;">
+                <div class="modal-header">
+                    <h3>${modeText}</h3>
+                    <button class="close-btn" data-group-rp-close>&times;</button>
+                </div>
+                <div class="modal-body" style="padding:16px 20px 20px;">
+                    <div style="font-size:14px;color:#6b7280;margin-bottom:6px;">发送者：${escapeHtml(senderName)}</div>
+                    <div style="font-size:30px;font-weight:700;color:#111827;margin-bottom:6px;">¥${escapeHtml(normalizeMoneyAmount(payload.amount, 0).toFixed(2))}</div>
+                    <div style="font-size:14px;color:#9ca3af;margin-bottom:12px;">${escapeHtml(String(payload.remark || '恭喜发财，大吉大利'))}</div>
+                    <div style="font-size:13px;color:#6b7280;margin-bottom:12px;">已领取 ${claims.length}/${totalCount}</div>
+                    <div style="max-height:220px;overflow:auto;margin-bottom:14px;">${claimLines || '<div style="font-size:13px;color:#9ca3af;">还没有人领取</div>'}</div>
+                    <button data-group-rp-claim class="ios-btn-block" ${claimState.canClaim ? '' : 'disabled'} style="${claimState.canClaim ? '' : 'opacity:.5;cursor:not-allowed;'}">${claimState.canClaim ? '抢红包' : (claimState.alreadyClaimed ? `已领取 ¥${Number(claimState.claimedAmount || 0).toFixed(2)}` : '暂不可领取')}</button>
+                </div>
+            </div>
+        `;
+
+        const closeModal = () => {
+            if (modal && modal.parentNode) modal.parentNode.removeChild(modal);
+        };
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) closeModal();
+        });
+        const closeBtn = modal.querySelector('[data-group-rp-close]');
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        const claimBtn = modal.querySelector('[data-group-rp-claim]');
+        if (claimBtn && claimState.canClaim) {
+            claimBtn.addEventListener('click', () => {
+                const claimed = claimGroupRedPacket(group, 'me', payload.id || entry.message.id, { showNotice: true });
+                if (!claimed.ok) {
+                    if (claimed.reason === 'already_claimed') {
+                        showGroupToast(`你已经抢过这个红包（¥${Number(claimed.claimedAmount || 0).toFixed(2)}）`);
+                    } else if (claimed.reason === 'not_target') {
+                        showGroupToast('这是专属红包，你不在领取名单里');
+                    } else if (claimed.reason === 'finished') {
+                        showGroupToast('红包已经被抢完了');
+                    } else {
+                        showGroupToast('抢红包失败');
+                    }
+                    return;
+                }
+                closeModal();
+            });
+        }
+
+        document.body.appendChild(modal);
+    }
+
     function getParticipantAvatar(groupContact, participantId, fallback = '') {
         const group = getGroupContact(groupContact);
         const safeId = normalizeParticipantId(participantId);
@@ -894,6 +1375,8 @@
             body = '[表情包]';
         } else if (message.type === 'voice') {
             body = '[语音]';
+        } else if (message.type === 'red_packet') {
+            body = '[红包]';
         } else if (typeof message.content === 'string' && message.content.trim()) {
             body = message.content.trim();
         } else {
@@ -976,6 +1459,7 @@
                     if (message.type === 'image' || message.type === 'virtual_image') content = '[图片]';
                     else if (message.type === 'sticker') content = '[表情包]';
                     else if (message.type === 'voice') content = '[语音]';
+                    else if (message.type === 'red_packet') content = '[红包]';
                     if (!content) content = '[消息]';
                     return `- ${message.role === 'user' ? getParticipantName(group, 'me') : getParticipantName(group, member.id, 'TA')}: ${content}`;
                 });
@@ -1012,6 +1496,15 @@
             body = `[表情包${message.description ? `: ${message.description}` : ''}]`;
         } else if (message.type === 'voice') {
             body = '[语音]';
+        } else if (message.type === 'red_packet') {
+            let packetInfo = '';
+            try {
+                const packetData = typeof message.content === 'string' ? JSON.parse(message.content) : message.content;
+                if (packetData && packetData.id) {
+                    packetInfo = ` id=${packetData.id}`;
+                }
+            } catch (error) {}
+            body = `[红包${packetInfo}]`;
         } else if (typeof message.content === 'string' && message.content.trim()) {
             body = message.content.trim();
         } else {
@@ -1106,14 +1599,18 @@
             '- sticker_message 格式：{"type":"sticker_message","speaker_contact_id":"成员ID","sticker":"表情描述"}。',
             '- voice 格式：{"type":"voice","speaker_contact_id":"成员ID","duration":3,"content":"语音内容"}。',
             '- image 格式：{"type":"image","speaker_contact_id":"成员ID","content":"图片描述"}。',
-            '- 允许额外输出管理动作 action，但仅限三种：',
-            '- 管理动作里的 speaker_contact_id 必须是某位 AI 成员，严禁写 me（用户本人）。',
+            '- 允许额外输出群动作 action，但仅限下面列出的五种。',
+            '- action 里的 speaker_contact_id 必须是某位 AI 成员，严禁写 me（用户本人）。',
             '- 改群名：{"type":"action","speaker_contact_id":"成员ID","command":"RENAME_GROUP","payload":"新群名"}。只有管理员或群主能这样做。',
             '- 设群头衔：{"type":"action","speaker_contact_id":"成员ID","command":"SET_MEMBER_TITLE","payload":{"target_member_id":"成员ID","title":"群头衔"}}。只有群主能这样做；若要取消群头衔，title 传空字符串。',
             '- 撤回消息：{"type":"action","speaker_contact_id":"成员ID","command":"RECALL_GROUP_MESSAGE","payload":{"target_msg_id":"消息ID"}}。只有管理员或群主能这样做；target_msg_id 必须来自上文已有真实消息。',
+            '- 发红包：{"type":"action","speaker_contact_id":"成员ID","command":"SEND_GROUP_RED_PACKET","payload":{"mode":"targeted|random","amount":88.88,"target_member_ids":["成员ID"],"count":3,"remark":"红包祝福"}}。targeted 需要 target_member_ids，random 需要 count。',
+            '- 抢红包：{"type":"action","speaker_contact_id":"成员ID","command":"CLAIM_GROUP_RED_PACKET","payload":{"packet_id":"红包ID或红包消息ID"}}。红包ID可从上下文里的 [红包 id=...] 读取。',
             '- 一次把整轮群成员要说的话按顺序写完整，不能依赖第二次生成补说话。',
             '- 每轮回复总共至少输出 6 条可见消息；action 不计入这 6 条。若群成员较少，可以让同一成员连续说多句，但总可见消息数不能少于 6 条。',
-            '- 除上面三种管理动作外，禁止输出 thought_state、转账、改资料、下单、一起听、屏幕操作等任何副作用指令。',
+            '- 回复形态必须像真实群聊：不要所有人都只对用户单线回复。每轮至少安排 2 条“成员对成员”的直接互动（接话、追问、调侃、引用任一成员都可以）。',
+            '- 成员在互相互动时可自然提及用户，但主语与对话对象不能始终只有用户一个人。',
+            '- 除上面五种群动作外，禁止输出 thought_state、转账、改资料、下单、一起听、屏幕操作等任何副作用指令。',
             '- 谁更可能接话、是否多人连续回复、是否引用消息，都由你一次性自然决定。',
             `【记忆模式】当前模式：${GROUP_MEMORY_MODE_LABELS[memoryMode] || GROUP_MEMORY_MODE_LABELS.group_only}。`,
             directContext || ''
@@ -2455,6 +2952,10 @@
     window.buildGroupAiPromptMessages = buildGroupAiPromptMessages;
     window.consumePendingInviteMembers = consumePendingInviteMembers;
     window.syncGroupRoundToDirectThreads = syncGroupRoundToDirectThreads;
+    window.openGroupContactMultiPicker = openContactMultiPicker;
+    window.createGroupRedPacket = createGroupRedPacket;
+    window.claimGroupRedPacket = claimGroupRedPacket;
+    window.handleGroupRedPacketClick = openGroupRedPacketDetail;
     window.openGroupChatSettings = openGroupChatSettings;
     window.openGroupMemberRelationsScreen = openGroupMemberRelationsScreen;
     window.openGroupMemberDirectoryScreen = openGroupMemberDirectoryScreen;

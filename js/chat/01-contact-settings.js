@@ -1402,6 +1402,7 @@ window.showChatNotification = function(contactId, content, options) {
     else if (content.startsWith('[表情包]') || content.startsWith('<img') && content.includes('sticker')) previewText = '[动画表情]';
     else if (content.startsWith('[语音]')) previewText = '[语音]';
     else if (content.startsWith('[转账]')) previewText = '[转账]';
+    else if (content.startsWith('[红包]')) previewText = '[红包]';
     else if (content.startsWith('[亲属卡]')) previewText = '[亲属卡]';
     else if (content.includes('pay_request')) previewText = '[代付请求]';
     else if (content.includes('shopping_gift')) previewText = '[礼物]';
@@ -2370,6 +2371,7 @@ function formatLastMsgPreview(lastMsg, contact = null) {
     if (lastMsg.type === 'image') preview = '[图片]';
     else if (lastMsg.type === 'sticker') preview = '[表情包]';
     else if (lastMsg.type === 'transfer') preview = '[转账]';
+    else if (lastMsg.type === 'red_packet') preview = '[红包]';
     else if (lastMsg.type === 'family_card') preview = '[亲属卡]';
     else if (lastMsg.type === 'voice') preview = '[语音]';
     else if (lastMsg.type === 'gift_card') preview = '[礼物]';
@@ -3081,6 +3083,9 @@ function openChat(contactId) {
     
     renderChatHistory(contactId);
     syncWechatBlockedChatUi(contact);
+    if (typeof window.refreshChatMoreFeatureVisibility === 'function') {
+        window.refreshChatMoreFeatureVisibility();
+    }
 
     if (typeof window.prefetchAmapChatContext === 'function') {
         window.prefetchAmapChatContext(contactId);
