@@ -4999,7 +4999,7 @@ function setupChatListeners() {
     // 分页相关元素
     const chatMorePages = document.getElementById('chat-more-pages');
     const chatMoreIndicators = document.querySelectorAll('.chat-more-dot');
-    const GROUP_ONLY_MORE_ITEM_IDS = ['chat-more-red-packet-btn'];
+    const GROUP_ONLY_MORE_ITEM_IDS = ['chat-more-red-packet-btn', 'chat-more-group-poll-btn', 'chat-more-group-relay-btn', 'chat-more-group-meeting-btn'];
     const DIRECT_ONLY_MORE_ITEM_IDS = [
         'chat-more-fire-buddy-btn',
         'chat-more-food-btn',
@@ -5118,8 +5118,29 @@ function setupChatListeners() {
                     openChatNavigationModal();
                     return;
                 }
+                if (item.id === 'chat-more-group-poll-btn') {
+                    e.stopPropagation();
+                    closeAllPanels();
+                    openGroupPollComposer();
+                    return;
+                }
+                if (item.id === 'chat-more-group-relay-btn') {
+                    e.stopPropagation();
+                    closeAllPanels();
+                    openGroupRelayComposer();
+                    return;
+                }
+                if (item.id === 'chat-more-group-meeting-btn') {
+                    e.stopPropagation();
+                    closeAllPanels();
+                    const contactId = window.iphoneSimState && window.iphoneSimState.currentChatContactId;
+                    if (contactId && typeof openMeetingsScreen === 'function') {
+                        openMeetingsScreen(contactId);
+                    }
+                    return;
+                }
 
-                if (item.id === 'chat-more-photo-btn' || item.id === 'chat-more-camera-btn' || item.id === 'chat-more-transfer-btn' || item.id === 'chat-more-red-packet-btn' || item.id === 'chat-more-memory-btn' || item.id === 'chat-more-location-btn' || item.id === 'chat-more-regenerate-btn' || item.id === 'chat-more-voice-btn' || item.id === 'chat-more-video-call-btn' || item.id === 'chat-more-screen-share-btn' || item.id === 'chat-more-fire-buddy-btn' || item.id === 'chat-more-food-btn' || item.id === 'chat-more-nav-btn') return;
+                if (item.id === 'chat-more-photo-btn' || item.id === 'chat-more-camera-btn' || item.id === 'chat-more-transfer-btn' || item.id === 'chat-more-red-packet-btn' || item.id === 'chat-more-group-poll-btn' || item.id === 'chat-more-group-relay-btn' || item.id === 'chat-more-group-meeting-btn' || item.id === 'chat-more-memory-btn' || item.id === 'chat-more-location-btn' || item.id === 'chat-more-regenerate-btn' || item.id === 'chat-more-voice-btn' || item.id === 'chat-more-video-call-btn' || item.id === 'chat-more-screen-share-btn' || item.id === 'chat-more-fire-buddy-btn' || item.id === 'chat-more-food-btn' || item.id === 'chat-more-nav-btn') return;
                 
                 e.stopPropagation();
                 const label = item.querySelector('.more-label').textContent;
@@ -5382,6 +5403,268 @@ function setupChatListeners() {
         const contact = window.iphoneSimState.contacts.find(item => String(item.id) === String(contactId));
         if (!contact) return null;
         return (typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(contact)) ? contact : null;
+    }
+
+    async function openGroupPollComposer() {
+        const group = getCurrentGroupContactForRedPacket();
+        if (!group) {
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('仅群聊支持发起投票', 2000);
+            }
+            return;
+        }
+        if (typeof window.createGroupPoll !== 'function') {
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('投票功能暂不可用', 2000);
+            }
+            return;
+        }
+        if (typeof window.openGroupActionEditorModal !== 'function') {
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('弹窗组件未就绪，请刷新重试', 2000);
+            }
+            return;
+        }
+
+        const normalizePollOptions = (values) => {
+            const source = Array.isArray(values) ? values : [];
+            const deduped = [];
+            const seen = new Set();
+            source.forEach((option) => {
+                const normalizedOption = String(option || '').replace(/\s+/g, ' ').trim();
+                if (!normalizedOption) return;
+                const key = normalizedOption.toLowerCase();
+                if (seen.has(key)) return;
+                seen.add(key);
+                deduped.push(normalizedOption);
+            });
+            return deduped;
+        };
+        const parsePollOptionsFromRaw = (rawValue) => normalizePollOptions(
+            String(rawValue || '')
+                .split(/\n|[,，|｜]/g)
+        );
+        const pollComposerState = {
+            readUiOptions: null,
+            lastValidatedOptions: []
+        };
+
+        const modalResult = await window.openGroupActionEditorModal({
+            kicker: 'GROUP POLL',
+            title: '发起投票',
+            subtitle: '黑白简约模式 · 请输入主题和选项',
+            confirmText: '创建投票',
+            cancelText: '取消',
+            fields: [
+                {
+                    id: 'title',
+                    type: 'text',
+                    label: '投票主题',
+                    placeholder: '例如：今晚吃什么',
+                    maxLength: 64
+                },
+                {
+                    id: 'options',
+                    type: 'text',
+                    label: '投票选项',
+                    value: '',
+                    hidden: true
+                }
+            ],
+            onRendered: ({ fields }) => {
+                if (!fields) return;
+                const hiddenOptionsInput = fields.querySelector('[data-group-action-field="options"]');
+                if (!hiddenOptionsInput) return;
+
+                const builderWrap = document.createElement('div');
+                builderWrap.className = 'group-poll-options-builder';
+                const header = document.createElement('div');
+                header.className = 'group-poll-options-header';
+                header.textContent = '投票选项（点击按钮新增）';
+
+                const list = document.createElement('div');
+                list.className = 'group-poll-options-list';
+
+                const addBtn = document.createElement('button');
+                addBtn.type = 'button';
+                addBtn.className = 'group-poll-option-add-btn';
+                addBtn.textContent = '+ 新增选项';
+
+                const hint = document.createElement('div');
+                hint.className = 'group-poll-options-hint';
+                hint.textContent = '至少保留 2 个选项，支持随时修改顺序编号。';
+
+                builderWrap.appendChild(header);
+                builderWrap.appendChild(list);
+                builderWrap.appendChild(addBtn);
+                builderWrap.appendChild(hint);
+                fields.appendChild(builderWrap);
+
+                const rowItems = [];
+                const normalizeRowValue = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+                const readRowOptions = () => normalizePollOptions(
+                    rowItems.map(item => normalizeRowValue(item.input && item.input.value))
+                );
+                pollComposerState.readUiOptions = readRowOptions;
+                const updateHiddenValue = () => {
+                    hiddenOptionsInput.value = readRowOptions().join('\n');
+                };
+                const updateRowsMeta = () => {
+                    rowItems.forEach((item, index) => {
+                        if (item.indexNode) item.indexNode.textContent = String(index + 1);
+                        const disableRemove = rowItems.length <= 2;
+                        if (item.removeBtn) {
+                            item.removeBtn.disabled = disableRemove;
+                            item.removeBtn.classList.toggle('is-disabled', disableRemove);
+                        }
+                    });
+                };
+                const addOptionRow = (initialValue = '', shouldFocus = false) => {
+                    const row = document.createElement('div');
+                    row.className = 'group-poll-option-row';
+
+                    const indexNode = document.createElement('div');
+                    indexNode.className = 'group-poll-option-index';
+
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'group-action-editor-input group-poll-option-input';
+                    input.placeholder = '输入选项内容';
+                    input.maxLength = 40;
+                    input.value = String(initialValue || '');
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.className = 'group-poll-option-remove-btn';
+                    removeBtn.textContent = '删除';
+
+                    row.appendChild(indexNode);
+                    row.appendChild(input);
+                    row.appendChild(removeBtn);
+                    list.appendChild(row);
+
+                    const rowItem = { row, indexNode, input, removeBtn };
+                    rowItems.push(rowItem);
+
+                    input.addEventListener('input', updateHiddenValue);
+                    input.addEventListener('keydown', (event) => {
+                        if (event.key !== 'Enter') return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        addOptionRow('', true);
+                    });
+                    removeBtn.addEventListener('click', () => {
+                        if (rowItems.length <= 2) return;
+                        const idx = rowItems.indexOf(rowItem);
+                        if (idx < 0) return;
+                        rowItems.splice(idx, 1);
+                        if (row.parentNode) row.parentNode.removeChild(row);
+                        updateRowsMeta();
+                        updateHiddenValue();
+                    });
+
+                    updateRowsMeta();
+                    updateHiddenValue();
+                    if (shouldFocus) {
+                        setTimeout(() => input.focus(), 30);
+                    }
+                };
+
+                addBtn.addEventListener('click', () => addOptionRow('', true));
+                const initialOptions = parsePollOptionsFromRaw(hiddenOptionsInput.value || '');
+                const bootOptions = initialOptions.length > 0 ? initialOptions : ['', ''];
+                bootOptions.forEach((optionValue) => addOptionRow(optionValue, false));
+                while (rowItems.length < 2) {
+                    addOptionRow('', false);
+                }
+            },
+            validate: (values) => {
+                const title = String(values.title || '').replace(/\s+/g, ' ').trim();
+                const options = typeof pollComposerState.readUiOptions === 'function'
+                    ? pollComposerState.readUiOptions()
+                    : parsePollOptionsFromRaw(values.options || '');
+                pollComposerState.lastValidatedOptions = options;
+                if (!title) return { ok: false, message: '请先输入投票主题' };
+                if (options.length < 2) return { ok: false, message: '请至少输入2个选项' };
+                return { ok: true };
+            }
+        });
+        if (!modalResult || !modalResult.confirmed) return;
+
+        const title = String(modalResult.values.title || '').replace(/\s+/g, ' ').trim();
+        const options = Array.isArray(pollComposerState.lastValidatedOptions) && pollComposerState.lastValidatedOptions.length > 0
+            ? pollComposerState.lastValidatedOptions
+            : parsePollOptionsFromRaw(modalResult.values.options || '');
+
+        const result = window.createGroupPoll(group, 'me', { title, options }, { showNotice: true });
+        if (!result || !result.ok) {
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('投票创建失败，请检查输入', 2200);
+            }
+        }
+    }
+
+    async function openGroupRelayComposer() {
+        const group = getCurrentGroupContactForRedPacket();
+        if (!group) {
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('仅群聊支持发起接龙', 2000);
+            }
+            return;
+        }
+        if (typeof window.createGroupRelay !== 'function') {
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('接龙功能暂不可用', 2000);
+            }
+            return;
+        }
+        if (typeof window.openGroupActionEditorModal !== 'function') {
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('弹窗组件未就绪，请刷新重试', 2000);
+            }
+            return;
+        }
+
+        const modalResult = await window.openGroupActionEditorModal({
+            kicker: 'GROUP RELAY',
+            title: '发起接龙',
+            subtitle: '可选填写第一条内容，成员可继续接龙',
+            confirmText: '创建接龙',
+            cancelText: '取消',
+            fields: [
+                {
+                    id: 'title',
+                    type: 'text',
+                    label: '接龙主题',
+                    placeholder: '例如：团建活动报名',
+                    maxLength: 64
+                },
+                {
+                    id: 'entry',
+                    type: 'textarea',
+                    label: '第一条内容（可留空）',
+                    placeholder: '例如：1. 小明',
+                    rows: 4,
+                    maxLength: 90
+                }
+            ],
+            validate: (values) => {
+                const title = String(values.title || '').replace(/\s+/g, ' ').trim();
+                if (!title) return { ok: false, message: '请先输入接龙主题' };
+                return { ok: true };
+            }
+        });
+        if (!modalResult || !modalResult.confirmed) return;
+
+        const title = String(modalResult.values.title || '').replace(/\s+/g, ' ').trim();
+        const entry = String(modalResult.values.entry || '').replace(/\s+/g, ' ').trim();
+
+        const result = window.createGroupRelay(group, 'me', { title, entry }, { showNotice: true });
+        if (!result || !result.ok) {
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('接龙创建失败，请重试', 2200);
+            }
+        }
     }
 
     function renderGroupRedPacketSelectedMembers() {
@@ -6247,6 +6530,29 @@ function hasVisibleRealtimeCall() {
     return false;
 }
 
+function isMeetingStoryModeActiveForContact(contactId) {
+    if (contactId === undefined || contactId === null) return false;
+    const meetingDetailScreen = document.getElementById('meeting-detail-screen');
+    if (!meetingDetailScreen || meetingDetailScreen.classList.contains('hidden')) {
+        return false;
+    }
+
+    const state = window.iphoneSimState || {};
+    const currentContactId = state.currentChatContactId;
+    if (String(currentContactId) !== String(contactId)) {
+        return false;
+    }
+
+    const currentContact = Array.isArray(state.contacts)
+        ? state.contacts.find(item => item && String(item.id) === String(currentContactId)) || null
+        : null;
+    if (currentContact && typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(currentContact)) {
+        return false;
+    }
+
+    return true;
+}
+
 function hasAnyChatReplyGenerationInProgress() {
     const locks = window.__chatAiReplyLocks;
     return !!(locks && typeof locks === 'object' && Object.keys(locks).length > 0);
@@ -6332,6 +6638,10 @@ function shouldTriggerActiveReply(contact, context, runtimeEntry, now = Date.now
 
     if (!isWechatSingleChatContact(contact)) {
         return { allow: false, reason: 'non-wechat' };
+    }
+
+    if (isMeetingStoryModeActiveForContact(contact.id)) {
+        return { allow: false, reason: 'meeting-story-active' };
     }
 
     if (typeof window.ensureContactRestWindowFields === 'function') {
@@ -6793,6 +7103,7 @@ async function checkActiveReplies(options = {}) {
 
     window.iphoneSimState.contacts.forEach(contact => {
         if (!contact.activeReplyEnabled) return;
+        if (isMeetingStoryModeActiveForContact(contact.id)) return;
         if (typeof window.ensureContactRestWindowFields === 'function') {
             window.ensureContactRestWindowFields(contact);
         }

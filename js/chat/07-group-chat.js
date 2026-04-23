@@ -241,6 +241,39 @@
             : [];
     }
 
+    function normalizeGroupRelationshipNotes(value) {
+        return String(value || '')
+            .replace(/\r\n?/g, '\n')
+            .split('\n')
+            .map(line => line.replace(/\s+/g, ' ').trim())
+            .join('\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim()
+            .slice(0, 500);
+    }
+
+    function getGroupRelationshipNotes(groupContact) {
+        const group = getGroupContact(groupContact);
+        if (!group || !group.groupMeta) return '';
+        return normalizeGroupRelationshipNotes(group.groupMeta.relationshipNotes || '');
+    }
+
+    function setGroupRelationshipNotes(groupContact, notes) {
+        const group = getGroupContact(groupContact);
+        if (!group || !group.groupMeta) return { ok: false, reason: 'invalid_group' };
+        const normalizedNotes = normalizeGroupRelationshipNotes(notes);
+        const previousNotes = getGroupRelationshipNotes(group);
+        if (normalizedNotes === previousNotes) {
+            return { ok: true, changed: false, notes: normalizedNotes };
+        }
+        group.groupMeta.relationshipNotes = normalizedNotes;
+        if (typeof window.ensureGroupChatMeta === 'function') {
+            window.ensureGroupChatMeta(group);
+        }
+        if (typeof saveConfig === 'function') saveConfig();
+        return { ok: true, changed: true, notes: getGroupRelationshipNotes(group) };
+    }
+
     function setManagedRelationNodePosition(groupContact, participantId, xRatio, yRatio) {
         const group = getGroupContact(groupContact);
         const safeId = normalizeParticipantId(participantId);
@@ -478,6 +511,259 @@
 
     function canParticipantManageTitles(groupContact, participantId = 'me') {
         return getGroupRole(groupContact, participantId) === 'owner';
+    }
+
+    function getGroupAnnouncementText(groupContact) {
+        const group = getGroupContact(groupContact);
+        if (!group || !group.groupMeta) return '';
+        return String(group.groupMeta.announcementText || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function canParticipantManageAnnouncement(groupContact, participantId = 'me') {
+        return canParticipantRenameGroup(groupContact, participantId);
+    }
+
+    function buildGroupMessagePreviewText(message, groupContact, options = {}) {
+        if (!message) return '[消息]';
+        const group = getGroupContact(groupContact);
+        const maxLength = Number.isFinite(Number(options.maxLength)) && Number(options.maxLength) > 0
+            ? Number(options.maxLength)
+            : 64;
+        let preview = '';
+        const type = String(message.type || '').trim();
+        if (type === 'image' || type === 'virtual_image') {
+            preview = '[图片]';
+        } else if (type === 'sticker') {
+            preview = '[表情包]';
+        } else if (type === 'voice') {
+            let voiceText = '';
+            try {
+                const payload = typeof message.content === 'string' ? JSON.parse(message.content) : (message.content || {});
+                voiceText = String(payload.text || '').trim();
+            } catch (error) {
+                voiceText = String(message.content || '').trim();
+            }
+            preview = voiceText ? `[语音] ${voiceText}` : '[语音]';
+        } else if (type === 'red_packet') {
+            preview = '[红包]';
+        } else if (type === 'private_chat_invite') {
+            preview = '[私聊邀请]';
+        } else if (type === 'group_poll') {
+            let title = '';
+            try {
+                const payload = typeof message.content === 'string' ? JSON.parse(message.content) : (message.content || {});
+                title = String(payload.title || '').trim();
+            } catch (error) {}
+            preview = title ? `[投票] ${title}` : '[投票]';
+        } else if (type === 'group_relay') {
+            let title = '';
+            try {
+                const payload = typeof message.content === 'string' ? JSON.parse(message.content) : (message.content || {});
+                title = String(payload.title || '').trim();
+            } catch (error) {}
+            preview = title ? `[接龙] ${title}` : '[接龙]';
+        } else {
+            preview = String(message.content || '').replace(/\s+/g, ' ').trim() || '[消息]';
+        }
+        const safePreview = preview.replace(/^\[系统消息\]:\s*/i, '').trim() || '[消息]';
+        return safePreview.length > maxLength ? `${safePreview.slice(0, maxLength)}…` : safePreview;
+    }
+
+    function getGroupPinnedMessageEntry(groupContact, options = {}) {
+        const group = getGroupContact(groupContact);
+        if (!group || !group.groupMeta) return null;
+        const pinnedMsgId = String(group.groupMeta.pinnedMessageId || '').trim();
+        if (!pinnedMsgId) return null;
+        const history = Array.isArray(window.iphoneSimState && window.iphoneSimState.chatHistory && window.iphoneSimState.chatHistory[group.id])
+            ? window.iphoneSimState.chatHistory[group.id]
+            : [];
+        const message = history.find(item => item && String(item.id || '') === pinnedMsgId) || null;
+        const valid = !!(
+            message
+            && !message.hiddenFromUi
+            && !message._hiddenBySanitizer
+            && message.type !== 'system_event'
+            && message.type !== 'voice_call_text'
+        );
+        if (valid) {
+            return { group, message };
+        }
+        if (options && options.autoClearInvalid) {
+            group.groupMeta.pinnedMessageId = '';
+            group.groupMeta.pinnedUpdatedAt = 0;
+            group.groupMeta.pinnedUpdatedBy = '';
+            if (options.persist && typeof saveConfig === 'function') {
+                saveConfig();
+            }
+        }
+        return null;
+    }
+
+    function getGroupPinnedMessageDisplayData(groupContact, options = {}) {
+        const entry = getGroupPinnedMessageEntry(groupContact, options);
+        if (!entry) return null;
+        const { group, message } = entry;
+        const speakerId = normalizeParticipantId(message.speakerContactId || (message.role === 'user' ? 'me' : ''));
+        const speakerName = getParticipantName(group, speakerId, message.role === 'user' ? getUserDisplayName(group) : '群成员');
+        return {
+            groupId: group.id,
+            messageId: String(message.id || ''),
+            speakerContactId: speakerId || '',
+            speakerName: String(speakerName || message.speakerNameSnapshot || '群成员').trim() || '群成员',
+            preview: buildGroupMessagePreviewText(message, group, { maxLength: Number(options.maxLength) || 72 }),
+            type: String(message.type || 'text'),
+            updatedAt: Number(group.groupMeta.pinnedUpdatedAt || 0) || 0,
+            updatedBy: String(group.groupMeta.pinnedUpdatedBy || '')
+        };
+    }
+
+    function setGroupPinnedMessage(groupContact, actorId = 'me', targetMsgId = '', options = {}) {
+        const group = getGroupContact(groupContact);
+        const safeActorId = normalizeParticipantId(actorId || 'me');
+        if (!group || !safeActorId || !canParticipantRenameGroup(group, safeActorId)) {
+            return { ok: false, reason: 'forbidden' };
+        }
+
+        const nextMsgId = String(targetMsgId || '').trim();
+        const previousMsgId = String(group.groupMeta && group.groupMeta.pinnedMessageId || '').trim();
+        let pinnedMessage = null;
+        if (nextMsgId) {
+            const history = Array.isArray(window.iphoneSimState && window.iphoneSimState.chatHistory && window.iphoneSimState.chatHistory[group.id])
+                ? window.iphoneSimState.chatHistory[group.id]
+                : [];
+            pinnedMessage = history.find(item => item && String(item.id || '') === nextMsgId) || null;
+            const valid = !!(
+                pinnedMessage
+                && !pinnedMessage.hiddenFromUi
+                && !pinnedMessage._hiddenBySanitizer
+                && pinnedMessage.type !== 'system_event'
+                && pinnedMessage.type !== 'voice_call_text'
+            );
+            if (!valid) {
+                return { ok: false, reason: 'invalid_target_message' };
+            }
+        }
+
+        if (!group.groupMeta || typeof group.groupMeta !== 'object') {
+            return { ok: false, reason: 'invalid_group_meta' };
+        }
+        if (!nextMsgId && !previousMsgId) {
+            return { ok: true, changed: false, pinnedMessageId: '' };
+        }
+        if (nextMsgId && previousMsgId === nextMsgId) {
+            return { ok: true, changed: false, pinnedMessageId: nextMsgId };
+        }
+
+        group.groupMeta.pinnedMessageId = nextMsgId;
+        group.groupMeta.pinnedUpdatedAt = Date.now();
+        group.groupMeta.pinnedUpdatedBy = safeActorId;
+        if (typeof window.ensureGroupChatMeta === 'function') {
+            window.ensureGroupChatMeta(group);
+        }
+        if (typeof saveConfig === 'function') saveConfig();
+        if (String(window.iphoneSimState.currentChatContactId || '') === String(group.id) && typeof window.renderChatHistory === 'function') {
+            window.renderChatHistory(group.id, true);
+        }
+        if (String(currentSettingsGroupId || '') === String(group.id)) {
+            renderGroupChatSettings(group);
+        }
+        if (options.showNotice !== false) {
+            const actorName = String(options.actorName || getParticipantName(group, safeActorId, safeActorId === 'me' ? '你' : '群成员')).trim() || '群成员';
+            if (nextMsgId && pinnedMessage) {
+                const targetSpeakerName = getParticipantName(group, normalizeParticipantId(pinnedMessage.speakerContactId || ''), '群成员');
+                pushVisibleGroupSystemNotice(group.id, `${actorName} 置顶了 ${targetSpeakerName} 的一条消息`);
+            } else {
+                pushVisibleGroupSystemNotice(group.id, `${actorName} 取消了置顶消息`);
+            }
+        }
+        return {
+            ok: true,
+            changed: true,
+            pinnedMessageId: nextMsgId,
+            cleared: !nextMsgId
+        };
+    }
+
+    function toggleGroupPinnedMessage(groupContact, targetMsgId = '', actorId = 'me', options = {}) {
+        const group = getGroupContact(groupContact);
+        if (!group || !group.groupMeta) return { ok: false, reason: 'invalid_group' };
+        const normalizedTargetMsgId = String(targetMsgId || '').trim();
+        const currentPinnedId = String(group.groupMeta.pinnedMessageId || '').trim();
+        if (!normalizedTargetMsgId) {
+            return setGroupPinnedMessage(group, actorId, '', options);
+        }
+        if (currentPinnedId && currentPinnedId === normalizedTargetMsgId) {
+            return setGroupPinnedMessage(group, actorId, '', options);
+        }
+        return setGroupPinnedMessage(group, actorId, normalizedTargetMsgId, options);
+    }
+
+    function focusGroupPinnedMessage(groupContact) {
+        const group = getGroupContact(groupContact);
+        if (!group) return;
+        const pinnedData = getGroupPinnedMessageDisplayData(group, { autoClearInvalid: true });
+        if (!pinnedData || !pinnedData.messageId) {
+            showGroupToast('当前没有可跳转的置顶消息');
+            return;
+        }
+        const doFocus = () => {
+            const nodes = Array.from(document.querySelectorAll('.chat-message[data-msg-id]'));
+            const targetNode = nodes.find(node => String(node && node.dataset && node.dataset.msgId || '') === String(pinnedData.messageId));
+            if (!targetNode) {
+                showGroupToast('请上滑加载更多历史消息查看置顶内容');
+                return;
+            }
+            targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const oldTransition = targetNode.style.transition;
+            const oldBoxShadow = targetNode.style.boxShadow;
+            targetNode.style.transition = 'box-shadow 0.22s ease';
+            targetNode.style.boxShadow = '0 0 0 2px rgba(250, 181, 80, 0.7), 0 6px 18px rgba(250, 181, 80, 0.25)';
+            setTimeout(() => {
+                targetNode.style.boxShadow = oldBoxShadow;
+                targetNode.style.transition = oldTransition;
+            }, 1600);
+        };
+        if (String(window.iphoneSimState.currentChatContactId || '') !== String(group.id) && typeof window.openChat === 'function') {
+            window.openChat(group.id);
+            setTimeout(doFocus, 120);
+            return;
+        }
+        doFocus();
+    }
+
+    function applyGroupAnnouncement(groupContact, actorId, nextAnnouncement, options = {}) {
+        const group = getGroupContact(groupContact);
+        const safeActorId = normalizeParticipantId(actorId || 'me');
+        if (!group || !safeActorId || !canParticipantManageAnnouncement(group, safeActorId)) {
+            return { ok: false, reason: 'forbidden' };
+        }
+        const normalizedAnnouncement = String(nextAnnouncement || '').replace(/\s+/g, ' ').trim().slice(0, 240);
+        const previousAnnouncement = getGroupAnnouncementText(group);
+        if (normalizedAnnouncement === previousAnnouncement) {
+            return { ok: true, changed: false, announcement: normalizedAnnouncement };
+        }
+        group.groupMeta.announcementText = normalizedAnnouncement;
+        group.groupMeta.announcementUpdatedAt = Date.now();
+        group.groupMeta.announcementUpdatedBy = safeActorId;
+        if (typeof window.ensureGroupChatMeta === 'function') {
+            window.ensureGroupChatMeta(group);
+        }
+        if (typeof saveConfig === 'function') saveConfig();
+        if (String(window.iphoneSimState.currentChatContactId || '') === String(group.id) && typeof window.renderChatHistory === 'function') {
+            window.renderChatHistory(group.id, true);
+        }
+        if (String(currentSettingsGroupId || '') === String(group.id)) {
+            renderGroupChatSettings(group);
+        }
+        if (options.showNotice !== false) {
+            const actorName = String(options.actorName || getParticipantName(group, safeActorId, safeActorId === 'me' ? '你' : '群成员')).trim() || '群成员';
+            if (normalizedAnnouncement) {
+                pushVisibleGroupSystemNotice(group.id, `${actorName} 更新了群公告`);
+            } else if (previousAnnouncement) {
+                pushVisibleGroupSystemNotice(group.id, `${actorName} 清空了群公告`);
+            }
+        }
+        return { ok: true, changed: true, announcement: normalizedAnnouncement };
     }
 
     function applyGroupRename(groupContact, actorId, nextName, options = {}) {
@@ -1180,6 +1466,888 @@
         document.body.appendChild(modal);
     }
 
+    const groupActionEditorRuntime = {
+        resolve: null,
+        fields: [],
+        validate: null,
+        closeTimer: null,
+        bound: false
+    };
+
+    function getGroupActionEditorElements() {
+        return {
+            modal: document.getElementById('group-action-editor-modal'),
+            backdrop: document.getElementById('group-action-editor-backdrop'),
+            card: document.getElementById('group-action-editor-card'),
+            kicker: document.getElementById('group-action-editor-kicker'),
+            title: document.getElementById('group-action-editor-title'),
+            subtitle: document.getElementById('group-action-editor-subtitle'),
+            fields: document.getElementById('group-action-editor-fields'),
+            closeBtn: document.getElementById('group-action-editor-close'),
+            cancelBtn: document.getElementById('group-action-editor-cancel'),
+            confirmBtn: document.getElementById('group-action-editor-confirm')
+        };
+    }
+
+    function clearGroupActionEditorCloseTimer() {
+        if (groupActionEditorRuntime.closeTimer) {
+            clearTimeout(groupActionEditorRuntime.closeTimer);
+            groupActionEditorRuntime.closeTimer = null;
+        }
+    }
+
+    function collectGroupActionEditorValues() {
+        const { fields } = getGroupActionEditorElements();
+        if (!fields) return {};
+        const values = {};
+        const nodes = fields.querySelectorAll('[data-group-action-field]');
+        nodes.forEach((node) => {
+            const fieldId = String(node.dataset.groupActionField || '').trim();
+            if (!fieldId) return;
+            if (node.tagName === 'TEXTAREA') {
+                values[fieldId] = String(node.value || '');
+                return;
+            }
+            values[fieldId] = String(node.value || '');
+        });
+        return values;
+    }
+
+    function closeGroupActionEditorModal(result = null) {
+        const { modal } = getGroupActionEditorElements();
+        if (!modal) return;
+        const resolver = groupActionEditorRuntime.resolve;
+        groupActionEditorRuntime.resolve = null;
+        groupActionEditorRuntime.validate = null;
+        groupActionEditorRuntime.fields = [];
+
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+        clearGroupActionEditorCloseTimer();
+        groupActionEditorRuntime.closeTimer = setTimeout(() => {
+            modal.style.display = 'none';
+        }, 260);
+
+        if (typeof resolver === 'function') {
+            resolver(result || { confirmed: false, values: {} });
+        }
+    }
+
+    function submitGroupActionEditorModal() {
+        const values = collectGroupActionEditorValues();
+        if (typeof groupActionEditorRuntime.validate === 'function') {
+            const validateResult = groupActionEditorRuntime.validate(values);
+            if (validateResult === false) {
+                showGroupToast('请检查输入');
+                return;
+            }
+            if (validateResult && typeof validateResult === 'object' && validateResult.ok === false) {
+                showGroupToast(validateResult.message || '请检查输入');
+                return;
+            }
+        }
+        closeGroupActionEditorModal({
+            confirmed: true,
+            values
+        });
+    }
+
+    function bindGroupActionEditorModal() {
+        if (groupActionEditorRuntime.bound) return;
+        const { modal, backdrop, closeBtn, cancelBtn, confirmBtn } = getGroupActionEditorElements();
+        if (!modal || !backdrop || !closeBtn || !cancelBtn || !confirmBtn) return;
+        groupActionEditorRuntime.bound = true;
+
+        backdrop.addEventListener('click', () => closeGroupActionEditorModal({ confirmed: false, values: {} }));
+        closeBtn.addEventListener('click', () => closeGroupActionEditorModal({ confirmed: false, values: {} }));
+        cancelBtn.addEventListener('click', () => closeGroupActionEditorModal({ confirmed: false, values: {} }));
+        confirmBtn.addEventListener('click', () => submitGroupActionEditorModal());
+        modal.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeGroupActionEditorModal({ confirmed: false, values: {} });
+                return;
+            }
+            if (event.key === 'Enter' && !event.shiftKey) {
+                const target = event.target;
+                if (target && target.tagName === 'TEXTAREA') return;
+                event.preventDefault();
+                submitGroupActionEditorModal();
+            }
+        });
+    }
+
+    function buildGroupActionEditorField(fieldConfig = {}) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'group-action-editor-field';
+        const fieldId = String(fieldConfig.id || '').trim();
+        if (!fieldId) return null;
+
+        const label = document.createElement('label');
+        label.className = 'group-action-editor-field-label';
+        label.setAttribute('for', `group-action-editor-field-${fieldId}`);
+        label.textContent = String(fieldConfig.label || fieldId).trim();
+        wrapper.appendChild(label);
+
+        const type = String(fieldConfig.type || 'text').trim().toLowerCase();
+        let fieldNode = null;
+        if (type === 'textarea') {
+            fieldNode = document.createElement('textarea');
+            fieldNode.className = 'group-action-editor-textarea';
+            fieldNode.rows = Number(fieldConfig.rows) > 0 ? Number(fieldConfig.rows) : 4;
+        } else if (type === 'select') {
+            fieldNode = document.createElement('select');
+            fieldNode.className = 'group-action-editor-select';
+            const options = Array.isArray(fieldConfig.options) ? fieldConfig.options : [];
+            options.forEach((option) => {
+                const optionNode = document.createElement('option');
+                if (option && typeof option === 'object') {
+                    optionNode.value = String(option.value || '');
+                    optionNode.textContent = String(option.label || option.value || '').trim();
+                } else {
+                    optionNode.value = String(option || '');
+                    optionNode.textContent = String(option || '').trim();
+                }
+                fieldNode.appendChild(optionNode);
+            });
+        } else {
+            fieldNode = document.createElement('input');
+            fieldNode.type = type === 'number' ? 'number' : 'text';
+            fieldNode.className = 'group-action-editor-input';
+        }
+        fieldNode.id = `group-action-editor-field-${fieldId}`;
+        fieldNode.dataset.groupActionField = fieldId;
+        if (fieldConfig.placeholder !== undefined) {
+            fieldNode.placeholder = String(fieldConfig.placeholder || '');
+        }
+        if (fieldConfig.maxLength !== undefined && Number(fieldConfig.maxLength) > 0 && fieldNode.tagName !== 'SELECT') {
+            fieldNode.maxLength = Number(fieldConfig.maxLength);
+        }
+        if (fieldConfig.min !== undefined && fieldNode.tagName === 'INPUT' && fieldNode.type === 'number') {
+            fieldNode.min = String(fieldConfig.min);
+        }
+        if (fieldConfig.max !== undefined && fieldNode.tagName === 'INPUT' && fieldNode.type === 'number') {
+            fieldNode.max = String(fieldConfig.max);
+        }
+        if (fieldConfig.step !== undefined && fieldNode.tagName === 'INPUT' && fieldNode.type === 'number') {
+            fieldNode.step = String(fieldConfig.step);
+        }
+        if (fieldConfig.value !== undefined && fieldConfig.value !== null) {
+            fieldNode.value = String(fieldConfig.value);
+        }
+        if (fieldConfig.readonly) {
+            fieldNode.readOnly = true;
+        }
+        if (fieldConfig.disabled) {
+            fieldNode.disabled = true;
+        }
+        wrapper.appendChild(fieldNode);
+        if (fieldConfig.hidden) {
+            wrapper.style.display = 'none';
+        }
+        return wrapper;
+    }
+
+    function openGroupActionEditorModal(config = {}) {
+        bindGroupActionEditorModal();
+        const { modal, kicker, title, subtitle, fields, confirmBtn, cancelBtn } = getGroupActionEditorElements();
+        if (!modal || !title || !subtitle || !fields || !confirmBtn || !cancelBtn) {
+            return Promise.resolve({ confirmed: false, values: {} });
+        }
+
+        if (typeof groupActionEditorRuntime.resolve === 'function') {
+            groupActionEditorRuntime.resolve({ confirmed: false, values: {} });
+            groupActionEditorRuntime.resolve = null;
+        }
+        clearGroupActionEditorCloseTimer();
+
+        const titleText = String(config.title || '编辑群内容').trim() || '编辑群内容';
+        const subtitleText = String(config.subtitle || '').trim();
+        const kickerText = String(config.kicker || 'GROUP ACTION').trim() || 'GROUP ACTION';
+        const confirmText = String(config.confirmText || '确认').trim() || '确认';
+        const cancelText = String(config.cancelText || '取消').trim() || '取消';
+        const fieldConfigs = Array.isArray(config.fields) ? config.fields : [];
+        const focusFieldId = String(config.focusFieldId || (fieldConfigs[0] && fieldConfigs[0].id) || '').trim();
+
+        if (kicker) kicker.textContent = kickerText;
+        title.textContent = titleText;
+        subtitle.textContent = subtitleText;
+        subtitle.style.display = subtitleText ? '' : 'none';
+        confirmBtn.textContent = confirmText;
+        cancelBtn.textContent = cancelText;
+        fields.innerHTML = '';
+
+        const builtNodes = fieldConfigs
+            .map(field => buildGroupActionEditorField(field))
+            .filter(Boolean);
+        builtNodes.forEach(node => fields.appendChild(node));
+
+        groupActionEditorRuntime.fields = fieldConfigs;
+        groupActionEditorRuntime.validate = typeof config.validate === 'function' ? config.validate : null;
+        if (typeof config.onRendered === 'function') {
+            try {
+                config.onRendered({
+                    modal,
+                    fields,
+                    kickerNode: kicker,
+                    titleNode: title,
+                    subtitleNode: subtitle,
+                    confirmBtn,
+                    cancelBtn
+                });
+            } catch (renderError) {
+                console.warn('群操作弹窗自定义渲染失败', renderError);
+            }
+        }
+
+        modal.style.display = 'flex';
+        modal.setAttribute('aria-hidden', 'false');
+        requestAnimationFrame(() => {
+            modal.classList.add('is-open');
+        });
+
+        setTimeout(() => {
+            const focusNode = focusFieldId
+                ? fields.querySelector(`[data-group-action-field="${focusFieldId}"]`)
+                : fields.querySelector('[data-group-action-field]');
+            if (focusNode && typeof focusNode.focus === 'function') {
+                focusNode.focus();
+            }
+        }, 80);
+
+        return new Promise((resolve) => {
+            groupActionEditorRuntime.resolve = resolve;
+        });
+    }
+
+    function parseStructuredGroupPayload(rawPayload) {
+        if (rawPayload && typeof rawPayload === 'object') {
+            return { ...(rawPayload || {}) };
+        }
+        const rawText = String(rawPayload || '').trim();
+        if (!rawText) return {};
+        if ((rawText.startsWith('{') && rawText.endsWith('}')) || (rawText.startsWith('[') && rawText.endsWith(']'))) {
+            try {
+                const parsed = JSON.parse(rawText);
+                if (parsed && typeof parsed === 'object') {
+                    return parsed;
+                }
+            } catch (error) {}
+        }
+        return { text: rawText };
+    }
+
+    function parseGroupPollPayload(rawPayload = {}) {
+        const payload = parseStructuredGroupPayload(rawPayload);
+        const title = String(payload.title || payload.topic || payload.subject || payload.name || '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 64);
+
+        let optionSource = [];
+        if (Array.isArray(payload.options)) optionSource = payload.options;
+        else if (Array.isArray(payload.choices)) optionSource = payload.choices;
+        else if (Array.isArray(payload.items)) optionSource = payload.items;
+        else if (typeof payload.options === 'string') optionSource = payload.options.split(/\n|[,，|｜]/g);
+        else if (typeof payload.text === 'string') optionSource = payload.text.split(/\n|[,，|｜]/g);
+
+        const options = [];
+        const seen = new Set();
+        optionSource.forEach((item) => {
+            const value = String(item && typeof item === 'object' ? (item.text || item.label || item.name || '') : item || '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 40);
+            if (!value) return;
+            const key = value.toLowerCase();
+            if (seen.has(key)) return;
+            seen.add(key);
+            options.push(value);
+        });
+
+        let normalizedOptions = options.slice();
+        let finalTitle = title;
+        if (!finalTitle && normalizedOptions.length >= 3) {
+            finalTitle = normalizedOptions.shift();
+        }
+        finalTitle = finalTitle || (normalizedOptions.length > 0 ? `关于“${normalizedOptions[0]}”的投票` : '');
+        if (!finalTitle) return { ok: false, reason: 'empty_title' };
+        if (normalizedOptions.length < 2) return { ok: false, reason: 'insufficient_options' };
+        if (normalizedOptions.length > 8) {
+            normalizedOptions = normalizedOptions.slice(0, 8);
+        }
+        return { ok: true, title: finalTitle, options: normalizedOptions };
+    }
+
+    function normalizeGroupPollData(payload = {}) {
+        const title = String(payload.title || '').replace(/\s+/g, ' ').trim().slice(0, 64);
+        const optionObjects = Array.isArray(payload.options) ? payload.options : [];
+        const options = optionObjects.map((option, index) => {
+            const optionId = String(option && (option.id || option.optionId) || `opt_${index + 1}`).trim() || `opt_${index + 1}`;
+            const text = String(option && (option.text || option.label || option.content || option.name) || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+            const voterIds = Array.isArray(option && option.voterIds)
+                ? option.voterIds.map(id => normalizeParticipantId(id)).filter(Boolean)
+                : [];
+            const dedupedVoterIds = [];
+            const voterSeen = new Set();
+            voterIds.forEach((id) => {
+                const key = getParticipantIdKey(id);
+                if (!key || voterSeen.has(key)) return;
+                voterSeen.add(key);
+                dedupedVoterIds.push(id);
+            });
+            const voteCountRaw = Number(option && option.voteCount);
+            const voteCount = Number.isFinite(voteCountRaw) && voteCountRaw >= 0 ? Math.floor(voteCountRaw) : dedupedVoterIds.length;
+            return {
+                id: optionId,
+                text,
+                voterIds: dedupedVoterIds,
+                voteCount
+            };
+        }).filter(option => option.text);
+
+        return {
+            id: String(payload.id || '').trim(),
+            title,
+            options,
+            creatorId: normalizeParticipantId(payload.creatorId || ''),
+            createdAt: Number(payload.createdAt || 0) || 0,
+            updatedAt: Number(payload.updatedAt || 0) || 0,
+            status: String(payload.status || 'open') === 'closed' ? 'closed' : 'open'
+        };
+    }
+
+    function findGroupPollEntry(groupContact, pollIdOrMsgId = null) {
+        const group = getGroupContact(groupContact);
+        if (!group) return null;
+        const targetToken = String(pollIdOrMsgId || '').trim();
+        const history = Array.isArray(window.iphoneSimState && window.iphoneSimState.chatHistory && window.iphoneSimState.chatHistory[group.id])
+            ? window.iphoneSimState.chatHistory[group.id]
+            : [];
+        for (let i = history.length - 1; i >= 0; i--) {
+            const message = history[i];
+            if (!message || message.type !== 'group_poll') continue;
+            let payload = null;
+            try {
+                payload = typeof message.content === 'string' ? JSON.parse(message.content) : message.content;
+            } catch (error) {
+                payload = null;
+            }
+            if (!payload || typeof payload !== 'object') continue;
+            const normalized = normalizeGroupPollData(payload);
+            const pollId = String(normalized.id || '').trim();
+            const msgId = String(message.id || '');
+            if (!targetToken || targetToken === pollId || targetToken === msgId) {
+                return { group, message, payload: normalized, index: i };
+            }
+        }
+        return null;
+    }
+
+    function resolvePollOptionIndex(pollData, payload) {
+        if (!pollData || !Array.isArray(pollData.options) || pollData.options.length === 0) return -1;
+        const structured = parseStructuredGroupPayload(payload);
+        const parseIndexFromToken = (token) => {
+            const text = String(token || '').replace(/\s+/g, ' ').trim();
+            if (!text) return -1;
+
+            const pureNumber = Number.parseInt(text, 10);
+            if (Number.isFinite(pureNumber) && String(pureNumber) === text && pureNumber >= 1 && pureNumber <= pollData.options.length) {
+                return pureNumber - 1;
+            }
+
+            const optMatch = text.match(/^opt[_\-]?(\d+)$/i);
+            if (optMatch) {
+                const idx = Number.parseInt(optMatch[1], 10) - 1;
+                if (idx >= 0 && idx < pollData.options.length) return idx;
+            }
+
+            const leadingNumberMatch = text.match(/^(\d+)\s*[\.、:：\-]/);
+            if (leadingNumberMatch) {
+                const idx = Number.parseInt(leadingNumberMatch[1], 10) - 1;
+                if (idx >= 0 && idx < pollData.options.length) return idx;
+            }
+
+            return -1;
+        };
+        const normalizeOptionText = (value) => String(value || '')
+            .replace(/\s+/g, ' ')
+            .replace(/^\d+\s*[\.、:：\-]\s*/g, '')
+            .replace(/（\d+票\)/g, '')
+            .replace(/\(\d+\s*票\)/g, '')
+            .trim()
+            .toLowerCase();
+        const optionId = String(structured.option_id || structured.optionId || structured.target_option_id || structured.targetOptionId || '').trim();
+        if (optionId) {
+            const idx = pollData.options.findIndex(option => String(option.id || '') === optionId);
+            if (idx >= 0) return idx;
+            const idxFromOptionId = parseIndexFromToken(optionId);
+            if (idxFromOptionId >= 0) return idxFromOptionId;
+        }
+        const optionIndexRaw = Number(structured.option_index || structured.optionIndex || structured.index || structured.option_no || structured.optionNo || 0);
+        if (Number.isFinite(optionIndexRaw) && optionIndexRaw > 0) {
+            const idx = Math.floor(optionIndexRaw) - 1;
+            if (idx >= 0 && idx < pollData.options.length) return idx;
+        }
+        let optionText = String(structured.option_text || structured.optionText || structured.option || structured.choice || structured.text || '')
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (optionText && /[|｜]/.test(optionText)) {
+            const parts = optionText.split(/[|｜]/).map(part => String(part || '').trim()).filter(Boolean);
+            if (parts.length > 0) {
+                optionText = parts[parts.length - 1];
+            }
+        }
+        if (optionText) {
+            const idxFromTextToken = parseIndexFromToken(optionText);
+            if (idxFromTextToken >= 0) return idxFromTextToken;
+
+            const normalizedTargetText = normalizeOptionText(optionText);
+            if (normalizedTargetText) {
+                const exactIdx = pollData.options.findIndex(option => normalizeOptionText(option && option.text) === normalizedTargetText);
+                if (exactIdx >= 0) return exactIdx;
+
+                const includeIdx = pollData.options.findIndex(option => {
+                    const normalizedOption = normalizeOptionText(option && option.text);
+                    return !!normalizedOption && (
+                        normalizedOption.includes(normalizedTargetText)
+                        || normalizedTargetText.includes(normalizedOption)
+                    );
+                });
+                if (includeIdx >= 0) return includeIdx;
+            }
+        }
+        return -1;
+    }
+
+    function createGroupPoll(groupContact, actorId = 'me', rawPayload = {}, options = {}) {
+        const group = getGroupContact(groupContact);
+        const safeActorId = normalizeParticipantId(actorId || 'me');
+        if (!group || !safeActorId) return { ok: false, reason: 'invalid_group_or_actor' };
+
+        const actorInGroup = safeActorId === 'me' || getGroupMemberIds(group).some(id => String(id) === String(safeActorId));
+        if (!actorInGroup) return { ok: false, reason: 'actor_not_in_group' };
+
+        const parsed = parseGroupPollPayload(rawPayload);
+        if (!parsed.ok) return parsed;
+
+        const pollData = {
+            id: `poll_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            title: parsed.title,
+            options: parsed.options.map((text, index) => ({
+                id: `opt_${index + 1}`,
+                text,
+                voterIds: [],
+                voteCount: 0
+            })),
+            creatorId: safeActorId,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            status: 'open'
+        };
+        const isActorUser = String(safeActorId) === 'me';
+        const message = typeof window.sendMessage === 'function'
+            ? window.sendMessage(
+                JSON.stringify(pollData),
+                isActorUser,
+                'group_poll',
+                null,
+                group.id,
+                {
+                    bypassWechatBlock: true,
+                    ignoreReplyingState: true,
+                    showNotification: true,
+                    speakerContactId: safeActorId
+                }
+            )
+            : null;
+        if (!message) return { ok: false, reason: 'send_failed' };
+
+        if (typeof saveConfig === 'function') saveConfig();
+        if (options.showNotice) {
+            const actorName = safeActorId === 'me' ? '你' : getParticipantName(group, safeActorId, '群成员');
+            pushVisibleGroupSystemNotice(group.id, `${actorName} 发起了投票：${pollData.title}`);
+        }
+        return { ok: true, message, pollData };
+    }
+
+    function voteGroupPoll(groupContact, actorId = 'me', rawPayload = {}, options = {}) {
+        const payload = parseStructuredGroupPayload(rawPayload);
+        let pollToken = String(payload.poll_id || payload.pollId || payload.message_id || payload.messageId || payload.msg_id || payload.msgId || '').trim();
+        if (!pollToken) {
+            const rawText = String(payload.text || '').trim();
+            if (rawText && /[|｜]/.test(rawText)) {
+                const parts = rawText.split(/[|｜]/).map(part => String(part || '').trim()).filter(Boolean);
+                if (parts.length >= 2) {
+                    const maybeToken = String(parts[0] || '').trim();
+                    if (/^(poll_[A-Za-z0-9_-]+)$/i.test(maybeToken) || /^msg_[A-Za-z0-9_-]+$/i.test(maybeToken)) {
+                        pollToken = maybeToken;
+                    }
+                }
+            }
+        }
+        const entry = findGroupPollEntry(groupContact, pollToken);
+        if (!entry) return { ok: false, reason: 'not_found' };
+        const { group, message } = entry;
+        const pollData = normalizeGroupPollData(entry.payload);
+        const safeActorId = normalizeParticipantId(actorId || 'me');
+        if (!safeActorId) return { ok: false, reason: 'invalid_actor' };
+        const actorInGroup = safeActorId === 'me' || getGroupMemberIds(group).some(id => String(id) === String(safeActorId));
+        if (!actorInGroup) return { ok: false, reason: 'actor_not_in_group' };
+        if (pollData.status !== 'open') return { ok: false, reason: 'poll_closed' };
+        if (!Array.isArray(pollData.options) || pollData.options.length < 2) return { ok: false, reason: 'invalid_poll_options' };
+
+        const optionIndex = resolvePollOptionIndex(pollData, payload);
+        if (optionIndex < 0 || optionIndex >= pollData.options.length) return { ok: false, reason: 'invalid_option' };
+        const targetOption = pollData.options[optionIndex];
+
+        let previousOptionIndex = -1;
+        pollData.options.forEach((option, index) => {
+            if (Array.isArray(option.voterIds) && option.voterIds.some(id => String(id) === String(safeActorId))) {
+                previousOptionIndex = index;
+            }
+            option.voterIds = (Array.isArray(option.voterIds) ? option.voterIds : [])
+                .map(id => normalizeParticipantId(id))
+                .filter(Boolean)
+                .filter(id => String(id) !== String(safeActorId));
+        });
+        targetOption.voterIds.push(safeActorId);
+        pollData.options.forEach((option) => {
+            option.voteCount = Array.isArray(option.voterIds) ? option.voterIds.length : 0;
+        });
+        pollData.updatedAt = Date.now();
+        message.content = JSON.stringify(pollData);
+
+        if (typeof saveConfig === 'function') saveConfig();
+        if (String(window.iphoneSimState.currentChatContactId || '') === String(group.id) && typeof window.renderChatHistory === 'function') {
+            window.renderChatHistory(group.id, true);
+        }
+        if (typeof window.renderContactList === 'function') {
+            window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
+        }
+        if (options.showNotice !== false) {
+            const actorName = safeActorId === 'me' ? '你' : getParticipantName(group, safeActorId, '群成员');
+            const optionText = targetOption && targetOption.text ? targetOption.text : '某个选项';
+            if (previousOptionIndex >= 0 && previousOptionIndex !== optionIndex) {
+                pushVisibleGroupSystemNotice(group.id, `${actorName} 将投票改为「${optionText}」`);
+            } else {
+                pushVisibleGroupSystemNotice(group.id, `${actorName} 投了「${optionText}」`);
+            }
+        }
+        return {
+            ok: true,
+            pollData,
+            optionIndex
+        };
+    }
+
+    async function handleGroupPollClick(pollIdOrMsgId = null) {
+        const group = getGroupContact(window.iphoneSimState.currentChatContactId);
+        if (!group) return;
+        const entry = findGroupPollEntry(group, pollIdOrMsgId);
+        if (!entry) {
+            showGroupToast('未找到投票');
+            return;
+        }
+        const pollData = normalizeGroupPollData(entry.payload);
+        if (!pollData || !Array.isArray(pollData.options) || pollData.options.length === 0) {
+            showGroupToast('投票数据无效');
+            return;
+        }
+        const currentChoice = pollData.options.findIndex(option => Array.isArray(option.voterIds) && option.voterIds.some(id => String(id) === 'me'));
+        const optionLines = pollData.options.map((option, index) => {
+            const count = Array.isArray(option.voterIds) ? option.voterIds.length : Number(option.voteCount || 0);
+            const selectedText = currentChoice === index ? '（你已选）' : '';
+            return `${index + 1}. ${option.text}（${count}票）${selectedText}`;
+        }).join('\n');
+        const defaultValue = currentChoice >= 0 ? String(currentChoice + 1) : '1';
+        let selectedIndex = NaN;
+        if (typeof openGroupActionEditorModal === 'function') {
+            const options = pollData.options.map((option, index) => {
+                const count = Array.isArray(option.voterIds) ? option.voterIds.length : Number(option.voteCount || 0);
+                return {
+                    value: String(index + 1),
+                    label: `${index + 1}. ${option.text}${count > 0 ? `（${count}票）` : ''}${currentChoice === index ? '（你已选）' : ''}`
+                };
+            });
+            const result = await openGroupActionEditorModal({
+                kicker: 'GROUP POLL',
+                title: pollData.title || '参与投票',
+                subtitle: `请选择一个选项。\n${optionLines}`,
+                confirmText: '提交投票',
+                cancelText: '取消',
+                fields: [
+                    {
+                        id: 'option_index',
+                        type: 'select',
+                        label: '投票选项',
+                        options,
+                        value: defaultValue
+                    }
+                ],
+                validate: (values) => {
+                    const idx = Number.parseInt(String(values.option_index || '').trim(), 10);
+                    if (!Number.isFinite(idx) || idx < 1 || idx > pollData.options.length) {
+                        return { ok: false, message: '请选择有效选项' };
+                    }
+                    return { ok: true };
+                }
+            });
+            if (!result || !result.confirmed) return;
+            selectedIndex = Number.parseInt(String(result.values.option_index || '').trim(), 10);
+        } else {
+            showGroupToast('投票弹窗未就绪，请刷新后重试');
+            return;
+        }
+        if (!Number.isFinite(selectedIndex) || selectedIndex < 1 || selectedIndex > pollData.options.length) {
+            showGroupToast('请输入有效的选项序号');
+            return;
+        }
+        const voted = voteGroupPoll(group, 'me', {
+            poll_id: pollData.id || entry.message.id,
+            option_index: selectedIndex
+        }, {
+            showNotice: true
+        });
+        if (!voted || !voted.ok) {
+            showGroupToast('投票失败');
+        }
+    }
+
+    function parseGroupRelayPayload(rawPayload = {}) {
+        const payload = parseStructuredGroupPayload(rawPayload);
+        const title = String(payload.title || payload.topic || payload.subject || payload.name || payload.text || '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 64);
+        const entryText = String(payload.entry || payload.content || payload.text || payload.first_entry || payload.firstEntry || '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 90);
+        const oncePerMember = !!(payload.once_per_member || payload.oncePerMember || payload.single_entry || payload.singleEntry);
+        if (!title) return { ok: false, reason: 'empty_title' };
+        return {
+            ok: true,
+            title,
+            entryText,
+            oncePerMember
+        };
+    }
+
+    function normalizeGroupRelayData(payload = {}) {
+        const entries = Array.isArray(payload.entries)
+            ? payload.entries
+                .map((entry, index) => ({
+                    id: String(entry && entry.id || `entry_${index + 1}`),
+                    memberId: normalizeParticipantId(entry && (entry.memberId || entry.member_id) || ''),
+                    content: String(entry && (entry.content || entry.text || entry.entry) || '').replace(/\s+/g, ' ').trim().slice(0, 90),
+                    time: Number(entry && entry.time || 0) || 0
+                }))
+                .filter(entry => entry.memberId && entry.content)
+            : [];
+        return {
+            id: String(payload.id || '').trim(),
+            title: String(payload.title || '').replace(/\s+/g, ' ').trim().slice(0, 64),
+            creatorId: normalizeParticipantId(payload.creatorId || ''),
+            createdAt: Number(payload.createdAt || 0) || 0,
+            updatedAt: Number(payload.updatedAt || 0) || 0,
+            oncePerMember: !!(payload.oncePerMember || payload.once_per_member),
+            status: String(payload.status || 'open') === 'closed' ? 'closed' : 'open',
+            entries
+        };
+    }
+
+    function findGroupRelayEntry(groupContact, relayIdOrMsgId = null) {
+        const group = getGroupContact(groupContact);
+        if (!group) return null;
+        const targetToken = String(relayIdOrMsgId || '').trim();
+        const history = Array.isArray(window.iphoneSimState && window.iphoneSimState.chatHistory && window.iphoneSimState.chatHistory[group.id])
+            ? window.iphoneSimState.chatHistory[group.id]
+            : [];
+        for (let i = history.length - 1; i >= 0; i--) {
+            const message = history[i];
+            if (!message || message.type !== 'group_relay') continue;
+            let payload = null;
+            try {
+                payload = typeof message.content === 'string' ? JSON.parse(message.content) : message.content;
+            } catch (error) {
+                payload = null;
+            }
+            if (!payload || typeof payload !== 'object') continue;
+            const normalized = normalizeGroupRelayData(payload);
+            const relayId = String(normalized.id || '').trim();
+            const msgId = String(message.id || '');
+            if (!targetToken || targetToken === relayId || targetToken === msgId) {
+                return { group, message, payload: normalized, index: i };
+            }
+        }
+        return null;
+    }
+
+    function createGroupRelay(groupContact, actorId = 'me', rawPayload = {}, options = {}) {
+        const group = getGroupContact(groupContact);
+        const safeActorId = normalizeParticipantId(actorId || 'me');
+        if (!group || !safeActorId) return { ok: false, reason: 'invalid_group_or_actor' };
+
+        const actorInGroup = safeActorId === 'me' || getGroupMemberIds(group).some(id => String(id) === String(safeActorId));
+        if (!actorInGroup) return { ok: false, reason: 'actor_not_in_group' };
+
+        const parsed = parseGroupRelayPayload(rawPayload);
+        if (!parsed.ok) return parsed;
+
+        const relayData = {
+            id: `relay_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            title: parsed.title,
+            creatorId: safeActorId,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            oncePerMember: parsed.oncePerMember,
+            status: 'open',
+            entries: []
+        };
+        if (parsed.entryText) {
+            relayData.entries.push({
+                id: `entry_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                memberId: safeActorId,
+                content: parsed.entryText,
+                time: Date.now()
+            });
+        }
+
+        const isActorUser = String(safeActorId) === 'me';
+        const message = typeof window.sendMessage === 'function'
+            ? window.sendMessage(
+                JSON.stringify(relayData),
+                isActorUser,
+                'group_relay',
+                null,
+                group.id,
+                {
+                    bypassWechatBlock: true,
+                    ignoreReplyingState: true,
+                    showNotification: true,
+                    speakerContactId: safeActorId
+                }
+            )
+            : null;
+        if (!message) return { ok: false, reason: 'send_failed' };
+
+        if (typeof saveConfig === 'function') saveConfig();
+        if (options.showNotice) {
+            const actorName = safeActorId === 'me' ? '你' : getParticipantName(group, safeActorId, '群成员');
+            pushVisibleGroupSystemNotice(group.id, `${actorName} 发起了接龙：${relayData.title}`);
+        }
+        return { ok: true, message, relayData };
+    }
+
+    function joinGroupRelay(groupContact, actorId = 'me', rawPayload = {}, options = {}) {
+        const payload = parseStructuredGroupPayload(rawPayload);
+        const relayToken = String(payload.relay_id || payload.relayId || payload.message_id || payload.messageId || payload.msg_id || payload.msgId || '').trim();
+        const entry = findGroupRelayEntry(groupContact, relayToken);
+        if (!entry) return { ok: false, reason: 'not_found' };
+        const { group, message } = entry;
+        const relayData = normalizeGroupRelayData(entry.payload);
+        const safeActorId = normalizeParticipantId(actorId || 'me');
+        if (!safeActorId) return { ok: false, reason: 'invalid_actor' };
+
+        const actorInGroup = safeActorId === 'me' || getGroupMemberIds(group).some(id => String(id) === String(safeActorId));
+        if (!actorInGroup) return { ok: false, reason: 'actor_not_in_group' };
+        if (relayData.status !== 'open') return { ok: false, reason: 'relay_closed' };
+
+        const content = String(payload.entry || payload.content || payload.text || '').replace(/\s+/g, ' ').trim().slice(0, 90);
+        if (!content) return { ok: false, reason: 'empty_entry' };
+        if (relayData.oncePerMember && relayData.entries.some(item => String(item.memberId) === String(safeActorId))) {
+            return { ok: false, reason: 'already_joined' };
+        }
+
+        relayData.entries.push({
+            id: `entry_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            memberId: safeActorId,
+            content,
+            time: Date.now()
+        });
+        relayData.updatedAt = Date.now();
+        message.content = JSON.stringify(relayData);
+
+        if (typeof saveConfig === 'function') saveConfig();
+        if (String(window.iphoneSimState.currentChatContactId || '') === String(group.id) && typeof window.renderChatHistory === 'function') {
+            window.renderChatHistory(group.id, true);
+        }
+        if (typeof window.renderContactList === 'function') {
+            window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
+        }
+        if (options.showNotice !== false) {
+            const actorName = safeActorId === 'me' ? '你' : getParticipantName(group, safeActorId, '群成员');
+            pushVisibleGroupSystemNotice(group.id, `${actorName} 参与了接龙「${relayData.title}」`);
+        }
+        return { ok: true, relayData };
+    }
+
+    async function handleGroupRelayClick(relayIdOrMsgId = null) {
+        const group = getGroupContact(window.iphoneSimState.currentChatContactId);
+        if (!group) return;
+        const entry = findGroupRelayEntry(group, relayIdOrMsgId);
+        if (!entry) {
+            showGroupToast('未找到接龙');
+            return;
+        }
+        const relayData = normalizeGroupRelayData(entry.payload);
+        const entryLines = relayData.entries
+            .slice(-12)
+            .map((item, index) => {
+                const memberName = getParticipantName(group, item.memberId, '群成员');
+                return `${index + 1}. ${memberName}：${item.content}`;
+            })
+            .join('\n');
+        let input = '';
+        if (typeof openGroupActionEditorModal === 'function') {
+            const result = await openGroupActionEditorModal({
+                kicker: 'GROUP RELAY',
+                title: relayData.title || '参与接龙',
+                subtitle: entryLines ? `最近接龙：\n${entryLines}` : '还没有接龙内容，来写第一条吧',
+                confirmText: '加入接龙',
+                cancelText: '取消',
+                fields: [
+                    {
+                        id: 'relay_entry',
+                        type: 'textarea',
+                        label: '接龙内容',
+                        placeholder: '输入你的接龙内容',
+                        rows: 4,
+                        maxLength: 90
+                    }
+                ],
+                validate: (values) => {
+                    const content = String(values.relay_entry || '').replace(/\s+/g, ' ').trim();
+                    if (!content) {
+                        return { ok: false, message: '请输入接龙内容' };
+                    }
+                    return { ok: true };
+                }
+            });
+            if (!result || !result.confirmed) return;
+            input = String(result.values.relay_entry || '');
+        } else {
+            showGroupToast('接龙弹窗未就绪，请刷新后重试');
+            return;
+        }
+        const joined = joinGroupRelay(group, 'me', {
+            relay_id: relayData.id || entry.message.id,
+            entry: input
+        }, {
+            showNotice: true
+        });
+        if (!joined || !joined.ok) {
+            if (joined && joined.reason === 'already_joined') {
+                showGroupToast('该接龙每人仅可参与一次');
+            } else if (joined && joined.reason === 'empty_entry') {
+                showGroupToast('请输入接龙内容');
+            } else {
+                showGroupToast('接龙失败');
+            }
+        }
+    }
+
     function getParticipantAvatar(groupContact, participantId, fallback = '') {
         const group = getGroupContact(groupContact);
         const safeId = normalizeParticipantId(participantId);
@@ -1461,6 +2629,7 @@
                 relationshipMemberIds: [],
                 relationshipNodePositions: {},
                 relationshipLinks: [],
+                relationshipNotes: '',
                 announcementText: '',
                 announcementUpdatedAt: 0,
                 announcementUpdatedBy: '',
@@ -1594,6 +2763,20 @@
             body = '[红包]';
         } else if (message.type === 'private_chat_invite') {
             body = '[私聊邀请]';
+        } else if (message.type === 'group_poll') {
+            let pollTitle = '';
+            try {
+                const payload = typeof message.content === 'string' ? JSON.parse(message.content) : (message.content || {});
+                pollTitle = String(payload.title || '').trim();
+            } catch (error) {}
+            body = pollTitle ? `[投票] ${pollTitle}` : '[投票]';
+        } else if (message.type === 'group_relay') {
+            let relayTitle = '';
+            try {
+                const payload = typeof message.content === 'string' ? JSON.parse(message.content) : (message.content || {});
+                relayTitle = String(payload.title || '').trim();
+            } catch (error) {}
+            body = relayTitle ? `[接龙] ${relayTitle}` : '[接龙]';
         } else if (typeof message.content === 'string' && message.content.trim()) {
             body = message.content.trim();
         } else {
@@ -1673,19 +2856,58 @@
             const snippets = getRecentVisibleDirectMessages(member.id, group.id)
                 .map(message => {
                     let content = String(message.content || '').trim();
-                    if (message.type === 'image' || message.type === 'virtual_image') content = '[图片]';
-                    else if (message.type === 'sticker') content = '[表情包]';
-                    else if (message.type === 'voice') content = '[语音]';
-                    else if (message.type === 'red_packet') content = '[红包]';
-                    else if (message.type === 'private_chat_invite') content = '[私聊邀请]';
-                    if (!content) content = '[消息]';
-                    return `- ${message.role === 'user' ? getParticipantName(group, 'me') : getParticipantName(group, member.id, 'TA')}: ${content}`;
-                });
+                if (message.type === 'image' || message.type === 'virtual_image') content = '[图片]';
+                else if (message.type === 'sticker') content = '[表情包]';
+                else if (message.type === 'voice') content = '[语音]';
+                else if (message.type === 'red_packet') content = '[红包]';
+                else if (message.type === 'private_chat_invite') content = '[私聊邀请]';
+                else if (message.type === 'group_poll') content = '[投票]';
+                else if (message.type === 'group_relay') content = '[接龙]';
+                if (!content) content = '[消息]';
+                return `- ${message.role === 'user' ? getParticipantName(group, 'me') : getParticipantName(group, member.id, 'TA')}: ${content}`;
+            });
             if (snippets.length === 0) return;
             lines.push(`【${getParticipantName(group, member.id, '成员')} 的单聊近况】`);
             lines.push(...snippets);
         });
         return lines.length > 1 ? `${lines.join('\n')}\n` : '';
+    }
+
+    function buildGroupUserPersonaContext(groupContact) {
+        const group = getGroupContact(groupContact);
+        if (!group) return '';
+
+        const userProfile = window.iphoneSimState && window.iphoneSimState.userProfile
+            ? window.iphoneSimState.userProfile
+            : null;
+        const userPersonas = Array.isArray(window.iphoneSimState && window.iphoneSimState.userPersonas)
+            ? window.iphoneSimState.userPersonas
+            : [];
+
+        const personaId = group.userPersonaId || (window.iphoneSimState && window.iphoneSimState.currentUserPersonaId) || null;
+        const persona = personaId !== null && personaId !== undefined
+            ? (userPersonas.find(item => String(item && item.id) === String(personaId)) || null)
+            : null;
+
+        const displayName = String(getParticipantName(group, 'me', '我') || '').trim() || '我';
+        const fallbackPersonaName = String((userProfile && userProfile.name) || displayName || '我').trim() || '我';
+        const personaName = String((persona && persona.name) || fallbackPersonaName).trim() || fallbackPersonaName;
+        const overridePrompt = String(group.userPersonaPromptOverride || '').trim();
+        const personaPrompt = String(overridePrompt || (persona && persona.aiPrompt) || '').trim();
+
+        if (!personaName && !personaPrompt) return '';
+
+        const lines = ['【用户人设（群聊设置 / User）】'];
+        lines.push(`- 用户在群内显示名：${displayName}`);
+        lines.push(`- 用户人设档案：${personaName}`);
+        if (personaPrompt) {
+            lines.push(`- 用户人设内容：${personaPrompt}`);
+            if (overridePrompt) {
+                lines.push('- 以上用户人设内容为当前群聊中的覆盖设定，优先级高于默认人设。');
+            }
+        }
+        lines.push('- 你在群聊互动时必须把用户当作以上人设来理解和回应。');
+        return lines.join('\n');
     }
 
     function buildGroupContextPrefix(message, groupContact) {
@@ -1761,6 +2983,40 @@
                 }
             } catch (error) {}
             body = `[私聊邀请${inviteInfo}]`;
+        } else if (message.type === 'group_poll') {
+            let pollId = '';
+            let pollTitle = '';
+            let optionPreview = '';
+            try {
+                const payload = typeof message.content === 'string' ? JSON.parse(message.content) : (message.content || {});
+                pollId = String(payload.id || '').trim();
+                pollTitle = String(payload.title || '').trim();
+                const options = Array.isArray(payload.options) ? payload.options : [];
+                optionPreview = options
+                    .map((option, index) => {
+                        const text = String(option && (option.text || option.content || option.label) || '').trim();
+                        const voterIds = Array.isArray(option && option.voterIds) ? option.voterIds : [];
+                        const voteCount = Number(option && option.voteCount);
+                        const count = Number.isFinite(voteCount) && voteCount >= 0 ? voteCount : voterIds.length;
+                        if (!text) return '';
+                        return `${index + 1}.${text}${count > 0 ? `(${count}票)` : ''}`;
+                    })
+                    .filter(Boolean)
+                    .slice(0, 8)
+                    .join(' / ');
+            } catch (error) {}
+            body = `[投票${pollId ? ` id=${pollId}` : ''}${pollTitle ? ` 标题=${pollTitle}` : ''}${optionPreview ? ` 选项=${optionPreview}` : ''}]`;
+        } else if (message.type === 'group_relay') {
+            let relayId = '';
+            let relayTitle = '';
+            let entryCount = 0;
+            try {
+                const payload = typeof message.content === 'string' ? JSON.parse(message.content) : (message.content || {});
+                relayId = String(payload.id || '').trim();
+                relayTitle = String(payload.title || '').trim();
+                entryCount = Array.isArray(payload.entries) ? payload.entries.length : 0;
+            } catch (error) {}
+            body = `[接龙${relayId ? ` id=${relayId}` : ''}${relayTitle ? ` 标题=${relayTitle}` : ''}${entryCount > 0 ? ` 已接=${entryCount}` : ''}]`;
         } else if (typeof message.content === 'string' && message.content.trim()) {
             body = message.content.trim();
         } else {
@@ -1792,6 +3048,10 @@
         const pendingInviteMemberIds = getPendingInviteMemberIds(group);
         const pendingInviteContacts = memberContacts.filter(member => pendingInviteMemberIds.some(id => String(id) === String(member.id)));
         const relationshipLinks = getGroupRelationshipLinks(group);
+        const relationshipNotes = getGroupRelationshipNotes(group);
+        const announcementText = getGroupAnnouncementText(group);
+        const pinnedDisplayData = getGroupPinnedMessageDisplayData(group, { autoClearInvalid: true, persist: true });
+        const userPersonaContext = buildGroupUserPersonaContext(group);
         const memberLines = [
             `- speaker_contact_id=me｜名字=${getParticipantName(group, 'me')}｜区分标签=${getParticipantPromptLabel(group, 'me')}｜身份=${GROUP_ROLE_LABELS[getGroupRole(group, 'me')] || '成员'}｜群头衔=${getGroupMemberTitle(group, 'me') || '无'}｜这是用户本人`
         ];
@@ -1837,6 +3097,7 @@
         const systemBaseBlocks = [
             `你现在不是在扮演单个联系人，而是在模拟微信群聊“${getGroupChatDisplayName(group)}”里的多位真实成员。`,
             `用户本人名字：${getParticipantName(group, 'me')}。用户是群里的${GROUP_ROLE_LABELS[getGroupRole(group, 'me')] || '成员'}。`,
+            userPersonaContext,
             '【群成员名单】',
             memberLines.length > 0 ? memberLines.join('\n') : '- 当前暂无群成员。',
             '- 如果群里有同名成员，必须参考“区分标签”与人设来区分他们；不要因为名字相同就跳过不回复。',
@@ -1844,6 +3105,15 @@
             relationshipLinkLines.length > 0
                 ? `${relationshipLinkLines.join('\n')}\n- 上面这些是群成员之间已经设定好的关系连线，发言互动、站队、亲疏感、称呼和语气时都要参考。若某对成员只有单条关系线而没有相反方向的另一条线，也要默认把它理解成双向关系；只有当同一对成员存在两条相反方向且内容不同的关系线时，才按有方向差异来理解。若没有写出的成员组合，则视为没有额外指定关系。`
                 : '- 当前没有额外设置成员之间的关系连线。',
+            relationshipNotes
+                ? `【群成员关系补充说明】\n${relationshipNotes}`
+                : '',
+            '【群公告】',
+            announcementText || '无',
+            '【置顶消息】',
+            pinnedDisplayData && pinnedDisplayData.messageId
+                ? `msg_id=${pinnedDisplayData.messageId}｜speaker_contact_id=${pinnedDisplayData.speakerContactId || ''}｜speaker_name=${pinnedDisplayData.speakerName || '群成员'}｜preview=${pinnedDisplayData.preview || '[消息]'}`
+                : '无',
             pendingInviteContacts.length > 0
                 ? `【最近新入群成员】\n${pendingInviteContacts.map(member => `- speaker_contact_id=${member.id}｜名字=${getParticipantName(group, member.id, '成员')}｜区分标签=${getParticipantPromptLabel(group, member.id, '成员')}｜人设=${String(member.persona || '无').replace(/\s+/g, ' ').trim() || '无'}`).join('\n')}\n这些成员现在已经在群里，可以自然接话；如果场景允许，优先让至少一位最近入群成员在本轮说 1 句，但不要硬凑所有人都发言。`
                 : '',
@@ -1858,7 +3128,7 @@
             '- sticker_message 格式：{"type":"sticker_message","speaker_contact_id":"成员ID","sticker":"表情描述"}。',
             '- voice 格式：{"type":"voice","speaker_contact_id":"成员ID","duration":3,"content":"语音内容"}。',
             '- image 格式：{"type":"image","speaker_contact_id":"成员ID","content":"图片描述"}。',
-            '- 允许额外输出群动作 action，但仅限下面列出的六种。',
+            '- 允许额外输出群动作 action，但仅限下面列出的十种。',
             '- action 里的 speaker_contact_id 必须是某位 AI 成员，严禁写 me（用户本人）。',
             '- 改群名：{"type":"action","speaker_contact_id":"成员ID","command":"RENAME_GROUP","payload":"新群名"}。只有管理员或群主能这样做。',
             '- 设群头衔：{"type":"action","speaker_contact_id":"成员ID","command":"SET_MEMBER_TITLE","payload":{"target_member_id":"成员ID","title":"群头衔"}}。只有群主能这样做；若要取消群头衔，title 传空字符串。',
@@ -1866,12 +3136,17 @@
             '- 发红包：{"type":"action","speaker_contact_id":"成员ID","command":"SEND_GROUP_RED_PACKET","payload":{"mode":"targeted|random","amount":88.88,"target_member_ids":["成员ID"],"count":3,"remark":"红包祝福"}}。targeted 需要 target_member_ids，random 需要 count。',
             '- 抢红包：{"type":"action","speaker_contact_id":"成员ID","command":"CLAIM_GROUP_RED_PACKET","payload":{"packet_id":"红包ID或红包消息ID"}}。红包ID可从上下文里的 [红包 id=...] 读取。',
             '- 发起私聊：{"type":"action","speaker_contact_id":"成员ID","command":"START_PRIVATE_CHAT","payload":{"message":"想和你私聊..."}}。仅当记忆模式为 bidirectional（双向同步）时才允许，用于向用户发起私聊邀请。',
+            '- 发起投票：{"type":"action","speaker_contact_id":"成员ID","command":"CREATE_GROUP_POLL","payload":{"title":"投票主题","options":["选项1","选项2","选项3"]}}。',
+            '- 参与投票：{"type":"action","speaker_contact_id":"成员ID","command":"VOTE_GROUP_POLL","payload":{"poll_id":"投票ID或消息ID","option_id":"选项ID"}}。也可用 option_index（从1开始）。',
+            '- 发起接龙：{"type":"action","speaker_contact_id":"成员ID","command":"CREATE_GROUP_RELAY","payload":{"title":"接龙主题","entry":"第一条接龙内容"}}。',
+            '- 参与接龙：{"type":"action","speaker_contact_id":"成员ID","command":"JOIN_GROUP_RELAY","payload":{"relay_id":"接龙ID或消息ID","entry":"接龙内容"}}。',
             '- 当成员希望把某个话题转去单独沟通时，且当前记忆模式为 bidirectional，可以使用发起私聊动作。',
+            '- 若上下文里已出现正在进行的投票或接龙，且成员在聊天里表达立场/观点/接龙意图，必须同时输出对应的 VOTE_GROUP_POLL 或 JOIN_GROUP_RELAY 动作，不能只发文本不落地动作。',
             '- 一次把整轮群成员要说的话按顺序写完整，不能依赖第二次生成补说话。',
             '- 每轮回复总共至少输出 6 条可见消息；action 不计入这 6 条。若群成员较少，可以让同一成员连续说多句，但总可见消息数不能少于 6 条。',
             '- 回复形态必须像真实群聊：不要所有人都只对用户单线回复。每轮至少安排 2 条“成员对成员”的直接互动（接话、追问、调侃、引用任一成员都可以）。',
             '- 成员在互相互动时可自然提及用户，但主语与对话对象不能始终只有用户一个人。',
-            '- 除上面六种群动作外，禁止输出 thought_state、转账、改资料、下单、一起听、屏幕操作等任何副作用指令。',
+            '- 除上面十种群动作外，禁止输出 thought_state、转账、改资料、下单、一起听、屏幕操作等任何副作用指令。',
             '- 谁更可能接话、是否多人连续回复、是否引用消息，都由你一次性自然决定。',
             `【记忆模式】当前模式：${GROUP_MEMORY_MODE_LABELS[memoryMode] || GROUP_MEMORY_MODE_LABELS.group_only}。`
         ].filter(Boolean);
@@ -2006,6 +3281,7 @@
             screen: document.getElementById('group-member-relations-screen'),
             subtitle: document.getElementById('group-member-relations-subtitle'),
             groupName: document.getElementById('group-member-relations-group-name'),
+            notesBtn: document.getElementById('group-member-relations-notes-btn'),
             canvas: document.getElementById('group-member-relations-canvas'),
             svg: document.getElementById('group-member-relations-svg'),
             nodesLayer: document.getElementById('group-member-relations-nodes'),
@@ -2033,6 +3309,16 @@
         if (!toast) return;
         clearTimeout(toast.__hideTimer);
         toast.classList.remove('show');
+    }
+
+    function updateGroupMemberRelationsNotesButton(groupContact = currentRelationGroupId) {
+        const group = getGroupContact(groupContact);
+        const { notesBtn } = getGroupMemberRelationsElements();
+        if (!notesBtn) return;
+        const notes = getGroupRelationshipNotes(group);
+        const hasNotes = !!notes;
+        notesBtn.classList.toggle('has-notes', hasNotes);
+        notesBtn.setAttribute('aria-label', hasNotes ? '编辑关系补充说明（已填写）' : '编辑关系补充说明');
     }
 
     function clearSelectedGroupRelationNode() {
@@ -2345,6 +3631,7 @@
         currentRelationGroupId = group.id;
         if (groupName) groupName.textContent = getGroupChatDisplayName(group);
         if (subtitle) subtitle.textContent = `${getManagedRelationMemberIds(group).length} NODES // RELATION MAP`;
+        updateGroupMemberRelationsNotesButton(group);
 
         clearSelectedGroupRelationNode();
         relationGraphRuntime.nodes = buildGroupRelationGraphNodes(group);
@@ -2409,7 +3696,9 @@
             'memory-mode': 'group-settings-memory-mode',
             'avatar-preview': 'group-settings-avatar-preview',
             'avatar-upload': 'group-settings-avatar-upload',
-            'member-list': 'group-chat-member-list'
+            'member-list': 'group-chat-member-list',
+            announcement: 'group-settings-announcement',
+            'pin-summary': 'group-settings-pin-summary'
         };
 
         if (inlinePanel) {
@@ -2442,7 +3731,9 @@
             save: 'group-settings-save-btn',
             invite: 'group-settings-invite-btn',
             exit: 'group-settings-exit-btn',
-            dissolve: 'group-settings-dissolve-btn'
+            dissolve: 'group-settings-dissolve-btn',
+            'save-announcement': 'group-settings-save-announcement-btn',
+            'clear-pin': 'group-settings-clear-pin-btn'
         };
 
         if (inlinePanel) {
@@ -2803,11 +4094,16 @@
         if (!group) return;
         currentSettingsGroupId = group.id;
         const canRename = canParticipantRenameGroup(group, 'me');
+        const canManageAnnouncement = canParticipantManageAnnouncement(group, 'me');
         const canManageTitles = canParticipantManageTitles(group, 'me');
         const nameInputs = getGroupSettingsNodes('name');
         const memorySelects = getGroupSettingsNodes('memory-mode');
+        const announcementInputs = getGroupSettingsNodes('announcement');
+        const pinSummaryNodes = getGroupSettingsNodes('pin-summary');
         const avatarPreviews = getGroupSettingsNodes('avatar-preview');
         const memberLists = getGroupSettingsNodes('member-list');
+        const saveAnnouncementButtons = getGroupSettingsActionNodes('save-announcement');
+        const clearPinButtons = getGroupSettingsActionNodes('clear-pin');
         const dissolveButtons = getGroupSettingsActionNodes('dissolve');
         const exitButtons = getGroupSettingsActionNodes('exit');
 
@@ -2825,6 +4121,40 @@
         }
         memorySelects.forEach((select) => {
             select.value = normalizedMemoryMode;
+        });
+        announcementInputs.forEach((input) => {
+            input.value = getGroupAnnouncementText(group);
+            input.disabled = !canManageAnnouncement;
+            input.placeholder = canManageAnnouncement
+                ? '输入群公告'
+                : '仅管理员或群主可编辑';
+            input.style.opacity = canManageAnnouncement ? '1' : '0.65';
+        });
+        const pinnedData = getGroupPinnedMessageDisplayData(group, { autoClearInvalid: true, persist: true, maxLength: 48 });
+        pinSummaryNodes.forEach((node) => {
+            node.textContent = pinnedData && pinnedData.messageId
+                ? `置顶：${pinnedData.speakerName}: ${pinnedData.preview}`
+                : '当前无置顶消息';
+            node.title = pinnedData && pinnedData.messageId
+                ? '点击跳转到置顶消息'
+                : '';
+            node.style.cursor = pinnedData && pinnedData.messageId ? 'pointer' : 'default';
+            node.onclick = pinnedData && pinnedData.messageId
+                ? () => focusGroupPinnedMessage(group.id)
+                : null;
+        });
+        saveAnnouncementButtons.forEach((button) => {
+            button.disabled = !canManageAnnouncement;
+            button.style.opacity = canManageAnnouncement ? '1' : '0.55';
+            button.title = canManageAnnouncement ? '' : '仅管理员或群主可操作';
+        });
+        clearPinButtons.forEach((button) => {
+            const enabled = canManageAnnouncement && !!(pinnedData && pinnedData.messageId);
+            button.disabled = !enabled;
+            button.style.opacity = enabled ? '1' : '0.55';
+            button.title = canManageAnnouncement
+                ? (enabled ? '' : '当前没有置顶消息')
+                : '仅管理员或群主可操作';
         });
         avatarPreviews.forEach((previewNode) => {
             setGroupSettingsAvatarPreview(previewNode, group.groupMeta.avatar || group.avatar || '');
@@ -2895,6 +4225,7 @@
         currentSettingsGroupId = group.id;
         const nameInput = getPrimaryGroupSettingsNode('name');
         const memorySelect = getPrimaryGroupSettingsNode('memory-mode');
+        const announcementInput = getPrimaryGroupSettingsNode('announcement');
         const contextLimitInput = document.getElementById('chat-setting-context-limit');
         const realTimeVisibleInput = document.getElementById('chat-setting-real-time-visible');
         const calendarAwareInput = document.getElementById('chat-setting-calendar-aware');
@@ -2902,6 +4233,7 @@
         const nextMemoryMode = String(memorySelect && memorySelect.value ? memorySelect.value : '') === 'bidirectional'
             ? 'bidirectional'
             : 'group_only';
+        const nextAnnouncement = String(announcementInput && announcementInput.value ? announcementInput.value : '').trim();
         group.groupMeta.memoryMode = nextMemoryMode;
         if (contextLimitInput) {
             const rawContextLimit = String(contextLimitInput.value || '').trim();
@@ -2915,9 +4247,17 @@
             group.calendarAwareEnabled = !!calendarAwareInput.checked;
         }
         let renamed = false;
+        let announcementChanged = false;
         if (canParticipantRenameGroup(group, 'me')) {
             const renameResult = applyGroupRename(group, 'me', nextName, { actorName: '你', showNotice: nextName !== getGroupChatDisplayName(group) });
             renamed = !!(renameResult && renameResult.ok && renameResult.changed);
+        }
+        if (announcementInput && canParticipantManageAnnouncement(group, 'me')) {
+            const announcementResult = applyGroupAnnouncement(group, 'me', nextAnnouncement, {
+                actorName: '你',
+                showNotice: !options.silent
+            });
+            announcementChanged = !!(announcementResult && announcementResult.ok && announcementResult.changed);
         }
         if (typeof window.ensureGroupChatMeta === 'function') {
             window.ensureGroupChatMeta(group);
@@ -2928,7 +4268,11 @@
             window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
         }
         if (!options.silent) {
-            showGroupToast(renamed ? '群资料已保存' : '群设置已保存');
+            if (renamed || announcementChanged) {
+                showGroupToast('群资料已保存');
+            } else {
+                showGroupToast('群设置已保存');
+            }
         }
         if (!options.skipRender) {
             renderGroupChatSettings(group);
@@ -2936,7 +4280,8 @@
         return {
             ok: true,
             group,
-            renamed
+            renamed,
+            announcementChanged
         };
     }
 
@@ -3175,6 +4520,7 @@
         const closeMemberDirectoryModalBtn = document.getElementById('close-group-member-directory-modal');
         const memberDirectoryModal = document.getElementById('group-member-directory-modal');
         const closeMemberRelationsBtn = document.getElementById('close-group-member-relations');
+        const editMemberRelationsNotesBtn = document.getElementById('group-member-relations-notes-btn');
         const addMemberRelationsBtn = document.getElementById('group-member-relations-add-btn');
         const closeMemberRelationsPickerBtn = document.getElementById('close-group-member-relations-picker');
         const closeMemberRelationsPickerMask = document.getElementById('close-group-member-relations-picker-mask');
@@ -3212,6 +4558,28 @@
             button.dataset.groupSettingsInviteBound = '1';
             button.addEventListener('click', () => handleInviteGroupMembers(currentSettingsGroupId));
         });
+        getGroupSettingsActionNodes('save-announcement').forEach((button) => {
+            if (button.dataset.groupSettingsSaveAnnouncementBound === '1') return;
+            button.dataset.groupSettingsSaveAnnouncementBound = '1';
+            button.addEventListener('click', () => persistGroupSettings(currentSettingsGroupId, { silent: false }));
+        });
+        getGroupSettingsActionNodes('clear-pin').forEach((button) => {
+            if (button.dataset.groupSettingsClearPinBound === '1') return;
+            button.dataset.groupSettingsClearPinBound = '1';
+            button.addEventListener('click', () => {
+                const group = getGroupContact(currentSettingsGroupId);
+                if (!group) return;
+                const result = setGroupPinnedMessage(group, 'me', '', { showNotice: true, actorName: '你' });
+                if (!result || !result.ok) {
+                    showGroupToast('取消置顶失败');
+                    return;
+                }
+                renderGroupChatSettings(group);
+                if (!result.changed) {
+                    showGroupToast('当前没有置顶消息');
+                }
+            });
+        });
         getGroupSettingsActionNodes('exit').forEach((button) => {
             if (button.dataset.groupSettingsExitBound === '1') return;
             button.dataset.groupSettingsExitBound = '1';
@@ -3248,6 +4616,46 @@
         if (closeMemberRelationsBtn && closeMemberRelationsBtn.dataset.bound !== '1') {
             closeMemberRelationsBtn.dataset.bound = '1';
             closeMemberRelationsBtn.addEventListener('click', closeGroupMemberRelationsScreen);
+        }
+        if (editMemberRelationsNotesBtn && editMemberRelationsNotesBtn.dataset.bound !== '1') {
+            editMemberRelationsNotesBtn.dataset.bound = '1';
+            editMemberRelationsNotesBtn.addEventListener('click', async () => {
+                const group = getGroupContact(currentRelationGroupId);
+                if (!group) return;
+                const currentNotes = getGroupRelationshipNotes(group);
+                const result = await openGroupActionEditorModal({
+                    kicker: 'RELATION NOTES',
+                    title: '关系补充说明',
+                    subtitle: '会注入群聊 prompt，用于补充成员之间的长期关系背景。',
+                    confirmText: '保存',
+                    fields: [
+                        {
+                            id: 'relationship-notes',
+                            label: '补充说明',
+                            type: 'textarea',
+                            rows: 5,
+                            maxLength: 500,
+                            placeholder: '例如：A 和 B 经常斗嘴，但彼此很信任；C 是组织活动的人。',
+                            value: currentNotes
+                        }
+                    ],
+                    validate: (values) => {
+                        const notes = normalizeGroupRelationshipNotes(values['relationship-notes'] || '');
+                        if (notes.length > 500) {
+                            return { ok: false, message: '补充说明最多 500 字' };
+                        }
+                        return { ok: true };
+                    }
+                });
+                if (!result || !result.confirmed) return;
+                const saveResult = setGroupRelationshipNotes(group, result.values['relationship-notes'] || '');
+                if (!saveResult.ok) {
+                    showGroupToast('保存关系补充说明失败');
+                    return;
+                }
+                updateGroupMemberRelationsNotesButton(group);
+                showGroupMemberRelationsToast(saveResult.notes ? '关系补充说明已保存' : '已清空关系补充说明', 1800);
+            });
         }
         if (addMemberRelationsBtn && addMemberRelationsBtn.dataset.bound !== '1') {
             addMemberRelationsBtn.dataset.bound = '1';
@@ -3354,11 +4762,18 @@
     window.getPendingInviteMemberIds = getPendingInviteMemberIds;
     window.getGroupMemberNickname = getGroupMemberNickname;
     window.getGroupMemberTitle = getGroupMemberTitle;
+    window.getGroupAnnouncementText = getGroupAnnouncementText;
+    window.getGroupPinnedMessageDisplayData = getGroupPinnedMessageDisplayData;
     window.canGroupParticipantRenameGroup = canParticipantRenameGroup;
     window.canGroupParticipantManageTitles = canParticipantManageTitles;
+    window.canGroupParticipantManageAnnouncement = canParticipantManageAnnouncement;
     window.applyGroupMemberNickname = applyGroupMemberNickname;
     window.applyGroupRename = applyGroupRename;
+    window.applyGroupAnnouncement = applyGroupAnnouncement;
     window.applyGroupMemberTitle = applyGroupMemberTitle;
+    window.setGroupPinnedMessage = setGroupPinnedMessage;
+    window.toggleGroupPinnedMessage = toggleGroupPinnedMessage;
+    window.focusGroupPinnedMessage = focusGroupPinnedMessage;
     window.resolveGroupSpeakerContactId = resolveGroupSpeakerContactId;
     window.decorateGroupChatMessageMeta = decorateGroupChatMessageMeta;
     window.buildGroupAiPromptMessages = buildGroupAiPromptMessages;
@@ -3368,6 +4783,13 @@
     window.createGroupRedPacket = createGroupRedPacket;
     window.claimGroupRedPacket = claimGroupRedPacket;
     window.handleGroupRedPacketClick = openGroupRedPacketDetail;
+    window.openGroupActionEditorModal = openGroupActionEditorModal;
+    window.createGroupPoll = createGroupPoll;
+    window.voteGroupPoll = voteGroupPoll;
+    window.handleGroupPollClick = handleGroupPollClick;
+    window.createGroupRelay = createGroupRelay;
+    window.joinGroupRelay = joinGroupRelay;
+    window.handleGroupRelayClick = handleGroupRelayClick;
     window.createGroupPrivateChatInvite = createGroupPrivateChatInvite;
     window.handleGroupPrivateChatInviteClick = openGroupPrivateChatInvite;
     window.openGroupChatSettings = openGroupChatSettings;

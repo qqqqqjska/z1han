@@ -733,6 +733,14 @@ function ensureGroupChatMeta(contact) {
             relation: relation.slice(0, 32)
         });
     });
+    const relationshipNotes = String(meta.relationshipNotes || '')
+        .replace(/\r\n?/g, '\n')
+        .split('\n')
+        .map((line) => String(line || '').replace(/\s+/g, ' ').trim())
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+        .slice(0, 500);
     const lastInviteAt = Number(meta.lastInviteAt);
     const announcementText = String(meta.announcementText || '').replace(/\s+/g, ' ').trim().slice(0, 240);
     const announcementUpdatedAt = Number(meta.announcementUpdatedAt);
@@ -759,6 +767,7 @@ function ensureGroupChatMeta(contact) {
         relationshipMemberIds,
         relationshipNodePositions,
         relationshipLinks,
+        relationshipNotes,
         lastInviteAt: Number.isFinite(lastInviteAt) && lastInviteAt > 0 ? lastInviteAt : 0,
         announcementText,
         announcementUpdatedAt: Number.isFinite(announcementUpdatedAt) && announcementUpdatedAt > 0 ? announcementUpdatedAt : 0,

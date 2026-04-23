@@ -1547,6 +1547,10 @@
                         <div class="group-member-relations-title">Member Nexus</div>
                         <div id="group-member-relations-subtitle" class="group-member-relations-subtitle">GROUP LINK MAP</div>
                     </div>
+                    <button id="group-member-relations-notes-btn" class="group-member-relations-notes-btn" type="button" aria-label="编辑关系补充说明">
+                        <i class="ri-sticky-note-line"></i>
+                        <span>补充说明</span>
+                    </button>
                 </div>
                 <div id="group-member-relations-canvas" class="group-member-relations-canvas">
                     <svg id="group-member-relations-svg" class="group-member-relations-svg"></svg>
@@ -1767,6 +1771,25 @@
                             <input type="number" id="group-red-packet-random-count" min="1" step="1" value="1">
                         </div>
                         <button id="do-group-red-packet-btn" class="ios-btn-block" style="margin-top: 18px; background-color: #fa5151;">发红包</button>
+                    </div>
+                </div>
+            </div>
+            <div id="group-action-editor-modal" class="group-action-editor-modal" style="display:none;" aria-hidden="true">
+                <button type="button" id="group-action-editor-backdrop" class="group-action-editor-backdrop" aria-label="关闭弹窗"></button>
+                <div id="group-action-editor-card" class="group-action-editor-card" role="dialog" aria-modal="true" aria-labelledby="group-action-editor-title">
+                    <div class="group-action-editor-handle" aria-hidden="true"></div>
+                    <div class="group-action-editor-header">
+                        <div class="group-action-editor-title-wrap">
+                            <div id="group-action-editor-kicker" class="group-action-editor-kicker">GROUP ACTION</div>
+                            <h3 id="group-action-editor-title">编辑群内容</h3>
+                        </div>
+                        <button type="button" id="group-action-editor-close" class="group-action-editor-close" aria-label="关闭">&times;</button>
+                    </div>
+                    <div id="group-action-editor-subtitle" class="group-action-editor-subtitle"></div>
+                    <div id="group-action-editor-fields" class="group-action-editor-fields"></div>
+                    <div class="group-action-editor-actions">
+                        <button type="button" id="group-action-editor-cancel" class="group-action-editor-btn secondary">取消</button>
+                        <button type="button" id="group-action-editor-confirm" class="group-action-editor-btn primary">确认</button>
                     </div>
                 </div>
             </div>
@@ -2050,14 +2073,6 @@
                                 <div class="more-icon"><i class="fas fa-envelope-open-text"></i></div>
                                 <div class="more-label">发红包</div>
                             </div>
-                            <div class="more-item" id="chat-more-group-poll-btn">
-                                <div class="more-icon"><i class="fas fa-poll-h"></i></div>
-                                <div class="more-label">投票</div>
-                            </div>
-                            <div class="more-item" id="chat-more-group-relay-btn">
-                                <div class="more-icon"><i class="fas fa-list-ol"></i></div>
-                                <div class="more-label">接龙</div>
-                            </div>
                             <div class="more-item" id="chat-more-voice-btn">
                                 <div class="more-icon"><i class="fas fa-microphone"></i></div>
                                 <div class="more-label">语音输入</div>
@@ -2080,6 +2095,18 @@
                             <div class="more-item" id="chat-more-games-btn">
                                 <div class="more-icon"><i class="fas fa-gamepad"></i></div>
                                 <div class="more-label">小游戏</div>
+                            </div>
+                            <div class="more-item" id="chat-more-group-poll-btn">
+                                <div class="more-icon"><i class="fas fa-poll-h"></i></div>
+                                <div class="more-label">投票</div>
+                            </div>
+                            <div class="more-item" id="chat-more-group-relay-btn">
+                                <div class="more-icon"><i class="fas fa-list-ol"></i></div>
+                                <div class="more-label">接龙</div>
+                            </div>
+                            <div class="more-item" id="chat-more-group-meeting-btn">
+                                <div class="more-icon"><i class="fas fa-handshake"></i></div>
+                                <div class="more-label">见面</div>
                             </div>
                             <div class="more-item" id="chat-more-edit-msg-btn">
                                 <div class="more-icon"><i class="fas fa-edit"></i></div>

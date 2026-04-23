@@ -2603,6 +2603,7 @@
 
 .group-member-relations-heading {
     min-width: 0;
+    flex: 1;
 }
 
 .group-member-relations-title {
@@ -2616,6 +2617,34 @@
     font-size: 10px;
     letter-spacing: 1.4px;
     color: #a1a1aa;
+}
+
+.group-member-relations-notes-btn {
+    height: 40px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(24,24,27,.58);
+    color: #d4d4d8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 12px;
+    font-size: 11px;
+    letter-spacing: .8px;
+    flex-shrink: 0;
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+}
+
+.group-member-relations-notes-btn i {
+    font-size: 15px;
+}
+
+.group-member-relations-notes-btn.has-notes {
+    color: #fafafa;
+    border-color: rgba(255,255,255,.24);
+    background: rgba(255,255,255,.14);
 }
 
 .group-member-relations-body {

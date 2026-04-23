@@ -2372,6 +2372,8 @@ function formatLastMsgPreview(lastMsg, contact = null) {
     else if (lastMsg.type === 'sticker') preview = '[表情包]';
     else if (lastMsg.type === 'transfer') preview = '[转账]';
     else if (lastMsg.type === 'red_packet') preview = '[红包]';
+    else if (lastMsg.type === 'group_poll') preview = '[投票]';
+    else if (lastMsg.type === 'group_relay') preview = '[接龙]';
     else if (lastMsg.type === 'private_chat_invite') preview = '[私聊邀请]';
     else if (lastMsg.type === 'family_card') preview = '[亲属卡]';
     else if (lastMsg.type === 'voice') preview = '[语音]';
