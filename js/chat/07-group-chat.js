@@ -2,7 +2,6 @@
     const GROUP_CHAT_CONTACT_GROUP = '群聊';
     const GROUP_MEMORY_MODE_LABELS = {
         group_only: '群聊独立',
-        group_to_direct: '群到单聊',
         bidirectional: '双向同步'
     };
     const GROUP_ROLE_LABELS = {
@@ -55,11 +54,47 @@
         return Number.isFinite(asNumber) && /^-?\d+(?:\.0+)?$/.test(raw) ? asNumber : raw;
     }
 
+    function getParticipantIdKey(value) {
+        const normalized = normalizeParticipantId(value);
+        if (normalized === '' || normalized === null || normalized === undefined) return '';
+        return String(normalized);
+    }
+
+    function normalizeDirectMemberId(value) {
+        const normalized = normalizeParticipantId(value);
+        if (normalized === '' || normalized === null || normalized === undefined || normalized === 'me') return '';
+        const contact = getContactById(normalized);
+        if (!contact || contact.chatType === 'group') return '';
+        return normalizeParticipantId(contact.id);
+    }
+
+    function normalizeDirectMemberIds(values) {
+        const source = Array.isArray(values) ? values : [];
+        const seen = new Set();
+        const result = [];
+        source.forEach((value) => {
+            const normalized = normalizeDirectMemberId(value);
+            if (normalized === '' || normalized === null || normalized === undefined) return;
+            const key = String(normalized);
+            if (seen.has(key)) return;
+            seen.add(key);
+            result.push(normalized);
+        });
+        return result;
+    }
+
     function getContactById(contactId) {
         const contacts = Array.isArray(window.iphoneSimState && window.iphoneSimState.contacts)
             ? window.iphoneSimState.contacts
             : [];
-        return contacts.find(contact => String(contact && contact.id) === String(contactId)) || null;
+        const rawKey = String(contactId === undefined || contactId === null ? '' : contactId).trim();
+        const normalizedKey = getParticipantIdKey(contactId);
+        return contacts.find((contact) => {
+            if (!contact) return false;
+            const contactRawKey = String(contact.id === undefined || contact.id === null ? '' : contact.id).trim();
+            if (rawKey && contactRawKey === rawKey) return true;
+            return normalizedKey && getParticipantIdKey(contact.id) === normalizedKey;
+        }) || null;
     }
 
     function getGroupContact(contactOrId) {
@@ -118,15 +153,29 @@
 
     function getGroupMemberIds(groupContact) {
         const group = getGroupContact(groupContact);
-        return group && group.groupMeta && Array.isArray(group.groupMeta.memberIds)
-            ? [...group.groupMeta.memberIds]
-            : [];
+        if (!group || !group.groupMeta || !Array.isArray(group.groupMeta.memberIds)) {
+            return [];
+        }
+        const normalizedIds = normalizeDirectMemberIds(group.groupMeta.memberIds);
+        const beforeKeys = group.groupMeta.memberIds.map(id => getParticipantIdKey(id)).filter(Boolean);
+        const afterKeys = normalizedIds.map(id => getParticipantIdKey(id)).filter(Boolean);
+        if (beforeKeys.length !== afterKeys.length || beforeKeys.some((key, index) => key !== afterKeys[index])) {
+            group.groupMeta.memberIds = normalizedIds;
+        }
+        return [...normalizedIds];
     }
 
     function getGroupMemberContacts(groupContact) {
+        const seen = new Set();
         return getGroupMemberIds(groupContact)
             .map(id => getContactById(id))
-            .filter(contact => contact && contact.chatType !== 'group');
+            .filter((contact) => {
+                if (!contact || contact.chatType === 'group') return false;
+                const key = getParticipantIdKey(contact.id);
+                if (!key || seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
     }
 
     function getManagedRelationMemberIds(groupContact) {
@@ -236,9 +285,21 @@
 
     function getPendingInviteMemberIds(groupContact) {
         const group = getGroupContact(groupContact);
-        return group && group.groupMeta && Array.isArray(group.groupMeta.pendingInviteMemberIds)
-            ? [...group.groupMeta.pendingInviteMemberIds]
-            : [];
+        if (!group || !group.groupMeta || !Array.isArray(group.groupMeta.pendingInviteMemberIds)) {
+            return [];
+        }
+        const memberKeySet = new Set(getGroupMemberIds(group).map(id => getParticipantIdKey(id)));
+        const normalized = normalizeDirectMemberIds(group.groupMeta.pendingInviteMemberIds)
+            .filter(id => memberKeySet.has(getParticipantIdKey(id)));
+        const beforeKeys = group.groupMeta.pendingInviteMemberIds.map(id => getParticipantIdKey(id)).filter(Boolean);
+        const afterKeys = normalized.map(id => getParticipantIdKey(id)).filter(Boolean);
+        if (beforeKeys.length !== afterKeys.length || beforeKeys.some((key, index) => key !== afterKeys[index])) {
+            group.groupMeta.pendingInviteMemberIds = normalized;
+            if (normalized.length === 0) {
+                group.groupMeta.lastInviteAt = 0;
+            }
+        }
+        return normalized;
     }
 
     function consumePendingInviteMembers(groupContact, roundMessages) {
@@ -251,7 +312,8 @@
             .filter(id => id && id !== 'me')
             .map(id => String(id)));
         if (spokenIds.size === 0) return;
-        const nextPendingIds = group.groupMeta.pendingInviteMemberIds.filter(id => !spokenIds.has(String(id)));
+        const nextPendingIds = normalizeDirectMemberIds(group.groupMeta.pendingInviteMemberIds)
+            .filter(id => !spokenIds.has(String(id)));
         if (nextPendingIds.length === group.groupMeta.pendingInviteMemberIds.length) return;
         group.groupMeta.pendingInviteMemberIds = nextPendingIds;
         if (nextPendingIds.length === 0) {
@@ -902,6 +964,148 @@
         };
     }
 
+    function parseGroupPrivateChatInvitePayload(rawPayload) {
+        let payload = rawPayload && typeof rawPayload === 'object'
+            ? rawPayload
+            : {};
+        if (typeof rawPayload === 'string') {
+            const rawText = String(rawPayload || '').trim();
+            if (rawText) {
+                if ((rawText.startsWith('{') && rawText.endsWith('}')) || (rawText.startsWith('[') && rawText.endsWith(']'))) {
+                    try {
+                        const parsed = JSON.parse(rawText);
+                        if (parsed && typeof parsed === 'object') {
+                            payload = parsed;
+                        } else {
+                            payload = {};
+                        }
+                    } catch (error) {
+                        payload = { message: rawText };
+                    }
+                } else {
+                    payload = { message: rawText };
+                }
+            }
+        }
+        const message = String(payload.message || payload.content || payload.text || payload.reason || '想和你私聊一下')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 120) || '想和你私聊一下';
+        return { ok: true, message };
+    }
+
+    function findGroupPrivateChatInviteEntry(groupContact, inviteIdOrMsgId = null) {
+        const group = getGroupContact(groupContact);
+        if (!group) return null;
+        const targetToken = String(inviteIdOrMsgId || '').trim();
+        const history = Array.isArray(window.iphoneSimState && window.iphoneSimState.chatHistory && window.iphoneSimState.chatHistory[group.id])
+            ? window.iphoneSimState.chatHistory[group.id]
+            : [];
+        for (let i = history.length - 1; i >= 0; i--) {
+            const message = history[i];
+            if (!message || message.type !== 'private_chat_invite') continue;
+            let payload = null;
+            try {
+                payload = typeof message.content === 'string' ? JSON.parse(message.content) : message.content;
+            } catch (error) {
+                payload = null;
+            }
+            if (!payload || typeof payload !== 'object') continue;
+            const inviteId = String(payload.id || '');
+            const msgId = String(message.id || '');
+            if (!targetToken || targetToken === inviteId || targetToken === msgId) {
+                return { group, message, payload, index: i };
+            }
+        }
+        return null;
+    }
+
+    function createGroupPrivateChatInvite(groupContact, actorId = 'me', rawPayload = {}, options = {}) {
+        const group = getGroupContact(groupContact);
+        const safeActorId = normalizeParticipantId(actorId || 'me');
+        if (!group || !safeActorId) return { ok: false, reason: 'invalid_group_or_actor' };
+        const memoryMode = String(group.groupMeta && group.groupMeta.memoryMode || 'group_only');
+        if (memoryMode !== 'bidirectional') return { ok: false, reason: 'memory_mode_restricted' };
+        const isActorUser = String(safeActorId) === 'me';
+        if (isActorUser) return { ok: false, reason: 'actor_should_be_member' };
+        const actorInGroup = getGroupMemberIds(group).some(id => String(id) === String(safeActorId));
+        if (!actorInGroup) return { ok: false, reason: 'actor_not_in_group' };
+
+        const parsed = parseGroupPrivateChatInvitePayload(rawPayload);
+        if (!parsed.ok) return parsed;
+
+        const inviteData = {
+            id: Date.now() + Math.floor(Math.random() * 10000),
+            initiatorId: safeActorId,
+            targetId: 'me',
+            message: parsed.message,
+            status: 'pending',
+            createdAt: Date.now()
+        };
+
+        const message = typeof window.sendMessage === 'function'
+            ? window.sendMessage(
+                JSON.stringify(inviteData),
+                false,
+                'private_chat_invite',
+                null,
+                group.id,
+                {
+                    bypassWechatBlock: true,
+                    ignoreReplyingState: true,
+                    showNotification: true,
+                    speakerContactId: safeActorId
+                }
+            )
+            : null;
+        if (!message) return { ok: false, reason: 'send_failed' };
+
+        if (typeof saveConfig === 'function') saveConfig();
+        if (options.showNotice) {
+            const actorName = getParticipantName(group, safeActorId, '群成员');
+            pushVisibleGroupSystemNotice(group.id, `${actorName} 向你发起了私聊邀请`);
+        }
+
+        return { ok: true, inviteData, message };
+    }
+
+    function openGroupPrivateChatInvite(inviteIdOrMsgId = null) {
+        const group = getGroupContact(window.iphoneSimState.currentChatContactId);
+        if (!group) return;
+        const entry = findGroupPrivateChatInviteEntry(group, inviteIdOrMsgId);
+        if (!entry) {
+            showGroupToast('未找到私聊邀请');
+            return;
+        }
+        const { message, payload } = entry;
+        const initiatorId = normalizeParticipantId(payload.initiatorId || message.speakerContactId || '');
+        if (!initiatorId || String(initiatorId) === 'me') {
+            showGroupToast('该私聊邀请无效');
+            return;
+        }
+        const targetContact = getContactById(initiatorId);
+        if (!targetContact || targetContact.chatType === 'group') {
+            showGroupToast('联系人不存在');
+            return;
+        }
+
+        const status = String(payload.status || 'pending').toLowerCase();
+        if (status !== 'accepted') {
+            payload.status = 'accepted';
+            payload.acceptedAt = Date.now();
+            payload.acceptedBy = 'me';
+            message.content = JSON.stringify(payload);
+            if (typeof saveConfig === 'function') saveConfig();
+            if (String(window.iphoneSimState.currentChatContactId || '') === String(group.id) && typeof window.renderChatHistory === 'function') {
+                window.renderChatHistory(group.id, true);
+            }
+        }
+
+        if (typeof window.openChat === 'function') {
+            window.openChat(targetContact.id);
+        }
+    }
+
     function openGroupRedPacketDetail(packetIdOrMsgId = null) {
         const group = getGroupContact(window.iphoneSimState.currentChatContactId);
         if (!group) return;
@@ -1062,9 +1266,12 @@
     }
 
     function getEligibleDirectContacts(excludeIds = []) {
-        const blacklist = new Set((Array.isArray(excludeIds) ? excludeIds : []).map(id => String(id)));
+        const blacklist = new Set(normalizeDirectMemberIds(excludeIds).map(id => String(id)));
         return (Array.isArray(window.iphoneSimState && window.iphoneSimState.contacts) ? window.iphoneSimState.contacts : [])
-            .filter(contact => contact && contact.chatType !== 'group' && !blacklist.has(String(contact.id)));
+            .filter((contact) => {
+                if (!contact || contact.chatType === 'group') return false;
+                return !blacklist.has(getParticipantIdKey(contact.id));
+            });
     }
 
     function renderSelectedMembersPreview() {
@@ -1254,6 +1461,12 @@
                 relationshipMemberIds: [],
                 relationshipNodePositions: {},
                 relationshipLinks: [],
+                announcementText: '',
+                announcementUpdatedAt: 0,
+                announcementUpdatedBy: '',
+                pinnedMessageId: '',
+                pinnedUpdatedAt: 0,
+                pinnedUpdatedBy: '',
                 memoryMode: 'group_only',
                 status: 'active'
             }
@@ -1298,8 +1511,10 @@
         if (!group) return '';
         const safeSpeaker = normalizeParticipantId(rawSpeaker);
         if (safeSpeaker === 'me') return 'me';
-        if (getGroupMemberIds(group).some(id => String(id) === String(safeSpeaker))) {
-            return safeSpeaker;
+        const safeSpeakerKey = getParticipantIdKey(safeSpeaker);
+        const matchedMemberId = getGroupMemberIds(group).find(id => getParticipantIdKey(id) === safeSpeakerKey);
+        if (matchedMemberId !== undefined) {
+            return matchedMemberId;
         }
 
         const speakerText = String(rawSpeaker || '').trim();
@@ -1377,6 +1592,8 @@
             body = '[语音]';
         } else if (message.type === 'red_packet') {
             body = '[红包]';
+        } else if (message.type === 'private_chat_invite') {
+            body = '[私聊邀请]';
         } else if (typeof message.content === 'string' && message.content.trim()) {
             body = message.content.trim();
         } else {
@@ -1460,6 +1677,7 @@
                     else if (message.type === 'sticker') content = '[表情包]';
                     else if (message.type === 'voice') content = '[语音]';
                     else if (message.type === 'red_packet') content = '[红包]';
+                    else if (message.type === 'private_chat_invite') content = '[私聊邀请]';
                     if (!content) content = '[消息]';
                     return `- ${message.role === 'user' ? getParticipantName(group, 'me') : getParticipantName(group, member.id, 'TA')}: ${content}`;
                 });
@@ -1484,11 +1702,40 @@
         return `[reply_to msg_id="${escapeHtml(replyTo.targetMsgId || '')}" timestamp="${escapeHtml(replyTo.targetTimestamp || '')}" name="${escapeHtml(replyTo.name || '')}" content="${escapeHtml(replyTo.content || '')}"]`;
     }
 
+    function isGroupHiddenAvatarContextMessage(message) {
+        if (!message || message.type !== 'image') return false;
+        if (message.hiddenFromUi !== true || message.includeInAiContext !== true) return false;
+        if (String(message.contextKind || '') !== 'group_avatar_update') return false;
+        const imageUrl = typeof message.content === 'string' ? message.content.trim() : '';
+        if (!imageUrl) return false;
+        const isChatMediaRef = typeof window.isChatMediaReference === 'function'
+            ? window.isChatMediaReference(imageUrl)
+            : false;
+        return isChatMediaRef
+            || /^data:image\//i.test(imageUrl)
+            || /^https?:\/\//i.test(imageUrl)
+            || /^blob:/i.test(imageUrl);
+    }
+
     function normalizeGroupContextMessage(message, groupContact) {
         const prefix = buildGroupContextPrefix(message, groupContact);
         const replyPrefix = buildGroupReplyPrefix(message.replyTo);
         const parts = [prefix, replyPrefix].filter(Boolean);
         let body = '';
+
+        if (isGroupHiddenAvatarContextMessage(message)) {
+            const imageUrl = String(message.content || '').trim();
+            const textPart = [...parts, '[群头像更新图片，仅供理解上下文]'].filter(Boolean).join(' ');
+            const content = [];
+            if (textPart) {
+                content.push({ type: 'text', text: textPart });
+            }
+            content.push({ type: 'image_url', image_url: { url: imageUrl } });
+            return {
+                role: message.role === 'assistant' ? 'assistant' : 'user',
+                content
+            };
+        }
 
         if (message.type === 'image' || message.type === 'virtual_image') {
             body = '[图片]';
@@ -1505,6 +1752,15 @@
                 }
             } catch (error) {}
             body = `[红包${packetInfo}]`;
+        } else if (message.type === 'private_chat_invite') {
+            let inviteInfo = '';
+            try {
+                const inviteData = typeof message.content === 'string' ? JSON.parse(message.content) : message.content;
+                if (inviteData && inviteData.id) {
+                    inviteInfo = ` id=${inviteData.id}`;
+                }
+            } catch (error) {}
+            body = `[私聊邀请${inviteInfo}]`;
         } else if (typeof message.content === 'string' && message.content.trim()) {
             body = message.content.trim();
         } else {
@@ -1570,11 +1826,15 @@
             : '';
         const limit = Number.isFinite(Number(group.contextLimit)) && Number(group.contextLimit) > 0 ? Number(group.contextLimit) : 40;
         const contextMessages = history
-            .filter(message => message && !message.hiddenFromUi && !message._hiddenBySanitizer)
+            .filter(message => {
+                if (!message || message._hiddenBySanitizer) return false;
+                if (message.hiddenFromUi) return isGroupHiddenAvatarContextMessage(message);
+                return true;
+            })
             .slice(-limit)
             .map(message => normalizeGroupContextMessage(message, group));
 
-        const systemPrompt = [
+        const systemBaseBlocks = [
             `你现在不是在扮演单个联系人，而是在模拟微信群聊“${getGroupChatDisplayName(group)}”里的多位真实成员。`,
             `用户本人名字：${getParticipantName(group, 'me')}。用户是群里的${GROUP_ROLE_LABELS[getGroupRole(group, 'me')] || '成员'}。`,
             '【群成员名单】',
@@ -1588,7 +1848,6 @@
                 ? `【最近新入群成员】\n${pendingInviteContacts.map(member => `- speaker_contact_id=${member.id}｜名字=${getParticipantName(group, member.id, '成员')}｜区分标签=${getParticipantPromptLabel(group, member.id, '成员')}｜人设=${String(member.persona || '无').replace(/\s+/g, ' ').trim() || '无'}`).join('\n')}\n这些成员现在已经在群里，可以自然接话；如果场景允许，优先让至少一位最近入群成员在本轮说 1 句，但不要硬凑所有人都发言。`
                 : '',
             stickerPrompt || '',
-            worldbookPrompt || '',
             '【输出协议】',
             '- 你必须只输出一个 JSON 数组，不要输出解释、不要输出 Markdown 代码块。',
             '- 允许的可见 type 只有：text_message、quote_reply、sticker_message、voice、image。',
@@ -1599,22 +1858,52 @@
             '- sticker_message 格式：{"type":"sticker_message","speaker_contact_id":"成员ID","sticker":"表情描述"}。',
             '- voice 格式：{"type":"voice","speaker_contact_id":"成员ID","duration":3,"content":"语音内容"}。',
             '- image 格式：{"type":"image","speaker_contact_id":"成员ID","content":"图片描述"}。',
-            '- 允许额外输出群动作 action，但仅限下面列出的五种。',
+            '- 允许额外输出群动作 action，但仅限下面列出的六种。',
             '- action 里的 speaker_contact_id 必须是某位 AI 成员，严禁写 me（用户本人）。',
             '- 改群名：{"type":"action","speaker_contact_id":"成员ID","command":"RENAME_GROUP","payload":"新群名"}。只有管理员或群主能这样做。',
             '- 设群头衔：{"type":"action","speaker_contact_id":"成员ID","command":"SET_MEMBER_TITLE","payload":{"target_member_id":"成员ID","title":"群头衔"}}。只有群主能这样做；若要取消群头衔，title 传空字符串。',
             '- 撤回消息：{"type":"action","speaker_contact_id":"成员ID","command":"RECALL_GROUP_MESSAGE","payload":{"target_msg_id":"消息ID"}}。只有管理员或群主能这样做；target_msg_id 必须来自上文已有真实消息。',
             '- 发红包：{"type":"action","speaker_contact_id":"成员ID","command":"SEND_GROUP_RED_PACKET","payload":{"mode":"targeted|random","amount":88.88,"target_member_ids":["成员ID"],"count":3,"remark":"红包祝福"}}。targeted 需要 target_member_ids，random 需要 count。',
             '- 抢红包：{"type":"action","speaker_contact_id":"成员ID","command":"CLAIM_GROUP_RED_PACKET","payload":{"packet_id":"红包ID或红包消息ID"}}。红包ID可从上下文里的 [红包 id=...] 读取。',
+            '- 发起私聊：{"type":"action","speaker_contact_id":"成员ID","command":"START_PRIVATE_CHAT","payload":{"message":"想和你私聊..."}}。仅当记忆模式为 bidirectional（双向同步）时才允许，用于向用户发起私聊邀请。',
+            '- 当成员希望把某个话题转去单独沟通时，且当前记忆模式为 bidirectional，可以使用发起私聊动作。',
             '- 一次把整轮群成员要说的话按顺序写完整，不能依赖第二次生成补说话。',
             '- 每轮回复总共至少输出 6 条可见消息；action 不计入这 6 条。若群成员较少，可以让同一成员连续说多句，但总可见消息数不能少于 6 条。',
             '- 回复形态必须像真实群聊：不要所有人都只对用户单线回复。每轮至少安排 2 条“成员对成员”的直接互动（接话、追问、调侃、引用任一成员都可以）。',
             '- 成员在互相互动时可自然提及用户，但主语与对话对象不能始终只有用户一个人。',
-            '- 除上面五种群动作外，禁止输出 thought_state、转账、改资料、下单、一起听、屏幕操作等任何副作用指令。',
+            '- 除上面六种群动作外，禁止输出 thought_state、转账、改资料、下单、一起听、屏幕操作等任何副作用指令。',
             '- 谁更可能接话、是否多人连续回复、是否引用消息，都由你一次性自然决定。',
-            `【记忆模式】当前模式：${GROUP_MEMORY_MODE_LABELS[memoryMode] || GROUP_MEMORY_MODE_LABELS.group_only}。`,
-            directContext || ''
-        ].filter(Boolean).join('\n\n');
+            `【记忆模式】当前模式：${GROUP_MEMORY_MODE_LABELS[memoryMode] || GROUP_MEMORY_MODE_LABELS.group_only}。`
+        ].filter(Boolean);
+
+        const systemPromptParts = [];
+        const systemBaseText = systemBaseBlocks.join('\n\n');
+        if (systemBaseText) {
+            systemPromptParts.push({
+                group: 'systemBase',
+                label: '群聊基础',
+                content: systemBaseText
+            });
+        }
+        if (worldbookPrompt) {
+            systemPromptParts.push({
+                group: 'worldbook',
+                label: '世界书',
+                content: worldbookPrompt
+            });
+        }
+        if (directContext) {
+            systemPromptParts.push({
+                group: 'extra',
+                label: '双向上下文',
+                content: directContext
+            });
+        }
+
+        const systemPrompt = systemPromptParts
+            .map(part => part.content)
+            .filter(Boolean)
+            .join('\n\n');
 
         const messages = [
             { role: 'system', content: systemPrompt },
@@ -1629,6 +1918,8 @@
             messages.push({ role: 'system', content: `[系统提示]: ${instruction}` });
         }
 
+        messages._systemPromptParts = systemPromptParts.map(part => ({ ...part }));
+
         return messages;
     }
     function pushVisibleGroupSystemNotice(groupId, text) {
@@ -1638,6 +1929,59 @@
             bypassWechatBlock: true,
             showNotification: false
         });
+    }
+
+    function appendHiddenGroupAvatarContextImage(groupContact, avatarUrl, actorId = 'me') {
+        const group = getGroupContact(groupContact);
+        const normalizedAvatar = String(avatarUrl || '').trim();
+        const normalizedActorId = normalizeParticipantId(actorId || 'me') || 'me';
+        if (!group || !normalizedAvatar) return null;
+        if (!window.iphoneSimState.chatHistory || typeof window.iphoneSimState.chatHistory !== 'object') {
+            window.iphoneSimState.chatHistory = {};
+        }
+        if (!Array.isArray(window.iphoneSimState.chatHistory[group.id])) {
+            window.iphoneSimState.chatHistory[group.id] = [];
+        }
+
+        const isUser = String(normalizedActorId) === 'me';
+        const messageMeta = decorateGroupChatMessageMeta({ speakerContactId: normalizedActorId }, group, isUser, {
+            speakerContactId: normalizedActorId
+        });
+        const message = {
+            id: `${Date.now()}${Math.random().toString(36).slice(2, 9)}`,
+            time: Date.now(),
+            role: isUser ? 'user' : 'assistant',
+            content: normalizedAvatar,
+            type: 'image',
+            channel: 'wechat',
+            hiddenFromUi: true,
+            includeInAiContext: true,
+            contextKind: 'group_avatar_update',
+            ...messageMeta
+        };
+        window.iphoneSimState.chatHistory[group.id].push(message);
+
+        if (typeof window.offloadInlineChatMediaMessage === 'function' && /^data:image\//i.test(normalizedAvatar)) {
+            Promise.resolve().then(() => window.offloadInlineChatMediaMessage(group.id, message.id, {
+                type: 'image/jpeg',
+                name: 'group-avatar'
+            })).catch((error) => {
+                console.warn('群头像上下文图片转存失败', error);
+            });
+        }
+
+        return message;
+    }
+
+    function pushGroupAvatarUpdateMessage(groupContact, avatarUrl, actorId = 'me') {
+        const group = getGroupContact(groupContact);
+        const normalizedAvatar = String(avatarUrl || '').trim();
+        const normalizedActorId = normalizeParticipantId(actorId || 'me') || 'me';
+        if (!group || !normalizedAvatar || typeof window.sendMessage !== 'function') return null;
+
+        appendHiddenGroupAvatarContextImage(group, normalizedAvatar, normalizedActorId);
+        const actorName = getParticipantName(group, normalizedActorId, normalizedActorId === 'me' ? '你' : '群成员');
+        return pushVisibleGroupSystemNotice(group.id, `${actorName} 更新了群头像`);
     }
 
     function refreshGroupChatVisualState(groupContact) {
@@ -2473,8 +2817,14 @@
             input.placeholder = canRename ? '输入群名称' : '仅管理员或群主可修改群名';
             input.style.opacity = canRename ? '1' : '0.65';
         });
+        const normalizedMemoryMode = String(group.groupMeta && group.groupMeta.memoryMode || '') === 'bidirectional'
+            ? 'bidirectional'
+            : 'group_only';
+        if (group.groupMeta && group.groupMeta.memoryMode !== normalizedMemoryMode) {
+            group.groupMeta.memoryMode = normalizedMemoryMode;
+        }
         memorySelects.forEach((select) => {
-            select.value = String(group.groupMeta.memoryMode || 'group_only');
+            select.value = normalizedMemoryMode;
         });
         avatarPreviews.forEach((previewNode) => {
             setGroupSettingsAvatarPreview(previewNode, group.groupMeta.avatar || group.avatar || '');
@@ -2545,9 +2895,25 @@
         currentSettingsGroupId = group.id;
         const nameInput = getPrimaryGroupSettingsNode('name');
         const memorySelect = getPrimaryGroupSettingsNode('memory-mode');
+        const contextLimitInput = document.getElementById('chat-setting-context-limit');
+        const realTimeVisibleInput = document.getElementById('chat-setting-real-time-visible');
+        const calendarAwareInput = document.getElementById('chat-setting-calendar-aware');
         const nextName = String(nameInput && nameInput.value ? nameInput.value : '').trim() || getGroupChatDisplayName(group);
-        const nextMemoryMode = String(memorySelect && memorySelect.value ? memorySelect.value : 'group_only');
+        const nextMemoryMode = String(memorySelect && memorySelect.value ? memorySelect.value : '') === 'bidirectional'
+            ? 'bidirectional'
+            : 'group_only';
         group.groupMeta.memoryMode = nextMemoryMode;
+        if (contextLimitInput) {
+            const rawContextLimit = String(contextLimitInput.value || '').trim();
+            const parsedContextLimit = rawContextLimit ? parseInt(rawContextLimit, 10) : 0;
+            group.contextLimit = Number.isFinite(parsedContextLimit) && parsedContextLimit > 0 ? parsedContextLimit : 0;
+        }
+        if (realTimeVisibleInput) {
+            group.realTimeVisible = !!realTimeVisibleInput.checked;
+        }
+        if (calendarAwareInput) {
+            group.calendarAwareEnabled = !!calendarAwareInput.checked;
+        }
         let renamed = false;
         if (canParticipantRenameGroup(group, 'me')) {
             const renameResult = applyGroupRename(group, 'me', nextName, { actorName: '你', showNotice: nextName !== getGroupChatDisplayName(group) });
@@ -2619,19 +2985,25 @@
             onConfirm: (memberIds) => {
                 const modal = document.getElementById('contact-picker-modal');
                 if (modal) modal.classList.add('hidden');
-                const nextIds = memberIds.filter(id => !getGroupMemberIds(group).some(existing => String(existing) === String(id)));
-                if (nextIds.length === 0) {
+                const currentIds = getGroupMemberIds(group);
+                const currentIdKeys = new Set(currentIds.map(id => getParticipantIdKey(id)));
+                const selectedIds = normalizeDirectMemberIds(memberIds);
+                const invitedIds = selectedIds.filter(id => !currentIdKeys.has(getParticipantIdKey(id)));
+                if (invitedIds.length === 0) {
                     showGroupToast('请选择至少一位新成员');
                     return;
                 }
-                group.groupMeta.memberIds = [...getGroupMemberIds(group), ...nextIds];
-                group.groupMeta.pendingInviteMemberIds = nextIds.slice(0, 12);
+                group.groupMeta.memberIds = normalizeDirectMemberIds([...currentIds, ...invitedIds]);
+                const memberKeySet = new Set(group.groupMeta.memberIds.map(id => getParticipantIdKey(id)));
+                group.groupMeta.pendingInviteMemberIds = normalizeDirectMemberIds(invitedIds)
+                    .filter(id => memberKeySet.has(getParticipantIdKey(id)))
+                    .slice(0, 12);
                 group.groupMeta.lastInviteAt = Date.now();
                 if (typeof window.ensureGroupChatMeta === 'function') {
                     window.ensureGroupChatMeta(group);
                 }
                 refreshGroupChatVisualState(group);
-                const names = nextIds.map(id => getParticipantName(group, id)).join('、');
+                const names = invitedIds.map(id => getParticipantName(group, id)).join('、');
                 pushVisibleGroupSystemNotice(group.id, `${names} 加入了群聊`);
                 if (typeof saveConfig === 'function') saveConfig();
                 renderGroupChatSettings(group);
@@ -2686,25 +3058,45 @@
     function handleRemoveGroupMember(groupId, targetId) {
         const group = getGroupContact(groupId);
         if (!group || !canCurrentUserManageMembers(group)) return;
-        if (!targetId || String(targetId) === String(group.groupMeta.ownerId)) {
+        const safeTargetId = normalizeDirectMemberId(targetId) || normalizeParticipantId(targetId);
+        const targetKey = getParticipantIdKey(safeTargetId);
+        if (!targetKey || targetKey === getParticipantIdKey(group.groupMeta.ownerId)) {
             showGroupToast('不能直接移除群主');
             return;
         }
-        const name = getParticipantName(group, targetId);
+        const name = getParticipantName(group, safeTargetId);
         if (!confirm(`确认将 ${name} 移出群聊？`)) return;
-        group.groupMeta.memberIds = getGroupMemberIds(group).filter(id => String(id) !== String(targetId));
-        group.groupMeta.adminIds = (Array.isArray(group.groupMeta.adminIds) ? group.groupMeta.adminIds : []).filter(id => String(id) !== String(targetId));
+        const currentMemberIds = getGroupMemberIds(group);
+        group.groupMeta.memberIds = normalizeDirectMemberIds(
+            currentMemberIds.filter(id => getParticipantIdKey(id) !== targetKey)
+        );
+        if (group.groupMeta.memberIds.length === currentMemberIds.length) {
+            showGroupToast('移除失败：未找到该成员');
+            return;
+        }
+        group.groupMeta.adminIds = (Array.isArray(group.groupMeta.adminIds) ? group.groupMeta.adminIds : [])
+            .filter(id => getParticipantIdKey(id) !== targetKey);
         if (group.groupMeta.memberNicknames && typeof group.groupMeta.memberNicknames === 'object') {
-            delete group.groupMeta.memberNicknames[String(targetId)];
+            Object.keys(group.groupMeta.memberNicknames).forEach((key) => {
+                if (getParticipantIdKey(key) === targetKey) {
+                    delete group.groupMeta.memberNicknames[key];
+                }
+            });
         }
         if (group.groupMeta.memberTitles && typeof group.groupMeta.memberTitles === 'object') {
-            delete group.groupMeta.memberTitles[String(targetId)];
+            Object.keys(group.groupMeta.memberTitles).forEach((key) => {
+                if (getParticipantIdKey(key) === targetKey) {
+                    delete group.groupMeta.memberTitles[key];
+                }
+            });
         }
         if (Array.isArray(group.groupMeta.relationshipMemberIds)) {
-            group.groupMeta.relationshipMemberIds = group.groupMeta.relationshipMemberIds.filter(id => String(id) !== String(targetId));
+            group.groupMeta.relationshipMemberIds = group.groupMeta.relationshipMemberIds
+                .filter(id => getParticipantIdKey(id) !== targetKey);
         }
         if (Array.isArray(group.groupMeta.pendingInviteMemberIds)) {
-            group.groupMeta.pendingInviteMemberIds = group.groupMeta.pendingInviteMemberIds.filter(id => String(id) !== String(targetId));
+            group.groupMeta.pendingInviteMemberIds = normalizeDirectMemberIds(group.groupMeta.pendingInviteMemberIds)
+                .filter(id => getParticipantIdKey(id) !== targetKey);
             if (group.groupMeta.pendingInviteMemberIds.length === 0) {
                 group.groupMeta.lastInviteAt = 0;
             }
@@ -2715,6 +3107,9 @@
         pushVisibleGroupSystemNotice(group.id, `${name} 被移出了群聊`);
         if (typeof saveConfig === 'function') saveConfig();
         renderGroupChatSettings(group);
+        if (String(window.iphoneSimState.currentChatContactId || '') === String(group.id) && typeof window.renderChatHistory === 'function') {
+            window.renderChatHistory(group.id, true);
+        }
     }
 
     function leaveOrCloseGroupChat(groupId, reason = 'left') {
@@ -2906,14 +3301,26 @@
             if (!preview || !input) return;
             if (preview.dataset.groupAvatarPreviewBound !== '1') {
                 preview.dataset.groupAvatarPreviewBound = '1';
-                preview.addEventListener('click', () => input.click());
+                const nativeTriggerLabel = preview.closest('label');
+                const shouldUseNativeLabelTrigger = !!(
+                    nativeTriggerLabel
+                    && nativeTriggerLabel.htmlFor
+                    && String(nativeTriggerLabel.htmlFor) === String(input.id)
+                );
+                if (!shouldUseNativeLabelTrigger) {
+                    preview.addEventListener('click', () => input.click());
+                }
             }
             if (input.dataset.groupAvatarInputBound === '1') return;
             input.dataset.groupAvatarInputBound = '1';
             input.addEventListener('change', async (event) => {
-                const group = getGroupContact(currentSettingsGroupId);
                 const file = event.target.files && event.target.files[0];
+                const fallbackGroupId = currentSettingsGroupId
+                    || (window.iphoneSimState && window.iphoneSimState.currentChatContactId);
+                const group = getGroupContact(fallbackGroupId);
                 if (!group || !file) return;
+                currentSettingsGroupId = group.id;
+                const previousAvatar = String(group.groupMeta.avatar || group.avatar || '').trim();
                 try {
                     const dataUrl = await readFileAsDataUrl(file);
                     group.groupMeta.avatar = dataUrl;
@@ -2923,9 +3330,14 @@
                     refreshGroupChatVisualState(group);
                     if (typeof saveConfig === 'function') saveConfig();
                     renderGroupChatSettings(group);
+                    if (dataUrl && dataUrl !== previousAvatar) {
+                        pushGroupAvatarUpdateMessage(group, dataUrl, 'me');
+                    }
                 } catch (error) {
                     console.error('群头像更新失败', error);
                     showGroupToast('群头像更新失败');
+                } finally {
+                    event.target.value = '';
                 }
             });
         });
@@ -2956,6 +3368,8 @@
     window.createGroupRedPacket = createGroupRedPacket;
     window.claimGroupRedPacket = claimGroupRedPacket;
     window.handleGroupRedPacketClick = openGroupRedPacketDetail;
+    window.createGroupPrivateChatInvite = createGroupPrivateChatInvite;
+    window.handleGroupPrivateChatInviteClick = openGroupPrivateChatInvite;
     window.openGroupChatSettings = openGroupChatSettings;
     window.openGroupMemberRelationsScreen = openGroupMemberRelationsScreen;
     window.openGroupMemberDirectoryScreen = openGroupMemberDirectoryScreen;

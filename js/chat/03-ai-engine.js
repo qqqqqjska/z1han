@@ -794,6 +794,63 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
                 <div class="card-label">${remark} · ${statusText}</div>
             </div>
         `;
+    } else if (type === 'private_chat_invite') {
+        let inviteData = {
+            id: '',
+            initiatorId: '',
+            targetId: 'me',
+            message: '想和你私聊一下',
+            status: 'pending'
+        };
+        try {
+            inviteData = typeof text === 'string' ? JSON.parse(text) : (text || inviteData);
+        } catch (e) {
+            console.error('解析私聊邀请数据失败', e);
+        }
+        const inviteId = String(inviteData.id || '').trim();
+        const initiatorId = String(inviteData.initiatorId || '').trim();
+        const status = String(inviteData.status || 'pending').trim().toLowerCase();
+        const isAccepted = status === 'accepted';
+        const safeLookupToken = String(inviteId || msgId || '').replace(/'/g, "\\'");
+        const inviteText = String(inviteData.message || inviteData.content || '想和你私聊一下').trim() || '想和你私聊一下';
+        let initiatorName = '群成员';
+        const currentContact = window.iphoneSimState && Array.isArray(window.iphoneSimState.contacts)
+            ? window.iphoneSimState.contacts.find(item => String(item && item.id) === String(window.iphoneSimState.currentChatContactId || ''))
+            : null;
+        if (currentContact && typeof window.isGroupChatContact === 'function' && window.isGroupChatContact(currentContact)) {
+            if (msgId && typeof window.getGroupMessageSpeakerMeta === 'function') {
+                const speakerMeta = window.getGroupMessageSpeakerMeta(currentContact.id, msgId);
+                if (speakerMeta && speakerMeta.name) {
+                    initiatorName = speakerMeta.name;
+                }
+            }
+            if ((!initiatorName || initiatorName === '群成员') && initiatorId && typeof window.getGroupMemberContacts === 'function') {
+                const member = window.getGroupMemberContacts(currentContact).find(item => String(item && item.id) === String(initiatorId));
+                if (member) {
+                    initiatorName = member.remark || member.nickname || member.name || initiatorName;
+                }
+            }
+        }
+        if ((!initiatorName || initiatorName === '群成员') && initiatorId && window.iphoneSimState && Array.isArray(window.iphoneSimState.contacts)) {
+            const directContact = window.iphoneSimState.contacts.find(item => item && String(item.id) === String(initiatorId));
+            if (directContact) {
+                initiatorName = directContact.remark || directContact.nickname || directContact.name || initiatorName;
+            }
+        }
+        contentHtml = `
+            <div class="food-invite-card" onclick="window.handleGroupPrivateChatInviteClick && window.handleGroupPrivateChatInviteClick('${safeLookupToken}')">
+                <div class="food-invite-card-head">
+                    <div class="food-invite-card-icon"><i class="fas fa-comment-dots"></i></div>
+                    <div class="food-invite-card-chip">${isAccepted ? '已进入私聊' : '私聊邀请'}</div>
+                </div>
+                <div class="food-invite-card-title">${initiatorName} 想和你私聊</div>
+                <div class="food-invite-card-subtitle">${inviteText}</div>
+                <div class="food-invite-card-foot">
+                    <span class="food-invite-card-dot"></span>
+                    <span>${isAccepted ? '点击再次进入私聊' : '点击进入私聊'}</span>
+                </div>
+            </div>
+        `;
     } else if (type === 'family_card') {
         let familyData = {
             id: '',
@@ -899,7 +956,7 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
 
     let extraClass = '';
     const isHtmlTextMessage = type === 'text' && isHtmlPayloadForParser(text);
-    const cardTypes = ['transfer', 'red_packet', 'family_card', 'food_invite', 'route_invite', 'gift_card', 'shopping_gift', 'delivery_share', 'order_progress', 'order_share', 'pay_request', 'product_share', 'icity_card', 'minesweeper_invite', 'pdd_cash_share', 'pdd_bargain_share', 'savings_invite', 'savings_withdraw_request', 'savings_withdraw_result', 'savings_progress', 'music_listen_invite'];
+    const cardTypes = ['transfer', 'red_packet', 'private_chat_invite', 'family_card', 'food_invite', 'route_invite', 'gift_card', 'shopping_gift', 'delivery_share', 'order_progress', 'order_share', 'pay_request', 'product_share', 'icity_card', 'minesweeper_invite', 'pdd_cash_share', 'pdd_bargain_share', 'savings_invite', 'savings_withdraw_request', 'savings_withdraw_result', 'savings_progress', 'music_listen_invite'];
     if (cardTypes.includes(type)) {
         extraClass += ' no-bubble';
     }
@@ -915,7 +972,7 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
         extraClass += ' red-packet-msg';
     } else if (type === 'family_card') {
         extraClass += ' family-card-msg';
-    } else if (type === 'food_invite' || type === 'route_invite') {
+    } else if (type === 'food_invite' || type === 'route_invite' || type === 'private_chat_invite') {
         extraClass += ' food-invite-msg';
     } else if (type === 'sticker') {
         extraClass = 'sticker-msg';
@@ -2414,6 +2471,7 @@ function handleQuote(msgData) {
     else if (msgData.type === 'sticker') previewText = '[表情包]';
     else if (msgData.type === 'transfer') previewText = '[转账]';
     else if (msgData.type === 'red_packet') previewText = '[红包]';
+    else if (msgData.type === 'private_chat_invite') previewText = '[私聊邀请]';
     else if (msgData.type === 'family_card') previewText = '[亲属卡]';
     else if (msgData.type === 'pay_request') previewText = '[代付请求]';
     else if (msgData.type === 'music_listen_invite') previewText = '[一起听邀请]';
@@ -4506,7 +4564,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                 if (isGroupChat) {
                     const cmd = String(item && item.content && item.content.command ? item.content.command : item && item.command ? item.command : '').trim().toUpperCase();
                     const pl = item && item.content ? item.content.payload : item.payload;
-                    if (cmd === 'RENAME_GROUP' || cmd === 'SET_MEMBER_TITLE' || cmd === 'RECALL_GROUP_MESSAGE' || cmd === 'SEND_GROUP_RED_PACKET' || cmd === 'CLAIM_GROUP_RED_PACKET') {
+                    if (cmd === 'RENAME_GROUP' || cmd === 'SET_MEMBER_TITLE' || cmd === 'RECALL_GROUP_MESSAGE' || cmd === 'SEND_GROUP_RED_PACKET' || cmd === 'CLAIM_GROUP_RED_PACKET' || cmd === 'START_PRIVATE_CHAT') {
                         groupActions.push({ command: cmd, payload: pl, speakerContactId });
                     }
                     continue;
@@ -4839,6 +4897,14 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                     }
                     const claimed = window.claimGroupRedPacket(contact, actorId, packetIdOrMsgId, { showNotice: true });
                     if (claimed && claimed.ok) {
+                        appliedGroupActionCount += 1;
+                    }
+                    return;
+                }
+
+                if (action.command === 'START_PRIVATE_CHAT' && typeof window.createGroupPrivateChatInvite === 'function') {
+                    const created = window.createGroupPrivateChatInvite(contact, actorId, action.payload, { showNotice: true });
+                    if (created && created.ok) {
                         appliedGroupActionCount += 1;
                     }
                 }
@@ -5817,11 +5883,13 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                     if (isLikelyChatImageUrl(rawImageContent)) {
                         contentToSave = rawImageContent;
                         typeToSave = 'image';
+                        descriptionToSave = msg.description || null;
                     } else {
-                        contentToSave = rawImageContent && !/^(?:未知图片|\[图片\]|图片)$/i.test(rawImageContent)
-                            ? `[图片] ${rawImageContent}`
-                            : '[图片]';
-                        typeToSave = 'text';
+                        contentToSave = window.iphoneSimState.defaultVirtualImageUrl || 'https://placehold.co/600x400/png?text=Photo';
+                        typeToSave = 'virtual_image';
+                        descriptionToSave = rawImageContent && !/^(?:未知图片|\[图片\]|图片)$/i.test(rawImageContent)
+                            ? rawImageContent
+                            : (msg.description || '图片');
                     }
                 } else {
                     typeToSave = 'text';
@@ -5864,6 +5932,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                         else if (msg.type === 'virtual_image') notifContent = '[图片]';
                         else if (msg.type === 'sticker') notifContent = '[表情包]';
                         else if (msg.type === 'red_packet') notifContent = '[红包]';
+                        else if (msg.type === 'private_chat_invite') notifContent = '[私聊邀请]';
                     
                     sendSystemNotification(contact, notifContent);
                 }
@@ -8254,6 +8323,12 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
                              const claimCount = Array.isArray(data.claims) ? data.claims.length : 0;
                              const totalCount = Number(data.totalCount || 0) || 1;
                              return { role: h.role, content: joinContextTextParts(structuredPrefix, `[红包: ${modeText}, ${data.amount}元, 已领取${claimCount}/${totalCount}] (红包ID: ${data.id || 'unknown'})`) };
+                         } else if (h.type === 'private_chat_invite') {
+                             const data = JSON.parse(content);
+                             const inviter = data.initiatorId || 'unknown';
+                             const status = String(data.status || 'pending');
+                             const text = String(data.message || data.content || '想和你私聊一下').trim() || '想和你私聊一下';
+                             return { role: h.role, content: joinContextTextParts(structuredPrefix, `[私聊邀请: 发起人=${inviter}, 状态=${status}, 内容=${text}] (邀请ID: ${data.id || 'unknown'})`) };
                          } else if (h.type === 'transfer') {
                              const data = JSON.parse(content);
                              return { role: h.role, content: joinContextTextParts(structuredPrefix, `[转账: ${data.amount}元] (ID: ${data.id})`) };

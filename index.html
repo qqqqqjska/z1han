@@ -857,7 +857,16 @@
                                                 <option value="bidirectional">双向同步</option>
                                             </select>
                                         </div>
+                                        <div class="mag-field">
+                                            <label class="mag-label">Group Announcement <span class="separator">/</span> <span class="mag-zh">群公告</span></label>
+                                            <textarea data-group-settings-id="announcement" class="mag-input" rows="3" placeholder="输入群公告（管理员/群主可编辑）" style="width:100%;resize:vertical;min-height:78px;"></textarea>
+                                            <div data-group-settings-id="pin-summary" style="margin-top:8px;font-size:12px;color:#9ca3af;line-height:1.45;">当前无置顶消息</div>
+                                        </div>
                                     </div>
+                                </div>
+                                <div class="mag-action-row">
+                                    <button type="button" class="mag-btn" data-group-settings-action="save-announcement"><i class="ri-megaphone-line"></i> 保存群公告</button>
+                                    <button type="button" class="mag-btn" data-group-settings-action="clear-pin"><i class="ri-pushpin-line"></i> 取消置顶</button>
                                 </div>
                             </div>
                             <div class="editorial-card-shell mag-card">
@@ -1499,6 +1508,15 @@
                             </select>
                         </div>
                         <div class="setting-group">
+                            <label>群公告</label>
+                            <textarea id="group-settings-announcement" rows="3" placeholder="输入群公告（管理员/群主可编辑）"></textarea>
+                            <div id="group-settings-pin-summary" style="margin-top:8px;font-size:12px;color:#8e8e93;line-height:1.45;">当前无置顶消息</div>
+                        </div>
+                        <div class="setting-group">
+                            <button id="group-settings-save-announcement-btn" class="ios-btn-block secondary">保存群公告</button>
+                            <button id="group-settings-clear-pin-btn" class="ios-btn-block secondary" style="margin-top:10px;">取消置顶</button>
+                        </div>
+                        <div class="setting-group">
                             <label>成员管理</label>
                             <div id="group-chat-member-list" class="ios-list-group" style="margin: 0; background: #f7f7fa;"></div>
                         </div>
@@ -2031,6 +2049,14 @@
                             <div class="more-item" id="chat-more-red-packet-btn">
                                 <div class="more-icon"><i class="fas fa-envelope-open-text"></i></div>
                                 <div class="more-label">发红包</div>
+                            </div>
+                            <div class="more-item" id="chat-more-group-poll-btn">
+                                <div class="more-icon"><i class="fas fa-poll-h"></i></div>
+                                <div class="more-label">投票</div>
+                            </div>
+                            <div class="more-item" id="chat-more-group-relay-btn">
+                                <div class="more-icon"><i class="fas fa-list-ol"></i></div>
+                                <div class="more-label">接龙</div>
                             </div>
                             <div class="more-item" id="chat-more-voice-btn">
                                 <div class="more-icon"><i class="fas fa-microphone"></i></div>

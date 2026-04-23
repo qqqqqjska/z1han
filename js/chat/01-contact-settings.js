@@ -2372,6 +2372,7 @@ function formatLastMsgPreview(lastMsg, contact = null) {
     else if (lastMsg.type === 'sticker') preview = '[表情包]';
     else if (lastMsg.type === 'transfer') preview = '[转账]';
     else if (lastMsg.type === 'red_packet') preview = '[红包]';
+    else if (lastMsg.type === 'private_chat_invite') preview = '[私聊邀请]';
     else if (lastMsg.type === 'family_card') preview = '[亲属卡]';
     else if (lastMsg.type === 'voice') preview = '[语音]';
     else if (lastMsg.type === 'gift_card') preview = '[礼物]';
@@ -3581,6 +3582,21 @@ if (!window.__chatSettingsStickyChromeResizeBound) {
 function getChatSettingsTargetModeElements() {
     const activeReplyToggle = document.getElementById('chat-setting-active-reply');
     const activeReplyToggleRow = activeReplyToggle ? activeReplyToggle.closest('.mag-toggle') : null;
+    const showThoughtToggleRow = document.getElementById('chat-setting-show-thought')
+        ? document.getElementById('chat-setting-show-thought').closest('.mag-toggle')
+        : null;
+    const thoughtVisibleToggleRow = document.getElementById('chat-setting-thought-visible')
+        ? document.getElementById('chat-setting-thought-visible').closest('.mag-toggle')
+        : null;
+    const realTimeToggleRow = document.getElementById('chat-setting-real-time-visible')
+        ? document.getElementById('chat-setting-real-time-visible').closest('.mag-toggle')
+        : null;
+    const calendarAwareToggleRow = document.getElementById('chat-setting-calendar-aware')
+        ? document.getElementById('chat-setting-calendar-aware').closest('.mag-toggle')
+        : null;
+    const deviceUsageToggleRow = document.getElementById('chat-setting-device-usage-shared')
+        ? document.getElementById('chat-setting-device-usage-shared').closest('.mag-toggle')
+        : null;
     const activeReplyLabel = activeReplyToggleRow && activeReplyToggleRow.previousElementSibling && activeReplyToggleRow.previousElementSibling.classList && activeReplyToggleRow.previousElementSibling.classList.contains('mag-label')
         ? activeReplyToggleRow.previousElementSibling
         : null;
@@ -3603,6 +3619,13 @@ function getChatSettingsTargetModeElements() {
         restWindowToggle: document.getElementById('chat-setting-rest-window-enabled') ? document.getElementById('chat-setting-rest-window-enabled').closest('.mag-toggle') : null,
         restWindowPanel: document.getElementById('chat-setting-rest-window-time-panel'),
         thoughtCard: document.getElementById('chat-setting-show-thought') ? document.getElementById('chat-setting-show-thought').closest('.editorial-thought-card') : null,
+        thoughtPetPanel: document.getElementById('chat-setting-thought-pet-panel'),
+        showThoughtToggle: showThoughtToggleRow,
+        thoughtStyleField: document.getElementById('chat-setting-thought-style') ? document.getElementById('chat-setting-thought-style').closest('.mag-field') : null,
+        thoughtVisibleToggle: thoughtVisibleToggleRow,
+        realTimeToggle: realTimeToggleRow,
+        calendarAwareToggle: calendarAwareToggleRow,
+        deviceUsageToggle: deviceUsageToggleRow,
         fireBuddyCard: document.getElementById('chat-setting-fire-buddy-enabled') ? document.getElementById('chat-setting-fire-buddy-enabled').closest('.editorial-fire-buddy-card') : null,
         assetsCard: document.getElementById('chat-setting-tts-enabled') ? document.getElementById('chat-setting-tts-enabled').closest('.editorial-card-shell') : null
     };
@@ -3633,6 +3656,13 @@ function syncChatSettingsTargetMode(contact) {
         restWindowToggle,
         restWindowPanel,
         thoughtCard,
+        thoughtPetPanel,
+        showThoughtToggle,
+        thoughtStyleField,
+        thoughtVisibleToggle,
+        realTimeToggle,
+        calendarAwareToggle,
+        deviceUsageToggle,
         fireBuddyCard,
         assetsCard
     } = getChatSettingsTargetModeElements();
@@ -3647,21 +3677,32 @@ function syncChatSettingsTargetMode(contact) {
         directIdentityBlock,
         directRemarkGroupField,
         directPersonaField,
-        contextField,
         bilingualToggle,
         bilingualPanel,
-        tokenField,
         logicDivider,
         restWindowToggle,
         restWindowPanel,
-        thoughtCard,
         fireBuddyCard,
         assetsCard
     ].forEach((element) => setChatSettingsElementHidden(element, isGroupChat));
 
-    [summaryField, activeReplyLabel, activeReplyToggle, activeReplyIntervalField].forEach((element) => {
+    [contextField, tokenField, summaryField, activeReplyLabel, activeReplyToggle, activeReplyIntervalField, thoughtCard].forEach((element) => {
         setChatSettingsElementHidden(element, false);
     });
+
+    if (isGroupChat) {
+        [showThoughtToggle, thoughtStyleField, thoughtPetPanel, thoughtVisibleToggle, deviceUsageToggle].forEach((element) => {
+            setChatSettingsElementHidden(element, true);
+        });
+        [realTimeToggle, calendarAwareToggle].forEach((element) => {
+            setChatSettingsElementHidden(element, false);
+        });
+    } else {
+        [showThoughtToggle, thoughtStyleField, thoughtVisibleToggle, realTimeToggle, calendarAwareToggle, deviceUsageToggle].forEach((element) => {
+            setChatSettingsElementHidden(element, false);
+        });
+        setChatSettingsElementHidden(thoughtPetPanel, false);
+    }
 
     if (!isGroupChat) {
         syncBilingualTranslationSettingsVisibility();
@@ -4490,17 +4531,17 @@ function handleSaveChatSettings() {
                 }
             }
         }
-        contact.contextLimit = contextLimit ? parseInt(contextLimit) : 0;
         contact.bilingualTranslationEnabled = bilingualTranslationEnabled;
         contact.bilingualSourceLang = bilingualSourceLang;
         contact.bilingualTargetLang = bilingualTargetLang;
     }
+    contact.contextLimit = contextLimit ? parseInt(contextLimit) : 0;
     contact.summaryLimit = summaryLimit ? parseInt(summaryLimit) : 0;
+    contact.realTimeVisible = realTimeVisible;
+    contact.calendarAwareEnabled = calendarAwareEnabled;
     if (!isGroupChat) {
         contact.showThought = showThought;
         contact.thoughtVisible = thoughtVisible;
-        contact.realTimeVisible = realTimeVisible;
-        contact.calendarAwareEnabled = calendarAwareEnabled;
         if (typeof window.setDeviceUsageSharedWithContact === 'function') {
             window.setDeviceUsageSharedWithContact(contact.id, deviceUsageShared, { persist: false });
         }

@@ -599,7 +599,7 @@ const state = {
 window.iphoneSimState = state;
 
 const GROUP_CHAT_CONTACT_GROUP = '群聊';
-const GROUP_CHAT_MEMORY_MODES = new Set(['group_only', 'group_to_direct', 'bidirectional']);
+const GROUP_CHAT_MEMORY_MODES = new Set(['group_only', 'bidirectional']);
 const GROUP_CHAT_STATUS = new Set(['active', 'left', 'dissolved']);
 
 function normalizeGroupParticipantId(value) {
@@ -734,6 +734,18 @@ function ensureGroupChatMeta(contact) {
         });
     });
     const lastInviteAt = Number(meta.lastInviteAt);
+    const announcementText = String(meta.announcementText || '').replace(/\s+/g, ' ').trim().slice(0, 240);
+    const announcementUpdatedAt = Number(meta.announcementUpdatedAt);
+    const announcementUpdatedByRaw = normalizeGroupParticipantId(meta.announcementUpdatedBy);
+    const announcementUpdatedBy = announcementUpdatedByRaw === 'me' || memberIds.includes(announcementUpdatedByRaw)
+        ? announcementUpdatedByRaw
+        : '';
+    const pinnedMessageId = String(meta.pinnedMessageId || '').trim();
+    const pinnedUpdatedAt = Number(meta.pinnedUpdatedAt);
+    const pinnedUpdatedByRaw = normalizeGroupParticipantId(meta.pinnedUpdatedBy);
+    const pinnedUpdatedBy = pinnedUpdatedByRaw === 'me' || memberIds.includes(pinnedUpdatedByRaw)
+        ? pinnedUpdatedByRaw
+        : '';
 
     contact.groupMeta = {
         name: fallbackName,
@@ -748,6 +760,12 @@ function ensureGroupChatMeta(contact) {
         relationshipNodePositions,
         relationshipLinks,
         lastInviteAt: Number.isFinite(lastInviteAt) && lastInviteAt > 0 ? lastInviteAt : 0,
+        announcementText,
+        announcementUpdatedAt: Number.isFinite(announcementUpdatedAt) && announcementUpdatedAt > 0 ? announcementUpdatedAt : 0,
+        announcementUpdatedBy,
+        pinnedMessageId,
+        pinnedUpdatedAt: Number.isFinite(pinnedUpdatedAt) && pinnedUpdatedAt > 0 ? pinnedUpdatedAt : 0,
+        pinnedUpdatedBy,
         memoryMode,
         status
     };
