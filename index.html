@@ -842,7 +842,7 @@
                                 <div class="editorial-identity-inline mag-avatar-upload mag-target-identity">
                                     <div class="ai-setting-avatar-container">
                                         <input type="file" id="chat-setting-group-avatar-upload" data-group-settings-id="avatar-upload" accept="image/*" class="file-input-hidden">
-                                        <label for="chat-setting-group-avatar-upload" class="ai-setting-avatar-wrapper mag-avatar-preview is-clickable">
+                                        <label for="chat-setting-group-avatar-upload" class="ai-setting-avatar-wrapper mag-avatar-preview is-clickable" title="点击上传群头像">
                                             <div data-group-settings-id="avatar-preview" style="width:100%;height:100%;background:#f3f4f6 center/cover no-repeat;display:flex;align-items:center;justify-content:center;border-radius:inherit;color:#9ca3af;"><i class="fas fa-users"></i></div>
                                         </label>
                                     </div>
@@ -854,15 +854,10 @@
                                             <label class="mag-label">Memory Mode <span class="separator">/</span> <span class="mag-zh">记忆范围</span></label>
                                             <select data-group-settings-id="memory-mode" class="mag-select">
                                                 <option value="group_only">群聊独立</option>
-                                                <option value="group_to_direct">群到单聊</option>
                                                 <option value="bidirectional">双向同步</option>
                                             </select>
                                         </div>
                                     </div>
-                                </div>
-                                <div class="mag-action-row">
-                                    <button type="button" class="mag-btn" data-group-settings-action="save"><i class="ri-save-line"></i> 保存群资料</button>
-                                    <button type="button" class="mag-btn" data-group-settings-action="invite"><i class="ri-user-add-line"></i> 邀请成员</button>
                                 </div>
                             </div>
                             <div class="editorial-card-shell mag-card">
@@ -1500,15 +1495,8 @@
                             <label>记忆范围</label>
                             <select id="group-settings-memory-mode">
                                 <option value="group_only">群聊独立</option>
-                                <option value="group_to_direct">群到单聊</option>
                                 <option value="bidirectional">双向同步</option>
                             </select>
-                        </div>
-                        <div class="setting-group">
-                            <button id="group-settings-save-btn" class="ios-btn-block secondary">保存基础信息</button>
-                        </div>
-                        <div class="setting-group">
-                            <button id="group-settings-invite-btn" class="ios-btn-block secondary">邀请联系人</button>
                         </div>
                         <div class="setting-group">
                             <label>成员管理</label>
