@@ -4694,13 +4694,28 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
             'RENAME_GROUP',
             'SET_MEMBER_TITLE',
             'RECALL_GROUP_MESSAGE',
+            'TRANSFER_GROUP_OWNER',
+            'SET_GROUP_ADMIN',
+            'UNSET_GROUP_ADMIN',
+            'LEAVE_GROUP',
             'SEND_GROUP_RED_PACKET',
             'CLAIM_GROUP_RED_PACKET',
             'START_PRIVATE_CHAT',
             'CREATE_GROUP_POLL',
             'VOTE_GROUP_POLL',
             'CREATE_GROUP_RELAY',
-            'JOIN_GROUP_RELAY'
+            'JOIN_GROUP_RELAY',
+            'START_UNDERCOVER_GAME',
+            'UNDERCOVER_SWITCH_PHASE',
+            'UNDERCOVER_VOTE',
+            'UNDERCOVER_SETTLE',
+            'UNDERCOVER_NEXT_ROUND',
+            'UNDERCOVER_END',
+            'START_TURTLE_SOUP_GAME',
+            'TURTLE_SOUP_REPLY',
+            'TURTLE_SOUP_REVEAL',
+            'TURTLE_SOUP_NEXT_ROUND',
+            'TURTLE_SOUP_END'
         ]);
 
         const parseLegacyGroupActionLine = (rawActionText, speakerValue = '') => {
@@ -5031,14 +5046,49 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                     return memberContacts.find(member => member && String(window.getGroupRole(contact, member.id) || '') === roleName) || null;
                 };
                 const command = String(action && action.command || '').trim().toUpperCase();
-                if (command === 'RENAME_GROUP' || command === 'SET_MEMBER_TITLE' || command === 'RECALL_GROUP_MESSAGE') {
+                if (command === 'TRANSFER_GROUP_OWNER' || command === 'SET_GROUP_ADMIN' || command === 'UNSET_GROUP_ADMIN' || command === 'SET_MEMBER_TITLE') {
+                    const owner = pickByRole('owner');
+                    if (owner && owner.id !== undefined && owner.id !== null) return owner.id;
+                }
+                if (command === 'RENAME_GROUP' || command === 'RECALL_GROUP_MESSAGE') {
                     const owner = pickByRole('owner');
                     if (owner && owner.id !== undefined && owner.id !== null) return owner.id;
                     const admin = pickByRole('admin');
                     if (admin && admin.id !== undefined && admin.id !== null) return admin.id;
                 }
+                if (command === 'LEAVE_GROUP') {
+                    const nonOwner = memberContacts.find(member => {
+                        if (!member || member.id === undefined || member.id === null) return false;
+                        if (typeof window.getGroupRole !== 'function') return true;
+                        return String(window.getGroupRole(contact, member.id) || '') !== 'owner';
+                    }) || null;
+                    if (nonOwner && nonOwner.id !== undefined && nonOwner.id !== null) return nonOwner.id;
+                }
                 const firstMember = memberContacts.find(member => member && member.id !== undefined && member.id !== null) || null;
                 return firstMember ? firstMember.id : '';
+            };
+
+            const resolveGroupActionTargetId = (payload) => {
+                let targetId = '';
+                if (payload && typeof payload === 'object') {
+                    targetId = payload.target_member_id
+                        || payload.targetMemberId
+                        || payload.target_id
+                        || payload.targetId
+                        || payload.member_id
+                        || payload.memberId
+                        || payload.user_id
+                        || payload.userId
+                        || payload.owner_id
+                        || payload.ownerId
+                        || '';
+                } else if (typeof payload === 'string') {
+                    const [rawTargetId] = String(payload || '').split('|');
+                    targetId = String(rawTargetId || '').trim();
+                }
+                return typeof window.resolveGroupSpeakerContactId === 'function'
+                    ? window.resolveGroupSpeakerContactId(targetId, contact) || String(targetId || '').trim()
+                    : String(targetId || '').trim();
             };
 
             groupActions.forEach((action) => {
@@ -5048,7 +5098,39 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                     ? window.getGroupRole(contact, actorId)
                     : 'member';
                 const canActorManageGroup = actorRole === 'owner' || actorRole === 'admin';
+                const canActorManageAdmins = actorRole === 'owner';
                 const canActorManageTitles = actorRole === 'owner';
+
+                if (action.command === 'TRANSFER_GROUP_OWNER' && typeof window.applyGroupOwnerTransfer === 'function') {
+                    if (!canActorManageAdmins) return;
+                    const targetId = resolveGroupActionTargetId(action.payload);
+                    if (!targetId) return;
+                    const transferred = window.applyGroupOwnerTransfer(contact, actorId, targetId, { showNotice: true });
+                    if (transferred && transferred.ok && transferred.changed) {
+                        appliedGroupActionCount += 1;
+                    }
+                    return;
+                }
+
+                if ((action.command === 'SET_GROUP_ADMIN' || action.command === 'UNSET_GROUP_ADMIN') && typeof window.applyGroupAdminRole === 'function') {
+                    if (!canActorManageAdmins) return;
+                    const targetId = resolveGroupActionTargetId(action.payload);
+                    if (!targetId) return;
+                    const nextAdminState = action.command === 'SET_GROUP_ADMIN';
+                    const updated = window.applyGroupAdminRole(contact, actorId, targetId, nextAdminState, { showNotice: true });
+                    if (updated && updated.ok && updated.changed) {
+                        appliedGroupActionCount += 1;
+                    }
+                    return;
+                }
+
+                if (action.command === 'LEAVE_GROUP' && typeof window.applyGroupMemberLeave === 'function') {
+                    const left = window.applyGroupMemberLeave(contact, actorId, { showNotice: true });
+                    if (left && left.ok && left.changed) {
+                        appliedGroupActionCount += 1;
+                    }
+                    return;
+                }
 
                 if (action.command === 'RENAME_GROUP' && typeof window.applyGroupRename === 'function') {
                     if (!canActorManageGroup) return;
@@ -5059,19 +5141,14 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
 
                 if (action.command === 'SET_MEMBER_TITLE' && typeof window.applyGroupMemberTitle === 'function') {
                     if (!canActorManageTitles) return;
-                    let targetId = '';
+                    let targetId = resolveGroupActionTargetId(action.payload);
                     let nextTitle = '';
                     if (action.payload && typeof action.payload === 'object') {
-                        targetId = action.payload.target_member_id || action.payload.targetMemberId || action.payload.target_id || action.payload.targetId || '';
                         nextTitle = action.payload.title || '';
                     } else if (typeof action.payload === 'string') {
-                        const [rawTargetId, ...rest] = action.payload.split('|');
-                        targetId = String(rawTargetId || '').trim();
+                        const [, ...rest] = action.payload.split('|');
                         nextTitle = rest.join('|').trim();
                     }
-                    targetId = typeof window.resolveGroupSpeakerContactId === 'function'
-                        ? window.resolveGroupSpeakerContactId(targetId, contact) || String(targetId || '').trim()
-                        : String(targetId || '').trim();
                     if (!targetId) return;
                     window.applyGroupMemberTitle(contact, actorId, targetId, nextTitle, { showNotice: true });
                     appliedGroupActionCount += 1;
@@ -5222,6 +5299,49 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                         joined = window.joinGroupRelay(contact, actorId, fallbackPayload, { showNotice: true });
                     }
                     if (joined && joined.ok) {
+                        appliedGroupActionCount += 1;
+                    }
+                    return;
+                }
+
+                if (
+                    (action.command === 'START_UNDERCOVER_GAME'
+                        || action.command === 'UNDERCOVER_SWITCH_PHASE'
+                        || action.command === 'UNDERCOVER_VOTE'
+                        || action.command === 'UNDERCOVER_SETTLE'
+                        || action.command === 'UNDERCOVER_NEXT_ROUND'
+                        || action.command === 'UNDERCOVER_END')
+                    && typeof window.applyGroupUndercoverGameAction === 'function'
+                ) {
+                    const applied = window.applyGroupUndercoverGameAction(
+                        contact,
+                        actorId,
+                        action.command,
+                        action.payload,
+                        { showNotice: true }
+                    );
+                    if (applied && applied.ok) {
+                        appliedGroupActionCount += 1;
+                    }
+                    return;
+                }
+
+                if (
+                    (action.command === 'START_TURTLE_SOUP_GAME'
+                        || action.command === 'TURTLE_SOUP_REPLY'
+                        || action.command === 'TURTLE_SOUP_REVEAL'
+                        || action.command === 'TURTLE_SOUP_NEXT_ROUND'
+                        || action.command === 'TURTLE_SOUP_END')
+                    && typeof window.applyGroupTurtleSoupGameAction === 'function'
+                ) {
+                    const applied = window.applyGroupTurtleSoupGameAction(
+                        contact,
+                        actorId,
+                        action.command,
+                        action.payload,
+                        { showNotice: true }
+                    );
+                    if (applied && applied.ok) {
                         appliedGroupActionCount += 1;
                     }
                 }

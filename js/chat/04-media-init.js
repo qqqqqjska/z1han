@@ -5452,7 +5452,7 @@ function setupChatListeners() {
         const modalResult = await window.openGroupActionEditorModal({
             kicker: 'GROUP POLL',
             title: '发起投票',
-            subtitle: '黑白简约模式 · 请输入主题和选项',
+            subtitle: '请输入主题和选项',
             confirmText: '创建投票',
             cancelText: '取消',
             fields: [

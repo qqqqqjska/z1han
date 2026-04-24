@@ -375,13 +375,21 @@
         return 'member';
     }
 
-    function canCurrentUserManageMembers(groupContact) {
-        const role = getGroupRole(groupContact, 'me');
+    function canParticipantManageMembers(groupContact, participantId = 'me') {
+        const role = getGroupRole(groupContact, participantId);
         return role === 'owner' || role === 'admin';
     }
 
+    function canParticipantManageAdmins(groupContact, participantId = 'me') {
+        return getGroupRole(groupContact, participantId) === 'owner';
+    }
+
+    function canCurrentUserManageMembers(groupContact) {
+        return canParticipantManageMembers(groupContact, 'me');
+    }
+
     function canCurrentUserManageAdmins(groupContact) {
-        return getGroupRole(groupContact, 'me') === 'owner';
+        return canParticipantManageAdmins(groupContact, 'me');
     }
 
     function getParticipantName(groupContact, participantId, fallback = '') {
@@ -841,6 +849,223 @@
             renderGroupChatSettings(group);
         }
         return { ok: true, changed: previousTitle !== normalizedTitle, title: normalizedTitle };
+    }
+
+    function removeGroupMemberFromMeta(groupContact, targetId) {
+        const group = getGroupContact(groupContact);
+        const safeTargetId = normalizeDirectMemberId(targetId) || normalizeParticipantId(targetId);
+        const targetKey = getParticipantIdKey(safeTargetId);
+        if (!group || !targetKey || safeTargetId === 'me') {
+            return { ok: false, reason: 'invalid_target' };
+        }
+        if (targetKey === getParticipantIdKey(group.groupMeta && group.groupMeta.ownerId)) {
+            return { ok: false, reason: 'target_is_owner' };
+        }
+
+        const currentMemberIds = getGroupMemberIds(group);
+        const exists = currentMemberIds.some(id => getParticipantIdKey(id) === targetKey);
+        if (!exists) {
+            return { ok: false, reason: 'missing_target' };
+        }
+
+        const targetName = getParticipantName(group, safeTargetId, '群成员');
+        group.groupMeta.memberIds = normalizeDirectMemberIds(
+            currentMemberIds.filter(id => getParticipantIdKey(id) !== targetKey)
+        );
+        group.groupMeta.adminIds = (Array.isArray(group.groupMeta.adminIds) ? group.groupMeta.adminIds : [])
+            .filter(id => getParticipantIdKey(id) !== targetKey);
+
+        if (group.groupMeta.memberNicknames && typeof group.groupMeta.memberNicknames === 'object') {
+            Object.keys(group.groupMeta.memberNicknames).forEach((key) => {
+                if (getParticipantIdKey(key) === targetKey) {
+                    delete group.groupMeta.memberNicknames[key];
+                }
+            });
+        }
+        if (group.groupMeta.memberTitles && typeof group.groupMeta.memberTitles === 'object') {
+            Object.keys(group.groupMeta.memberTitles).forEach((key) => {
+                if (getParticipantIdKey(key) === targetKey) {
+                    delete group.groupMeta.memberTitles[key];
+                }
+            });
+        }
+        if (Array.isArray(group.groupMeta.relationshipMemberIds)) {
+            group.groupMeta.relationshipMemberIds = group.groupMeta.relationshipMemberIds
+                .filter(id => getParticipantIdKey(id) !== targetKey);
+        }
+        if (group.groupMeta.relationshipNodePositions && typeof group.groupMeta.relationshipNodePositions === 'object') {
+            Object.keys(group.groupMeta.relationshipNodePositions).forEach((key) => {
+                if (getParticipantIdKey(key) === targetKey) {
+                    delete group.groupMeta.relationshipNodePositions[key];
+                }
+            });
+        }
+        if (Array.isArray(group.groupMeta.relationshipLinks)) {
+            group.groupMeta.relationshipLinks = group.groupMeta.relationshipLinks.filter(link => (
+                getParticipantIdKey(link && link.sourceId) !== targetKey
+                && getParticipantIdKey(link && link.targetId) !== targetKey
+            ));
+        }
+        if (Array.isArray(group.groupMeta.pendingInviteMemberIds)) {
+            group.groupMeta.pendingInviteMemberIds = normalizeDirectMemberIds(group.groupMeta.pendingInviteMemberIds)
+                .filter(id => getParticipantIdKey(id) !== targetKey);
+            if (group.groupMeta.pendingInviteMemberIds.length === 0) {
+                group.groupMeta.lastInviteAt = 0;
+            }
+        }
+
+        return {
+            ok: true,
+            changed: true,
+            targetId: safeTargetId,
+            targetName
+        };
+    }
+
+    function applyGroupAdminRole(groupContact, actorId, targetId, setAsAdmin, options = {}) {
+        const group = getGroupContact(groupContact);
+        const safeActorId = normalizeParticipantId(actorId || 'me');
+        const safeTargetId = normalizeParticipantId(targetId);
+        if (!group || !safeActorId || !safeTargetId || !canParticipantManageAdmins(group, safeActorId)) {
+            return { ok: false, reason: 'forbidden' };
+        }
+        if (String(safeTargetId) === String(group.groupMeta && group.groupMeta.ownerId)) {
+            return { ok: false, reason: 'target_is_owner' };
+        }
+        if (safeTargetId !== 'me' && !getGroupMemberIds(group).some(id => String(id) === String(safeTargetId))) {
+            return { ok: false, reason: 'missing_target' };
+        }
+
+        const currentAdmins = Array.isArray(group.groupMeta.adminIds) ? group.groupMeta.adminIds : [];
+        const targetKey = getParticipantIdKey(safeTargetId);
+        const exists = currentAdmins.some(id => getParticipantIdKey(id) === targetKey);
+        const shouldSet = typeof setAsAdmin === 'boolean' ? setAsAdmin : !exists;
+        if (shouldSet === exists) {
+            return { ok: true, changed: false, isAdmin: exists };
+        }
+
+        if (shouldSet) {
+            currentAdmins.push(safeTargetId);
+            group.groupMeta.adminIds = currentAdmins;
+        } else {
+            group.groupMeta.adminIds = currentAdmins.filter(id => getParticipantIdKey(id) !== targetKey);
+        }
+
+        if (typeof window.ensureGroupChatMeta === 'function') {
+            window.ensureGroupChatMeta(group);
+        }
+        if (typeof saveConfig === 'function') saveConfig();
+        if (String(window.iphoneSimState.currentChatContactId || '') === String(group.id) && typeof window.renderChatHistory === 'function') {
+            window.renderChatHistory(group.id, true);
+        }
+        if (String(currentSettingsGroupId || '') === String(group.id)) {
+            renderGroupChatSettings(group);
+        }
+
+        if (options.showNotice !== false) {
+            const actorName = String(options.actorName || getParticipantName(group, safeActorId, safeActorId === 'me' ? '你' : '群成员')).trim() || '群成员';
+            const targetName = getParticipantName(group, safeTargetId, '群成员');
+            if (shouldSet) {
+                pushVisibleGroupSystemNotice(group.id, `${actorName} 将 ${targetName} 设为了管理员`);
+            } else {
+                pushVisibleGroupSystemNotice(group.id, `${actorName} 取消了 ${targetName} 的管理员身份`);
+            }
+        }
+
+        return { ok: true, changed: true, isAdmin: shouldSet };
+    }
+
+    function applyGroupOwnerTransfer(groupContact, actorId, targetId, options = {}) {
+        const group = getGroupContact(groupContact);
+        const safeActorId = normalizeParticipantId(actorId || 'me');
+        const safeTargetId = normalizeParticipantId(targetId);
+        if (!group || !safeActorId || !safeTargetId || !canParticipantManageAdmins(group, safeActorId)) {
+            return { ok: false, reason: 'forbidden' };
+        }
+        if (safeTargetId !== 'me' && !getGroupMemberIds(group).some(id => String(id) === String(safeTargetId))) {
+            return { ok: false, reason: 'missing_target' };
+        }
+
+        const previousOwnerId = normalizeParticipantId(group.groupMeta && group.groupMeta.ownerId || 'me') || 'me';
+        if (String(previousOwnerId) === String(safeTargetId)) {
+            return { ok: true, changed: false, ownerId: safeTargetId };
+        }
+
+        group.groupMeta.ownerId = safeTargetId;
+        if (!Array.isArray(group.groupMeta.adminIds)) {
+            group.groupMeta.adminIds = [];
+        }
+
+        const adminKeySet = new Set(group.groupMeta.adminIds.map(id => getParticipantIdKey(id)).filter(Boolean));
+        const canBeAdmin = (participantId) => participantId === 'me' || getGroupMemberIds(group).some(id => String(id) === String(participantId));
+        if (previousOwnerId && String(previousOwnerId) !== String(safeTargetId) && canBeAdmin(previousOwnerId) && !adminKeySet.has(getParticipantIdKey(previousOwnerId))) {
+            group.groupMeta.adminIds.push(previousOwnerId);
+            adminKeySet.add(getParticipantIdKey(previousOwnerId));
+        }
+        if (String(safeActorId) === 'me' && String(safeTargetId) !== 'me' && !adminKeySet.has('me')) {
+            group.groupMeta.adminIds.push('me');
+            adminKeySet.add('me');
+        }
+
+        if (typeof window.ensureGroupChatMeta === 'function') {
+            window.ensureGroupChatMeta(group);
+        }
+        if (typeof saveConfig === 'function') saveConfig();
+        if (String(window.iphoneSimState.currentChatContactId || '') === String(group.id) && typeof window.renderChatHistory === 'function') {
+            window.renderChatHistory(group.id, true);
+        }
+        if (String(currentSettingsGroupId || '') === String(group.id)) {
+            renderGroupChatSettings(group);
+        }
+
+        if (options.showNotice !== false) {
+            const actorName = String(options.actorName || getParticipantName(group, safeActorId, safeActorId === 'me' ? '你' : '群成员')).trim() || '群成员';
+            const targetName = getParticipantName(group, safeTargetId, '群成员');
+            pushVisibleGroupSystemNotice(group.id, `${actorName} 将群主转让给了 ${targetName}`);
+        }
+
+        return { ok: true, changed: true, ownerId: safeTargetId };
+    }
+
+    function applyGroupMemberLeave(groupContact, actorId, options = {}) {
+        const group = getGroupContact(groupContact);
+        const safeActorId = normalizeParticipantId(actorId);
+        if (!group || !safeActorId || safeActorId === 'me') {
+            return { ok: false, reason: 'invalid_actor' };
+        }
+        if (getGroupRole(group, safeActorId) === 'owner') {
+            return { ok: false, reason: 'owner_cannot_leave' };
+        }
+
+        const removed = removeGroupMemberFromMeta(group, safeActorId);
+        if (!removed || !removed.ok) {
+            return removed || { ok: false, reason: 'remove_failed' };
+        }
+
+        if (typeof window.ensureGroupChatMeta === 'function') {
+            window.ensureGroupChatMeta(group);
+        }
+        if (typeof saveConfig === 'function') saveConfig();
+        if (String(window.iphoneSimState.currentChatContactId || '') === String(group.id) && typeof window.renderChatHistory === 'function') {
+            window.renderChatHistory(group.id, true);
+        }
+        if (String(currentSettingsGroupId || '') === String(group.id)) {
+            renderGroupChatSettings(group);
+        }
+        if (typeof window.renderContactList === 'function') {
+            window.renderContactList(window.iphoneSimState.currentContactGroup || 'all');
+        }
+
+        if (options.showNotice !== false) {
+            pushVisibleGroupSystemNotice(group.id, `${removed.targetName || '群成员'} 退出了群聊`);
+        }
+
+        return {
+            ok: true,
+            changed: true,
+            actorId: safeActorId,
+            actorName: removed.targetName || getParticipantName(group, safeActorId, '群成员')
+        };
     }
 
     function normalizeMoneyAmount(value, fallback = 0) {
@@ -3084,6 +3309,12 @@
         const worldbookPrompt = typeof window.buildWechatWorldbookPrompt === 'function'
             ? window.buildWechatWorldbookPrompt(group, history)
             : '';
+        const undercoverGameContext = typeof window.getGroupUndercoverPromptContext === 'function'
+            ? window.getGroupUndercoverPromptContext(group)
+            : '';
+        const turtleSoupGameContext = typeof window.getGroupTurtleSoupPromptContext === 'function'
+            ? window.getGroupTurtleSoupPromptContext(group)
+            : '';
         const timeContext = group.realTimeVisible && typeof buildRealtimeTimeContext === 'function'
             ? buildRealtimeTimeContext(group.id)
             : '';
@@ -3130,6 +3361,10 @@
             calendarContext || '',
             itineraryContext || '',
             stickerPrompt || '',
+            undercoverGameContext || '',
+            turtleSoupGameContext || '',
+            '- 若上下文中出现【群内小游戏：谁是卧底】，必须优先遵守该区块内的硬性规则；尤其在线索阶段，禁止输出与对应词语明显无关的描述。',
+            '- 若上下文中出现【群内小游戏：海龟汤】，提问阶段严禁在可见消息里直接泄露标准答案，主持人应优先使用动作记录“问题-回答”。',
             '【输出协议】',
             '- 你必须只输出一个 JSON 数组，不要输出解释、不要输出 Markdown 代码块。',
             '- 允许的可见 type 只有：text_message、quote_reply、sticker_message、voice、image。',
@@ -3140,11 +3375,15 @@
             '- sticker_message 格式：{"type":"sticker_message","speaker_contact_id":"成员ID","sticker":"表情描述"}。',
             '- voice 格式：{"type":"voice","speaker_contact_id":"成员ID","duration":3,"content":"语音内容"}。',
             '- image 格式：{"type":"image","speaker_contact_id":"成员ID","content":"图片描述"}。',
-            '- 允许额外输出群动作 action，但仅限下面列出的十种。',
+            '- 允许额外输出群动作 action，但仅限下面列出的动作。',
             '- action 里的 speaker_contact_id 必须是某位 AI 成员，严禁写 me（用户本人）。',
             '- 改群名：{"type":"action","speaker_contact_id":"成员ID","command":"RENAME_GROUP","payload":"新群名"}。只有管理员或群主能这样做。',
             '- 设群头衔：{"type":"action","speaker_contact_id":"成员ID","command":"SET_MEMBER_TITLE","payload":{"target_member_id":"成员ID","title":"群头衔"}}。只有群主能这样做；若要取消群头衔，title 传空字符串。',
             '- 撤回消息：{"type":"action","speaker_contact_id":"成员ID","command":"RECALL_GROUP_MESSAGE","payload":{"target_msg_id":"消息ID"}}。只有管理员或群主能这样做；target_msg_id 必须来自上文已有真实消息。',
+            '- 转让群主：{"type":"action","speaker_contact_id":"成员ID","command":"TRANSFER_GROUP_OWNER","payload":{"target_member_id":"成员ID"}}。只有当前群主能这样做；target_member_id 可为 me 或某位成员ID。',
+            '- 设管理员：{"type":"action","speaker_contact_id":"成员ID","command":"SET_GROUP_ADMIN","payload":{"target_member_id":"成员ID"}}。只有群主能这样做；可把 me 或某位成员设为管理员。',
+            '- 取消管理员：{"type":"action","speaker_contact_id":"成员ID","command":"UNSET_GROUP_ADMIN","payload":{"target_member_id":"成员ID"}}。只有群主能这样做。',
+            '- 主动退群：{"type":"action","speaker_contact_id":"成员ID","command":"LEAVE_GROUP","payload":{}}。仅普通成员或管理员可退群；群主要先转让群主后再退群。',
             '- 发红包：{"type":"action","speaker_contact_id":"成员ID","command":"SEND_GROUP_RED_PACKET","payload":{"mode":"targeted|random","amount":88.88,"target_member_ids":["成员ID"],"count":3,"remark":"红包祝福"}}。targeted 需要 target_member_ids，random 需要 count。',
             '- 抢红包：{"type":"action","speaker_contact_id":"成员ID","command":"CLAIM_GROUP_RED_PACKET","payload":{"packet_id":"红包ID或红包消息ID"}}。红包ID可从上下文里的 [红包 id=...] 读取。',
             '- 发起私聊：{"type":"action","speaker_contact_id":"成员ID","command":"START_PRIVATE_CHAT","payload":{"message":"想和你私聊..."}}。仅当记忆模式为 bidirectional（双向同步）时才允许，用于向用户发起私聊邀请。',
@@ -3152,13 +3391,24 @@
             '- 参与投票：{"type":"action","speaker_contact_id":"成员ID","command":"VOTE_GROUP_POLL","payload":{"poll_id":"投票ID或消息ID","option_id":"选项ID"}}。也可用 option_index（从1开始）。',
             '- 发起接龙：{"type":"action","speaker_contact_id":"成员ID","command":"CREATE_GROUP_RELAY","payload":{"title":"接龙主题","entry":"第一条接龙内容"}}。',
             '- 参与接龙：{"type":"action","speaker_contact_id":"成员ID","command":"JOIN_GROUP_RELAY","payload":{"relay_id":"接龙ID或消息ID","entry":"接龙内容"}}。',
+            '- 发起谁是卧底：{"type":"action","speaker_contact_id":"成员ID","command":"START_UNDERCOVER_GAME","payload":{}}。',
+            '- 切换卧底阶段：{"type":"action","speaker_contact_id":"成员ID","command":"UNDERCOVER_SWITCH_PHASE","payload":{"phase":"vote"}}。phase 可为 clue/vote/finished。',
+            '- 卧底投票：{"type":"action","speaker_contact_id":"成员ID","command":"UNDERCOVER_VOTE","payload":{"target_member_id":"成员ID"}}。',
+            '- 卧底结算：{"type":"action","speaker_contact_id":"成员ID","command":"UNDERCOVER_SETTLE","payload":{}}。',
+            '- 卧底下一局：{"type":"action","speaker_contact_id":"成员ID","command":"UNDERCOVER_NEXT_ROUND","payload":{}}。',
+            '- 卧底结束：{"type":"action","speaker_contact_id":"成员ID","command":"UNDERCOVER_END","payload":{}}。',
+            '- 发起海龟汤：{"type":"action","speaker_contact_id":"成员ID","command":"START_TURTLE_SOUP_GAME","payload":{}}。',
+            '- 海龟汤回应：{"type":"action","speaker_contact_id":"成员ID","command":"TURTLE_SOUP_REPLY","payload":{"asker_member_id":"成员ID","question":"问题","verdict":"是|否|无关|接近","hint":"可选提示"}}。',
+            '- 海龟汤揭晓：{"type":"action","speaker_contact_id":"成员ID","command":"TURTLE_SOUP_REVEAL","payload":{}}。',
+            '- 海龟汤下一局：{"type":"action","speaker_contact_id":"成员ID","command":"TURTLE_SOUP_NEXT_ROUND","payload":{}}。',
+            '- 海龟汤结束：{"type":"action","speaker_contact_id":"成员ID","command":"TURTLE_SOUP_END","payload":{}}。',
             '- 当成员希望把某个话题转去单独沟通时，且当前记忆模式为 bidirectional，可以使用发起私聊动作。',
             '- 若上下文里已出现正在进行的投票或接龙，且成员在聊天里表达立场/观点/接龙意图，必须同时输出对应的 VOTE_GROUP_POLL 或 JOIN_GROUP_RELAY 动作，不能只发文本不落地动作。',
             '- 一次把整轮群成员要说的话按顺序写完整，不能依赖第二次生成补说话。',
             '- 每轮回复总共至少输出 6 条可见消息；action 不计入这 6 条。若群成员较少，可以让同一成员连续说多句，但总可见消息数不能少于 6 条。',
             '- 回复形态必须像真实群聊：不要所有人都只对用户单线回复。每轮至少安排 2 条“成员对成员”的直接互动（接话、追问、调侃、引用任一成员都可以）。',
             '- 成员在互相互动时可自然提及用户，但主语与对话对象不能始终只有用户一个人。',
-            '- 除上面十种群动作外，禁止输出 thought_state、转账、改资料、下单、一起听、屏幕操作等任何副作用指令。',
+            '- 除上面列出的群动作外，禁止输出 thought_state、转账、改资料、下单、一起听、屏幕操作等任何副作用指令。',
             '- 谁更可能接话、是否多人连续回复、是否引用消息，都由你一次性自然决定。',
             `【记忆模式】当前模式：${GROUP_MEMORY_MODE_LABELS[memoryMode] || GROUP_MEMORY_MODE_LABELS.group_only}。`
         ].filter(Boolean);
@@ -4377,39 +4627,22 @@
     function handleToggleGroupAdmin(groupId, targetId) {
         const group = getGroupContact(groupId);
         if (!group || !canCurrentUserManageAdmins(group)) return;
-        if (!targetId || String(targetId) === String(group.groupMeta.ownerId)) return;
-        const exists = Array.isArray(group.groupMeta.adminIds) && group.groupMeta.adminIds.some(id => String(id) === String(targetId));
-        if (exists) {
-            group.groupMeta.adminIds = group.groupMeta.adminIds.filter(id => String(id) !== String(targetId));
-            pushVisibleGroupSystemNotice(group.id, `${getParticipantName(group, targetId)} 不再是管理员`);
-        } else {
-            group.groupMeta.adminIds.push(targetId);
-            pushVisibleGroupSystemNotice(group.id, `${getParticipantName(group, targetId)} 成为了管理员`);
+        const result = applyGroupAdminRole(group, 'me', targetId, undefined, { actorName: '你', showNotice: true });
+        if (!result || !result.ok) {
+            showGroupToast('管理员设置失败');
+            return;
         }
-        if (typeof window.ensureGroupChatMeta === 'function') {
-            window.ensureGroupChatMeta(group);
-        }
-        if (typeof saveConfig === 'function') saveConfig();
-        renderGroupChatSettings(group);
     }
 
     function handleTransferGroupOwner(groupId, targetId) {
         const group = getGroupContact(groupId);
         if (!group || getGroupRole(group, 'me') !== 'owner') return;
         if (!targetId || !confirm(`确认把群主转让给 ${getParticipantName(group, targetId)}？`)) return;
-        group.groupMeta.ownerId = targetId;
-        if (!Array.isArray(group.groupMeta.adminIds)) {
-            group.groupMeta.adminIds = [];
+        const result = applyGroupOwnerTransfer(group, 'me', targetId, { actorName: '你', showNotice: true });
+        if (!result || !result.ok) {
+            showGroupToast('转让群主失败');
+            return;
         }
-        if (!group.groupMeta.adminIds.some(id => String(id) === 'me')) {
-            group.groupMeta.adminIds.push('me');
-        }
-        if (typeof window.ensureGroupChatMeta === 'function') {
-            window.ensureGroupChatMeta(group);
-        }
-        pushVisibleGroupSystemNotice(group.id, `${getParticipantName(group, targetId)} 成为了新群主`);
-        if (typeof saveConfig === 'function') saveConfig();
-        renderGroupChatSettings(group);
     }
 
     function handleRemoveGroupMember(groupId, targetId) {
@@ -4423,40 +4656,10 @@
         }
         const name = getParticipantName(group, safeTargetId);
         if (!confirm(`确认将 ${name} 移出群聊？`)) return;
-        const currentMemberIds = getGroupMemberIds(group);
-        group.groupMeta.memberIds = normalizeDirectMemberIds(
-            currentMemberIds.filter(id => getParticipantIdKey(id) !== targetKey)
-        );
-        if (group.groupMeta.memberIds.length === currentMemberIds.length) {
+        const removed = removeGroupMemberFromMeta(group, safeTargetId);
+        if (!removed || !removed.ok) {
             showGroupToast('移除失败：未找到该成员');
             return;
-        }
-        group.groupMeta.adminIds = (Array.isArray(group.groupMeta.adminIds) ? group.groupMeta.adminIds : [])
-            .filter(id => getParticipantIdKey(id) !== targetKey);
-        if (group.groupMeta.memberNicknames && typeof group.groupMeta.memberNicknames === 'object') {
-            Object.keys(group.groupMeta.memberNicknames).forEach((key) => {
-                if (getParticipantIdKey(key) === targetKey) {
-                    delete group.groupMeta.memberNicknames[key];
-                }
-            });
-        }
-        if (group.groupMeta.memberTitles && typeof group.groupMeta.memberTitles === 'object') {
-            Object.keys(group.groupMeta.memberTitles).forEach((key) => {
-                if (getParticipantIdKey(key) === targetKey) {
-                    delete group.groupMeta.memberTitles[key];
-                }
-            });
-        }
-        if (Array.isArray(group.groupMeta.relationshipMemberIds)) {
-            group.groupMeta.relationshipMemberIds = group.groupMeta.relationshipMemberIds
-                .filter(id => getParticipantIdKey(id) !== targetKey);
-        }
-        if (Array.isArray(group.groupMeta.pendingInviteMemberIds)) {
-            group.groupMeta.pendingInviteMemberIds = normalizeDirectMemberIds(group.groupMeta.pendingInviteMemberIds)
-                .filter(id => getParticipantIdKey(id) !== targetKey);
-            if (group.groupMeta.pendingInviteMemberIds.length === 0) {
-                group.groupMeta.lastInviteAt = 0;
-            }
         }
         if (typeof window.ensureGroupChatMeta === 'function') {
             window.ensureGroupChatMeta(group);
@@ -4778,11 +4981,16 @@
     window.getGroupPinnedMessageDisplayData = getGroupPinnedMessageDisplayData;
     window.canGroupParticipantRenameGroup = canParticipantRenameGroup;
     window.canGroupParticipantManageTitles = canParticipantManageTitles;
+    window.canGroupParticipantManageMembers = canParticipantManageMembers;
+    window.canGroupParticipantManageAdmins = canParticipantManageAdmins;
     window.canGroupParticipantManageAnnouncement = canParticipantManageAnnouncement;
     window.applyGroupMemberNickname = applyGroupMemberNickname;
     window.applyGroupRename = applyGroupRename;
     window.applyGroupAnnouncement = applyGroupAnnouncement;
     window.applyGroupMemberTitle = applyGroupMemberTitle;
+    window.applyGroupAdminRole = applyGroupAdminRole;
+    window.applyGroupOwnerTransfer = applyGroupOwnerTransfer;
+    window.applyGroupMemberLeave = applyGroupMemberLeave;
     window.setGroupPinnedMessage = setGroupPinnedMessage;
     window.toggleGroupPinnedMessage = toggleGroupPinnedMessage;
     window.focusGroupPinnedMessage = focusGroupPinnedMessage;
