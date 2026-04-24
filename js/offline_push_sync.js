@@ -11,7 +11,81 @@
         pushPermission: 'default'
     };
     const AUTO_SYNC_INTERVAL_MS = 12000;
+    const STARTUP_CATCH_UP_SYNC_DELAYS_MS = [0, 600, 1800, 3600];
+    const SYNC_LOOKBACK_MS = 5 * 60 * 1000;
+    const SYNC_FUTURE_SKEW_TOLERANCE_MS = 2 * 60 * 1000;
+    const OFFLINE_PUSH_SETTINGS_BACKUP_KEY = 'offlinePushSyncSettings';
     let syncInFlightPromise = null;
+
+    function readLocalBackupState() {
+        try {
+            const raw = localStorage.getItem(OFFLINE_PUSH_SETTINGS_BACKUP_KEY);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch (err) {
+            console.error('[offline-push-sync] readLocalBackupState failed', err);
+            return null;
+        }
+    }
+
+    function tryHydrateStateFromBackup(state) {
+        if (!state || typeof state !== 'object') return false;
+
+        const appearsToBeFreshDefault = !state.enabled
+            && !String(state.apiBaseUrl || '').trim()
+            && !String(state.vapidPublicKey || '').trim()
+            && String(state.userId || '').trim() === DEFAULT_STATE.userId
+            && !Number(state.lastSyncAt || 0)
+            && (!Array.isArray(state.deletedRemoteMessageIds) || state.deletedRemoteMessageIds.length === 0);
+        if (!appearsToBeFreshDefault) return false;
+
+        const backup = readLocalBackupState();
+        if (!backup || typeof backup !== 'object') return false;
+
+        let changed = false;
+        if (backup.enabled === true && state.enabled !== true) {
+            state.enabled = true;
+            changed = true;
+        }
+
+        const backupApiBaseUrl = String(backup.apiBaseUrl || '').trim();
+        if (!state.apiBaseUrl && backupApiBaseUrl) {
+            state.apiBaseUrl = backupApiBaseUrl;
+            changed = true;
+        }
+
+        const backupVapidPublicKey = String(backup.vapidPublicKey || '').trim();
+        if (!state.vapidPublicKey && backupVapidPublicKey) {
+            state.vapidPublicKey = backupVapidPublicKey;
+            changed = true;
+        }
+
+        const backupUserId = String(backup.userId || '').trim();
+        if (backupUserId && String(state.userId || '').trim() === DEFAULT_STATE.userId) {
+            state.userId = backupUserId;
+            changed = true;
+        }
+
+        if (typeof backup.disableLocalActiveReplyScheduler === 'boolean') {
+            state.disableLocalActiveReplyScheduler = backup.disableLocalActiveReplyScheduler;
+            changed = true;
+        }
+
+        if (changed) {
+            console.log('[offline-push-sync] restored runtime state from local backup');
+        }
+        return changed;
+    }
+
+    function normalizeSyncAnchorMs(value, now = Date.now()) {
+        const parsed = Number(value || 0);
+        if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+        if (parsed > (now + SYNC_FUTURE_SKEW_TOLERANCE_MS)) {
+            return Math.max(0, now - SYNC_LOOKBACK_MS);
+        }
+        return parsed;
+    }
 
     function getState() {
         if (!window.iphoneSimState) window.iphoneSimState = {};
@@ -20,6 +94,7 @@
         } else {
             window.iphoneSimState.offlinePushSync = Object.assign({}, DEFAULT_STATE, window.iphoneSimState.offlinePushSync);
         }
+        tryHydrateStateFromBackup(window.iphoneSimState.offlinePushSync);
         if (!window.iphoneSimState.offlinePushSync.deviceId) {
             window.iphoneSimState.offlinePushSync.deviceId = `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
         }
@@ -546,17 +621,23 @@
         const state = getState();
         if (!state.enabled || !state.apiBaseUrl) return { added: 0, skipped: true };
         syncInFlightPromise = (async () => {
+            const now = Date.now();
+            const previousAnchor = normalizeSyncAnchorMs(state.lastSyncAt, now);
+            const requestSince = Math.max(0, previousAnchor - SYNC_LOOKBACK_MS);
             const payload = await apiFetch('/api/messages/sync', {
                 method: 'POST',
                 body: JSON.stringify({
                     userId: state.userId,
                     deviceId: state.deviceId,
-                    since: state.lastSyncAt || 0
+                    since: requestSince
                 })
             });
             const messages = (payload && payload.messages) || [];
             const added = injectRemoteMessages(messages);
-            state.lastSyncAt = Number((payload && payload.serverTime) || Date.now()) || Date.now();
+            const serverTime = Number(payload && payload.serverTime || 0);
+            const nextAnchorCandidate = Number.isFinite(serverTime) && serverTime > 0 ? serverTime : Date.now();
+            const boundedNextAnchor = Math.min(nextAnchorCandidate, Date.now() + SYNC_FUTURE_SKEW_TOLERANCE_MS);
+            state.lastSyncAt = Math.max(previousAnchor, boundedNextAnchor);
             saveState();
             return { added, skipped: false };
         })();
@@ -1046,6 +1127,14 @@
         }
     }
 
+    function scheduleStartupCatchUpSync() {
+        STARTUP_CATCH_UP_SYNC_DELAYS_MS.forEach((delay) => {
+            window.setTimeout(() => {
+                syncMessages().catch(err => console.error('[offline-push-sync] startup catch-up sync failed', err));
+            }, delay);
+        });
+    }
+
     async function initOfflinePushSync() {
         const state = getState();
         patchSaveConfig();
@@ -1120,6 +1209,7 @@
         } catch (err) {
             console.error('[offline-push-sync] initial sync failed', err);
         }
+        scheduleStartupCatchUpSync();
         startAutoSyncLoop();
     }
 
