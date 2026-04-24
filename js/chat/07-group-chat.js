@@ -3033,7 +3033,7 @@
         };
     }
 
-    function buildGroupAiPromptMessages(contactId, instruction = null, options = {}) {
+    async function buildGroupAiPromptMessages(contactId, instruction = null, options = {}) {
         const group = getGroupContact(contactId);
         if (!group) return [];
 
@@ -3084,6 +3084,15 @@
         const worldbookPrompt = typeof window.buildWechatWorldbookPrompt === 'function'
             ? window.buildWechatWorldbookPrompt(group, history)
             : '';
+        const timeContext = group.realTimeVisible && typeof buildRealtimeTimeContext === 'function'
+            ? buildRealtimeTimeContext(group.id)
+            : '';
+        const itineraryContext = group.realTimeVisible && typeof window.getCurrentItineraryInfo === 'function'
+            ? (await window.getCurrentItineraryInfo(group.id).catch(() => ''))
+            : '';
+        const calendarContext = group.calendarAwareEnabled === false
+            ? ''
+            : (typeof buildCalendarPromptContext === 'function' ? buildCalendarPromptContext() : '');
         const limit = Number.isFinite(Number(group.contextLimit)) && Number(group.contextLimit) > 0 ? Number(group.contextLimit) : 40;
         const contextMessages = history
             .filter(message => {
@@ -3117,6 +3126,9 @@
             pendingInviteContacts.length > 0
                 ? `【最近新入群成员】\n${pendingInviteContacts.map(member => `- speaker_contact_id=${member.id}｜名字=${getParticipantName(group, member.id, '成员')}｜区分标签=${getParticipantPromptLabel(group, member.id, '成员')}｜人设=${String(member.persona || '无').replace(/\s+/g, ' ').trim() || '无'}`).join('\n')}\n这些成员现在已经在群里，可以自然接话；如果场景允许，优先让至少一位最近入群成员在本轮说 1 句，但不要硬凑所有人都发言。`
                 : '',
+            timeContext || '',
+            calendarContext || '',
+            itineraryContext || '',
             stickerPrompt || '',
             '【输出协议】',
             '- 你必须只输出一个 JSON 数组，不要输出解释、不要输出 Markdown 代码块。',
