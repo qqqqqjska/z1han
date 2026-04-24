@@ -672,6 +672,16 @@
         if (typeof window.ensureContactRestWindowFields === 'function') {
             window.ensureContactRestWindowFields(contact);
         }
+        const normalizedActiveReplyEnabled = !!contact.activeReplyEnabled;
+        const currentActiveReplyStartTime = Number(contact.activeReplyStartTime || 0);
+        const normalizedActiveReplyStartTime = normalizedActiveReplyEnabled
+            ? (Number.isFinite(currentActiveReplyStartTime) && currentActiveReplyStartTime > 0
+                ? Math.round(currentActiveReplyStartTime)
+                : Date.now())
+            : 0;
+        if (normalizedActiveReplyEnabled && (!Number.isFinite(currentActiveReplyStartTime) || currentActiveReplyStartTime <= 0)) {
+            contact.activeReplyStartTime = normalizedActiveReplyStartTime;
+        }
         try {
             await apiFetch('/api/contacts', {
                 method: 'POST',
@@ -684,9 +694,9 @@
                     personaPrompt: contact.persona || '',
                     timezoneOffsetMinutes: -new Date().getTimezoneOffset(),
                     contextLimit: Number(contact.contextLimit || 0),
-                    activeReplyEnabled: !!contact.activeReplyEnabled,
+                    activeReplyEnabled: normalizedActiveReplyEnabled,
                     activeReplyInterval: Number(contact.activeReplyInterval || 1),
-                    activeReplyStartTime: Number(contact.activeReplyStartTime || 0),
+                    activeReplyStartTime: normalizedActiveReplyStartTime,
                     lastActiveReplyTriggeredMsgId: contact.lastActiveReplyTriggeredMsgId || null,
                     restWindowEnabled: !!contact.restWindowEnabled,
                     restWindowStart: contact.restWindowStart || '',
