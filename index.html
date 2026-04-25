@@ -29,6 +29,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Libre+Barcode+39&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&display=swap">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/whisper_challenge_palette.css">
     <link rel="stylesheet" href="css/chat_tail_style.css">
@@ -57,6 +59,7 @@
     <link rel="stylesheet" href="css/preset_app.css">
     <link rel="stylesheet" href="css/messages_app.css">
     <link rel="stylesheet" href="css/phone_delivery_app.css">
+    <link rel="stylesheet" href="css/chat_ootd.css">
 </head>
 <body>
     <div class="screen-container" id="screen-container">
@@ -3203,72 +3206,125 @@
         </div>
         <div id="ai-profile-screen" class="sub-screen hidden" style="z-index: 170; background-color: #fff;">
             <div class="app-header transparent-header" id="ai-profile-header">
-                <button id="close-ai-profile" class="back-btn" style="color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.5);"><i class="fas fa-chevron-left"></i></button>
+                <button id="close-ai-profile" class="back-btn status-badge ai-profile-status-back" type="button" aria-label="返回聊天">
+                    <span class="ai-profile-status-dot" aria-hidden="true"></span>
+                    <span class="ai-profile-status-text">Online</span>
+                </button>
                 <div style="flex: 1;"></div>
-                <button id="ai-profile-more" class="wechat-icon-btn" style="color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.5); display: none;"><i class="fas fa-ellipsis-h"></i></button>
+                <div class="icons ai-profile-header-icons">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    <button id="ai-profile-menu-trigger" class="ai-profile-menu-trigger" type="button" aria-label="资料卡设置">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="1.5"></circle>
+                            <circle cx="19" cy="12" r="1.5"></circle>
+                            <circle cx="5" cy="12" r="1.5"></circle>
+                        </svg>
+                    </button>
+                </div>
+                <button id="ai-profile-more" class="wechat-icon-btn" style="display: none;"><i class="fas fa-ellipsis-h"></i></button>
             </div>
             
-            <div class="app-body full-screen" style="padding: 0;">
-                <!-- 头部背景与头像 -->
-                <div class="ai-profile-header-section">
+            <div class="app-body full-screen ai-profile-body" style="padding: 0;">
+                <div class="ai-profile-bg-layer">
                     <div class="profile-bg" id="ai-profile-bg"></div>
-                    <div class="ai-profile-avatar-container">
+                    <div class="ai-profile-bg-pattern" aria-hidden="true"></div>
+                    <div class="ai-profile-orb ai-profile-orb-1" aria-hidden="true"></div>
+                    <div class="ai-profile-orb ai-profile-orb-2" aria-hidden="true"></div>
+                    <div class="ai-profile-bg-watermark" aria-hidden="true">MELLIFLUOUS</div>
+                    <div class="ai-profile-bg-deco ai-profile-bg-deco-1" aria-hidden="true">+</div>
+                    <div class="ai-profile-bg-deco ai-profile-bg-deco-2" aria-hidden="true">+</div>
+                    <div class="ai-profile-bg-deco ai-profile-bg-deco-3" aria-hidden="true">+</div>
+                </div>
+
+                <div class="hero ai-profile-header-section">
+                    <div class="avatar-container ai-profile-avatar-container">
+                        <div class="ai-profile-avatar-ring ai-profile-avatar-ring-1" aria-hidden="true"></div>
+                        <div class="ai-profile-avatar-ring ai-profile-avatar-ring-2" aria-hidden="true"></div>
+                        <div class="ai-profile-avatar-ring ai-profile-avatar-ring-3" aria-hidden="true"></div>
                         <img src="" id="ai-profile-avatar" class="ai-profile-avatar-large">
+                        <span id="ai-profile-avatar-tag" class="floating-tag ai-profile-avatar-tag">Online</span>
                     </div>
                     <div class="ai-profile-info-primary">
-                        <h2 id="ai-profile-name"></h2>
+                        <h1 id="ai-profile-name" class="remark"></h1>
                         <p id="ai-profile-nickname" class="profile-nickname" style="display: none;"></p>
-                        <p id="ai-profile-id" class="profile-id"></p>
+                        <h2 id="ai-profile-id" class="username profile-id"></h2>
                     </div>
                 </div>
-                
 
-                <!-- 详细信息列表 -->
-                <div class="profile-content-section">
-                    <!-- 备注与签名 -->
-                    <div class="ios-list-group">
+                <div class="bottom-panel profile-content-section">
+                    <div class="stats ai-profile-stats" aria-label="profile stats">
+                        <div class="stat ai-profile-stat-item">
+                            <span id="ai-profile-stat-messages-value" class="num ai-profile-stat-value">0</span>
+                            <span id="ai-profile-stat-messages-label" class="lbl ai-profile-stat-label">MESSAGES</span>
+                        </div>
+                        <div class="stat ai-profile-stat-item">
+                            <span id="ai-profile-stat-friend-days-value" class="num ai-profile-stat-value">0</span>
+                            <span id="ai-profile-stat-friend-days-label" class="lbl ai-profile-stat-label">FRIEND DAYS</span>
+                        </div>
+                        <div id="ai-profile-stat-third-item" class="stat ai-profile-stat-item" role="button" tabindex="0" aria-label="设置关键词统计">
+                            <span id="ai-profile-stat-active-days-value" class="num ai-profile-stat-value">0</span>
+                            <span id="ai-profile-stat-active-days-label" class="lbl ai-profile-stat-label">KEYWORD</span>
+                        </div>
+                    </div>
+
+                    <div class="highlights ai-profile-highlights" aria-label="profile highlights">
+                        <div class="highlight-item ai-profile-highlight-item">
+                            <div class="highlight-thumb ai-profile-highlight-thumb ai-profile-highlight-vlog" aria-hidden="true"></div>
+                            <span class="hl-title ai-profile-highlight-label">VLOG</span>
+                        </div>
+                        <div class="highlight-item ai-profile-highlight-item ai-profile-highlight-item-click" id="ai-ootd-entry" role="button" tabindex="0" aria-label="打开今日穿搭 OOTD">
+                            <div class="highlight-thumb ai-profile-highlight-thumb ai-profile-highlight-ootd" aria-hidden="true"></div>
+                            <span class="hl-title ai-profile-highlight-label">OOTD</span>
+                        </div>
+                        <div class="highlight-item ai-profile-highlight-item">
+                            <div class="highlight-thumb ai-profile-highlight-thumb ai-profile-highlight-cafe" aria-hidden="true"></div>
+                            <span class="hl-title ai-profile-highlight-label">CAFE</span>
+                        </div>
+                        <div class="highlight-item ai-profile-highlight-item ai-profile-highlight-item-click" id="ai-moments-entry" role="button" tabindex="0" aria-label="打开朋友圈 MOMENT">
+                            <div class="highlight-thumb ai-profile-highlight-thumb moments-preview" id="ai-moments-preview" title="打开朋友圈"></div>
+                            <span class="hl-title ai-profile-highlight-label">MOMENT</span>
+                        </div>
+                    </div>
+
+                    <div class="signature ai-profile-signature-card">
+                        <div id="ai-profile-signature" class="field-value"></div>
+                    </div>
+
+                    <div id="ai-profile-tags" class="tags ai-profile-tags" aria-hidden="true">
+                        <span class="tag ai-profile-tag">#Photography</span>
+                        <span class="tag ai-profile-tag">#Design</span>
+                        <span class="tag ai-profile-tag">#Life</span>
+                    </div>
+
+                    <div class="ios-list-group ai-profile-hidden-meta">
                         <div class="list-item">
                             <div class="list-content column">
                                 <label class="field-label">备注名</label>
                                 <div id="ai-profile-remark" class="field-value"></div>
                             </div>
-                            <i class="fas fa-chevron-right" style="color: #ccc;"></i>
-                        </div>
-                        <div class="list-item">
-                            <div class="list-content column">
-                                <label class="field-label">个性签名</label>
-                                <div id="ai-profile-signature" class="field-value"></div>
-                            </div>
                         </div>
                     </div>
 
-                    <!-- 关系设置 -->
-                    <div class="ios-list-group">
+                    <div class="ios-list-group ai-profile-hidden-meta">
                         <div class="list-item" id="ai-relation-item">
                             <div class="list-content">
                                 <label>关系</label>
                                 <span id="ai-profile-relation" class="value-right">未设置</span>
                             </div>
-                            <i class="fas fa-chevron-right" style="color: #ccc;"></i>
-                        </div>
-                    </div>
-
-                    <!-- 朋友圈入口 -->
-                    <div class="ios-list-group">
-                        <div class="list-item" id="ai-moments-entry">
-                            <div class="list-content">
-                                <label>朋友圈</label>
-                                <div class="moments-preview" id="ai-moments-preview">
-                                    <!-- 缩略图 -->
-                                </div>
-                            </div>
-                            <i class="fas fa-chevron-right" style="color: #ccc;"></i>
                         </div>
                     </div>
                     
-                    <!-- 底部按钮 -->
-                    <div class="profile-actions">
-                        <button id="ai-profile-send-msg" class="ios-btn-block"><i class="fas fa-comment"></i> 见面</button>
+                    <div class="action-buttons profile-actions ai-profile-actions-row">
+                        <button id="ai-profile-send-msg" class="btn btn-primary ios-btn-block"><i class="fas fa-comment"></i> 见面</button>
+                        <button id="ai-profile-chat-shortcut" class="btn btn-icon ai-profile-secondary-action" type="button" aria-label="返回聊天">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                <polyline points="22,6 12,13 2,6"></polyline>
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -3287,9 +3343,178 @@
                     </div>
                 </div>
             </div>
+
+            <div id="ai-profile-customize-modal" class="modal hidden" style="z-index: 365;">
+                <div class="modal-content ai-profile-customize-content">
+                    <div class="modal-header ai-profile-customize-header">
+                        <h3>Settings</h3>
+                        <p>Customize Your Page</p>
+                        <button class="close-btn" id="close-ai-profile-customize">&times;</button>
+                    </div>
+                    <div class="modal-body ai-profile-customize-body">
+                        <section class="ai-profile-customize-section">
+                            <h4 class="ai-profile-customize-title">Upload Icons</h4>
+                            <div class="ai-profile-icon-grid">
+                                <div class="ai-profile-icon-card" data-key="vlog">
+                                    <div id="ai-profile-icon-preview-vlog" class="ai-profile-icon-preview">VLOG</div>
+                                    <div class="ai-profile-icon-actions">
+                                        <button type="button" class="ai-profile-icon-btn upload" data-key="vlog">上传</button>
+                                        <button type="button" class="ai-profile-icon-btn clear" data-key="vlog">清空</button>
+                                    </div>
+                                    <input type="file" id="ai-profile-icon-input-vlog" accept="image/*" class="file-input-hidden">
+                                </div>
+                                <div class="ai-profile-icon-card" data-key="ootd">
+                                    <div id="ai-profile-icon-preview-ootd" class="ai-profile-icon-preview">OOTD</div>
+                                    <div class="ai-profile-icon-actions">
+                                        <button type="button" class="ai-profile-icon-btn upload" data-key="ootd">上传</button>
+                                        <button type="button" class="ai-profile-icon-btn clear" data-key="ootd">清空</button>
+                                    </div>
+                                    <input type="file" id="ai-profile-icon-input-ootd" accept="image/*" class="file-input-hidden">
+                                </div>
+                                <div class="ai-profile-icon-card" data-key="cafe">
+                                    <div id="ai-profile-icon-preview-cafe" class="ai-profile-icon-preview">CAFE</div>
+                                    <div class="ai-profile-icon-actions">
+                                        <button type="button" class="ai-profile-icon-btn upload" data-key="cafe">上传</button>
+                                        <button type="button" class="ai-profile-icon-btn clear" data-key="cafe">清空</button>
+                                    </div>
+                                    <input type="file" id="ai-profile-icon-input-cafe" accept="image/*" class="file-input-hidden">
+                                </div>
+                                <div class="ai-profile-icon-card" data-key="moment">
+                                    <div id="ai-profile-icon-preview-moment" class="ai-profile-icon-preview">MOMENT</div>
+                                    <div class="ai-profile-icon-actions">
+                                        <button type="button" class="ai-profile-icon-btn upload" data-key="moment">上传</button>
+                                        <button type="button" class="ai-profile-icon-btn clear" data-key="moment">清空</button>
+                                    </div>
+                                    <input type="file" id="ai-profile-icon-input-moment" accept="image/*" class="file-input-hidden">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="ai-profile-customize-section">
+                            <h4 class="ai-profile-customize-title">OOTD Style</h4>
+                            <div class="ai-profile-ootd-style-group">
+                                <div id="ai-profile-ootd-selector-bg" class="ai-profile-ootd-selector-bg" aria-hidden="true"></div>
+                                <label class="ai-profile-ootd-style-option" data-style="v5">
+                                    <input type="radio" name="ai-profile-ootd-style" value="v5">
+                                    <span class="zh">吊牌风格</span>
+                                    <span class="en">Hangtag</span>
+                                </label>
+                                <label class="ai-profile-ootd-style-option active" data-style="v3">
+                                    <input type="radio" name="ai-profile-ootd-style" value="v3" checked>
+                                    <span class="zh">黑白风格</span>
+                                    <span class="en">Monochrome</span>
+                                </label>
+                            </div>
+                        </section>
+                    </div>
+                    <div class="ai-profile-customize-footer">
+                        <button type="button" id="ai-profile-customize-cancel" class="ai-profile-customize-btn secondary">取消</button>
+                        <button type="button" id="ai-profile-customize-save" class="ai-profile-customize-btn primary">保存</button>
+                    </div>
+                </div>
+            </div>
             
             <!-- 隐藏的文件输入框，用于资料卡背景修改 -->
             <input type="file" id="ai-profile-bg-input" accept="image/*" class="file-input-hidden">
+        </div>
+
+        <!-- OOTD 弹窗（V3 样式） -->
+        <div id="chat-ootd-modal" class="chat-ootd-overlay hidden" aria-hidden="true">
+            <div id="chat-ootd-card" class="chat-ootd-card v3" role="dialog" aria-modal="true" aria-labelledby="chat-ootd-title">
+                <button id="close-chat-ootd" class="chat-ootd-close-btn" type="button" aria-label="关闭 OOTD"></button>
+                <button id="chat-ootd-refresh-btn" class="chat-ootd-refresh-btn" type="button" aria-label="刷新今日 OOTD">
+                    <i class="fas fa-rotate-right" aria-hidden="true"></i>
+                </button>
+
+                <div id="chat-ootd-view-v3" class="chat-ootd-view chat-ootd-view-v3">
+                    <div class="v3-header">
+                        <div id="chat-ootd-title" class="v3-title">OOTD // --.--</div>
+                        <div id="chat-ootd-subtitle" class="v3-subtitle">SYS.LOG: MONOCHROME FIT</div>
+                    </div>
+
+                    <div class="v3-grid">
+                        <div class="v3-grid-item">
+                            <div class="v3-label">TEMP // WX</div>
+                            <div id="chat-ootd-weather-value" class="v3-value chat-ootd-weather-value">
+                                --°C<br><span id="chat-ootd-weather-text" class="chat-ootd-weather-text">UNKNOWN</span>
+                            </div>
+                        </div>
+                        <div id="chat-ootd-fingerprint-box" class="v3-grid-item chat-ootd-fingerprint-box" role="button" tabindex="0" aria-label="验证查看评分与评价">
+                            <div id="chat-ootd-fingerprint-idle" class="chat-ootd-fingerprint-idle">
+                                <i id="chat-ootd-fp-icon" class="ri-fingerprint-line chat-ootd-fp-icon"></i>
+                                <div id="chat-ootd-fp-text" class="chat-ootd-fp-text">AUTH REQ</div>
+                            </div>
+                            <div id="chat-ootd-fingerprint-result" class="chat-ootd-fingerprint-result">
+                                <div class="v3-label chat-ootd-rating-label">RATING</div>
+                                <div id="chat-ootd-rating" class="v3-value">-- / 10</div>
+                                <div class="v3-label chat-ootd-review-label">REVIEW</div>
+                                <div id="chat-ootd-review" class="v3-value chat-ootd-review-text">等待生成中...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="chat-ootd-description" class="v3-desc">正在生成今日穿搭描述...</div>
+
+                    <div id="chat-ootd-secret-grid" class="v3-grid chat-ootd-secret-grid">
+                        <div class="v3-grid-item chat-ootd-awaiting-item">
+                            <div class="v3-label">STATUS</div>
+                            <div class="v3-value chat-ootd-awaiting-value">[ AWAITING SCAN ]</div>
+                        </div>
+                    </div>
+
+                    <div id="chat-ootd-barcode-scanner" class="v3-barcode-wrapper" role="button" tabindex="0" aria-label="扫描查看单品详情">
+                        <div class="v3-scanner-line"></div>
+                        <div class="v3-barcode">*URBAN-TECH*</div>
+                    </div>
+                    <div id="chat-ootd-barcode-text" class="v3-footer-text">CLICK BARCODE TO SCAN FOR DETAILS</div>
+                </div>
+
+                <div id="chat-ootd-view-v5" class="chat-ootd-view chat-ootd-view-v5 hidden">
+                    <div class="chat-ootd-v5-string"></div>
+                    <div class="chat-ootd-v5-tag-wrapper">
+                        <div class="chat-ootd-v5-tag-top">
+                            <div class="chat-ootd-v5-hole"></div>
+                            <div class="chat-ootd-v5-brand">STUDIO<br>COLLECTION</div>
+                            <div class="chat-ootd-v5-desc">
+                                <p>100% ORGANIC VIBES</p>
+                                <p>WASH COLD / DO NOT TUMBLE DRY</p>
+                            </div>
+                            <div id="chat-ootd-v5-temp" class="chat-ootd-v5-temp">--°C</div>
+                        </div>
+
+                        <div id="chat-ootd-v5-tear-line" class="chat-ootd-v5-tear-line" role="button" tabindex="0" aria-label="撕开吊牌">
+                            <span>✂ TEAR HERE</span>
+                        </div>
+
+                        <div id="chat-ootd-v5-bottom" class="chat-ootd-v5-bottom" role="button" tabindex="0" aria-label="翻转吊牌查看详情">
+                            <div id="chat-ootd-v5-front">
+                                <div class="chat-ootd-v5-price">$$ OOTD</div>
+                                <div id="chat-ootd-v5-barcode" class="chat-ootd-v5-barcode">*TAG-0000*</div>
+                                <div class="chat-ootd-v5-hint">CLICK TO FLIP</div>
+                            </div>
+                            <div id="chat-ootd-v5-back" class="chat-ootd-v5-back">
+                                <div class="chat-ootd-v5-title-row">
+                                    <span id="chat-ootd-v5-title">Today Tag</span>
+                                    <span id="chat-ootd-v5-rating" class="chat-ootd-v5-rating">★ 8.5 / 10</span>
+                                </div>
+                                <div id="chat-ootd-v5-text" class="chat-ootd-v5-text">正在生成今日穿搭描述...</div>
+                                <div class="chat-ootd-v5-list">
+                                    <div class="chat-ootd-v5-item">TOP <span id="chat-ootd-v5-item-top">-</span></div>
+                                    <div class="chat-ootd-v5-item">BOTTOM <span id="chat-ootd-v5-item-bottom">-</span></div>
+                                    <div class="chat-ootd-v5-item">SHOES <span id="chat-ootd-v5-item-shoes">-</span></div>
+                                    <div class="chat-ootd-v5-item">ACCESSORIES <span id="chat-ootd-v5-item-accessories">-</span></div>
+                                </div>
+                                <div class="chat-ootd-v5-review-card">
+                                    <div class="chat-ootd-v5-review-label">User Review</div>
+                                    <div id="chat-ootd-v5-review" class="chat-ootd-v5-review-text">等待生成中...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="chat-ootd-loading" class="chat-ootd-loading hidden">GENERATING OOTD...</div>
+            </div>
         </div>
 
         <!-- 个人朋友圈全屏页 -->

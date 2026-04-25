@@ -3107,6 +3107,428 @@ function getActiveAiProfileContact() {
     return window.iphoneSimState.contacts.find(c => c.id === contactId) || null;
 }
 
+function getAiProfileNickname(contact) {
+    const cleanValue = (value) => String(value || '').trim().replace(/^@+/, '');
+    const nickname = cleanValue(contact && contact.nickname);
+    const name = cleanValue(contact && contact.name);
+    const remark = cleanValue(contact && contact.remark);
+    const contactId = cleanValue(contact && contact.id);
+    return nickname || name || remark || contactId || '未命名';
+}
+
+function formatAiProfileWechatId(contact) {
+    const cleanValue = (value) => String(value || '').trim().replace(/^@+/, '');
+    const wxid = cleanValue(contact && contact.wxid);
+    const fallbackId = cleanValue(contact && contact.id);
+    return `微信号: ${wxid || fallbackId || '未设置'}`;
+}
+
+function normalizeAiProfileTimestamp(value) {
+    if (value === undefined || value === null || value === '') return 0;
+    if (value instanceof Date) {
+        const time = value.getTime();
+        return Number.isFinite(time) ? time : 0;
+    }
+
+    if (typeof value === 'string') {
+        const text = value.trim();
+        if (!text) return 0;
+        if (/^\d+(?:\.\d+)?$/.test(text)) {
+            const asNumber = Number(text);
+            return Number.isFinite(asNumber) ? asNumber : 0;
+        }
+        const parsed = Date.parse(text);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    const asNumber = Number(value);
+    return Number.isFinite(asNumber) ? asNumber : 0;
+}
+
+function getAiProfileLiveStatusStore() {
+    if (!window.__aiProfileLiveStatusStore || typeof window.__aiProfileLiveStatusStore !== 'object') {
+        window.__aiProfileLiveStatusStore = {};
+    }
+    return window.__aiProfileLiveStatusStore;
+}
+
+function getAiProfileLiveStatusTimers() {
+    if (!window.__aiProfileLiveStatusTimers || typeof window.__aiProfileLiveStatusTimers !== 'object') {
+        window.__aiProfileLiveStatusTimers = {};
+    }
+    return window.__aiProfileLiveStatusTimers;
+}
+
+function clearAiProfileLiveStatusTimer(contactId) {
+    const key = String(contactId || '');
+    if (!key) return;
+    const timers = getAiProfileLiveStatusTimers();
+    if (timers[key]) {
+        clearTimeout(timers[key]);
+        delete timers[key];
+    }
+}
+
+function getAiProfileLiveStatusText(contactId) {
+    const key = String(contactId || '');
+    if (!key) return '';
+    const store = getAiProfileLiveStatusStore();
+    const record = store[key];
+    if (!record || typeof record !== 'object') return '';
+
+    const text = String(record.text || '').trim();
+    if (!text) {
+        delete store[key];
+        clearAiProfileLiveStatusTimer(key);
+        return '';
+    }
+
+    const expiresAt = normalizeAiProfileTimestamp(record.expiresAt);
+    if (expiresAt > 0 && expiresAt <= Date.now()) {
+        delete store[key];
+        clearAiProfileLiveStatusTimer(key);
+        return '';
+    }
+
+    return text;
+}
+
+function refreshAiProfileLiveStatusIfVisible(contactId) {
+    const key = String(contactId || '');
+    if (!key) return;
+    const activeContact = getActiveAiProfileContact();
+    if (!activeContact || String(activeContact.id) !== key) return;
+
+    const statusText = getAiProfileStatusText(activeContact);
+    const avatarTagEl = document.getElementById('ai-profile-avatar-tag');
+    if (avatarTagEl) {
+        avatarTagEl.textContent = statusText;
+    }
+}
+
+function setAiProfileLiveStatusText(contactId, text, ttlMs = 0) {
+    const key = String(contactId || '');
+    if (!key) return;
+    const cleanText = String(text || '').trim();
+    const store = getAiProfileLiveStatusStore();
+    clearAiProfileLiveStatusTimer(key);
+
+    if (!cleanText) {
+        delete store[key];
+        refreshAiProfileLiveStatusIfVisible(key);
+        return;
+    }
+
+    const now = Date.now();
+    const duration = Number.isFinite(Number(ttlMs)) ? Math.max(0, Math.floor(Number(ttlMs))) : 0;
+    const expiresAt = duration > 0 ? now + duration : 0;
+    store[key] = { text: cleanText, expiresAt };
+    refreshAiProfileLiveStatusIfVisible(key);
+
+    if (duration > 0) {
+        const timers = getAiProfileLiveStatusTimers();
+        timers[key] = setTimeout(() => {
+            const currentStore = getAiProfileLiveStatusStore();
+            delete currentStore[key];
+            const currentTimers = getAiProfileLiveStatusTimers();
+            delete currentTimers[key];
+            refreshAiProfileLiveStatusIfVisible(key);
+        }, duration + 40);
+    }
+}
+
+function normalizeContactActivityStatusText(value) {
+    if (value === undefined || value === null) return '';
+    let text = String(value).replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    text = text.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
+    if (!text) return '';
+    if (text.length > 24) {
+        text = `${text.slice(0, 24)}...`;
+    }
+    return text;
+}
+
+function setContactActivityStatusText(contactOrId, statusText, options = {}) {
+    const contactId = contactOrId && typeof contactOrId === 'object'
+        ? contactOrId.id
+        : contactOrId;
+    const key = String(contactId || '');
+    if (!key || !window.iphoneSimState || !Array.isArray(window.iphoneSimState.contacts)) return false;
+
+    const contact = contactOrId && typeof contactOrId === 'object'
+        ? contactOrId
+        : window.iphoneSimState.contacts.find((item) => String(item && item.id) === key);
+    if (!contact) return false;
+
+    const normalizedText = normalizeContactActivityStatusText(statusText);
+    if (!normalizedText) {
+        delete contact.activityStatusText;
+        delete contact.activityStatusUpdatedAt;
+        setAiProfileLiveStatusText(key, '', 0);
+    } else {
+        contact.activityStatusText = normalizedText;
+        contact.activityStatusUpdatedAt = Date.now();
+        setAiProfileLiveStatusText(key, normalizedText, 0);
+    }
+
+    if (options && options.save !== false) {
+        saveConfig();
+    }
+
+    refreshAiProfileLiveStatusIfVisible(key);
+    return true;
+}
+
+function clearContactActivityStatusText(contactOrId, options = {}) {
+    return setContactActivityStatusText(contactOrId, '', options);
+}
+
+function updateContactStatusFromChatActivity(contactId, options = {}) {
+    const key = String(contactId || '');
+    if (!key) return;
+
+    if (Object.prototype.hasOwnProperty.call(options || {}, 'activityText')) {
+        setContactActivityStatusText(key, options.activityText, { save: options.save !== false });
+    }
+}
+
+function getAiProfileStatusText(contact) {
+    const liveStatus = getAiProfileLiveStatusText(contact && contact.id);
+    if (liveStatus) return liveStatus;
+
+    const cleanValue = (value) => String(value || '').trim();
+    const activityStatus = cleanValue(contact && contact.activityStatusText);
+    if (activityStatus) return activityStatus;
+
+    const explicitStatus = cleanValue(contact && (contact.profileStatus || contact.statusText || contact.presenceStatus));
+    if (explicitStatus) return explicitStatus;
+
+    const topbarStatus = cleanValue(contact && contact.topbarStatusText);
+    if (topbarStatus && (contact && contact.topbarStatusVisible)) return topbarStatus;
+    if (topbarStatus && topbarStatus !== '5G Online') return topbarStatus;
+    return 'Online';
+}
+
+window.updateContactStatusFromChatActivity = updateContactStatusFromChatActivity;
+window.setContactActivityStatusText = setContactActivityStatusText;
+window.clearContactActivityStatusText = clearContactActivityStatusText;
+
+function getAiProfileChatHistory(contactId) {
+    if (contactId === undefined || contactId === null) return [];
+
+    let history = null;
+    if (typeof window.getChatHistoryByChannel === 'function') {
+        try {
+            history = window.getChatHistoryByChannel(contactId, 'wechat');
+        } catch (err) {
+            history = null;
+        }
+    }
+
+    if (!Array.isArray(history) && window.iphoneSimState && window.iphoneSimState.chatHistory) {
+        history = window.iphoneSimState.chatHistory[contactId];
+    }
+
+    return Array.isArray(history) ? history : [];
+}
+
+function getAiProfileMessageTime(message) {
+    if (!message || typeof message !== 'object') return 0;
+    const candidates = [message.time, message.timestamp, message.createdAt, message.sentAt, message.date];
+    for (let index = 0; index < candidates.length; index++) {
+        const normalized = normalizeAiProfileTimestamp(candidates[index]);
+        if (normalized > 0) return normalized;
+    }
+    return 0;
+}
+
+function getAiProfileDayKey(timestamp) {
+    const date = new Date(timestamp);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function calculateAiProfileStats(contact) {
+    const rawHistory = getAiProfileChatHistory(contact && contact.id);
+    const history = rawHistory.filter((message) => {
+        if (typeof shouldHideChatSyncMsg === 'function') {
+            return !shouldHideChatSyncMsg(message);
+        }
+        return true;
+    });
+
+    const messageTimes = history
+        .map(getAiProfileMessageTime)
+        .filter((time) => Number.isFinite(time) && time > 0)
+        .sort((a, b) => a - b);
+
+    const now = Date.now();
+    const createdAtCandidates = [
+        contact && contact.createdAt,
+        contact && contact.addedAt,
+        contact && contact.friendSince,
+        contact && contact.friendSinceAt
+    ].map(normalizeAiProfileTimestamp).filter((time) => Number.isFinite(time) && time > 0 && time <= now);
+
+    const idAsTimestamp = normalizeAiProfileTimestamp(contact && contact.id);
+    if (idAsTimestamp >= 946684800000 && idAsTimestamp <= now) {
+        createdAtCandidates.push(idAsTimestamp);
+    }
+
+    let friendStartTime = createdAtCandidates[0] || 0;
+    if (!friendStartTime && messageTimes.length > 0) {
+        friendStartTime = messageTimes[0];
+    }
+    if (!friendStartTime) {
+        friendStartTime = now;
+    }
+
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+
+    const friendStartDate = new Date(friendStartTime);
+    friendStartDate.setHours(0, 0, 0, 0);
+
+    const dayDiff = Math.floor((today.getTime() - friendStartDate.getTime()) / 86400000);
+    const friendDays = Math.max(1, dayDiff + 1);
+
+    const activeDaySet = new Set();
+    messageTimes.forEach((time) => {
+        activeDaySet.add(getAiProfileDayKey(time));
+    });
+
+    return {
+        messageCount: history.length,
+        friendDays,
+        activeDays: activeDaySet.size
+    };
+}
+
+function formatAiProfileStatNumber(value) {
+    const normalized = Math.max(0, Math.floor(Number(value) || 0));
+    return normalized.toLocaleString('en-US');
+}
+
+function normalizeAiProfileTags(tagsInput) {
+    const toList = (value) => {
+        if (Array.isArray(value)) return value;
+        if (typeof value === 'string') {
+            const text = value.trim();
+            if (!text) return [];
+            if ((text.startsWith('[') && text.endsWith(']')) || (text.startsWith('{') && text.endsWith('}'))) {
+                try {
+                    const parsed = JSON.parse(text);
+                    if (Array.isArray(parsed)) return parsed;
+                    if (parsed && typeof parsed === 'object') {
+                        if (Array.isArray(parsed.tags)) return parsed.tags;
+                        if (Array.isArray(parsed.list)) return parsed.list;
+                    }
+                } catch (error) {}
+            }
+            return text.split(/[,，、|/]/);
+        }
+        if (value && typeof value === 'object') {
+            if (Array.isArray(value.tags)) return value.tags;
+            if (Array.isArray(value.list)) return value.list;
+        }
+        return [];
+    };
+
+    const rawList = toList(tagsInput);
+    const normalized = [];
+    const seen = new Set();
+
+    rawList.forEach((item) => {
+        let text = String(item || '').trim();
+        if (!text) return;
+        text = text.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
+        text = text.replace(/^#+/, '').trim();
+        text = text.replace(/\s+/g, ' ');
+        if (!text) return;
+        if (text.length > 16) text = `${text.slice(0, 16)}`;
+        const key = text.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        normalized.push(`#${text}`);
+    });
+
+    return normalized.slice(0, 3);
+}
+
+function buildDefaultAiProfileTags(contact) {
+    const nickname = String((contact && (contact.nickname || contact.name)) || '').trim();
+    const firstTag = nickname ? `#${nickname.replace(/^#+/, '').slice(0, 10)}` : '#Life';
+    return [firstTag, '#Daily', '#Mood'];
+}
+
+function renderAiProfileTags(contact) {
+    const tagsContainer = document.getElementById('ai-profile-tags')
+        || document.querySelector('#ai-profile-screen .ai-profile-tags');
+    if (!tagsContainer) return;
+
+    const parsedTags = normalizeAiProfileTags(contact && contact.profileTags);
+    const displayTags = parsedTags.length > 0 ? parsedTags : buildDefaultAiProfileTags(contact);
+
+    tagsContainer.innerHTML = '';
+    displayTags.forEach((tagText) => {
+        const span = document.createElement('span');
+        span.className = 'tag ai-profile-tag';
+        span.textContent = tagText;
+        tagsContainer.appendChild(span);
+    });
+}
+
+function countKeywordOccurrencesInText(source, keyword) {
+    const text = String(source || '');
+    const term = String(keyword || '');
+    if (!text || !term) return 0;
+
+    let count = 0;
+    let cursor = 0;
+    while (cursor < text.length) {
+        const foundAt = text.indexOf(term, cursor);
+        if (foundAt === -1) break;
+        count++;
+        cursor = foundAt + term.length;
+    }
+    return count;
+}
+
+function calculateAiProfileKeywordMentionCount(contact, keyword) {
+    const term = String(keyword || '').trim();
+    if (!contact || !term) return 0;
+
+    const history = getAiProfileChatHistory(contact.id);
+    let total = 0;
+
+    history.forEach((message) => {
+        if (!message || message.role !== 'assistant') return;
+        if (typeof shouldHideChatSyncMsg === 'function' && shouldHideChatSyncMsg(message)) return;
+
+        const type = String(message.type || 'text').trim().toLowerCase();
+        if (type !== 'text' && type !== 'voice_call_text') return;
+
+        const raw = String(message.content || '').trim();
+        if (!raw) return;
+        if (raw.startsWith('[系统消息]:') || raw.startsWith('[系统]:')) return;
+
+        const plainText = typeof stripHtmlToText === 'function' ? stripHtmlToText(raw) : raw;
+        total += countKeywordOccurrencesInText(plainText, term);
+    });
+
+    return total;
+}
+
+function formatAiProfileKeywordStatLabel(keyword) {
+    const term = String(keyword || '').trim();
+    if (!term) return 'KEYWORD';
+    const short = term.length > 8 ? `${term.slice(0, 8)}...` : term;
+    return `${short} COUNT`;
+}
+
 window.openAiProfile = async function(contactId = null) {
     const resolvedContactId = contactId || window.iphoneSimState.currentChatContactId;
     if (!resolvedContactId) return;
@@ -3140,7 +3562,8 @@ async function generateInitialProfile(contact) {
         const systemPrompt = `你是一个资料卡生成助手。请为角色 "${contact.name}" (人设: ${contact.persona || '无'}) 生成微信资料卡 JSON。
 严禁输出 Markdown 代码块 (如 \`\`\`json)，严禁输出任何解释性文字。
 只输出纯 JSON 字符串，格式如下：
-{"nickname": "网名", "wxid": "微信号", "signature": "签名"}
+{"nickname": "网名", "wxid": "微信号", "signature": "签名", "tags": ["标签1", "标签2", "标签3"]}
+tags 必须是 3 个简短标签，偏生活化，可用于资料卡底部 hashtag。
 确保 JSON 格式合法且完整。`;
 
         let fetchUrl = settings.url;
@@ -3283,12 +3706,36 @@ async function generateInitialProfile(contact) {
                 }
                 return null;
             };
+            const extractTags = () => {
+                const listMatch = content.match(/["']?(?:tags|标签|hashtags?)["']?\s*[:：]\s*(\[[^\]]*\])/i);
+                if (listMatch && listMatch[1]) {
+                    const rawList = String(listMatch[1] || '').trim();
+                    if (rawList) {
+                        try {
+                            const parsed = JSON.parse(rawList.replace(/'/g, '"'));
+                            const tags = normalizeAiProfileTags(parsed);
+                            if (tags.length > 0) return tags;
+                        } catch (error) {
+                            const tags = normalizeAiProfileTags(
+                                rawList
+                                    .replace(/^\[/, '')
+                                    .replace(/\]$/, '')
+                                    .split(',')
+                            );
+                            if (tags.length > 0) return tags;
+                        }
+                    }
+                }
+                const tags = normalizeAiProfileTags(extractField(['tags', '标签', 'hashtags']));
+                return tags.length > 0 ? tags : null;
+            };
             profile.nickname = extractField(['nickname', '网名', 'name']);
             profile.wxid = extractField(['wxid', '微信号', 'id']);
             profile.signature = extractField(['signature', '签名', 'sign']);
+            profile.tags = extractTags();
             
             // Check if profile is empty
-            if (!profile.nickname && !profile.wxid && !profile.signature) {
+            if (!profile.nickname && !profile.wxid && !profile.signature && !profile.tags) {
                 profile = null;
             }
         }
@@ -3300,7 +3747,8 @@ async function generateInitialProfile(contact) {
             profile = {
                 nickname: contact.name, // 默认使用名字
                 wxid: `wxid_${randomId}`,
-                signature: `你好，我是${contact.name}`
+                signature: `你好，我是${contact.name}`,
+                tags: buildDefaultAiProfileTags(contact)
             };
         }
 
@@ -3310,11 +3758,19 @@ async function generateInitialProfile(contact) {
             if (profile.nickname) contact.nickname = profile.nickname;
             if (profile.wxid) contact.wxid = profile.wxid;
             if (profile.signature) contact.signature = profile.signature;
+            const nextTags = normalizeAiProfileTags(
+                profile.tags
+                || profile.tagList
+                || profile.hashtags
+                || profile.labels
+            );
+            contact.profileTags = nextTags.length > 0 ? nextTags : buildDefaultAiProfileTags(contact);
             
             // 强制刷新 UI
-            document.getElementById('ai-profile-name').textContent = contact.nickname || contact.name;
-            document.getElementById('ai-profile-id').textContent = `微信号: ${contact.wxid || 'wxid_' + contact.id}`;
+            document.getElementById('ai-profile-name').textContent = getAiProfileNickname(contact);
+            document.getElementById('ai-profile-id').textContent = formatAiProfileWechatId(contact);
             document.getElementById('ai-profile-signature').textContent = contact.signature || '暂无个性签名';
+            renderAiProfileTags(contact);
         }
         
         contact.initializedProfile = true;
@@ -3326,33 +3782,96 @@ async function generateInitialProfile(contact) {
         contact.nickname = contact.name;
         contact.wxid = `wxid_${Math.random().toString(36).substring(2, 8)}`;
         contact.signature = "你好";
+        contact.profileTags = buildDefaultAiProfileTags(contact);
         contact.initializedProfile = true;
         saveConfig();
         
         // 刷新 UI
-        document.getElementById('ai-profile-name').textContent = contact.nickname;
-        document.getElementById('ai-profile-id').textContent = `微信号: ${contact.wxid}`;
+        document.getElementById('ai-profile-name').textContent = getAiProfileNickname(contact);
+        document.getElementById('ai-profile-id').textContent = formatAiProfileWechatId(contact);
         document.getElementById('ai-profile-signature').textContent = contact.signature;
+        renderAiProfileTags(contact);
+    }
+}
+
+function normalizeAiProfileHighlightImageMap(contact) {
+    const source = contact && contact.profileHighlightImages && typeof contact.profileHighlightImages === 'object'
+        ? contact.profileHighlightImages
+        : {};
+    const normalize = (value) => String(value || '').trim();
+    return {
+        vlog: normalize(source.vlog),
+        ootd: normalize(source.ootd),
+        cafe: normalize(source.cafe),
+        // Backward-compatible fallback: old key `art` -> new key `moment`.
+        moment: normalize(source.moment || source.art)
+    };
+}
+
+function applyAiProfileHighlightThumbImage(thumbEl, imageUrl) {
+    if (!thumbEl) return;
+    const src = String(imageUrl || '').trim();
+    if (!src) {
+        thumbEl.style.backgroundImage = '';
+        thumbEl.classList.remove('has-custom-image');
+        return;
+    }
+    thumbEl.style.backgroundImage = `url(${src})`;
+    thumbEl.classList.add('has-custom-image');
+}
+
+function renderAiProfileHighlightThumbs(contact, contactMoments = []) {
+    const imageMap = normalizeAiProfileHighlightImageMap(contact);
+    const vlogThumb = document.querySelector('#ai-profile-screen .ai-profile-highlight-vlog');
+    const ootdThumb = document.querySelector('#ai-profile-screen .ai-profile-highlight-ootd');
+    const cafeThumb = document.querySelector('#ai-profile-screen .ai-profile-highlight-cafe');
+    applyAiProfileHighlightThumbImage(vlogThumb, imageMap.vlog);
+    applyAiProfileHighlightThumbImage(ootdThumb, imageMap.ootd);
+    applyAiProfileHighlightThumbImage(cafeThumb, imageMap.cafe);
+
+    const momentThumb = document.getElementById('ai-moments-preview');
+    if (!momentThumb) return;
+
+    momentThumb.innerHTML = '';
+    momentThumb.classList.remove('has-image');
+
+    if (imageMap.moment) {
+        const customImg = document.createElement('img');
+        customImg.src = imageMap.moment;
+        customImg.alt = 'MOMENT';
+        momentThumb.appendChild(customImg);
+        momentThumb.classList.add('has-image');
+        return;
+    }
+
+    const latestMomentWithImage = Array.isArray(contactMoments)
+        ? contactMoments.find(m => Array.isArray(m.images) && m.images.length > 0)
+        : null;
+
+    if (latestMomentWithImage) {
+        const img = document.createElement('img');
+        img.src = latestMomentWithImage.images[0];
+        img.alt = 'MOMENT';
+        momentThumb.appendChild(img);
+        momentThumb.classList.add('has-image');
     }
 }
 
 function renderAiProfile(contact) {
-    document.getElementById('ai-profile-avatar').src = contact.avatar;
+    document.getElementById('ai-profile-avatar').src = contact.avatar || '';
     
-    const displayName = contact.remark || contact.nickname || contact.name;
-    document.getElementById('ai-profile-name').textContent = displayName;
+    const profileNickname = getAiProfileNickname(contact);
+    document.getElementById('ai-profile-name').textContent = profileNickname;
 
     const nicknameEl = document.getElementById('ai-profile-nickname');
-    const realNickname = contact.nickname || contact.name;
-    if (contact.remark && realNickname && contact.remark !== realNickname) {
-        nicknameEl.textContent = `昵称: ${realNickname}`;
-        nicknameEl.style.display = 'block';
-    } else {
-        nicknameEl.style.display = 'none';
-    }
+    if (nicknameEl) nicknameEl.style.display = 'none';
 
-    const displayId = contact.wxid || contact.id;
-    document.getElementById('ai-profile-id').textContent = `微信号: ${displayId}`;
+    document.getElementById('ai-profile-id').textContent = formatAiProfileWechatId(contact);
+
+    const avatarTagEl = document.getElementById('ai-profile-avatar-tag');
+    if (avatarTagEl) {
+        avatarTagEl.textContent = getAiProfileStatusText(contact);
+    }
     
     const bgEl = document.getElementById('ai-profile-bg');
     if (contact.profileBg) {
@@ -3364,20 +3883,63 @@ function renderAiProfile(contact) {
     document.getElementById('ai-profile-remark').textContent = contact.remark || '未设置';
     document.getElementById('ai-profile-signature').textContent = contact.signature || '暂无个性签名';
     document.getElementById('ai-profile-relation').textContent = contact.relation || '未设置';
+    renderAiProfileTags(contact);
 
-    const previewContainer = document.getElementById('ai-moments-preview');
-    previewContainer.innerHTML = '';
-    
-    const contactMoments = window.iphoneSimState.moments.filter(m => m.contactId === contact.id);
-    const recentMoments = contactMoments.sort((a, b) => b.time - a.time).slice(0, 4);
-    
-    recentMoments.forEach(m => {
-        if (m.images && m.images.length > 0) {
-            const img = document.createElement('img');
-            img.src = m.images[0];
-            previewContainer.appendChild(img);
+    const contactMoments = (window.iphoneSimState.moments || [])
+        .filter(m => m.contactId === contact.id)
+        .sort((a, b) => b.time - a.time);
+
+    const profileStats = calculateAiProfileStats(contact);
+    const statMessagesValue = document.getElementById('ai-profile-stat-messages-value');
+    const statFriendDaysValue = document.getElementById('ai-profile-stat-friend-days-value');
+    const statThirdValue = document.getElementById('ai-profile-stat-active-days-value');
+    const statMessagesLabel = document.getElementById('ai-profile-stat-messages-label');
+    const statFriendDaysLabel = document.getElementById('ai-profile-stat-friend-days-label');
+    const statThirdLabel = document.getElementById('ai-profile-stat-active-days-label');
+    const statThirdItem = document.getElementById('ai-profile-stat-third-item');
+
+    const keywordTerm = String(contact.profileKeywordStatTerm || '').trim();
+    const keywordCount = keywordTerm ? calculateAiProfileKeywordMentionCount(contact, keywordTerm) : 0;
+
+    if (statMessagesValue) statMessagesValue.textContent = formatAiProfileStatNumber(profileStats.messageCount);
+    if (statFriendDaysValue) statFriendDaysValue.textContent = formatAiProfileStatNumber(profileStats.friendDays);
+    if (statThirdValue) statThirdValue.textContent = formatAiProfileStatNumber(keywordCount);
+    if (statMessagesLabel) statMessagesLabel.textContent = 'MESSAGES';
+    if (statFriendDaysLabel) statFriendDaysLabel.textContent = 'FRIEND DAYS';
+    if (statThirdLabel) statThirdLabel.textContent = formatAiProfileKeywordStatLabel(keywordTerm);
+
+    const openKeywordStatPrompt = () => {
+        const currentTerm = String(contact.profileKeywordStatTerm || '').trim();
+        const nextInput = window.prompt('输入要统计的文本（例如：宝宝）\n留空可清除关键词统计', currentTerm);
+        if (nextInput === null) return;
+
+        const normalized = String(nextInput || '').trim();
+        if (!normalized) {
+            delete contact.profileKeywordStatTerm;
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast('已清除关键词统计', 1800);
+            }
+        } else {
+            contact.profileKeywordStatTerm = normalized.slice(0, 24);
+            if (typeof window.showChatToast === 'function') {
+                window.showChatToast(`关键词已设为：${contact.profileKeywordStatTerm}`, 1800);
+            }
         }
-    });
+        saveConfig();
+        renderAiProfile(contact);
+    };
+
+    if (statThirdItem) {
+        statThirdItem.onclick = openKeywordStatPrompt;
+        statThirdItem.onkeydown = (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openKeywordStatPrompt();
+            }
+        };
+    }
+
+    renderAiProfileHighlightThumbs(contact, contactMoments);
 }
 
 function handleAiProfileBgUpload(e) {

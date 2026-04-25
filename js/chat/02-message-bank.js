@@ -782,6 +782,20 @@ function sendMessage(text, isUser, type = 'text', description = null, targetCont
     }
 
     window.iphoneSimState.chatHistory[contactId].push(msg);
+    if (typeof window.updateContactStatusFromChatActivity === 'function') {
+        try {
+            window.updateContactStatusFromChatActivity(contactId, {
+                isUser,
+                type,
+                text,
+                deliveryChannel,
+                time: msg.time
+            });
+        } catch (liveStatusError) {
+            console.warn('聊天状态动态更新失败', liveStatusError);
+        }
+    }
+
     const shouldOffloadInlineMedia = (type === 'image' || type === 'sticker')
         && typeof text === 'string'
         && text.trim().startsWith('data:image');

@@ -146,6 +146,1145 @@ const CHAT_NAVIGATION_MODE_META = {
     walking: { key: 'walking', label: '步行' },
     bicycling: { key: 'bicycling', label: '骑行' }
 };
+const CHAT_OOTD_DEFAULT_SUBTITLE = 'SYS.LOG: MONOCHROME FIT';
+const CHAT_OOTD_BARCODE_DEFAULT_TEXT = 'CLICK BARCODE TO SCAN FOR DETAILS';
+const CHAT_OOTD_BARCODE_SCANNING_TEXT = 'SCANNING...';
+const CHAT_OOTD_BARCODE_SUCCESS_TEXT = 'SCANNED SUCCESSFULLY [200 OK]';
+const CHAT_OOTD_SECRET_GRID_AWAITING_HTML = `
+    <div class="v3-grid-item chat-ootd-awaiting-item">
+        <div class="v3-label">STATUS</div>
+        <div class="v3-value chat-ootd-awaiting-value">[ AWAITING SCAN ]</div>
+    </div>
+`;
+const CHAT_OOTD_MODAL_TRANSITION_MS = 340;
+const CHAT_OOTD_V5_DRAG_LIMIT_X = 160;
+const CHAT_OOTD_V5_DRAG_LIMIT_Y = 240;
+const CHAT_OOTD_V5_FLIPPED_BASE_Y = -40;
+const CHAT_OOTD_V5_FLIPPED_SCALE = 1.05;
+let chatOotdGenerateRequestSeq = 0;
+const AI_PROFILE_HIGHLIGHT_KEYS = ['vlog', 'ootd', 'cafe', 'moment'];
+const AI_PROFILE_CUSTOMIZE_TRANSITION_MS = 360;
+let aiProfileCustomizeDraft = null;
+let aiProfileCustomizeHideTimer = null;
+let chatOotdModalHideTimer = null;
+const chatOotdV5DragState = {
+    active: false,
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    startOffsetX: 0,
+    startOffsetY: 0,
+    offsetX: 0,
+    offsetY: 0
+};
+
+function escapeChatOotdHtml(text) {
+    return String(text == null ? '' : text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getChatOotdDateKey(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function getChatOotdTitleDate(date = new Date()) {
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${month}.${day}`;
+}
+
+function normalizeChatOotdStyleKey(styleKey) {
+    return String(styleKey || '').trim().toLowerCase() === 'v5' ? 'v5' : 'v3';
+}
+
+function getChatOotdStyleForContact(contact) {
+    return normalizeChatOotdStyleKey(contact && contact.ootdCardStyle);
+}
+
+function normalizeChatOotdText(value, fallback = '', maxLen = 240) {
+    const normalized = String(value == null ? '' : value)
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!normalized) return fallback;
+    return normalized.slice(0, Math.max(1, maxLen));
+}
+
+function formatChatOotdScore(scoreValue) {
+    const rawText = String(scoreValue == null ? '' : scoreValue).trim();
+    const matchedNumber = rawText.match(/(\d+(?:\.\d+)?)/);
+    const parsed = matchedNumber ? Number.parseFloat(matchedNumber[1]) : Number.parseFloat(rawText);
+    if (Number.isFinite(parsed)) {
+        const normalized = Math.max(0, Math.min(10, parsed));
+        const fixed = Number.isInteger(normalized) ? normalized.toString() : normalized.toFixed(1);
+        return `${fixed} / 10`;
+    }
+    return '8.5 / 10';
+}
+
+function getChatOotdContactDisplayName(contact) {
+    if (!contact || typeof contact !== 'object') return 'TA';
+    return normalizeChatOotdText(contact.remark || contact.nickname || contact.name, 'TA', 28);
+}
+
+function normalizeChatOotdWeather(weather, contact) {
+    const rawTemperature = normalizeChatOotdText(weather && weather.temperature, '', 12);
+    const parsedTemperature = Number.parseFloat(rawTemperature);
+    const city = normalizeChatOotdText(weather && weather.city, '', 24);
+    const province = normalizeChatOotdText(weather && weather.province, '', 24);
+    const rawWeatherText = normalizeChatOotdText(weather && weather.weather, '', 24);
+    const weatherText = /^[a-z\s-]+$/i.test(rawWeatherText) ? rawWeatherText.toUpperCase() : rawWeatherText;
+    const locationFromContact = normalizeChatOotdText(
+        contact && contact.location && contact.location.query,
+        '',
+        48
+    );
+    const locationText = city || locationFromContact || province || '未知位置';
+    const promptTemperature = Number.isFinite(parsedTemperature) ? `${parsedTemperature}°C` : '未知温度';
+    const cardTemperature = Number.isFinite(parsedTemperature) ? `${Math.round(parsedTemperature)}°C` : '--°C';
+
+    return {
+        city,
+        province,
+        weatherText: weatherText || 'UNKNOWN',
+        locationText,
+        promptTemperature,
+        cardTemperature,
+        reportTime: normalizeChatOotdText(weather && weather.reporttime, '', 40)
+    };
+}
+
+function extractChatOotdJsonString(rawContent) {
+    let text = String(rawContent == null ? '' : rawContent)
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim();
+    if (!text) return '';
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+        text = text.slice(firstBrace, lastBrace + 1);
+    }
+    return text;
+}
+
+function parseChatOotdJson(rawContent) {
+    const jsonText = extractChatOotdJsonString(rawContent);
+    if (!jsonText) return null;
+    try {
+        return JSON.parse(jsonText);
+    } catch (error) {
+        console.warn('[OOTD] JSON parse failed', error);
+        return null;
+    }
+}
+
+function buildChatOotdFallbackPayload(contact, weatherMeta) {
+    const contactName = getChatOotdContactDisplayName(contact);
+    const weatherLabel = weatherMeta && weatherMeta.weatherText ? weatherMeta.weatherText : '当前天气';
+    const tempLabel = weatherMeta && weatherMeta.promptTemperature ? weatherMeta.promptTemperature : '未知温度';
+    return {
+        subtitle: CHAT_OOTD_DEFAULT_SUBTITLE,
+        description: `根据${contactName}当地${tempLabel}与${weatherLabel}，搭配了兼顾舒适和质感的日常穿搭，适合今天出门通勤或轻度活动。`,
+        items: {
+            top: 'Lightweight Knit Top',
+            bottom: 'Straight Fit Trousers',
+            shoes: 'Classic Low-top Sneakers',
+            accessories: 'Minimal Silver Necklace'
+        },
+        satisfaction: '8.5 / 10',
+        review: '整体上身轻盈，行动方便，风格也比较耐看，今天这套我会继续穿。'
+    };
+}
+
+function normalizeChatOotdPayload(rawPayload, contact, weatherMeta) {
+    const fallbackPayload = buildChatOotdFallbackPayload(contact, weatherMeta);
+    const payload = rawPayload && typeof rawPayload === 'object' ? rawPayload : {};
+    const itemMap = payload.items && typeof payload.items === 'object' ? payload.items : {};
+    const normalized = {
+        subtitle: normalizeChatOotdText(
+            payload.subtitle || payload.subTitle || payload.title_en || payload.title,
+            fallbackPayload.subtitle,
+            64
+        ),
+        description: normalizeChatOotdText(
+            payload.description || payload.outfitDescription || payload.desc || payload.summary,
+            fallbackPayload.description,
+            320
+        ),
+        items: {
+            top: normalizeChatOotdText(
+                itemMap.top || itemMap.upper || itemMap.up || payload.top || payload.upper || payload['上身'],
+                fallbackPayload.items.top,
+                72
+            ),
+            bottom: normalizeChatOotdText(
+                itemMap.bottom || itemMap.lower || itemMap.down || payload.bottom || payload.lower || payload['下身'],
+                fallbackPayload.items.bottom,
+                72
+            ),
+            shoes: normalizeChatOotdText(
+                itemMap.shoes || itemMap.footwear || payload.shoes || payload.footwear || payload['鞋子'],
+                fallbackPayload.items.shoes,
+                72
+            ),
+            accessories: normalizeChatOotdText(
+                itemMap.accessories || itemMap.accessory || payload.accessories || payload.accessory || payload['配饰'],
+                fallbackPayload.items.accessories,
+                72
+            )
+        },
+        satisfaction: formatChatOotdScore(
+            payload.satisfaction || payload.rating || payload.score || payload['满意度']
+        ),
+        review: normalizeChatOotdText(
+            payload.review || payload.selfReview || payload.comment || payload.feedback || payload['评价'],
+            fallbackPayload.review,
+            320
+        )
+    };
+    return normalized;
+}
+
+function buildChatOotdSecretGridHtml(items) {
+    const top = escapeChatOotdHtml((items && items.top) || '');
+    const bottom = escapeChatOotdHtml((items && items.bottom) || '');
+    const shoes = escapeChatOotdHtml((items && items.shoes) || '');
+    const accessories = escapeChatOotdHtml((items && items.accessories) || '');
+    return `
+        <div class="v3-grid-item v3-fade-in" style="padding: 8px; animation-delay: 0.1s;">
+            <div class="v3-label">TOP</div>
+            <div class="v3-value">${top}</div>
+        </div>
+        <div class="v3-grid-item v3-fade-in" style="padding: 8px; animation-delay: 0.2s;">
+            <div class="v3-label">BOTTOM</div>
+            <div class="v3-value">${bottom}</div>
+        </div>
+        <div class="v3-grid-item v3-fade-in" style="padding: 8px; animation-delay: 0.3s;">
+            <div class="v3-label">FOOTWEAR</div>
+            <div class="v3-value">${shoes}</div>
+        </div>
+        <div class="v3-grid-item v3-fade-in" style="padding: 8px; background: #18181b; animation-delay: 0.4s;">
+            <div class="v3-label" style="color: #a1a1aa;">ACCESSORIES</div>
+            <div class="v3-value" style="color: #fff;">${accessories}</div>
+        </div>
+    `;
+}
+
+function clampChatOotdV5Drag(value, min, max) {
+    if (!Number.isFinite(value)) return min;
+    return Math.max(min, Math.min(max, value));
+}
+
+function applyChatOotdV5DraggedTransform(bottom) {
+    if (!bottom) return;
+    const x = chatOotdV5DragState.offsetX;
+    const y = CHAT_OOTD_V5_FLIPPED_BASE_Y + chatOotdV5DragState.offsetY;
+    bottom.style.transform = `translate(${x}px, ${y}px) rotateY(0deg) scale(${CHAT_OOTD_V5_FLIPPED_SCALE})`;
+}
+
+function resetChatOotdV5DragState(fullReset = false) {
+    const bottom = document.getElementById('chat-ootd-v5-bottom');
+    if (bottom) {
+        bottom.classList.remove('dragging');
+        if (
+            chatOotdV5DragState.pointerId != null
+            && typeof bottom.releasePointerCapture === 'function'
+            && bottom.hasPointerCapture(chatOotdV5DragState.pointerId)
+        ) {
+            try {
+                bottom.releasePointerCapture(chatOotdV5DragState.pointerId);
+            } catch (error) {
+                // Ignore pointer capture release errors
+            }
+        }
+    }
+    chatOotdV5DragState.active = false;
+    chatOotdV5DragState.pointerId = null;
+    chatOotdV5DragState.startX = 0;
+    chatOotdV5DragState.startY = 0;
+    chatOotdV5DragState.startOffsetX = 0;
+    chatOotdV5DragState.startOffsetY = 0;
+    if (fullReset) {
+        chatOotdV5DragState.offsetX = 0;
+        chatOotdV5DragState.offsetY = 0;
+    }
+}
+
+function startChatOotdV5Drag(event) {
+    const bottom = document.getElementById('chat-ootd-v5-bottom');
+    const loadingEl = document.getElementById('chat-ootd-loading');
+    if (!bottom || !bottom.classList.contains('flipped')) return;
+    if (loadingEl && !loadingEl.classList.contains('hidden')) return;
+    if (typeof event.button === 'number' && event.button !== 0) return;
+
+    chatOotdV5DragState.active = true;
+    chatOotdV5DragState.pointerId = event.pointerId != null ? event.pointerId : null;
+    chatOotdV5DragState.startX = Number(event.clientX || 0);
+    chatOotdV5DragState.startY = Number(event.clientY || 0);
+    chatOotdV5DragState.startOffsetX = chatOotdV5DragState.offsetX;
+    chatOotdV5DragState.startOffsetY = chatOotdV5DragState.offsetY;
+    bottom.classList.add('dragging');
+    bottom.style.transition = 'none';
+
+    if (chatOotdV5DragState.pointerId != null && typeof bottom.setPointerCapture === 'function') {
+        try {
+            bottom.setPointerCapture(chatOotdV5DragState.pointerId);
+        } catch (error) {
+            // Ignore pointer capture errors
+        }
+    }
+    event.preventDefault();
+}
+
+function moveChatOotdV5Drag(event) {
+    if (!chatOotdV5DragState.active) return;
+    if (chatOotdV5DragState.pointerId != null && event.pointerId != null && event.pointerId !== chatOotdV5DragState.pointerId) {
+        return;
+    }
+    const bottom = document.getElementById('chat-ootd-v5-bottom');
+    if (!bottom || !bottom.classList.contains('flipped')) {
+        resetChatOotdV5DragState(false);
+        return;
+    }
+
+    const dx = Number(event.clientX || 0) - chatOotdV5DragState.startX;
+    const dy = Number(event.clientY || 0) - chatOotdV5DragState.startY;
+    chatOotdV5DragState.offsetX = clampChatOotdV5Drag(
+        chatOotdV5DragState.startOffsetX + dx,
+        -CHAT_OOTD_V5_DRAG_LIMIT_X,
+        CHAT_OOTD_V5_DRAG_LIMIT_X
+    );
+    chatOotdV5DragState.offsetY = clampChatOotdV5Drag(
+        chatOotdV5DragState.startOffsetY + dy,
+        -CHAT_OOTD_V5_DRAG_LIMIT_Y,
+        CHAT_OOTD_V5_DRAG_LIMIT_Y
+    );
+    applyChatOotdV5DraggedTransform(bottom);
+    event.preventDefault();
+}
+
+function endChatOotdV5Drag(event) {
+    if (!chatOotdV5DragState.active) return;
+    if (chatOotdV5DragState.pointerId != null && event.pointerId != null && event.pointerId !== chatOotdV5DragState.pointerId) {
+        return;
+    }
+    const bottom = document.getElementById('chat-ootd-v5-bottom');
+    if (bottom) {
+        bottom.classList.remove('dragging');
+        if (
+            chatOotdV5DragState.pointerId != null
+            && typeof bottom.releasePointerCapture === 'function'
+            && bottom.hasPointerCapture(chatOotdV5DragState.pointerId)
+        ) {
+            try {
+                bottom.releasePointerCapture(chatOotdV5DragState.pointerId);
+            } catch (error) {
+                // Ignore pointer capture release errors
+            }
+        }
+        if (bottom.classList.contains('flipped')) {
+            bottom.style.transition = 'transform 0.16s ease-out';
+            applyChatOotdV5DraggedTransform(bottom);
+            setTimeout(() => {
+                if (!chatOotdV5DragState.active && bottom.classList.contains('flipped')) {
+                    bottom.style.transition = '';
+                }
+            }, 180);
+        }
+    }
+    chatOotdV5DragState.active = false;
+    chatOotdV5DragState.pointerId = null;
+}
+
+function resetChatOotdV5InteractiveState() {
+    const card = document.getElementById('chat-ootd-card');
+    const tearLine = document.getElementById('chat-ootd-v5-tear-line');
+    const bottom = document.getElementById('chat-ootd-v5-bottom');
+    const front = document.getElementById('chat-ootd-v5-front');
+    const back = document.getElementById('chat-ootd-v5-back');
+    resetChatOotdV5DragState(true);
+    if (card) {
+        card.style.position = '';
+        card.style.top = '';
+        card.style.left = '';
+        card.style.width = '';
+        card.style.margin = '';
+        card.style.marginTop = '';
+        card.style.alignSelf = '';
+    }
+    if (tearLine) {
+        tearLine.style.opacity = '1';
+    }
+    if (bottom) {
+        bottom.classList.remove('torn', 'flipping', 'flipped');
+        bottom.style.transition = '';
+        bottom.style.transform = '';
+        bottom.style.cursor = '';
+    }
+    if (front) {
+        front.style.display = 'block';
+    }
+    if (back) {
+        back.style.display = 'none';
+    }
+}
+
+function applyChatOotdStyle(styleKey) {
+    const normalized = normalizeChatOotdStyleKey(styleKey);
+    const cardEl = document.getElementById('chat-ootd-card');
+    const viewV3 = document.getElementById('chat-ootd-view-v3');
+    const viewV5 = document.getElementById('chat-ootd-view-v5');
+    if (cardEl) {
+        cardEl.classList.toggle('chat-ootd-card-v5', normalized === 'v5');
+        cardEl.classList.toggle('v3', normalized === 'v3');
+    }
+    if (viewV3) {
+        viewV3.classList.toggle('hidden', normalized !== 'v3');
+    }
+    if (viewV5) {
+        viewV5.classList.toggle('hidden', normalized !== 'v5');
+    }
+    resetChatOotdV5InteractiveState();
+}
+
+function resetChatOotdInteractiveState() {
+    const fingerprintBox = document.getElementById('chat-ootd-fingerprint-box');
+    const fingerprintIdle = document.getElementById('chat-ootd-fingerprint-idle');
+    const fingerprintResult = document.getElementById('chat-ootd-fingerprint-result');
+    const fingerprintIcon = document.getElementById('chat-ootd-fp-icon');
+    const fingerprintText = document.getElementById('chat-ootd-fp-text');
+    const barcodeScanner = document.getElementById('chat-ootd-barcode-scanner');
+    const barcodeText = document.getElementById('chat-ootd-barcode-text');
+    const secretGrid = document.getElementById('chat-ootd-secret-grid');
+
+    if (fingerprintBox) {
+        fingerprintBox.classList.remove('scanned');
+        fingerprintBox.style.pointerEvents = 'auto';
+    }
+    if (fingerprintIdle) {
+        fingerprintIdle.style.display = 'flex';
+    }
+    if (fingerprintResult) {
+        fingerprintResult.style.display = 'none';
+        fingerprintResult.style.opacity = '0';
+    }
+    if (fingerprintIcon) {
+        fingerprintIcon.style.color = '#3f3f46';
+        fingerprintIcon.style.transform = 'scale(1)';
+    }
+    if (fingerprintText) {
+        fingerprintText.textContent = 'AUTH REQ';
+        fingerprintText.style.color = '#a1a1aa';
+    }
+    if (barcodeScanner) {
+        barcodeScanner.classList.remove('scanning');
+        barcodeScanner.style.display = 'block';
+    }
+    if (barcodeText) {
+        barcodeText.style.display = 'block';
+        barcodeText.textContent = CHAT_OOTD_BARCODE_DEFAULT_TEXT;
+        barcodeText.style.color = '';
+    }
+    if (secretGrid) {
+        secretGrid.classList.remove('scanned');
+        secretGrid.innerHTML = CHAT_OOTD_SECRET_GRID_AWAITING_HTML;
+    }
+    resetChatOotdV5InteractiveState();
+}
+
+function setChatOotdLoading(loading, loadingText = 'GENERATING OOTD...') {
+    const loadingEl = document.getElementById('chat-ootd-loading');
+    const cardEl = document.getElementById('chat-ootd-card');
+    const refreshBtn = document.getElementById('chat-ootd-refresh-btn');
+    if (loadingEl) {
+        loadingEl.textContent = loadingText;
+        loadingEl.classList.toggle('hidden', !loading);
+    }
+    if (cardEl) {
+        cardEl.classList.toggle('is-loading', !!loading);
+    }
+    if (refreshBtn) {
+        refreshBtn.disabled = !!loading;
+    }
+}
+
+function renderChatOotdResult(contact, weatherMeta, ootdPayload) {
+    const titleEl = document.getElementById('chat-ootd-title');
+    const subtitleEl = document.getElementById('chat-ootd-subtitle');
+    const weatherValueEl = document.getElementById('chat-ootd-weather-value');
+    const ratingEl = document.getElementById('chat-ootd-rating');
+    const reviewEl = document.getElementById('chat-ootd-review');
+    const descEl = document.getElementById('chat-ootd-description');
+    const secretGrid = document.getElementById('chat-ootd-secret-grid');
+    const v5TempEl = document.getElementById('chat-ootd-v5-temp');
+    const v5BarcodeEl = document.getElementById('chat-ootd-v5-barcode');
+    const v5TitleEl = document.getElementById('chat-ootd-v5-title');
+    const v5RatingEl = document.getElementById('chat-ootd-v5-rating');
+    const v5TextEl = document.getElementById('chat-ootd-v5-text');
+    const v5ItemTopEl = document.getElementById('chat-ootd-v5-item-top');
+    const v5ItemBottomEl = document.getElementById('chat-ootd-v5-item-bottom');
+    const v5ItemShoesEl = document.getElementById('chat-ootd-v5-item-shoes');
+    const v5ItemAccessoriesEl = document.getElementById('chat-ootd-v5-item-accessories');
+    const v5ReviewEl = document.getElementById('chat-ootd-v5-review');
+
+    const today = new Date();
+    const mdCode = `${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+    const fallbackPayload = buildChatOotdFallbackPayload(contact, weatherMeta);
+    const items = ootdPayload && ootdPayload.items ? ootdPayload.items : fallbackPayload.items;
+    const scoreText = normalizeChatOotdText(
+        ootdPayload && ootdPayload.satisfaction,
+        '8.5 / 10',
+        24
+    );
+
+    if (titleEl) {
+        titleEl.textContent = `OOTD // ${getChatOotdTitleDate(today)}`;
+    }
+    if (subtitleEl) {
+        subtitleEl.textContent = normalizeChatOotdText(
+            ootdPayload && ootdPayload.subtitle,
+            CHAT_OOTD_DEFAULT_SUBTITLE,
+            64
+        );
+    }
+    if (weatherValueEl) {
+        const weatherLine = escapeChatOotdHtml((weatherMeta && weatherMeta.cardTemperature) || '--°C');
+        const weatherText = escapeChatOotdHtml((weatherMeta && weatherMeta.weatherText) || 'UNKNOWN');
+        weatherValueEl.innerHTML = `${weatherLine}<br><span class="chat-ootd-weather-text">${weatherText}</span>`;
+    }
+    if (ratingEl) {
+        ratingEl.textContent = scoreText;
+    }
+    if (reviewEl) {
+        reviewEl.textContent = normalizeChatOotdText(
+            ootdPayload && ootdPayload.review,
+            fallbackPayload.review,
+            320
+        );
+    }
+    if (descEl) {
+        descEl.textContent = normalizeChatOotdText(
+            ootdPayload && ootdPayload.description,
+            fallbackPayload.description,
+            320
+        );
+    }
+    if (secretGrid) {
+        secretGrid.dataset.top = normalizeChatOotdText(items.top, '', 72);
+        secretGrid.dataset.bottom = normalizeChatOotdText(items.bottom, '', 72);
+        secretGrid.dataset.shoes = normalizeChatOotdText(items.shoes, '', 72);
+        secretGrid.dataset.accessories = normalizeChatOotdText(items.accessories, '', 72);
+    }
+    if (v5TempEl) {
+        v5TempEl.textContent = normalizeChatOotdText(
+            weatherMeta && weatherMeta.cardTemperature,
+            '--°C',
+            16
+        );
+    }
+    if (v5BarcodeEl) {
+        v5BarcodeEl.textContent = `*TAG-${mdCode}*`;
+    }
+    if (v5TitleEl) {
+        v5TitleEl.textContent = normalizeChatOotdText(
+            `${getChatOotdContactDisplayName(contact)} Fit`,
+            'Today Tag',
+            36
+        );
+    }
+    if (v5RatingEl) {
+        v5RatingEl.textContent = `★ ${scoreText}`;
+    }
+    if (v5TextEl) {
+        v5TextEl.textContent = normalizeChatOotdText(
+            ootdPayload && ootdPayload.description,
+            fallbackPayload.description,
+            320
+        );
+    }
+    if (v5ItemTopEl) {
+        v5ItemTopEl.textContent = normalizeChatOotdText(items.top, '-', 72);
+    }
+    if (v5ItemBottomEl) {
+        v5ItemBottomEl.textContent = normalizeChatOotdText(items.bottom, '-', 72);
+    }
+    if (v5ItemShoesEl) {
+        v5ItemShoesEl.textContent = normalizeChatOotdText(items.shoes, '-', 72);
+    }
+    if (v5ItemAccessoriesEl) {
+        v5ItemAccessoriesEl.textContent = normalizeChatOotdText(items.accessories, '-', 72);
+    }
+    if (v5ReviewEl) {
+        v5ReviewEl.textContent = normalizeChatOotdText(
+            ootdPayload && ootdPayload.review,
+            fallbackPayload.review,
+            320
+        );
+    }
+
+    resetChatOotdInteractiveState();
+}
+
+function openChatOotdModalUi() {
+    const modal = document.getElementById('chat-ootd-modal');
+    if (!modal) return;
+    if (chatOotdModalHideTimer) {
+        clearTimeout(chatOotdModalHideTimer);
+        chatOotdModalHideTimer = null;
+    }
+    modal.classList.remove('chat-ootd-open');
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => {
+        modal.classList.add('chat-ootd-open');
+    });
+}
+
+function closeChatOotdModalUi() {
+    const modal = document.getElementById('chat-ootd-modal');
+    if (!modal) return;
+    if (chatOotdModalHideTimer) {
+        clearTimeout(chatOotdModalHideTimer);
+        chatOotdModalHideTimer = null;
+    }
+    modal.classList.remove('chat-ootd-open');
+    modal.setAttribute('aria-hidden', 'true');
+    setChatOotdLoading(false);
+    chatOotdModalHideTimer = setTimeout(() => {
+        if (!modal.classList.contains('chat-ootd-open')) {
+            modal.classList.add('hidden');
+        }
+        chatOotdModalHideTimer = null;
+    }, CHAT_OOTD_MODAL_TRANSITION_MS);
+}
+
+async function requestChatOotdPayloadFromApi(contact, weatherMeta) {
+    const state = window.iphoneSimState || {};
+    const settings = state.aiSettings2 && state.aiSettings2.url ? state.aiSettings2 : state.aiSettings;
+    if (!settings || !settings.url || !settings.key) {
+        throw new Error('AI API 未配置');
+    }
+
+    let fetchUrl = String(settings.url || '').trim();
+    if (!fetchUrl.endsWith('/chat/completions')) {
+        fetchUrl = fetchUrl.endsWith('/') ? `${fetchUrl}chat/completions` : `${fetchUrl}/chat/completions`;
+    }
+    const cleanKey = String(settings.key || '').replace(/[^\x00-\x7F]/g, '').trim();
+    const contactName = getChatOotdContactDisplayName(contact);
+    const personaText = normalizeChatOotdText(contact && contact.persona, '无', 1200);
+    const weatherLine = `天气：${weatherMeta.locationText}，${weatherMeta.weatherText}，${weatherMeta.promptTemperature}`;
+    const reportLine = weatherMeta.reportTime ? `天气报告时间：${weatherMeta.reportTime}` : '';
+    const systemPrompt = [
+        '你是一个联系人 OOTD 生成助手。',
+        '你必须根据给定天气和温度生成当天穿搭。',
+        '严禁输出 Markdown，严禁输出解释。',
+        '只输出一个 JSON 对象，字段格式必须是：',
+        '{"description":"穿搭描述","items":{"top":"上身单品","bottom":"下身单品","shoes":"鞋子","accessories":"配饰"},"satisfaction":"8.8 / 10","review":"联系人自我评价","subtitle":"SYS.LOG: MONOCHROME FIT"}',
+        '要求：',
+        '- description 35~120 字，描述整体风格和适用场景。',
+        '- items 四个字段都必须非空、简短具体。',
+        '- satisfaction 必须是 0-10 的评分格式（例如 8.8 / 10）。',
+        '- review 20~100 字，语气像联系人自己的评价。',
+        '- subtitle 可选，若输出请保持英文短句风格。'
+    ].join('\n');
+    const userPrompt = [
+        `联系人：${contactName}`,
+        `人设：${personaText}`,
+        weatherLine,
+        reportLine,
+        '请生成今天这位联系人的 OOTD JSON。'
+    ].filter(Boolean).join('\n');
+
+    const callApi = async (useJsonFormat) => {
+        const requestBody = {
+            model: settings.model || 'gpt-4o-mini',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.7
+        };
+        if (useJsonFormat) {
+            requestBody.response_format = { type: 'json_object' };
+        }
+        const response = await fetch(fetchUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${cleanKey}`
+            },
+            body: JSON.stringify(requestBody)
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        const choice = data && Array.isArray(data.choices) ? data.choices[0] : null;
+        let content = choice && choice.message ? choice.message.content : '';
+        if (Array.isArray(content)) {
+            content = content.map((part) => {
+                if (typeof part === 'string') return part;
+                if (part && typeof part.text === 'string') return part.text;
+                return '';
+            }).join('\n');
+        }
+        return String(content || '').trim();
+    };
+
+    let rawContent = '';
+    try {
+        rawContent = await callApi(true);
+    } catch (firstError) {
+        console.warn('[OOTD] first attempt failed, retrying without json_object', firstError);
+        rawContent = await callApi(false);
+    }
+
+    const parsed = parseChatOotdJson(rawContent);
+    return normalizeChatOotdPayload(parsed, contact, weatherMeta);
+}
+
+function getChatOotdCachedEntry(contact, dateKey = getChatOotdDateKey(new Date())) {
+    if (!contact || typeof contact !== 'object') return null;
+    const entry = contact.todayOotd;
+    if (!entry || typeof entry !== 'object') return null;
+    if (String(entry.dateKey || '') !== String(dateKey || '')) return null;
+    if (!entry.payload || typeof entry.payload !== 'object') return null;
+    return entry;
+}
+
+function normalizeChatOotdWeatherFromCache(contact, cachedEntry) {
+    const fallback = normalizeChatOotdWeather(null, contact);
+    const cachedWeather = cachedEntry && cachedEntry.weather && typeof cachedEntry.weather === 'object'
+        ? cachedEntry.weather
+        : null;
+    if (!cachedWeather) return fallback;
+    return {
+        ...fallback,
+        locationText: normalizeChatOotdText(cachedWeather.locationText, fallback.locationText, 48),
+        weatherText: normalizeChatOotdText(cachedWeather.weatherText, fallback.weatherText, 24),
+        cardTemperature: normalizeChatOotdText(cachedWeather.cardTemperature, fallback.cardTemperature, 16),
+        promptTemperature: normalizeChatOotdText(cachedWeather.promptTemperature, fallback.promptTemperature, 24),
+        reportTime: normalizeChatOotdText(cachedWeather.reportTime, fallback.reportTime || '', 40)
+    };
+}
+
+async function openChatOotdModal(contactId = null, options = {}) {
+    const resolvedContactId = contactId
+        || (window.iphoneSimState && window.iphoneSimState.currentAiProfileContactId)
+        || (window.iphoneSimState && window.iphoneSimState.currentChatContactId);
+    if (!resolvedContactId || !window.iphoneSimState || !Array.isArray(window.iphoneSimState.contacts)) {
+        return;
+    }
+    const contact = window.iphoneSimState.contacts.find(item => String(item.id) === String(resolvedContactId));
+    if (!contact) return;
+    const ootdStyle = getChatOotdStyleForContact(contact);
+    const forceRefresh = !!(options && options.forceRefresh);
+    const dateKey = getChatOotdDateKey(new Date());
+
+    const requestSeq = ++chatOotdGenerateRequestSeq;
+    openChatOotdModalUi();
+    applyChatOotdStyle(ootdStyle);
+
+    const cachedEntry = forceRefresh ? null : getChatOotdCachedEntry(contact, dateKey);
+    if (cachedEntry) {
+        const cachedWeatherMeta = normalizeChatOotdWeatherFromCache(contact, cachedEntry);
+        const cachedPayload = normalizeChatOotdPayload(cachedEntry.payload, contact, cachedWeatherMeta);
+        renderChatOotdResult(contact, cachedWeatherMeta, cachedPayload);
+        setChatOotdLoading(false);
+        if (typeof window.showChatToast === 'function') {
+            window.showChatToast('今日 OOTD 已缓存，点击左上刷新可重新生成', 1800);
+        }
+        return;
+    }
+
+    setChatOotdLoading(true, forceRefresh ? 'REFRESHING OOTD...' : 'GENERATING OOTD...');
+
+    const initialWeatherMeta = normalizeChatOotdWeather(null, contact);
+    renderChatOotdResult(contact, initialWeatherMeta, buildChatOotdFallbackPayload(contact, initialWeatherMeta));
+
+    let weather = null;
+    try {
+        if (typeof window.getAmapWeatherForContact === 'function') {
+            weather = await window.getAmapWeatherForContact(contact.id);
+        }
+    } catch (error) {
+        console.warn('[OOTD] weather fetch failed', error);
+    }
+    if (!weather) {
+        const runtimeWeather = window.iphoneSimState
+            && window.iphoneSimState.amapRuntime
+            && window.iphoneSimState.amapRuntime.lastWeather
+            ? window.iphoneSimState.amapRuntime.lastWeather[contact.id]
+            : null;
+        if (runtimeWeather) {
+            weather = runtimeWeather;
+        }
+    }
+    if (requestSeq !== chatOotdGenerateRequestSeq) return;
+
+    const weatherMeta = normalizeChatOotdWeather(weather, contact);
+    let ootdPayload = null;
+    try {
+        ootdPayload = await requestChatOotdPayloadFromApi(contact, weatherMeta);
+    } catch (error) {
+        console.error('[OOTD] payload generation failed', error);
+        if (typeof window.showChatToast === 'function') {
+            window.showChatToast(`OOTD 生成失败，已使用默认结果：${error && error.message ? error.message : '未知错误'}`, 2800);
+        }
+        ootdPayload = normalizeChatOotdPayload(null, contact, weatherMeta);
+    }
+    if (requestSeq !== chatOotdGenerateRequestSeq) return;
+
+    renderChatOotdResult(contact, weatherMeta, ootdPayload);
+    setChatOotdLoading(false);
+
+    contact.todayOotd = {
+        dateKey,
+        weather: {
+            locationText: weatherMeta.locationText,
+            weatherText: weatherMeta.weatherText,
+            cardTemperature: weatherMeta.cardTemperature,
+            promptTemperature: weatherMeta.promptTemperature,
+            reportTime: weatherMeta.reportTime
+        },
+        payload: {
+            subtitle: ootdPayload.subtitle,
+            description: ootdPayload.description,
+            items: { ...ootdPayload.items },
+            satisfaction: ootdPayload.satisfaction,
+            review: ootdPayload.review
+        },
+        source: forceRefresh ? 'manual_refresh' : 'auto_generate',
+        updatedAt: Date.now()
+    };
+    if (typeof saveConfig === 'function') {
+        saveConfig();
+    }
+}
+
+function scanChatOotdFingerprint() {
+    const box = document.getElementById('chat-ootd-fingerprint-box');
+    const idle = document.getElementById('chat-ootd-fingerprint-idle');
+    const icon = document.getElementById('chat-ootd-fp-icon');
+    const text = document.getElementById('chat-ootd-fp-text');
+    const result = document.getElementById('chat-ootd-fingerprint-result');
+    const loadingEl = document.getElementById('chat-ootd-loading');
+    if (!box || !idle || !icon || !text || !result || (loadingEl && !loadingEl.classList.contains('hidden'))) return;
+    if (box.classList.contains('scanned')) return;
+
+    box.style.pointerEvents = 'none';
+    icon.style.color = '#10b981';
+    text.textContent = 'VERIFYING...';
+    text.style.color = '#10b981';
+    icon.style.transform = 'scale(1.1)';
+
+    setTimeout(() => {
+        icon.style.transform = 'scale(1)';
+    }, 200);
+
+    setTimeout(() => {
+        idle.style.display = 'none';
+        result.style.display = 'block';
+        result.style.opacity = '0';
+        void result.offsetWidth;
+        result.style.transition = 'opacity 0.4s';
+        result.style.opacity = '1';
+        box.classList.add('scanned');
+        box.style.pointerEvents = 'auto';
+    }, 800);
+}
+
+function scanChatOotdBarcode() {
+    const wrapper = document.getElementById('chat-ootd-barcode-scanner');
+    const text = document.getElementById('chat-ootd-barcode-text');
+    const grid = document.getElementById('chat-ootd-secret-grid');
+    const loadingEl = document.getElementById('chat-ootd-loading');
+    if (!wrapper || !text || !grid || (loadingEl && !loadingEl.classList.contains('hidden'))) return;
+    if (wrapper.classList.contains('scanning') || grid.classList.contains('scanned')) return;
+
+    wrapper.classList.add('scanning');
+    text.textContent = CHAT_OOTD_BARCODE_SCANNING_TEXT;
+    text.style.color = '#ef4444';
+
+    setTimeout(() => {
+        wrapper.classList.remove('scanning');
+        text.textContent = CHAT_OOTD_BARCODE_SUCCESS_TEXT;
+        text.style.color = '#10b981';
+
+        setTimeout(() => {
+            const items = {
+                top: normalizeChatOotdText(grid.dataset.top, 'Lightweight Knit Top', 72),
+                bottom: normalizeChatOotdText(grid.dataset.bottom, 'Straight Fit Trousers', 72),
+                shoes: normalizeChatOotdText(grid.dataset.shoes, 'Classic Low-top Sneakers', 72),
+                accessories: normalizeChatOotdText(grid.dataset.accessories, 'Minimal Silver Necklace', 72)
+            };
+            wrapper.style.display = 'none';
+            text.style.display = 'none';
+            grid.classList.add('scanned');
+            grid.innerHTML = buildChatOotdSecretGridHtml(items);
+        }, 800);
+    }, 1000);
+}
+
+function tearChatOotdV5Tag() {
+    const card = document.getElementById('chat-ootd-card');
+    const tearLine = document.getElementById('chat-ootd-v5-tear-line');
+    const bottom = document.getElementById('chat-ootd-v5-bottom');
+    const loadingEl = document.getElementById('chat-ootd-loading');
+    if (!tearLine || !bottom || (loadingEl && !loadingEl.classList.contains('hidden'))) return;
+    if (bottom.classList.contains('torn')) return;
+
+    if (card && !card.style.marginTop) {
+        card.style.marginTop = `${card.offsetTop - 20}px`;
+        card.style.alignSelf = 'flex-start';
+    }
+
+    bottom.classList.add('torn');
+    tearLine.style.opacity = '0';
+}
+
+function flipChatOotdV5Tag() {
+    const bottom = document.getElementById('chat-ootd-v5-bottom');
+    const front = document.getElementById('chat-ootd-v5-front');
+    const back = document.getElementById('chat-ootd-v5-back');
+    const loadingEl = document.getElementById('chat-ootd-loading');
+    if (!bottom || !front || !back || (loadingEl && !loadingEl.classList.contains('hidden'))) return;
+    if (!bottom.classList.contains('torn') || bottom.classList.contains('flipping') || bottom.classList.contains('flipped')) {
+        return;
+    }
+
+    bottom.classList.add('flipping');
+    chatOotdV5DragState.offsetX = 0;
+    chatOotdV5DragState.offsetY = 0;
+    bottom.style.transition = 'transform 0.4s ease-in, padding 0.4s ease-in';
+    bottom.style.transform = 'translateY(10px) rotateY(90deg) scale(1.05)';
+
+    setTimeout(() => {
+        front.style.display = 'none';
+        back.style.display = 'block';
+        bottom.style.transition = 'none';
+        bottom.style.transform = 'translateY(10px) rotateY(-90deg) scale(1.05)';
+        void bottom.offsetWidth;
+        bottom.style.transition = 'transform 0.5s ease-out, padding 0.5s ease-out';
+        applyChatOotdV5DraggedTransform(bottom);
+        bottom.classList.remove('flipping');
+        bottom.classList.add('flipped');
+        bottom.style.cursor = 'grab';
+    }, 400);
+}
+
+window.openChatOotdModal = openChatOotdModal;
+
+function normalizeAiProfileHighlightImageDraft(rawValue) {
+    const source = rawValue && typeof rawValue === 'object' ? rawValue : {};
+    return {
+        vlog: normalizeChatOotdText(source.vlog, '', 500000),
+        ootd: normalizeChatOotdText(source.ootd, '', 500000),
+        cafe: normalizeChatOotdText(source.cafe, '', 500000),
+        // Backward-compatible fallback: old key `art` -> new key `moment`.
+        moment: normalizeChatOotdText(source.moment || source.art, '', 500000)
+    };
+}
+
+function getContactById(contactId) {
+    if (!contactId || !window.iphoneSimState || !Array.isArray(window.iphoneSimState.contacts)) return null;
+    return window.iphoneSimState.contacts.find(item => String(item.id) === String(contactId)) || null;
+}
+
+function getActiveAiProfileContactForCustomize() {
+    const contactId = window.iphoneSimState
+        ? (window.iphoneSimState.currentAiProfileContactId || window.iphoneSimState.currentChatContactId)
+        : null;
+    return getContactById(contactId);
+}
+
+function updateAiProfileCustomizePreviewByKey(key) {
+    const previewEl = document.getElementById(`ai-profile-icon-preview-${key}`);
+    if (!previewEl || !aiProfileCustomizeDraft || !aiProfileCustomizeDraft.images) return;
+    const imageSrc = normalizeChatOotdText(aiProfileCustomizeDraft.images[key], '', 500000);
+    previewEl.textContent = key.toUpperCase();
+    if (imageSrc) {
+        previewEl.style.backgroundImage = `url(${imageSrc})`;
+        previewEl.classList.add('has-image');
+        previewEl.textContent = '';
+    } else {
+        previewEl.style.backgroundImage = '';
+        previewEl.classList.remove('has-image');
+    }
+}
+
+function syncAiProfileCustomizeStyleUi(styleKey) {
+    const normalized = normalizeChatOotdStyleKey(styleKey);
+    const selectorBg = document.getElementById('ai-profile-ootd-selector-bg');
+    if (selectorBg) {
+        selectorBg.style.transform = normalized === 'v3' ? 'translateX(100%)' : 'translateX(0)';
+    }
+    const options = document.querySelectorAll('#ai-profile-customize-modal .ai-profile-ootd-style-option');
+    options.forEach((option) => {
+        const input = option.querySelector('input[name="ai-profile-ootd-style"]');
+        const isActive = !!(input && normalizeChatOotdStyleKey(input.value) === normalized);
+        option.classList.toggle('active', isActive);
+    });
+}
+
+function updateAiProfileCustomizeAllPreviews() {
+    AI_PROFILE_HIGHLIGHT_KEYS.forEach((key) => {
+        updateAiProfileCustomizePreviewByKey(key);
+    });
+    const styleKey = normalizeChatOotdStyleKey(aiProfileCustomizeDraft && aiProfileCustomizeDraft.style);
+    const checkedInput = document.querySelector(`#ai-profile-customize-modal input[name="ai-profile-ootd-style"][value="${styleKey}"]`);
+    if (checkedInput) checkedInput.checked = true;
+    syncAiProfileCustomizeStyleUi(styleKey);
+}
+
+function closeAiProfileCustomizeModal() {
+    const modal = document.getElementById('ai-profile-customize-modal');
+    if (!modal) {
+        aiProfileCustomizeDraft = null;
+        return;
+    }
+    if (aiProfileCustomizeHideTimer) {
+        clearTimeout(aiProfileCustomizeHideTimer);
+        aiProfileCustomizeHideTimer = null;
+    }
+    if (modal.classList.contains('hidden')) {
+        aiProfileCustomizeDraft = null;
+        return;
+    }
+    modal.classList.remove('ai-profile-customize-open');
+    aiProfileCustomizeHideTimer = setTimeout(() => {
+        if (!modal.classList.contains('ai-profile-customize-open')) {
+            modal.classList.add('hidden');
+            aiProfileCustomizeDraft = null;
+        }
+        aiProfileCustomizeHideTimer = null;
+    }, AI_PROFILE_CUSTOMIZE_TRANSITION_MS);
+}
+
+function openAiProfileCustomizeModal() {
+    const modal = document.getElementById('ai-profile-customize-modal');
+    const contact = getActiveAiProfileContactForCustomize();
+    if (!modal || !contact) return;
+    if (aiProfileCustomizeHideTimer) {
+        clearTimeout(aiProfileCustomizeHideTimer);
+        aiProfileCustomizeHideTimer = null;
+    }
+    aiProfileCustomizeDraft = {
+        contactId: contact.id,
+        style: getChatOotdStyleForContact(contact),
+        images: normalizeAiProfileHighlightImageDraft(contact.profileHighlightImages)
+    };
+    updateAiProfileCustomizeAllPreviews();
+    modal.classList.remove('ai-profile-customize-open');
+    modal.classList.remove('hidden');
+    requestAnimationFrame(() => {
+        modal.classList.add('ai-profile-customize-open');
+    });
+}
+
+function bindAiProfileCustomizeUploadActions() {
+    const modal = document.getElementById('ai-profile-customize-modal');
+    if (!modal || modal.dataset.bound === '1') return;
+    modal.dataset.bound = '1';
+
+    modal.addEventListener('click', async (event) => {
+        const previewEl = event.target.closest('.ai-profile-icon-preview');
+        if (previewEl) {
+            event.preventDefault();
+            const card = previewEl.closest('.ai-profile-icon-card');
+            const key = card ? String(card.dataset.key || '').trim().toLowerCase() : '';
+            if (!AI_PROFILE_HIGHLIGHT_KEYS.includes(key)) return;
+            const input = document.getElementById(`ai-profile-icon-input-${key}`);
+            if (input) input.click();
+            return;
+        }
+
+        const uploadBtn = event.target.closest('.ai-profile-icon-btn.upload');
+        if (uploadBtn) {
+            event.preventDefault();
+            const key = String(uploadBtn.dataset.key || '').trim().toLowerCase();
+            if (!AI_PROFILE_HIGHLIGHT_KEYS.includes(key)) return;
+            const input = document.getElementById(`ai-profile-icon-input-${key}`);
+            if (input) input.click();
+            return;
+        }
+
+        const clearBtn = event.target.closest('.ai-profile-icon-btn.clear');
+        if (clearBtn) {
+            event.preventDefault();
+            const key = String(clearBtn.dataset.key || '').trim().toLowerCase();
+            if (!AI_PROFILE_HIGHLIGHT_KEYS.includes(key) || !aiProfileCustomizeDraft) return;
+            aiProfileCustomizeDraft.images[key] = '';
+            updateAiProfileCustomizePreviewByKey(key);
+            return;
+        }
+
+        if (event.target === modal) {
+            closeAiProfileCustomizeModal();
+        }
+    });
+
+    AI_PROFILE_HIGHLIGHT_KEYS.forEach((key) => {
+        const input = document.getElementById(`ai-profile-icon-input-${key}`);
+        if (!input) return;
+        input.addEventListener('change', async () => {
+            const file = input.files && input.files[0] ? input.files[0] : null;
+            if (!file || !aiProfileCustomizeDraft) {
+                input.value = '';
+                return;
+            }
+            try {
+                const base64 = await compressImage(file, 420, 0.82);
+                aiProfileCustomizeDraft.images[key] = String(base64 || '');
+                updateAiProfileCustomizePreviewByKey(key);
+            } catch (error) {
+                console.error('[AI Profile Customize] icon upload failed', error);
+                if (typeof window.showChatToast === 'function') {
+                    window.showChatToast('图片处理失败，请重试', 1800);
+                }
+            } finally {
+                input.value = '';
+            }
+        });
+    });
+
+    const styleInputs = modal.querySelectorAll('input[name="ai-profile-ootd-style"]');
+    styleInputs.forEach((input) => {
+        input.addEventListener('change', () => {
+            if (!aiProfileCustomizeDraft || !input.checked) return;
+            aiProfileCustomizeDraft.style = normalizeChatOotdStyleKey(input.value);
+            syncAiProfileCustomizeStyleUi(aiProfileCustomizeDraft.style);
+        });
+    });
+}
+
+function saveAiProfileCustomizeDraft() {
+    if (!aiProfileCustomizeDraft) return;
+    const contact = getContactById(aiProfileCustomizeDraft.contactId);
+    if (!contact) {
+        closeAiProfileCustomizeModal();
+        return;
+    }
+    contact.profileHighlightImages = normalizeAiProfileHighlightImageDraft(aiProfileCustomizeDraft.images);
+    contact.ootdCardStyle = normalizeChatOotdStyleKey(aiProfileCustomizeDraft.style);
+    if (typeof saveConfig === 'function') saveConfig();
+    if (typeof renderAiProfile === 'function') renderAiProfile(contact);
+    const ootdModal = document.getElementById('chat-ootd-modal');
+    if (ootdModal && !ootdModal.classList.contains('hidden')) {
+        openChatOotdModal(contact.id, { forceRefresh: false });
+    }
+    closeAiProfileCustomizeModal();
+    if (typeof window.showChatToast === 'function') {
+        window.showChatToast('资料卡展示设置已保存', 1600);
+    }
+}
 
 function getChatNavigationModeMeta(modeKey) {
     const normalizedKey = String(modeKey || 'driving').trim().toLowerCase();
@@ -4856,7 +5995,9 @@ function setupChatListeners() {
     const aiProfileScreen = document.getElementById('ai-profile-screen');
     const closeAiProfileBtn = document.getElementById('close-ai-profile');
     const aiProfileMoreBtn = document.getElementById('ai-profile-more');
+    const aiProfileMenuTrigger = document.getElementById('ai-profile-menu-trigger');
     const aiProfileSendMsgBtn = document.getElementById('ai-profile-send-msg');
+    const aiProfileChatShortcutBtn = document.getElementById('ai-profile-chat-shortcut');
     const aiProfileBgInput = document.getElementById('ai-profile-bg-input');
     const aiProfileBg = document.getElementById('ai-profile-bg');
     const aiRelationItem = document.getElementById('ai-relation-item');
@@ -4874,7 +6015,21 @@ function setupChatListeners() {
 
     const relationSelectModal = document.getElementById('relation-select-modal');
     const closeRelationSelectBtn = document.getElementById('close-relation-select');
+    const aiProfileCustomizeModal = document.getElementById('ai-profile-customize-modal');
+    const closeAiProfileCustomizeBtn = document.getElementById('close-ai-profile-customize');
+    const aiProfileCustomizeCancelBtn = document.getElementById('ai-profile-customize-cancel');
+    const aiProfileCustomizeSaveBtn = document.getElementById('ai-profile-customize-save');
+    const aiOotdEntry = document.getElementById('ai-ootd-entry');
     const aiMomentsEntry = document.getElementById('ai-moments-entry');
+    const aiMomentsPreview = document.getElementById('ai-moments-preview');
+    const chatOotdModal = document.getElementById('chat-ootd-modal');
+    const chatOotdCard = document.getElementById('chat-ootd-card');
+    const closeChatOotdBtn = document.getElementById('close-chat-ootd');
+    const chatOotdRefreshBtn = document.getElementById('chat-ootd-refresh-btn');
+    const chatOotdFingerprintBox = document.getElementById('chat-ootd-fingerprint-box');
+    const chatOotdBarcodeScanner = document.getElementById('chat-ootd-barcode-scanner');
+    const chatOotdV5TearLine = document.getElementById('chat-ootd-v5-tear-line');
+    const chatOotdV5Bottom = document.getElementById('chat-ootd-v5-bottom');
 
     if (closeAiProfileBtn) {
         closeAiProfileBtn.addEventListener('click', () => {
@@ -4882,8 +6037,20 @@ function setupChatListeners() {
             window.iphoneSimState.currentAiProfileContactId = null;
         });
     }
-    if (aiProfileMoreBtn) aiProfileMoreBtn.addEventListener('click', openChatSettings);
-    
+    if (aiProfileChatShortcutBtn) {
+        aiProfileChatShortcutBtn.addEventListener('click', () => {
+            aiProfileScreen.classList.add('hidden');
+            window.iphoneSimState.currentAiProfileContactId = null;
+        });
+    }
+    if (aiProfileMoreBtn) aiProfileMoreBtn.addEventListener('click', openAiProfileCustomizeModal);
+    if (aiProfileMenuTrigger) {
+        aiProfileMenuTrigger.addEventListener('click', (event) => {
+            event.preventDefault();
+            openAiProfileCustomizeModal();
+        });
+    }
+
 
     if (aiProfileBg) aiProfileBg.addEventListener('click', () => aiProfileBgInput.click());
     if (aiProfileBgInput) aiProfileBgInput.addEventListener('change', handleAiProfileBgUpload);
@@ -4893,8 +6060,142 @@ function setupChatListeners() {
         window.__relationSelectContext = null;
         relationSelectModal.classList.add('hidden');
     });
+    bindAiProfileCustomizeUploadActions();
+    if (closeAiProfileCustomizeBtn) {
+        closeAiProfileCustomizeBtn.addEventListener('click', closeAiProfileCustomizeModal);
+    }
+    if (aiProfileCustomizeCancelBtn) {
+        aiProfileCustomizeCancelBtn.addEventListener('click', closeAiProfileCustomizeModal);
+    }
+    if (aiProfileCustomizeSaveBtn) {
+        aiProfileCustomizeSaveBtn.addEventListener('click', saveAiProfileCustomizeDraft);
+    }
+    if (aiProfileCustomizeModal) {
+        aiProfileCustomizeModal.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeAiProfileCustomizeModal();
+            }
+        });
+    }
     
-    if (aiMomentsEntry) aiMomentsEntry.addEventListener('click', window.openAiMoments);
+    const openAiMomentsFromProfile = (event = null) => {
+        if (event) event.preventDefault();
+        if (typeof window.openAiMoments === 'function') {
+            window.openAiMoments();
+        }
+    };
+
+    if (aiMomentsEntry) {
+        aiMomentsEntry.addEventListener('click', openAiMomentsFromProfile);
+        aiMomentsEntry.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                openAiMomentsFromProfile(event);
+            }
+        });
+    }
+    if (aiMomentsPreview) {
+        aiMomentsPreview.addEventListener('click', (event) => {
+            event.stopPropagation();
+            openAiMomentsFromProfile(event);
+        });
+    }
+
+    const openAiOotdFromProfile = async (event = null) => {
+        if (event) event.preventDefault();
+        const contactId = window.iphoneSimState
+            ? (window.iphoneSimState.currentAiProfileContactId || window.iphoneSimState.currentChatContactId)
+            : null;
+        await openChatOotdModal(contactId);
+    };
+
+    if (aiOotdEntry) {
+        aiOotdEntry.addEventListener('click', openAiOotdFromProfile);
+        aiOotdEntry.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                openAiOotdFromProfile(event);
+            }
+        });
+    }
+
+    if (closeChatOotdBtn) {
+        closeChatOotdBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            closeChatOotdModalUi();
+        });
+    }
+    if (chatOotdRefreshBtn) {
+        chatOotdRefreshBtn.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const contactId = window.iphoneSimState
+                ? (window.iphoneSimState.currentAiProfileContactId || window.iphoneSimState.currentChatContactId)
+                : null;
+            await openChatOotdModal(contactId, { forceRefresh: true });
+        });
+    }
+    if (chatOotdModal) {
+        chatOotdModal.addEventListener('click', (event) => {
+            if (event.target === chatOotdModal) {
+                closeChatOotdModalUi();
+            }
+        });
+    }
+    if (chatOotdCard) {
+        chatOotdCard.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+    }
+    if (chatOotdFingerprintBox) {
+        chatOotdFingerprintBox.addEventListener('click', scanChatOotdFingerprint);
+        chatOotdFingerprintBox.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                scanChatOotdFingerprint();
+            }
+        });
+    }
+    if (chatOotdBarcodeScanner) {
+        chatOotdBarcodeScanner.addEventListener('click', scanChatOotdBarcode);
+        chatOotdBarcodeScanner.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                scanChatOotdBarcode();
+            }
+        });
+    }
+    if (chatOotdV5TearLine) {
+        chatOotdV5TearLine.addEventListener('click', (event) => {
+            event.preventDefault();
+            tearChatOotdV5Tag();
+        });
+        chatOotdV5TearLine.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                tearChatOotdV5Tag();
+            }
+        });
+    }
+    if (chatOotdV5Bottom) {
+        chatOotdV5Bottom.addEventListener('click', (event) => {
+            event.preventDefault();
+            flipChatOotdV5Tag();
+        });
+        chatOotdV5Bottom.addEventListener('pointerdown', (event) => {
+            startChatOotdV5Drag(event);
+        });
+        chatOotdV5Bottom.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                flipChatOotdV5Tag();
+            }
+        });
+    }
+    if (!window.__chatOotdV5DragPointerBound) {
+        window.__chatOotdV5DragPointerBound = true;
+        document.addEventListener('pointermove', moveChatOotdV5Drag, { passive: false });
+        document.addEventListener('pointerup', endChatOotdV5Drag);
+        document.addEventListener('pointercancel', endChatOotdV5Drag);
+    }
 
     if (chatSettingsBtn) chatSettingsBtn.addEventListener('click', openChatSettings);
     if (closeChatSettingsBtn) closeChatSettingsBtn.addEventListener('click', () => { chatSettingsScreen.classList.add('hidden'); if (window.setChatSettingsFloatingSaveVisible) window.setChatSettingsFloatingSaveVisible(false); });

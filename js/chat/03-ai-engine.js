@@ -4330,6 +4330,16 @@ function buildWechatBaseCapabilityPrompt() {
         '  {"type":"action","command":"SEND_GIFT","payload":"物品名称 | 价格 | 备注"}',
         '  {"type":"action","command":"SEND_DELIVERY","payload":"餐品名称 | 价格 | 备注"}',
         '  {"type":"action","command":"UPDATE_NAME","payload":"新网名"} / UPDATE_WXID / UPDATE_SIGNATURE / {"type":"action","command":"UPDATE_AVATAR","payload":"候选图片编号或 msg_id"}',
+        '  {"type":"action","command":"UPDATE_STATUS_TEXT","payload":"正在洗澡/在开会/路上等短状态"}（用于资料卡头像旁短文本）',
+        '  {"type":"action","command":"CLEAR_STATUS_TEXT","payload":""}（清空资料卡短状态）',
+        '- 你可以更积极地使用 UPDATE_STATUS_TEXT：当可见消息自然提到“我现在在做什么/我人在哪种场景”时，默认同步更新一次短状态。',
+        '- UPDATE_STATUS_TEXT 常见触发场景：',
+        '  1) 用户问你“在干嘛/怎么不回/是不是在忙”。',
+        '  2) 你解释回复延迟原因（在开会、通勤、洗澡、做饭、上课、运动、赶路）。',
+        '  3) 你主动交代当前安排（先忙一会、晚点回、马上到家）。',
+        '- 状态文案要短、口语、可直接展示：优先 4-12 字，例如“正在开会”“路上通勤”“刚洗完澡”。',
+        '- 状态明显变化时优先再次 UPDATE_STATUS_TEXT 覆盖旧状态；不再需要展示时用 CLEAR_STATUS_TEXT。',
+        '- 除非上下文完全没有活动信息，否则可优先考虑带一个 UPDATE_STATUS_TEXT action。',
         '  {"type":"action","command":"PDD_CASH_HELP","payload":""}、{"type":"action","command":"PDD_BARGAIN_HELP","payload":"商品ID"}（仅在用户发送对应链接时使用）',
         '- 表情包请优先直接输出 sticker_message，不要改用旧式 SEND_STICKER。',
         '- 一次回复最多只发起一笔转账；发送图片时请给出具体画面描述；发朋友圈时可用 [图片描述: ...] 追加配图，纯图片朋友圈也可以只写图片描述标签；不想执行操作就不要输出 action。',
@@ -4785,8 +4795,22 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                 const cmd = item && item.content ? item.content.command : item.command;
                 const pl = item && item.content ? item.content.payload : item.payload;
                 let actionStr = cmd ? `ACTION: ${cmd}` : '';
-                if (actionStr && pl !== undefined && pl !== null && String(pl).trim()) {
-                    actionStr += `: ${pl}`;
+                let payloadText = '';
+                if (pl !== undefined && pl !== null) {
+                    if (typeof pl === 'string') {
+                        payloadText = pl.trim();
+                    } else if (typeof pl === 'object') {
+                        try {
+                            payloadText = JSON.stringify(pl);
+                        } catch (error) {
+                            payloadText = String(pl).trim();
+                        }
+                    } else {
+                        payloadText = String(pl).trim();
+                    }
+                }
+                if (actionStr && payloadText) {
+                    actionStr += `: ${payloadText}`;
                 }
                 if (actionStr) {
                     actions.push(actionStr);
@@ -5383,6 +5407,8 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
         const updateWxidRegex = /ACTION:\s*UPDATE_WXID:\s*(.*?)(?:\n|$)/;
         const updateSignatureRegex = /ACTION:\s*UPDATE_SIGNATURE:\s*(.*?)(?:\n|$)/;
         const updateAvatarRegex = /ACTION:\s*UPDATE_AVATAR(?:\s*:\s*(.*?))?(?:\n|$)/;
+        const updateStatusTextRegex = /ACTION:\s*UPDATE_STATUS_TEXT:\s*(.*?)(?:\n|$)/;
+        const clearStatusTextRegex = /ACTION:\s*(?:CLEAR_STATUS_TEXT|CLEAR_ACTIVITY_STATUS)(?:\s*|$)/;
         const quoteMessageRegex = /ACTION:\s*QUOTE_MESSAGE:\s*(.*?)(?:\n|$)/;
         const recordUserStateRegex = /ACTION:\s*RECORD_USER_STATE:\s*(.*?)(?:\n|$)/;
         const resolveUserStateRegex = /ACTION:\s*RESOLVE_USER_STATE:\s*(.*?)(?:\n|$)/;
@@ -5411,6 +5437,7 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
         let hasUpdatedName = false;
         let hasUpdatedWxid = false;
         let hasUpdatedSignature = false;
+        let hasUpdatedStatusText = false;
         let hasFamilyCardDecision = false;
         let hasShownSavingsPlanMissingToast = false;
         let hasMusicInviteSent = false;
@@ -5735,6 +5762,55 @@ async function generateAiReply(instruction = null, targetContactId = null, optio
                     }
                 }
                 processedSegment = processedSegment.replace(quoteMessageMatch[0], '');
+            }
+
+            let updateStatusTextMatch;
+            while ((updateStatusTextMatch = processedSegment.match(updateStatusTextRegex)) !== null) {
+                let nextStatusText = (updateStatusTextMatch[1] || '').trim();
+
+                if (nextStatusText && (nextStatusText.startsWith('{') || nextStatusText.startsWith('['))) {
+                    try {
+                        const parsedStatusPayload = JSON.parse(nextStatusText);
+                        if (parsedStatusPayload && typeof parsedStatusPayload === 'object') {
+                            nextStatusText = String(
+                                parsedStatusPayload.text
+                                || parsedStatusPayload.status
+                                || parsedStatusPayload.content
+                                || parsedStatusPayload.value
+                                || ''
+                            ).trim();
+                        }
+                    } catch (error) {}
+                }
+
+                nextStatusText = String(nextStatusText || '').replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
+
+                if (nextStatusText && !hasUpdatedStatusText) {
+                    if (typeof window.setContactActivityStatusText === 'function') {
+                        window.setContactActivityStatusText(contact.id, nextStatusText);
+                    } else {
+                        contact.activityStatusText = nextStatusText;
+                        contact.activityStatusUpdatedAt = Date.now();
+                        saveConfig();
+                    }
+                    hasUpdatedStatusText = true;
+                }
+                processedSegment = processedSegment.replace(updateStatusTextMatch[0], '');
+            }
+
+            let clearStatusTextMatch;
+            while ((clearStatusTextMatch = processedSegment.match(clearStatusTextRegex)) !== null) {
+                if (!hasUpdatedStatusText) {
+                    if (typeof window.clearContactActivityStatusText === 'function') {
+                        window.clearContactActivityStatusText(contact.id);
+                    } else {
+                        delete contact.activityStatusText;
+                        delete contact.activityStatusUpdatedAt;
+                        saveConfig();
+                    }
+                    hasUpdatedStatusText = true;
+                }
+                processedSegment = processedSegment.replace(clearStatusTextMatch[0], '');
             }
 
             let updateNameMatch;
