@@ -8242,7 +8242,9 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
 
     let importantStateContext = '';
     let memoryContext = '';
-    if (typeof window.buildMemoryContextByPolicy === 'function') {
+    if (typeof window.buildMemoryContextByPolicyWithVector === 'function') {
+        memoryContext = await window.buildMemoryContextByPolicyWithVector(contact, history, 'chat-text');
+    } else if (typeof window.buildMemoryContextByPolicy === 'function') {
         memoryContext = window.buildMemoryContextByPolicy(contact, history, 'chat-text');
     } else {
         const contactMemories = window.iphoneSimState.memories.filter(m => m.contactId === contact.id);

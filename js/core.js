@@ -28,6 +28,16 @@ function createDefaultMemorySettingsV2() {
             other: 7
         },
         dedupeThreshold: 0.75,
+        vectorRetrieval: {
+            enabled: false,
+            endpoint: 'https://api.siliconflow.cn/v1',
+            apiKey: 'sk-tpkfgtmytrfvabkejzzyccvfeqkgwvnqxobpendlnmokojik',
+            model: 'BAAI/bge-m3',
+            topK: 8,
+            minSimilarity: 0.35,
+            queryTimeoutMs: 600,
+            useChatKeyFallback: false
+        },
         stateExtractV2: {
             enabled: true,
             strategy: 'rule_plus_ai',
@@ -53,6 +63,9 @@ function normalizeMemorySettingsV2(raw) {
     const recentDays = src.injectRecentDays && typeof src.injectRecentDays === 'object' ? src.injectRecentDays : {};
     const importanceMin = src.injectImportanceMin && typeof src.injectImportanceMin === 'object' ? src.injectImportanceMin : {};
     const ttl = src.stateTtlDays && typeof src.stateTtlDays === 'object' ? src.stateTtlDays : {};
+    const vectorRetrieval = src.vectorRetrieval && typeof src.vectorRetrieval === 'object'
+        ? src.vectorRetrieval
+        : {};
     const stateExtract = src.stateExtractV2 && typeof src.stateExtractV2 === 'object' ? src.stateExtractV2 : {};
     const stateThresholds = stateExtract.thresholds && typeof stateExtract.thresholds === 'object'
         ? stateExtract.thresholds
@@ -99,6 +112,18 @@ function normalizeMemorySettingsV2(raw) {
             other: toInt(ttl.other, defaults.stateTtlDays.other, 1, 365)
         },
         dedupeThreshold: toFloat(src.dedupeThreshold, defaults.dedupeThreshold, 0.3, 0.99),
+        vectorRetrieval: {
+            enabled: vectorRetrieval.enabled === undefined
+                ? !!defaults.vectorRetrieval.enabled
+                : !!vectorRetrieval.enabled,
+            endpoint: String(vectorRetrieval.endpoint || defaults.vectorRetrieval.endpoint || '').trim(),
+            apiKey: String(vectorRetrieval.apiKey || defaults.vectorRetrieval.apiKey || '').trim(),
+            model: String(vectorRetrieval.model || defaults.vectorRetrieval.model || '').trim(),
+            topK: toInt(vectorRetrieval.topK, defaults.vectorRetrieval.topK, 1, 30),
+            minSimilarity: toFloat(vectorRetrieval.minSimilarity, defaults.vectorRetrieval.minSimilarity, 0.05, 0.99),
+            queryTimeoutMs: toInt(vectorRetrieval.queryTimeoutMs, defaults.vectorRetrieval.queryTimeoutMs, 200, 5000),
+            useChatKeyFallback: false
+        },
         stateExtractV2: {
             enabled: stateExtract.enabled === undefined ? true : !!stateExtract.enabled,
             strategy: ['rule_plus_ai', 'rule_only'].includes(stateExtract.strategy)
@@ -2632,4 +2657,3 @@ async function init() {
         }
     });
 }
-

@@ -770,6 +770,28 @@ body {
     transition: opacity 0.15s ease-in-out, visibility 0s linear 0.15s;
 }
 
+/* Reduce mobile compositing pressure for heavy apps when hidden */
+#music-app.hidden,
+#worldbook-app.hidden,
+#settings-app.hidden,
+#shopping-app.hidden,
+#forum-app.hidden,
+#album-app.hidden,
+#studio-app.hidden {
+    display: none !important;
+}
+
+/* Disable fade compositing on large app screens to avoid exit jank on mobile */
+#music-app,
+#worldbook-app,
+#settings-app,
+#shopping-app,
+#forum-app,
+#album-app,
+#studio-app {
+    transition: none !important;
+}
+
 .app-header {
     height: 91px;
     height: calc(44px + max(47px, env(safe-area-inset-top, 0px)));
@@ -7129,3 +7151,6 @@ html body .chat-message.user .voice-icon-box i { transform: rotate(-90deg); }
     color: #b7b7b7;
     font-style: italic;
 }
+
+
+
