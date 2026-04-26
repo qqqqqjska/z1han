@@ -3212,10 +3212,12 @@
                 </button>
                 <div style="flex: 1;"></div>
                 <div class="icons ai-profile-header-icons">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                    </svg>
+                    <button id="ai-profile-regenerate-trigger" class="ai-profile-menu-trigger" type="button" aria-label="重新生成资料卡">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                        </svg>
+                    </button>
                     <button id="ai-profile-menu-trigger" class="ai-profile-menu-trigger" type="button" aria-label="资料卡设置">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <circle cx="12" cy="12" r="1.5"></circle>
@@ -3271,7 +3273,7 @@
                     </div>
 
                     <div class="highlights ai-profile-highlights" aria-label="profile highlights">
-                        <div class="highlight-item ai-profile-highlight-item">
+                        <div class="highlight-item ai-profile-highlight-item ai-profile-highlight-item-click" id="ai-vlog-entry" role="button" tabindex="0" aria-label="打开今日 VLOG">
                             <div class="highlight-thumb ai-profile-highlight-thumb ai-profile-highlight-vlog" aria-hidden="true"></div>
                             <span class="hl-title ai-profile-highlight-label">VLOG</span>
                         </div>
@@ -3279,7 +3281,7 @@
                             <div class="highlight-thumb ai-profile-highlight-thumb ai-profile-highlight-ootd" aria-hidden="true"></div>
                             <span class="hl-title ai-profile-highlight-label">OOTD</span>
                         </div>
-                        <div class="highlight-item ai-profile-highlight-item">
+                        <div class="highlight-item ai-profile-highlight-item ai-profile-highlight-item-click" id="ai-loot-entry" role="button" tabindex="0" aria-label="打开今日随身物品 CAFE">
                             <div class="highlight-thumb ai-profile-highlight-thumb ai-profile-highlight-cafe" aria-hidden="true"></div>
                             <span class="hl-title ai-profile-highlight-label">CAFE</span>
                         </div>
@@ -3406,6 +3408,40 @@
                                 </label>
                             </div>
                         </section>
+
+                        <section class="ai-profile-customize-section">
+                            <h4 class="ai-profile-customize-title">Carry Card Style</h4>
+                            <div class="ai-profile-loot-style-group">
+                                <div id="ai-profile-loot-selector-bg" class="ai-profile-loot-selector-bg" aria-hidden="true"></div>
+                                <label class="ai-profile-loot-style-option active" data-style="v1">
+                                    <input type="radio" name="ai-profile-loot-style" value="v1" checked>
+                                    <span class="zh">战术玻璃风</span>
+                                    <span class="en">Tactical V1</span>
+                                </label>
+                                <label class="ai-profile-loot-style-option" data-style="v2">
+                                    <input type="radio" name="ai-profile-loot-style" value="v2">
+                                    <span class="zh">明亮极简风</span>
+                                    <span class="en">Minimal V2</span>
+                                </label>
+                            </div>
+                        </section>
+
+                        <section class="ai-profile-customize-section">
+                            <h4 class="ai-profile-customize-title">VLOG Card Style</h4>
+                            <div class="ai-profile-vlog-style-group">
+                                <div id="ai-profile-vlog-selector-bg" class="ai-profile-vlog-selector-bg" aria-hidden="true"></div>
+                                <label class="ai-profile-vlog-style-option active" data-style="v1">
+                                    <input type="radio" name="ai-profile-vlog-style" value="v1" checked>
+                                    <span class="zh">轻透日记风</span>
+                                    <span class="en">Light V1</span>
+                                </label>
+                                <label class="ai-profile-vlog-style-option" data-style="v2">
+                                    <input type="radio" name="ai-profile-vlog-style" value="v2">
+                                    <span class="zh">暗黑结构风</span>
+                                    <span class="en">Dark V2</span>
+                                </label>
+                            </div>
+                        </section>
                     </div>
                     <div class="ai-profile-customize-footer">
                         <button type="button" id="ai-profile-customize-cancel" class="ai-profile-customize-btn secondary">取消</button>
@@ -3514,6 +3550,174 @@
                 </div>
 
                 <div id="chat-ootd-loading" class="chat-ootd-loading hidden">GENERATING OOTD...</div>
+            </div>
+        </div>
+
+        <div id="chat-loot-modal" class="chat-loot-overlay hidden" aria-hidden="true">
+            <div id="chat-loot-card" class="chat-loot-card chat-loot-card-v1" role="dialog" aria-modal="true" aria-labelledby="chat-loot-title-v1">
+                <button id="close-chat-loot" class="chat-loot-close-btn" type="button" aria-label="关闭随身物品"></button>
+                <button id="chat-loot-refresh-btn" class="chat-loot-refresh-btn" type="button" aria-label="刷新今日随身物品">
+                    <i class="fas fa-rotate-right" aria-hidden="true"></i>
+                </button>
+
+                <div id="chat-loot-view-v1" class="chat-loot-view chat-loot-view-v1">
+                    <div class="chat-loot-v1-topbar">
+                        <strong id="chat-loot-title-v1-en" class="chat-loot-v1-top-title">LOOT POPUP V1</strong>
+                    </div>
+                    <div class="chat-loot-v1-header-decor">
+                        <span id="chat-loot-title-v1" class="chat-loot-v1-header-left">SECURE CONTAINER_01</span>
+                        <span id="chat-loot-v1-desc" class="chat-loot-v1-header-right">STATUS: ONLINE</span>
+                    </div>
+                    <div id="chat-loot-v1-items" class="chat-loot-v1-grid"></div>
+
+                    <div id="chat-loot-v1-detail-modal" class="chat-loot-v1-detail-modal hidden" aria-hidden="true">
+                        <div class="chat-loot-v1-detail-card" role="dialog" aria-modal="true" aria-labelledby="chat-loot-v1-detail-title-zh">
+                            <div class="chat-loot-v1-detail-corner tl"></div>
+                            <div class="chat-loot-v1-detail-corner tr"></div>
+                            <div class="chat-loot-v1-detail-corner bl"></div>
+                            <div class="chat-loot-v1-detail-corner br"></div>
+                            <div class="chat-loot-v1-detail-ring"></div>
+
+                            <button id="chat-loot-v1-detail-close" class="chat-loot-v1-detail-close" type="button">[ ESC ]</button>
+
+                            <div class="chat-loot-v1-detail-content">
+                                <div id="chat-loot-v1-detail-title-en" class="chat-loot-v1-detail-title-en">ITEM ID</div>
+                                <div id="chat-loot-v1-detail-title-zh" class="chat-loot-v1-detail-title-zh">等待扫描</div>
+                                <div id="chat-loot-v1-detail-desc" class="chat-loot-v1-detail-desc">点击物品卡片进行扫描后查看详情。</div>
+                                <div id="chat-loot-v1-detail-use" class="chat-loot-v1-detail-use"><b>用途</b>-</div>
+
+                                <div class="chat-loot-v1-detail-stats">
+                                    <div class="chat-loot-v1-detail-stat">
+                                        <span class="chat-loot-v1-detail-stat-label">TYPE</span>
+                                        <span id="chat-loot-v1-detail-type" class="chat-loot-v1-detail-stat-value">--</span>
+                                    </div>
+                                    <div class="chat-loot-v1-detail-stat">
+                                        <span class="chat-loot-v1-detail-stat-label">WEIGHT</span>
+                                        <span id="chat-loot-v1-detail-weight" class="chat-loot-v1-detail-stat-value">--</span>
+                                    </div>
+                                    <div class="chat-loot-v1-detail-stat">
+                                        <span class="chat-loot-v1-detail-stat-label">VALUE</span>
+                                        <span id="chat-loot-v1-detail-value" class="chat-loot-v1-detail-stat-value">--</span>
+                                    </div>
+                                </div>
+
+                                <button id="chat-loot-v1-detail-action" class="chat-loot-v1-detail-action" type="button">TAKE ITEM +</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="chat-loot-view-v2" class="chat-loot-view chat-loot-view-v2 hidden">
+                    <div class="chat-loot-v2-topbar">
+                        <strong id="chat-loot-title-v2-en" class="chat-loot-v2-top-title">LOOT POPUP V2</strong>
+                    </div>
+                    <div class="chat-loot-v2-header-decor">
+                        <span id="chat-loot-title-v2" class="chat-loot-v2-header-left">SYSTEM SCANNER</span>
+                        <span id="chat-loot-v2-desc" class="chat-loot-v2-header-right">AWAITING INPUT</span>
+                    </div>
+                    <div id="chat-loot-v2-items" class="chat-loot-v2-grid"></div>
+
+                    <div id="chat-loot-v2-detail-modal" class="chat-loot-v2-detail-modal hidden" aria-hidden="true">
+                        <div class="chat-loot-v2-detail-card" role="dialog" aria-modal="true" aria-labelledby="chat-loot-v2-detail-title-zh">
+                            <div class="chat-loot-v2-detail-decor-circle" aria-hidden="true"></div>
+                            <button id="chat-loot-v2-detail-close" class="chat-loot-v2-detail-close" type="button">✕</button>
+
+                            <div class="chat-loot-v2-detail-content">
+                                <div id="chat-loot-v2-detail-title-en" class="chat-loot-v2-detail-title-en">ITEM ID</div>
+                                <div id="chat-loot-v2-detail-title-zh" class="chat-loot-v2-detail-title-zh">等待扫描</div>
+                                <div id="chat-loot-v2-detail-desc" class="chat-loot-v2-detail-desc">点击物品卡片进行扫描后查看详情。</div>
+
+                                <div class="chat-loot-v2-detail-stats">
+                                    <div class="chat-loot-v2-detail-stat">
+                                        <div class="chat-loot-v2-detail-stat-label">TYPE</div>
+                                        <div id="chat-loot-v2-detail-type" class="chat-loot-v2-detail-stat-value">--</div>
+                                    </div>
+                                    <div class="chat-loot-v2-detail-stat">
+                                        <div class="chat-loot-v2-detail-stat-label">WEIGHT</div>
+                                        <div id="chat-loot-v2-detail-weight" class="chat-loot-v2-detail-stat-value">--</div>
+                                    </div>
+                                    <div class="chat-loot-v2-detail-stat">
+                                        <div class="chat-loot-v2-detail-stat-label">VALUE</div>
+                                        <div id="chat-loot-v2-detail-value" class="chat-loot-v2-detail-stat-value">--</div>
+                                    </div>
+                                </div>
+
+                                <button id="chat-loot-v2-detail-action" class="chat-loot-v2-detail-action" type="button">EQUIP ITEM</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="chat-loot-loading" class="chat-loot-loading hidden">GENERATING LOOT...</div>
+            </div>
+        </div>
+
+        <div id="chat-vlog-modal" class="chat-vlog-overlay hidden" aria-hidden="true">
+            <div id="chat-vlog-card" class="chat-vlog-card chat-vlog-card-v1" role="dialog" aria-modal="true" aria-labelledby="chat-vlog-title-v1">
+                <div class="chat-vlog-actions-pill" aria-label="VLOG 操作按钮">
+                    <button id="chat-vlog-refresh-btn" class="chat-vlog-refresh-btn" type="button" aria-label="重新生成今日 VLOG">
+                        <i class="ri-refresh-line" aria-hidden="true"></i>
+                    </button>
+                    <button id="close-chat-vlog" class="chat-vlog-close-btn" type="button" aria-label="关闭今日 VLOG">
+                        <i class="ri-close-line" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <div id="chat-vlog-view-v1" class="chat-vlog-view chat-vlog-view-v1">
+                    <div class="chat-vlog-v1-weather-widget">
+                        <i id="chat-vlog-v1-weather-icon" class="ri-sun-cloudy-line" aria-hidden="true"></i>
+                        <span id="chat-vlog-v1-weather-temp">--°C</span>
+                        <span>/</span>
+                        <span id="chat-vlog-v1-weather-text">Unknown</span>
+                    </div>
+
+                    <h2 id="chat-vlog-title-v1" class="chat-vlog-v1-title">
+                        <span id="chat-vlog-v1-title-en" class="en">One Day</span>
+                        <span id="chat-vlog-v1-title-zh" class="zh">日常记录</span>
+                    </h2>
+
+                    <div class="chat-vlog-v1-divider"></div>
+
+                    <div id="chat-vlog-v1-timeline" class="chat-vlog-v1-timeline"></div>
+
+                    <div class="chat-vlog-v1-timestamp">
+                        <span id="chat-vlog-v1-footer-left">// LOG_ENTRY_01</span>
+                        <span id="chat-vlog-v1-footer-right">END OF DAY</span>
+                    </div>
+
+                    <div class="chat-vlog-v1-deco-circle" aria-hidden="true"></div>
+                    <div class="chat-vlog-v1-deco-dot" aria-hidden="true"></div>
+                </div>
+
+                <div id="chat-vlog-view-v2" class="chat-vlog-view chat-vlog-view-v2 hidden">
+                    <div class="chat-vlog-v2-corner chat-vlog-v2-corner-tl" aria-hidden="true"></div>
+                    <div class="chat-vlog-v2-corner chat-vlog-v2-corner-tr" aria-hidden="true"></div>
+                    <div class="chat-vlog-v2-corner chat-vlog-v2-corner-bl" aria-hidden="true"></div>
+                    <div class="chat-vlog-v2-corner chat-vlog-v2-corner-br" aria-hidden="true"></div>
+
+                    <div class="chat-vlog-v2-header">
+                        <div class="chat-vlog-v2-date-box">
+                            <span id="chat-vlog-v2-date-num" class="chat-vlog-v2-date-num">--</span>
+                            <span id="chat-vlog-v2-date-month" class="chat-vlog-v2-date-month">MONTH</span>
+                        </div>
+                        <div class="chat-vlog-v2-weather-box">
+                            <div class="chat-vlog-v2-weather-icon"><i id="chat-vlog-v2-weather-icon" class="ri-moon-cloudy-line" aria-hidden="true"></i></div>
+                            <div id="chat-vlog-v2-weather-temp">--°C</div>
+                            <div id="chat-vlog-v2-weather-text">UNKNOWN</div>
+                        </div>
+                    </div>
+
+                    <h2 id="chat-vlog-title-v2" class="chat-vlog-v2-title">DAILY RECORD</h2>
+
+                    <div id="chat-vlog-v2-timeline" class="chat-vlog-v2-timeline"></div>
+
+                    <div class="chat-vlog-v2-footer">
+                        <span id="chat-vlog-v2-footer-left">SYS.LOG // 002</span>
+                        <span id="chat-vlog-v2-footer-right">STATUS: RECORDED</span>
+                    </div>
+                </div>
+
+                <div id="chat-vlog-loading" class="chat-vlog-loading hidden">GENERATING VLOG...</div>
             </div>
         </div>
 

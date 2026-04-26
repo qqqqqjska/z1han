@@ -3113,14 +3113,15 @@ function getAiProfileNickname(contact) {
     const name = cleanValue(contact && contact.name);
     const remark = cleanValue(contact && contact.remark);
     const contactId = cleanValue(contact && contact.id);
-    return nickname || name || remark || contactId || '未命名';
+    const base = nickname || name || remark || contactId || '未命名';
+    return base;
 }
 
 function formatAiProfileWechatId(contact) {
     const cleanValue = (value) => String(value || '').trim().replace(/^@+/, '');
     const wxid = cleanValue(contact && contact.wxid);
     const fallbackId = cleanValue(contact && contact.id);
-    return `微信号: ${wxid || fallbackId || '未设置'}`;
+    return `ID: ${wxid || fallbackId || '未设置'}`;
 }
 
 function normalizeAiProfileTimestamp(value) {
@@ -3464,6 +3465,81 @@ function buildDefaultAiProfileTags(contact) {
     return [firstTag, '#Daily', '#Mood'];
 }
 
+function normalizeAiProfileCompareText(value) {
+    return String(value || '').trim().replace(/^@+/, '').toLowerCase();
+}
+
+function getAiProfileCoreSnapshot(contact) {
+    const normalizedTags = normalizeAiProfileTags(contact && contact.profileTags);
+    return {
+        nickname: normalizeAiProfileCompareText(getAiProfileNickname(contact)),
+        wxid: normalizeAiProfileCompareText(contact && contact.wxid),
+        signature: normalizeAiProfileCompareText(contact && contact.signature),
+        tags: normalizedTags.map(item => normalizeAiProfileCompareText(item))
+    };
+}
+
+function isAiProfileCoreSnapshotEqual(previousSnapshot, nextSnapshot) {
+    if (!previousSnapshot || !nextSnapshot) return false;
+    const prevTags = Array.isArray(previousSnapshot.tags) ? previousSnapshot.tags : [];
+    const nextTags = Array.isArray(nextSnapshot.tags) ? nextSnapshot.tags : [];
+    return previousSnapshot.nickname === nextSnapshot.nickname
+        && previousSnapshot.wxid === nextSnapshot.wxid
+        && previousSnapshot.signature === nextSnapshot.signature
+        && prevTags.join('|') === nextTags.join('|');
+}
+
+function enforceAiProfileDifference(contact, previousSnapshot) {
+    if (!contact || !previousSnapshot) return;
+
+    const currentSnapshot = getAiProfileCoreSnapshot(contact);
+    const currentNickname = String(contact.nickname || contact.name || '').trim().replace(/^@+/, '');
+    const currentWxid = String(contact.wxid || '').trim().replace(/^@+/, '');
+    const currentSignature = String(contact.signature || '').trim();
+
+    if (currentSnapshot.nickname === previousSnapshot.nickname) {
+        const suffixes = ['新档案', '新状态', '新版本', '重启中', '今日份'];
+        const suffix = suffixes[Math.floor(Math.random() * suffixes.length)];
+        contact.nickname = `${currentNickname || contact.name || '用户'}${suffix}`.slice(0, 18);
+    }
+
+    if (currentSnapshot.wxid === previousSnapshot.wxid) {
+        const base = (currentWxid || `wxid_${String(contact.id || '').replace(/\s+/g, '')}` || 'wxid_user')
+            .replace(/\s+/g, '')
+            .replace(/[^\w.-]/g, '');
+        const nonce = Math.random().toString(36).slice(2, 6);
+        contact.wxid = `${base}_${nonce}`.slice(0, 28);
+    }
+
+    if (currentSnapshot.signature === previousSnapshot.signature) {
+        const signatures = [
+            `今天是${contact.name || '我'}的新频道`,
+            '已更新状态，欢迎来聊',
+            '换个心情，继续营业',
+            '信号正常，随时在线',
+            '正在加载今日新故事'
+        ];
+        contact.signature = signatures[Math.floor(Math.random() * signatures.length)];
+    }
+
+    const nextTags = normalizeAiProfileTags(contact.profileTags);
+    const prevTagKey = (Array.isArray(previousSnapshot.tags) ? previousSnapshot.tags : []).join('|');
+    if (nextTags.map(item => normalizeAiProfileCompareText(item)).join('|') === prevTagKey) {
+        const fallbackPool = ['#新状态', '#今天', '#刷新', '#MoodUp', '#再认识一下'];
+        const existing = new Set(nextTags.map(item => normalizeAiProfileCompareText(item)));
+        const tags = nextTags.length > 0 ? [...nextTags] : buildDefaultAiProfileTags(contact);
+        while (tags.length < 3) {
+            tags.push(fallbackPool[tags.length % fallbackPool.length]);
+        }
+        const replacement = fallbackPool.find(tag => !existing.has(normalizeAiProfileCompareText(tag)))
+            || `#更新${Math.random().toString(36).slice(2, 5)}`;
+        tags[2] = replacement;
+        contact.profileTags = normalizeAiProfileTags(tags);
+    }
+}
+
+let aiProfileRegenerateInFlight = false;
+
 function renderAiProfileTags(contact) {
     const tagsContainer = document.getElementById('ai-profile-tags')
         || document.querySelector('#ai-profile-screen .ai-profile-tags');
@@ -3551,20 +3627,39 @@ window.openAiProfile = async function(contactId = null) {
     document.getElementById('ai-profile-screen').classList.remove('hidden');
 }
 
-async function generateInitialProfile(contact) {
+async function generateInitialProfile(contact, options = {}) {
+    if (!contact || typeof contact !== 'object') return false;
     const settings = window.iphoneSimState.aiSettings2.url ? window.iphoneSimState.aiSettings2 : window.iphoneSimState.aiSettings;
-    if (!settings.url || !settings.key) return;
+    if (!settings.url || !settings.key) return false;
 
-    document.getElementById('ai-profile-name').textContent = '正在生成资料...';
+    const forceRegenerate = !!(options && options.forceRegenerate);
+    const previousSnapshot = options && options.previousSnapshot ? options.previousSnapshot : null;
+
+    document.getElementById('ai-profile-name').textContent = forceRegenerate ? '正在重新生成资料...' : '正在生成资料...';
     document.getElementById('ai-profile-screen').classList.remove('hidden');
 
     try {
+        const previousProfileText = previousSnapshot
+            ? `旧资料如下：
+nickname: ${previousSnapshot.nickname || '-'}
+wxid: ${previousSnapshot.wxid || '-'}
+signature: ${previousSnapshot.signature || '-'}
+tags: ${(Array.isArray(previousSnapshot.tags) ? previousSnapshot.tags : []).join(', ') || '-'}`
+            : '';
+
+        const regenerateRule = forceRegenerate
+            ? `这是一次重新生成。
+要求新结果中的 nickname、wxid、signature、tags 必须与旧资料明显不同，不能与旧值完全一致。`
+            : '';
+
         const systemPrompt = `你是一个资料卡生成助手。请为角色 "${contact.name}" (人设: ${contact.persona || '无'}) 生成微信资料卡 JSON。
 严禁输出 Markdown 代码块 (如 \`\`\`json)，严禁输出任何解释性文字。
 只输出纯 JSON 字符串，格式如下：
 {"nickname": "网名", "wxid": "微信号", "signature": "签名", "tags": ["标签1", "标签2", "标签3"]}
 tags 必须是 3 个简短标签，偏生活化，可用于资料卡底部 hashtag。
-确保 JSON 格式合法且完整。`;
+确保 JSON 格式合法且完整。
+${regenerateRule}
+${previousProfileText}`;
 
         let fetchUrl = settings.url;
         if (!fetchUrl.endsWith('/chat/completions')) {
@@ -3765,16 +3860,22 @@ tags 必须是 3 个简短标签，偏生活化，可用于资料卡底部 hasht
                 || profile.labels
             );
             contact.profileTags = nextTags.length > 0 ? nextTags : buildDefaultAiProfileTags(contact);
-            
-            // 强制刷新 UI
+            if (forceRegenerate && previousSnapshot) {
+                enforceAiProfileDifference(contact, previousSnapshot);
+            }
+        }
+        
+        contact.initializedProfile = true;
+        saveConfig();
+        if (typeof renderAiProfile === 'function') {
+            renderAiProfile(contact);
+        } else {
             document.getElementById('ai-profile-name').textContent = getAiProfileNickname(contact);
             document.getElementById('ai-profile-id').textContent = formatAiProfileWechatId(contact);
             document.getElementById('ai-profile-signature').textContent = contact.signature || '暂无个性签名';
             renderAiProfileTags(contact);
         }
-        
-        contact.initializedProfile = true;
-        saveConfig();
+        return true;
 
     } catch (error) {
         console.error('[GenerateProfile] 生成资料过程中发生异常', error);
@@ -3791,8 +3892,58 @@ tags 必须是 3 个简短标签，偏生活化，可用于资料卡底部 hasht
         document.getElementById('ai-profile-id').textContent = formatAiProfileWechatId(contact);
         document.getElementById('ai-profile-signature').textContent = contact.signature;
         renderAiProfileTags(contact);
+        return false;
     }
 }
+
+async function regenerateAiProfileCard(contactId = null) {
+    if (aiProfileRegenerateInFlight) return false;
+    if (!window.iphoneSimState || !Array.isArray(window.iphoneSimState.contacts)) return false;
+
+    const resolvedContactId = contactId || getActiveAiProfileContactId();
+    if (!resolvedContactId) return false;
+
+    const contact = window.iphoneSimState.contacts.find(item => String(item.id) === String(resolvedContactId));
+    if (!contact) return false;
+
+    aiProfileRegenerateInFlight = true;
+    const triggerBtn = document.getElementById('ai-profile-regenerate-trigger');
+    const oldDisabled = triggerBtn ? !!triggerBtn.disabled : false;
+    if (triggerBtn) {
+        triggerBtn.disabled = true;
+        triggerBtn.style.opacity = '0.55';
+    }
+
+    const previousSnapshot = getAiProfileCoreSnapshot(contact);
+    let generationOk = false;
+    try {
+        generationOk = await generateInitialProfile(contact, {
+            forceRegenerate: true,
+            previousSnapshot
+        });
+    } finally {
+        aiProfileRegenerateInFlight = false;
+        if (triggerBtn) {
+            triggerBtn.disabled = oldDisabled;
+            triggerBtn.style.opacity = '';
+        }
+    }
+
+    const latestSnapshot = getAiProfileCoreSnapshot(contact);
+    if (isAiProfileCoreSnapshotEqual(previousSnapshot, latestSnapshot)) {
+        enforceAiProfileDifference(contact, previousSnapshot);
+        saveConfig();
+        if (typeof renderAiProfile === 'function') renderAiProfile(contact);
+    }
+
+    if (typeof window.showChatToast === 'function') {
+        const message = generationOk ? '资料卡已重新生成' : '资料卡已更新为新的兜底内容';
+        window.showChatToast(message, 1800);
+    }
+    return true;
+}
+
+window.regenerateAiProfileCard = regenerateAiProfileCard;
 
 function normalizeAiProfileHighlightImageMap(contact) {
     const source = contact && contact.profileHighlightImages && typeof contact.profileHighlightImages === 'object'

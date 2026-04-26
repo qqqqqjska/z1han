@@ -157,16 +157,25 @@ const CHAT_OOTD_SECRET_GRID_AWAITING_HTML = `
     </div>
 `;
 const CHAT_OOTD_MODAL_TRANSITION_MS = 340;
+const CHAT_LOOT_MODAL_TRANSITION_MS = 340;
+const CHAT_VLOG_MODAL_TRANSITION_MS = 340;
+const CHAT_LOOT_DEFAULT_DESC = '根据联系人当前人设生成今日随身物品中...';
 const CHAT_OOTD_V5_DRAG_LIMIT_X = 160;
 const CHAT_OOTD_V5_DRAG_LIMIT_Y = 240;
 const CHAT_OOTD_V5_FLIPPED_BASE_Y = -40;
 const CHAT_OOTD_V5_FLIPPED_SCALE = 1.05;
 let chatOotdGenerateRequestSeq = 0;
+let chatLootGenerateRequestSeq = 0;
+let chatVlogGenerateRequestSeq = 0;
 const AI_PROFILE_HIGHLIGHT_KEYS = ['vlog', 'ootd', 'cafe', 'moment'];
 const AI_PROFILE_CUSTOMIZE_TRANSITION_MS = 360;
 let aiProfileCustomizeDraft = null;
 let aiProfileCustomizeHideTimer = null;
 let chatOotdModalHideTimer = null;
+let chatLootModalHideTimer = null;
+let chatVlogModalHideTimer = null;
+let chatLootV1DetailHideTimer = null;
+let chatLootV2DetailHideTimer = null;
 const chatOotdV5DragState = {
     active: false,
     pointerId: null,
@@ -206,6 +215,22 @@ function normalizeChatOotdStyleKey(styleKey) {
 
 function getChatOotdStyleForContact(contact) {
     return normalizeChatOotdStyleKey(contact && contact.ootdCardStyle);
+}
+
+function normalizeChatLootStyleKey(styleKey) {
+    return String(styleKey || '').trim().toLowerCase() === 'v2' ? 'v2' : 'v1';
+}
+
+function getChatLootStyleForContact(contact) {
+    return normalizeChatLootStyleKey(contact && contact.lootCardStyle);
+}
+
+function normalizeChatVlogStyleKey(styleKey) {
+    return String(styleKey || '').trim().toLowerCase() === 'v2' ? 'v2' : 'v1';
+}
+
+function getChatVlogStyleForContact(contact) {
+    return normalizeChatVlogStyleKey(contact && contact.vlogCardStyle);
 }
 
 function normalizeChatOotdText(value, fallback = '', maxLen = 240) {
@@ -765,6 +790,1288 @@ function closeChatOotdModalUi() {
     }, CHAT_OOTD_MODAL_TRANSITION_MS);
 }
 
+function getChatVlogUserMeta(contact) {
+    let userName = '我';
+    if (contact && contact.userPersonaId) {
+        const persona = Array.isArray(window.iphoneSimState && window.iphoneSimState.userPersonas)
+            ? window.iphoneSimState.userPersonas.find(item => item.id === contact.userPersonaId)
+            : null;
+        if (persona && persona.name) userName = String(persona.name).trim();
+    } else if (window.iphoneSimState && window.iphoneSimState.userProfile && window.iphoneSimState.userProfile.name) {
+        userName = String(window.iphoneSimState.userProfile.name).trim();
+    }
+
+    const aliasSet = new Set([
+        '我', '用户', '自己', '本人', '你', 'me', 'myself', 'self', 'user', 'you'
+    ]);
+    const addAlias = (value) => {
+        const text = String(value || '').trim();
+        if (!text) return;
+        const normalized = text.replace(/^@+/, '').toLowerCase();
+        if (!normalized) return;
+        aliasSet.add(normalized);
+        aliasSet.add(text.toLowerCase());
+    };
+    addAlias(userName);
+    if (window.iphoneSimState && window.iphoneSimState.userProfile && window.iphoneSimState.userProfile.name) {
+        addAlias(window.iphoneSimState.userProfile.name);
+    }
+    return {
+        userName: normalizeChatOotdText(userName, '我', 42),
+        aliasSet
+    };
+}
+
+function getChatVlogTargetKey(value) {
+    return String(value == null ? '' : value)
+        .trim()
+        .replace(/^@+/, '')
+        .replace(/\s+/g, '')
+        .toLowerCase();
+}
+
+function isChatVlogForbiddenTarget(target, forbiddenAliasSet) {
+    const key = getChatVlogTargetKey(target);
+    if (!key) return true;
+    if (!forbiddenAliasSet || !(forbiddenAliasSet instanceof Set)) {
+        return false;
+    }
+    return forbiddenAliasSet.has(key) || forbiddenAliasSet.has(`@${key}`);
+}
+
+function normalizeChatVlogTarget(value, fallback = '') {
+    const text = normalizeChatOotdText(value, fallback, 24).replace(/^@+/, '');
+    return text;
+}
+
+function normalizeChatVlogTimeLabel(value, fallback = '08:30') {
+    const text = normalizeChatOotdText(value, '', 20).toUpperCase();
+    if (!text) return fallback;
+    const match = text.match(/(\d{1,2})\s*[:：]\s*(\d{2})(?:\s*(AM|PM))?/i);
+    if (!match) return fallback;
+    let hour = Number.parseInt(match[1], 10);
+    const minute = Number.parseInt(match[2], 10);
+    const ampm = String(match[3] || '').toUpperCase();
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return fallback;
+    if (minute < 0 || minute > 59) return fallback;
+    if (ampm === 'AM' || ampm === 'PM') {
+        hour = Math.max(1, Math.min(12, hour));
+        if (ampm === 'AM') {
+            if (hour === 12) hour = 0;
+        } else if (hour !== 12) {
+            hour += 12;
+        }
+    } else {
+        if (hour < 0 || hour > 23) return fallback;
+    }
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function getChatVlogMinutes(timeLabel = '00:00') {
+    const match = String(timeLabel || '').match(/^(\d{2}):(\d{2})$/);
+    if (!match) return 0;
+    const hour = Number.parseInt(match[1], 10);
+    const minute = Number.parseInt(match[2], 10);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return 0;
+    return (hour * 60) + minute;
+}
+
+function formatChatVlogTimeForV1(time24 = '00:00') {
+    const match = String(time24 || '').match(/^(\d{2}):(\d{2})$/);
+    if (!match) return '00:00 AM';
+    const hour = Number.parseInt(match[1], 10);
+    const minute = Number.parseInt(match[2], 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+    return `${String(hour12).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${ampm}`;
+}
+
+function getChatVlogMonthLabel(date = new Date()) {
+    const labels = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const index = Number(date.getMonth());
+    if (!Number.isFinite(index) || index < 0 || index > 11) return 'MONTH';
+    return labels[index];
+}
+
+function getChatVlogWeatherIcon(weatherText, styleKey = 'v1') {
+    const text = String(weatherText || '').toLowerCase();
+    if (/雨|rain|shower|storm|thunder/.test(text)) return 'ri-rainy-line';
+    if (/雪|snow|sleet|hail/.test(text)) return 'ri-snowy-line';
+    if (/晴|clear|sun/.test(text)) return styleKey === 'v2' ? 'ri-sun-line' : 'ri-sun-cloudy-line';
+    if (/云|阴|overcast|cloud|fog|haze|mist/.test(text)) return styleKey === 'v2' ? 'ri-moon-cloudy-line' : 'ri-cloudy-line';
+    return styleKey === 'v2' ? 'ri-moon-cloudy-line' : 'ri-sun-cloudy-line';
+}
+
+function parseChatVlogJson(rawContent) {
+    const jsonText = extractChatOotdJsonString(rawContent);
+    if (!jsonText) return null;
+    try {
+        return JSON.parse(jsonText);
+    } catch (error) {
+        console.warn('[VLOG] parse json failed', error);
+        return null;
+    }
+}
+
+function buildChatVlogFallbackPayload(contact, weatherMeta, userMeta) {
+    const displayName = getChatOotdContactDisplayName(contact);
+    const userName = normalizeChatOotdText(userMeta && userMeta.userName, '我', 42);
+    const weatherText = normalizeChatOotdText(weatherMeta && weatherMeta.weatherText, 'UNKNOWN', 24);
+    return {
+        titleEn: 'One Day',
+        titleZh: '日常记录',
+        footerLeft: '// LOG_ENTRY_01',
+        footerRight: 'END OF DAY',
+        summary: `${displayName} 今日对外沟通记录（排除对${userName}的对话）`,
+        entries: [
+            { time: '08:30', to: '妈妈', content: `今天${weatherText}，我出门前会把雨伞带上。` },
+            { time: '10:40', to: '同事阿澄', content: '下午会议我会提前十分钟到，资料我已经整理好了。' },
+            { time: '13:10', to: '咖啡店店员', content: '帮我来一杯冰美式，少冰，谢谢。' },
+            { time: '15:35', to: '快递员', content: '我现在在公司前台，你到了直接联系我就行。' },
+            { time: '18:20', to: '健身教练', content: '我今晚会晚到半小时，训练计划照旧。' },
+            { time: '21:45', to: '朋友林木', content: '今天行程很满，周末我们再约见面聊。' }
+        ]
+    };
+}
+
+function normalizeChatVlogEntry(item, index, forbiddenAliasSet) {
+    const source = item && typeof item === 'object' ? item : {};
+    const fallbackTimes = ['08:30', '10:40', '13:10', '15:35', '18:20', '21:45', '23:10'];
+    const fallbackTime = fallbackTimes[index % fallbackTimes.length];
+    const time = normalizeChatVlogTimeLabel(
+        source.time || source.timeLabel || source.at || source['时间'],
+        fallbackTime
+    );
+    const target = normalizeChatVlogTarget(
+        source.to || source.toPerson || source.target || source.person || source['对象'] || source['对谁说'],
+        ''
+    );
+    if (!target || isChatVlogForbiddenTarget(target, forbiddenAliasSet)) return null;
+    const content = normalizeChatOotdText(
+        source.content || source.text || source.line || source.quote || source['内容'],
+        '',
+        220
+    );
+    if (!content) return null;
+    return { time, to: target, content };
+}
+
+function normalizeChatVlogPayload(rawPayload, contact, weatherMeta, userMeta) {
+    const fallbackPayload = buildChatVlogFallbackPayload(contact, weatherMeta, userMeta);
+    const payload = rawPayload && typeof rawPayload === 'object' ? rawPayload : {};
+    const sourceEntries = Array.isArray(payload.entries)
+        ? payload.entries
+        : (Array.isArray(payload.timeline)
+            ? payload.timeline
+            : (Array.isArray(payload.logs)
+                ? payload.logs
+                : (Array.isArray(payload.dialogues) ? payload.dialogues : [])));
+    const forbiddenAliasSet = userMeta && userMeta.aliasSet instanceof Set
+        ? userMeta.aliasSet
+        : new Set();
+    const normalizedEntries = sourceEntries
+        .slice(0, 14)
+        .map((item, index) => normalizeChatVlogEntry(item, index, forbiddenAliasSet))
+        .filter(Boolean);
+
+    let entries = normalizedEntries;
+    if (entries.length < 4) {
+        const fallbackEntries = fallbackPayload.entries
+            .map((item, index) => normalizeChatVlogEntry(item, index, forbiddenAliasSet))
+            .filter(Boolean);
+        entries = [...entries, ...fallbackEntries].slice(0, 10);
+    }
+
+    entries = entries
+        .sort((a, b) => getChatVlogMinutes(a.time) - getChatVlogMinutes(b.time))
+        .slice(0, 10);
+
+    return {
+        titleEn: normalizeChatOotdText(
+            payload.titleEn || payload.title_en || payload.title || payload.headline || payload['标题英文'],
+            fallbackPayload.titleEn,
+            42
+        ),
+        titleZh: normalizeChatOotdText(
+            payload.titleZh || payload.title_zh || payload.title_cn || payload['标题中文'],
+            fallbackPayload.titleZh,
+            28
+        ),
+        footerLeft: normalizeChatOotdText(
+            payload.footerLeft || payload.footer_left || payload.logCode || payload['底部左侧'],
+            fallbackPayload.footerLeft,
+            40
+        ),
+        footerRight: normalizeChatOotdText(
+            payload.footerRight || payload.footer_right || payload.status || payload['底部右侧'],
+            fallbackPayload.footerRight,
+            44
+        ),
+        entries
+    };
+}
+
+function buildChatVlogV1TimelineHtml(entries = []) {
+    return entries.map((entry) => `
+        <div class="chat-vlog-v1-item">
+            <div class="chat-vlog-v1-time">${escapeChatOotdHtml(formatChatVlogTimeForV1(entry.time))} <span class="chat-vlog-v1-to">@${escapeChatOotdHtml(entry.to)}</span></div>
+            <div class="chat-vlog-v1-content">${escapeChatOotdHtml(entry.content)}</div>
+        </div>
+    `).join('');
+}
+
+function buildChatVlogV2TimelineHtml(entries = []) {
+    return entries.map((entry) => `
+        <div class="chat-vlog-v2-item">
+            <div class="chat-vlog-v2-time">${escapeChatOotdHtml(entry.time)}<span class="chat-vlog-v2-to">@${escapeChatOotdHtml(entry.to)}</span></div>
+            <div class="chat-vlog-v2-content">${escapeChatOotdHtml(entry.content)}</div>
+        </div>
+    `).join('');
+}
+
+function applyChatVlogStyle(styleKey) {
+    const normalized = normalizeChatVlogStyleKey(styleKey);
+    const modal = document.getElementById('chat-vlog-modal');
+    const card = document.getElementById('chat-vlog-card');
+    const viewV1 = document.getElementById('chat-vlog-view-v1');
+    const viewV2 = document.getElementById('chat-vlog-view-v2');
+    if (modal) {
+        modal.classList.toggle('chat-vlog-theme-v1', normalized === 'v1');
+        modal.classList.toggle('chat-vlog-theme-v2', normalized === 'v2');
+    }
+    if (card) {
+        card.classList.toggle('chat-vlog-card-v1', normalized === 'v1');
+        card.classList.toggle('chat-vlog-card-v2', normalized === 'v2');
+    }
+    if (viewV1) viewV1.classList.toggle('hidden', normalized !== 'v1');
+    if (viewV2) viewV2.classList.toggle('hidden', normalized !== 'v2');
+}
+
+function setChatVlogLoading(loading, loadingText = 'GENERATING VLOG...') {
+    const loadingEl = document.getElementById('chat-vlog-loading');
+    const card = document.getElementById('chat-vlog-card');
+    if (loadingEl) {
+        loadingEl.textContent = loadingText;
+        loadingEl.classList.toggle('hidden', !loading);
+    }
+    if (card) {
+        card.classList.toggle('is-loading', !!loading);
+    }
+}
+
+function renderChatVlogResult(contact, weatherMeta, vlogPayload) {
+    const userMeta = getChatVlogUserMeta(contact);
+    const payload = normalizeChatVlogPayload(vlogPayload, contact, weatherMeta, userMeta);
+    const now = new Date();
+    const weatherTemp = normalizeChatOotdText(weatherMeta && weatherMeta.cardTemperature, '--°C', 16);
+    const weatherText = normalizeChatOotdText(weatherMeta && weatherMeta.weatherText, 'UNKNOWN', 24);
+
+    const v1Icon = document.getElementById('chat-vlog-v1-weather-icon');
+    const v1Temp = document.getElementById('chat-vlog-v1-weather-temp');
+    const v1Text = document.getElementById('chat-vlog-v1-weather-text');
+    const v1TitleEn = document.getElementById('chat-vlog-v1-title-en');
+    const v1TitleZh = document.getElementById('chat-vlog-v1-title-zh');
+    const v1Timeline = document.getElementById('chat-vlog-v1-timeline');
+    const v1FooterLeft = document.getElementById('chat-vlog-v1-footer-left');
+    const v1FooterRight = document.getElementById('chat-vlog-v1-footer-right');
+
+    if (v1Icon) v1Icon.className = getChatVlogWeatherIcon(weatherText, 'v1');
+    if (v1Temp) v1Temp.textContent = weatherTemp;
+    if (v1Text) v1Text.textContent = weatherText;
+    if (v1TitleEn) v1TitleEn.textContent = payload.titleEn;
+    if (v1TitleZh) v1TitleZh.textContent = payload.titleZh;
+    if (v1Timeline) v1Timeline.innerHTML = buildChatVlogV1TimelineHtml(payload.entries);
+    if (v1FooterLeft) v1FooterLeft.textContent = payload.footerLeft;
+    if (v1FooterRight) v1FooterRight.textContent = payload.footerRight;
+
+    const v2DateNum = document.getElementById('chat-vlog-v2-date-num');
+    const v2DateMonth = document.getElementById('chat-vlog-v2-date-month');
+    const v2Icon = document.getElementById('chat-vlog-v2-weather-icon');
+    const v2Temp = document.getElementById('chat-vlog-v2-weather-temp');
+    const v2Text = document.getElementById('chat-vlog-v2-weather-text');
+    const v2Title = document.getElementById('chat-vlog-title-v2');
+    const v2Timeline = document.getElementById('chat-vlog-v2-timeline');
+    const v2FooterLeft = document.getElementById('chat-vlog-v2-footer-left');
+    const v2FooterRight = document.getElementById('chat-vlog-v2-footer-right');
+
+    if (v2DateNum) v2DateNum.textContent = String(now.getDate()).padStart(2, '0');
+    if (v2DateMonth) v2DateMonth.textContent = getChatVlogMonthLabel(now);
+    if (v2Icon) v2Icon.className = getChatVlogWeatherIcon(weatherText, 'v2');
+    if (v2Temp) v2Temp.textContent = weatherTemp;
+    if (v2Text) v2Text.textContent = weatherText;
+    if (v2Title) v2Title.textContent = payload.titleZh || 'DAILY RECORD';
+    if (v2Timeline) v2Timeline.innerHTML = buildChatVlogV2TimelineHtml(payload.entries);
+    if (v2FooterLeft) v2FooterLeft.textContent = payload.footerLeft || 'SYS.LOG // 002';
+    if (v2FooterRight) {
+        const baseText = payload.footerRight || 'STATUS: RECORDED';
+        v2FooterRight.textContent = baseText;
+        v2FooterRight.dataset.base = baseText;
+        v2FooterRight.style.color = '';
+    }
+}
+
+function pulseChatVlogV2FooterStatus() {
+    const footer = document.getElementById('chat-vlog-v2-footer-right');
+    if (!footer) return;
+    const baseText = String(footer.dataset.base || footer.textContent || 'STATUS: RECORDED');
+    footer.textContent = 'STATUS: INTERACTED';
+    footer.style.color = '#fff';
+    if (window.__chatVlogStatusTimer) {
+        clearTimeout(window.__chatVlogStatusTimer);
+    }
+    window.__chatVlogStatusTimer = setTimeout(() => {
+        footer.textContent = baseText;
+        footer.style.color = '';
+    }, 1000);
+}
+
+function openChatVlogModalUi() {
+    const modal = document.getElementById('chat-vlog-modal');
+    if (!modal) return;
+    if (chatVlogModalHideTimer) {
+        clearTimeout(chatVlogModalHideTimer);
+        chatVlogModalHideTimer = null;
+    }
+    modal.classList.remove('chat-vlog-open');
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => {
+        modal.classList.add('chat-vlog-open');
+    });
+}
+
+function closeChatVlogModalUi() {
+    const modal = document.getElementById('chat-vlog-modal');
+    if (!modal) return;
+    if (chatVlogModalHideTimer) {
+        clearTimeout(chatVlogModalHideTimer);
+        chatVlogModalHideTimer = null;
+    }
+    modal.classList.remove('chat-vlog-open');
+    modal.setAttribute('aria-hidden', 'true');
+    setChatVlogLoading(false);
+    chatVlogModalHideTimer = setTimeout(() => {
+        if (!modal.classList.contains('chat-vlog-open')) {
+            modal.classList.add('hidden');
+        }
+        chatVlogModalHideTimer = null;
+    }, CHAT_VLOG_MODAL_TRANSITION_MS);
+}
+
+function getChatVlogCachedEntry(contact, dateKey = getChatOotdDateKey(new Date())) {
+    if (!contact || typeof contact !== 'object') return null;
+    const entry = contact.todayVlogTimeline;
+    if (!entry || typeof entry !== 'object') return null;
+    if (String(entry.dateKey || '') !== String(dateKey || '')) return null;
+    if (!entry.payload || typeof entry.payload !== 'object') return null;
+    return entry;
+}
+
+async function requestChatVlogPayloadFromApi(contact, weatherMeta, userMeta) {
+    const state = window.iphoneSimState || {};
+    const settings = state.aiSettings2 && state.aiSettings2.url ? state.aiSettings2 : state.aiSettings;
+    if (!settings || !settings.url || !settings.key) {
+        throw new Error('AI API 未配置');
+    }
+
+    let fetchUrl = String(settings.url || '').trim();
+    if (!fetchUrl.endsWith('/chat/completions')) {
+        fetchUrl = fetchUrl.endsWith('/') ? `${fetchUrl}chat/completions` : `${fetchUrl}/chat/completions`;
+    }
+    const cleanKey = String(settings.key || '').replace(/[^\x00-\x7F]/g, '').trim();
+    const contactName = getChatOotdContactDisplayName(contact);
+    const personaText = normalizeChatOotdText(contact && contact.persona, '无', 1200);
+    const today = new Date();
+    const dateLabel = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const forbiddenNames = Array.from((userMeta && userMeta.aliasSet) || []).slice(0, 12).join(' / ');
+
+    const systemPrompt = [
+        '你是“联系人单日对话回放”生成助手。',
+        '请只生成“该联系人今天对其他人说过的话”。',
+        '绝对禁止生成该联系人对用户本人说的话。',
+        `用户本人别名（严格禁止作为 to 对象）：${forbiddenNames || '我 / 用户 / me / myself'}`,
+        '严禁输出 Markdown，严禁输出解释。',
+        '只输出一个 JSON 对象，格式必须是：',
+        '{"titleEn":"One Day","titleZh":"日常记录","footerLeft":"// LOG_ENTRY_01","footerRight":"END OF DAY","entries":[{"time":"08:30","to":"妈妈","content":"一句联系人说的话"}]}',
+        '要求：',
+        '- entries 返回 6~10 条，按时间从早到晚。',
+        '- time 必须是 24 小时 HH:MM。',
+        '- to 必须是“非用户本人”的人名或称呼，不得为我/用户/me/you 等。',
+        '- content 必须是联系人对该对象说的话，长度 10~80 字。',
+        '- 不要生成对话来回，只保留联系人单句发言。',
+        '- 用日常口语风格，避免夸张。'
+    ].join('\n');
+
+    const userPrompt = [
+        `联系人：${contactName}`,
+        `联系人设：${personaText}`,
+        `日期：${dateLabel}`,
+        `天气：${weatherMeta.locationText}，${weatherMeta.weatherText}，${weatherMeta.promptTemperature}`,
+        '请生成 JSON。'
+    ].join('\n');
+
+    const callApi = async (useJsonFormat) => {
+        const requestBody = {
+            model: settings.model || 'gpt-4o-mini',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.78
+        };
+        if (useJsonFormat) {
+            requestBody.response_format = { type: 'json_object' };
+        }
+        const response = await fetch(fetchUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${cleanKey}`
+            },
+            body: JSON.stringify(requestBody)
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        const choice = data && Array.isArray(data.choices) ? data.choices[0] : null;
+        let content = choice && choice.message ? choice.message.content : '';
+        if (Array.isArray(content)) {
+            content = content.map((part) => {
+                if (typeof part === 'string') return part;
+                if (part && typeof part.text === 'string') return part.text;
+                return '';
+            }).join('\n');
+        }
+        return String(content || '').trim();
+    };
+
+    let rawContent = '';
+    try {
+        rawContent = await callApi(true);
+    } catch (firstError) {
+        console.warn('[VLOG] first attempt failed, retrying without json_object', firstError);
+        rawContent = await callApi(false);
+    }
+    return normalizeChatVlogPayload(parseChatVlogJson(rawContent), contact, weatherMeta, userMeta);
+}
+
+async function openChatVlogModal(contactId = null, options = {}) {
+    const resolvedContactId = contactId
+        || (window.iphoneSimState && window.iphoneSimState.currentAiProfileContactId)
+        || (window.iphoneSimState && window.iphoneSimState.currentChatContactId);
+    if (!resolvedContactId || !window.iphoneSimState || !Array.isArray(window.iphoneSimState.contacts)) {
+        return;
+    }
+    const contact = window.iphoneSimState.contacts.find(item => String(item.id) === String(resolvedContactId));
+    if (!contact) return;
+    const vlogStyle = getChatVlogStyleForContact(contact);
+    const forceRefresh = !!(options && options.forceRefresh);
+    const dateKey = getChatOotdDateKey(new Date());
+    const userMeta = getChatVlogUserMeta(contact);
+
+    const requestSeq = ++chatVlogGenerateRequestSeq;
+    applyChatVlogStyle(vlogStyle);
+    openChatVlogModalUi();
+
+    const initialWeatherMeta = normalizeChatOotdWeather(null, contact);
+    renderChatVlogResult(contact, initialWeatherMeta, buildChatVlogFallbackPayload(contact, initialWeatherMeta, userMeta));
+
+    const cachedEntry = forceRefresh ? null : getChatVlogCachedEntry(contact, dateKey);
+    if (cachedEntry) {
+        const cachedWeatherMeta = normalizeChatOotdWeatherFromCache(contact, cachedEntry);
+        const cachedPayload = normalizeChatVlogPayload(cachedEntry.payload, contact, cachedWeatherMeta, userMeta);
+        renderChatVlogResult(contact, cachedWeatherMeta, cachedPayload);
+        setChatVlogLoading(false);
+        if (typeof window.showChatToast === 'function') {
+            window.showChatToast('今日 VLOG 已缓存', 1500);
+        }
+        return;
+    }
+
+    setChatVlogLoading(true, forceRefresh ? 'REFRESHING VLOG...' : 'GENERATING VLOG...');
+
+    let weather = null;
+    try {
+        if (typeof window.getAmapWeatherForContact === 'function') {
+            weather = await window.getAmapWeatherForContact(contact.id);
+        }
+    } catch (error) {
+        console.warn('[VLOG] weather fetch failed', error);
+    }
+    if (!weather) {
+        const runtimeWeather = window.iphoneSimState
+            && window.iphoneSimState.amapRuntime
+            && window.iphoneSimState.amapRuntime.lastWeather
+            ? window.iphoneSimState.amapRuntime.lastWeather[contact.id]
+            : null;
+        if (runtimeWeather) weather = runtimeWeather;
+    }
+    if (requestSeq !== chatVlogGenerateRequestSeq) return;
+
+    const weatherMeta = normalizeChatOotdWeather(weather, contact);
+    let vlogPayload = null;
+    try {
+        vlogPayload = await requestChatVlogPayloadFromApi(contact, weatherMeta, userMeta);
+    } catch (error) {
+        console.error('[VLOG] payload generation failed', error);
+        if (typeof window.showChatToast === 'function') {
+            window.showChatToast(`VLOG 生成失败，已使用默认结果：${error && error.message ? error.message : '未知错误'}`, 2600);
+        }
+        vlogPayload = buildChatVlogFallbackPayload(contact, weatherMeta, userMeta);
+    }
+    if (requestSeq !== chatVlogGenerateRequestSeq) return;
+
+    renderChatVlogResult(contact, weatherMeta, vlogPayload);
+    setChatVlogLoading(false);
+
+    const normalizedForCache = normalizeChatVlogPayload(vlogPayload, contact, weatherMeta, userMeta);
+    contact.todayVlogTimeline = {
+        dateKey,
+        weather: {
+            locationText: weatherMeta.locationText,
+            weatherText: weatherMeta.weatherText,
+            cardTemperature: weatherMeta.cardTemperature,
+            promptTemperature: weatherMeta.promptTemperature,
+            reportTime: weatherMeta.reportTime
+        },
+        payload: {
+            titleEn: normalizedForCache.titleEn,
+            titleZh: normalizedForCache.titleZh,
+            footerLeft: normalizedForCache.footerLeft,
+            footerRight: normalizedForCache.footerRight,
+            entries: Array.isArray(normalizedForCache.entries)
+                ? normalizedForCache.entries.map(item => ({ ...item }))
+                : []
+        },
+        source: forceRefresh ? 'manual_refresh' : 'auto_generate',
+        updatedAt: Date.now()
+    };
+    if (typeof saveConfig === 'function') {
+        saveConfig();
+    }
+}
+
+window.openChatVlogModal = openChatVlogModal;
+
+function parseChatLootJson(rawContent) {
+    const jsonText = extractChatOotdJsonString(rawContent);
+    if (!jsonText) return null;
+    try {
+        return JSON.parse(jsonText);
+    } catch (error) {
+        console.warn('[Loot] parse json failed', error);
+        return null;
+    }
+}
+
+function normalizeChatLootBadgeText(value, fallback, maxLen = 24) {
+    const normalized = normalizeChatOotdText(value, fallback, maxLen);
+    if (/^[a-z0-9./\s-]+$/i.test(normalized)) {
+        return normalized.toUpperCase();
+    }
+    return normalized;
+}
+
+function normalizeChatLootItem(item, index = 0) {
+    const source = item && typeof item === 'object' ? item : {};
+    const fallbackName = `随身物品 ${index + 1}`;
+    return {
+        name: normalizeChatOotdText(
+            source.name || source.itemName || source.title || source['名称'],
+            fallbackName,
+            42
+        ),
+        description: normalizeChatOotdText(
+            source.description || source.desc || source.detail || source['描述'],
+            '暂无描述',
+            280
+        ),
+        use: normalizeChatOotdText(
+            source.use || source.usage || source.purpose || source['用处'] || source['用途'],
+            '日常备用',
+            140
+        ),
+        type: normalizeChatLootBadgeText(
+            source.type || source.category || source['类型'],
+            'UTILITY',
+            24
+        ),
+        value: normalizeChatLootBadgeText(
+            source.value || source.rarity || source.grade || source['价值'],
+            'MED',
+            24
+        ),
+        weight: normalizeChatLootBadgeText(
+            source.weight || source.mass || source['重量'],
+            '0.30 KG',
+            24
+        )
+    };
+}
+
+function buildChatLootFallbackPayload(contact) {
+    const contactName = getChatOotdContactDisplayName(contact);
+    return {
+        summary: `${contactName} 今天携带了几样和当前状态匹配的物品，偏向实用、轻便与高频使用。`,
+        items: [
+            normalizeChatLootItem({ name: '随行卡包', description: '内含门禁与交通卡，方便快速通行。', use: '出入与支付', type: 'ACCESS', value: 'MED', weight: '0.12 KG' }, 0),
+            normalizeChatLootItem({ name: '便携保温杯', description: '轻量材质，能保持饮品温度并减少一次性杯使用。', use: '补水与咖啡', type: 'SUPPLY', value: 'LOW', weight: '0.28 KG' }, 1),
+            normalizeChatLootItem({ name: '降噪耳机', description: '通勤与工作时提升专注，过滤环境噪声。', use: '听歌与专注', type: 'GEAR', value: 'HIGH', weight: '0.20 KG' }, 2),
+            normalizeChatLootItem({ name: '迷你急救包', description: '包含创可贴与基础消毒用品，应对小型突发情况。', use: '应急处理', type: 'MEDICAL', value: 'MED', weight: '0.15 KG' }, 3)
+        ]
+    };
+}
+
+function normalizeChatLootPayload(payload, contact) {
+    const fallbackPayload = buildChatLootFallbackPayload(contact);
+    const source = payload && typeof payload === 'object' ? payload : {};
+    const sourceItems = Array.isArray(source.items)
+        ? source.items
+        : (Array.isArray(source.lootItems)
+            ? source.lootItems
+            : (Array.isArray(source.inventory)
+                ? source.inventory
+                : (Array.isArray(source['物品']) ? source['物品'] : [])));
+    const normalizedItems = sourceItems
+        .slice(0, 8)
+        .map((item, index) => normalizeChatLootItem(item, index))
+        .filter(item => item && item.name);
+    return {
+        summary: normalizeChatOotdText(
+            source.summary || source.overview || source['概述'],
+            fallbackPayload.summary,
+            220
+        ),
+        items: normalizedItems.length > 0 ? normalizedItems : fallbackPayload.items
+    };
+}
+
+function buildChatLootV1ItemsHtml(items = []) {
+    return items.map((item, index) => {
+        const encodedItem = encodeURIComponent(JSON.stringify(item));
+        const itemId = String(index + 1).padStart(3, '0');
+        const typeLabel = normalizeChatLootBadgeText(item.type, 'UTILITY', 24);
+        return `
+            <article class="chat-loot-v1-item" data-item="${encodedItem}" data-scanned="0" data-scanning="0">
+                <div class="chat-loot-v1-scan-overlay">
+                    <div class="chat-loot-v1-scan-icon"></div>
+                    <div class="chat-loot-v1-scan-text">TAP TO SCAN</div>
+                </div>
+                <div class="chat-loot-v1-revealed">
+                    <div class="chat-loot-v1-item-id">OBJ-${escapeChatOotdHtml(itemId)}</div>
+                    <div class="chat-loot-v1-item-name">${escapeChatOotdHtml(item.name)}</div>
+                    <div class="chat-loot-v1-item-en">${escapeChatOotdHtml(typeLabel)}</div>
+                    <div class="chat-loot-v1-item-icon"></div>
+                </div>
+            </article>
+        `;
+    }).join('');
+}
+
+function buildChatLootV2ItemsHtml(items = []) {
+    return items.map((item, index) => {
+        const encodedItem = encodeURIComponent(JSON.stringify(item));
+        const typeLabel = normalizeChatLootBadgeText(item.type, 'ITEM', 24);
+        return `
+            <article class="chat-loot-v2-item" data-item="${encodedItem}" data-scanned="0" data-scanning="0">
+                <div class="chat-loot-v2-scan-overlay">
+                    <div class="chat-loot-v2-scan-icon"></div>
+                    <div class="chat-loot-v2-scan-text">TAP TO SCAN</div>
+                </div>
+                <div class="chat-loot-v2-revealed">
+                    <div class="chat-loot-v2-item-icon">${escapeChatOotdHtml(String(index + 1))}</div>
+                    <div class="chat-loot-v2-item-info">
+                        <div class="chat-loot-v2-item-title">${escapeChatOotdHtml(item.name)}</div>
+                        <div class="chat-loot-v2-item-sub">${escapeChatOotdHtml(typeLabel)}</div>
+                    </div>
+                </div>
+            </article>
+        `;
+    }).join('');
+}
+
+function parseChatLootV1ItemFromCard(cardEl) {
+    if (!cardEl || !cardEl.dataset) return null;
+    const encoded = String(cardEl.dataset.item || '');
+    if (!encoded) return null;
+    try {
+        const parsed = JSON.parse(decodeURIComponent(encoded));
+        return normalizeChatLootItem(parsed, 0);
+    } catch (error) {
+        console.warn('[Loot] parse v1 card item failed', error);
+        return null;
+    }
+}
+
+function fillChatLootV1Detail(item) {
+    const titleEn = document.getElementById('chat-loot-v1-detail-title-en');
+    const titleZh = document.getElementById('chat-loot-v1-detail-title-zh');
+    const desc = document.getElementById('chat-loot-v1-detail-desc');
+    const use = document.getElementById('chat-loot-v1-detail-use');
+    const type = document.getElementById('chat-loot-v1-detail-type');
+    const weight = document.getElementById('chat-loot-v1-detail-weight');
+    const value = document.getElementById('chat-loot-v1-detail-value');
+
+    const safeItem = normalizeChatLootItem(item, 0);
+    if (titleEn) titleEn.textContent = normalizeChatLootBadgeText(safeItem.type, 'ITEM', 32);
+    if (titleZh) titleZh.textContent = safeItem.name;
+    if (desc) desc.textContent = safeItem.description;
+    if (use) use.innerHTML = `<b>用途</b>${escapeChatOotdHtml(safeItem.use)}`;
+    if (type) type.textContent = safeItem.type;
+    if (weight) weight.textContent = safeItem.weight;
+    if (value) value.textContent = safeItem.value;
+
+    const actionBtn = document.getElementById('chat-loot-v1-detail-action');
+    if (actionBtn) {
+        actionBtn.textContent = 'TAKE ITEM +';
+        actionBtn.style.background = '';
+        actionBtn.style.color = '';
+        actionBtn.style.fontWeight = '';
+    }
+}
+
+function openChatLootV1Detail(item) {
+    const detailModal = document.getElementById('chat-loot-v1-detail-modal');
+    if (!detailModal) return;
+    fillChatLootV1Detail(item);
+    if (chatLootV1DetailHideTimer) {
+        clearTimeout(chatLootV1DetailHideTimer);
+        chatLootV1DetailHideTimer = null;
+    }
+    detailModal.classList.remove('hidden');
+    detailModal.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => {
+        detailModal.classList.add('active');
+    });
+}
+
+function closeChatLootV1Detail(immediate = false) {
+    const detailModal = document.getElementById('chat-loot-v1-detail-modal');
+    if (!detailModal) return;
+    if (chatLootV1DetailHideTimer) {
+        clearTimeout(chatLootV1DetailHideTimer);
+        chatLootV1DetailHideTimer = null;
+    }
+    detailModal.classList.remove('active');
+    detailModal.setAttribute('aria-hidden', 'true');
+    if (immediate) {
+        detailModal.classList.add('hidden');
+        return;
+    }
+    chatLootV1DetailHideTimer = setTimeout(() => {
+        if (!detailModal.classList.contains('active')) {
+            detailModal.classList.add('hidden');
+        }
+        chatLootV1DetailHideTimer = null;
+    }, 280);
+}
+
+function bindChatLootV1Interactions() {
+    const grid = document.getElementById('chat-loot-v1-items');
+    if (!grid) return;
+    if (grid.dataset.bound !== '1') {
+        grid.dataset.bound = '1';
+        grid.addEventListener('click', (event) => {
+            const card = event.target.closest('.chat-loot-v1-item');
+            if (!card || !grid.contains(card)) return;
+            const item = parseChatLootV1ItemFromCard(card);
+            if (!item) return;
+
+            const isScanned = card.dataset.scanned === '1';
+            const isScanning = card.dataset.scanning === '1';
+            if (isScanned) {
+                openChatLootV1Detail(item);
+                return;
+            }
+            if (isScanning) return;
+
+            card.dataset.scanning = '1';
+            const scanOverlay = card.querySelector('.chat-loot-v1-scan-overlay');
+            const scanText = card.querySelector('.chat-loot-v1-scan-text');
+            const scanIcon = card.querySelector('.chat-loot-v1-scan-icon');
+            const revealed = card.querySelector('.chat-loot-v1-revealed');
+
+            if (scanText) scanText.classList.add('hidden');
+            if (scanIcon) scanIcon.classList.add('scanning');
+
+            setTimeout(() => {
+                if (!document.body.contains(card)) return;
+                if (scanOverlay) scanOverlay.classList.add('is-hidden');
+                setTimeout(() => {
+                    if (!document.body.contains(card)) return;
+                    if (scanOverlay) scanOverlay.style.display = 'none';
+                    if (revealed) revealed.classList.add('revealed');
+                    card.dataset.scanning = '0';
+                    card.dataset.scanned = '1';
+                    setTimeout(() => {
+                        if (document.body.contains(card)) {
+                            openChatLootV1Detail(item);
+                        }
+                    }, 220);
+                }, 300);
+            }, 1800);
+        });
+    }
+
+    const detailModal = document.getElementById('chat-loot-v1-detail-modal');
+    const detailCloseBtn = document.getElementById('chat-loot-v1-detail-close');
+    const detailActionBtn = document.getElementById('chat-loot-v1-detail-action');
+    if (detailModal && detailModal.dataset.bound !== '1') {
+        detailModal.dataset.bound = '1';
+        detailModal.addEventListener('click', (event) => {
+            if (event.target === detailModal) {
+                closeChatLootV1Detail(false);
+            }
+        });
+    }
+    if (detailCloseBtn && detailCloseBtn.dataset.bound !== '1') {
+        detailCloseBtn.dataset.bound = '1';
+        detailCloseBtn.addEventListener('click', () => {
+            closeChatLootV1Detail(false);
+        });
+    }
+    if (detailActionBtn && detailActionBtn.dataset.bound !== '1') {
+        detailActionBtn.dataset.bound = '1';
+        detailActionBtn.addEventListener('click', () => {
+            detailActionBtn.textContent = 'OBTAINED ✓';
+            detailActionBtn.style.background = '#f0f0f0';
+            detailActionBtn.style.color = '#0d0d0f';
+            detailActionBtn.style.fontWeight = '700';
+            setTimeout(() => {
+                closeChatLootV1Detail(false);
+            }, 600);
+        });
+    }
+    if (!window.__chatLootV1EscapeBound) {
+        window.__chatLootV1EscapeBound = true;
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeChatLootV1Detail(false);
+            }
+        });
+    }
+}
+
+function parseChatLootV2ItemFromCard(cardEl) {
+    if (!cardEl || !cardEl.dataset) return null;
+    const encoded = String(cardEl.dataset.item || '');
+    if (!encoded) return null;
+    try {
+        const parsed = JSON.parse(decodeURIComponent(encoded));
+        return normalizeChatLootItem(parsed, 0);
+    } catch (error) {
+        console.warn('[Loot] parse v2 card item failed', error);
+        return null;
+    }
+}
+
+function fillChatLootV2Detail(item) {
+    const titleEn = document.getElementById('chat-loot-v2-detail-title-en');
+    const titleZh = document.getElementById('chat-loot-v2-detail-title-zh');
+    const desc = document.getElementById('chat-loot-v2-detail-desc');
+    const type = document.getElementById('chat-loot-v2-detail-type');
+    const weight = document.getElementById('chat-loot-v2-detail-weight');
+    const value = document.getElementById('chat-loot-v2-detail-value');
+
+    const safeItem = normalizeChatLootItem(item, 0);
+    if (titleEn) titleEn.textContent = normalizeChatLootBadgeText(safeItem.type, 'ITEM ID', 24);
+    if (titleZh) titleZh.textContent = safeItem.name;
+    if (desc) desc.textContent = safeItem.description;
+    if (type) type.textContent = safeItem.type;
+    if (weight) weight.textContent = safeItem.weight;
+    if (value) value.textContent = safeItem.value;
+
+    const actionBtn = document.getElementById('chat-loot-v2-detail-action');
+    if (actionBtn) {
+        actionBtn.textContent = 'EQUIP ITEM';
+        actionBtn.style.background = '';
+        actionBtn.style.color = '';
+        actionBtn.style.fontWeight = '';
+    }
+}
+
+function openChatLootV2Detail(item) {
+    const detailModal = document.getElementById('chat-loot-v2-detail-modal');
+    if (!detailModal) return;
+    fillChatLootV2Detail(item);
+    if (chatLootV2DetailHideTimer) {
+        clearTimeout(chatLootV2DetailHideTimer);
+        chatLootV2DetailHideTimer = null;
+    }
+    detailModal.classList.remove('hidden');
+    detailModal.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => {
+        detailModal.classList.add('active');
+    });
+}
+
+function closeChatLootV2Detail(immediate = false) {
+    const detailModal = document.getElementById('chat-loot-v2-detail-modal');
+    if (!detailModal) return;
+    if (chatLootV2DetailHideTimer) {
+        clearTimeout(chatLootV2DetailHideTimer);
+        chatLootV2DetailHideTimer = null;
+    }
+    detailModal.classList.remove('active');
+    detailModal.setAttribute('aria-hidden', 'true');
+    if (immediate) {
+        detailModal.classList.add('hidden');
+        return;
+    }
+    chatLootV2DetailHideTimer = setTimeout(() => {
+        if (!detailModal.classList.contains('active')) {
+            detailModal.classList.add('hidden');
+        }
+        chatLootV2DetailHideTimer = null;
+    }, 280);
+}
+
+function bindChatLootV2Interactions() {
+    const grid = document.getElementById('chat-loot-v2-items');
+    if (!grid) return;
+    if (grid.dataset.bound !== '1') {
+        grid.dataset.bound = '1';
+        grid.addEventListener('click', (event) => {
+            const card = event.target.closest('.chat-loot-v2-item');
+            if (!card || !grid.contains(card)) return;
+            const item = parseChatLootV2ItemFromCard(card);
+            if (!item) return;
+
+            const isScanned = card.dataset.scanned === '1';
+            const isScanning = card.dataset.scanning === '1';
+            if (isScanned) {
+                openChatLootV2Detail(item);
+                return;
+            }
+            if (isScanning) return;
+
+            card.dataset.scanning = '1';
+            const scanOverlay = card.querySelector('.chat-loot-v2-scan-overlay');
+            const scanText = card.querySelector('.chat-loot-v2-scan-text');
+            const scanIcon = card.querySelector('.chat-loot-v2-scan-icon');
+            const revealed = card.querySelector('.chat-loot-v2-revealed');
+
+            if (scanText) scanText.classList.add('hidden');
+            if (scanIcon) scanIcon.classList.add('scanning');
+
+            setTimeout(() => {
+                if (!document.body.contains(card)) return;
+                if (scanOverlay) scanOverlay.classList.add('is-hidden');
+                setTimeout(() => {
+                    if (!document.body.contains(card)) return;
+                    if (scanOverlay) scanOverlay.style.display = 'none';
+                    if (revealed) revealed.classList.add('revealed');
+                    card.dataset.scanning = '0';
+                    card.dataset.scanned = '1';
+                    setTimeout(() => {
+                        if (document.body.contains(card)) {
+                            openChatLootV2Detail(item);
+                        }
+                    }, 150);
+                }, 300);
+            }, 1800);
+        });
+    }
+
+    const detailModal = document.getElementById('chat-loot-v2-detail-modal');
+    const detailCloseBtn = document.getElementById('chat-loot-v2-detail-close');
+    const detailActionBtn = document.getElementById('chat-loot-v2-detail-action');
+    if (detailModal && detailModal.dataset.bound !== '1') {
+        detailModal.dataset.bound = '1';
+        detailModal.addEventListener('click', (event) => {
+            if (event.target === detailModal) {
+                closeChatLootV2Detail(false);
+            }
+        });
+    }
+    if (detailCloseBtn && detailCloseBtn.dataset.bound !== '1') {
+        detailCloseBtn.dataset.bound = '1';
+        detailCloseBtn.addEventListener('click', () => {
+            closeChatLootV2Detail(false);
+        });
+    }
+    if (detailActionBtn && detailActionBtn.dataset.bound !== '1') {
+        detailActionBtn.dataset.bound = '1';
+        detailActionBtn.addEventListener('click', () => {
+            detailActionBtn.textContent = 'EQUIPPED ✓';
+            detailActionBtn.style.background = '#111';
+            detailActionBtn.style.color = '#fff';
+            detailActionBtn.style.fontWeight = '700';
+            setTimeout(() => {
+                closeChatLootV2Detail(false);
+            }, 600);
+        });
+    }
+    if (!window.__chatLootV2EscapeBound) {
+        window.__chatLootV2EscapeBound = true;
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeChatLootV2Detail(false);
+            }
+        });
+    }
+}
+
+function applyChatLootStyle(styleKey) {
+    const normalized = normalizeChatLootStyleKey(styleKey);
+    const modal = document.getElementById('chat-loot-modal');
+    const card = document.getElementById('chat-loot-card');
+    const viewV1 = document.getElementById('chat-loot-view-v1');
+    const viewV2 = document.getElementById('chat-loot-view-v2');
+    const refreshBtn = document.getElementById('chat-loot-refresh-btn');
+    if (modal) {
+        modal.classList.toggle('chat-loot-theme-v1', normalized === 'v1');
+        modal.classList.toggle('chat-loot-theme-v2', normalized === 'v2');
+    }
+    if (card) {
+        card.classList.toggle('chat-loot-card-v1', normalized === 'v1');
+        card.classList.toggle('chat-loot-card-v2', normalized === 'v2');
+    }
+    if (viewV1) {
+        viewV1.classList.toggle('hidden', normalized !== 'v1');
+    }
+    if (viewV2) {
+        viewV2.classList.toggle('hidden', normalized !== 'v2');
+    }
+    if (refreshBtn) {
+        refreshBtn.classList.remove('hidden');
+    }
+}
+
+function setChatLootLoading(loading, loadingText = 'GENERATING LOOT...') {
+    const loadingEl = document.getElementById('chat-loot-loading');
+    const card = document.getElementById('chat-loot-card');
+    const refreshBtn = document.getElementById('chat-loot-refresh-btn');
+    if (loadingEl) {
+        loadingEl.textContent = loadingText;
+        loadingEl.classList.toggle('hidden', !loading);
+    }
+    if (card) {
+        card.classList.toggle('is-loading', !!loading);
+    }
+    if (refreshBtn) {
+        refreshBtn.disabled = !!loading;
+    }
+}
+
+function renderChatLootResult(contact, lootPayload) {
+    const payload = normalizeChatLootPayload(lootPayload, contact);
+    const titleV1En = document.getElementById('chat-loot-title-v1-en');
+    const titleV1 = document.getElementById('chat-loot-title-v1');
+    const descV1 = document.getElementById('chat-loot-v1-desc');
+    const itemsV1 = document.getElementById('chat-loot-v1-items');
+    const titleV2En = document.getElementById('chat-loot-title-v2-en');
+    const titleV2 = document.getElementById('chat-loot-title-v2');
+    const descV2 = document.getElementById('chat-loot-v2-desc');
+    const itemsV2 = document.getElementById('chat-loot-v2-items');
+
+    if (titleV1En) titleV1En.textContent = 'LOOT POPUP V1';
+    if (titleV1) titleV1.textContent = 'SECURE CONTAINER_01';
+    if (descV1) descV1.textContent = 'STATUS: ONLINE';
+    if (itemsV1) itemsV1.innerHTML = buildChatLootV1ItemsHtml(payload.items);
+    bindChatLootV1Interactions();
+    closeChatLootV1Detail(true);
+
+    if (titleV2En) titleV2En.textContent = 'LOOT POPUP V2';
+    if (titleV2) titleV2.textContent = 'SYSTEM SCANNER';
+    if (descV2) descV2.textContent = 'AWAITING INPUT';
+    if (itemsV2) itemsV2.innerHTML = buildChatLootV2ItemsHtml(payload.items);
+    bindChatLootV2Interactions();
+    closeChatLootV2Detail(true);
+}
+
+function openChatLootModalUi() {
+    const modal = document.getElementById('chat-loot-modal');
+    if (!modal) return;
+    if (chatLootModalHideTimer) {
+        clearTimeout(chatLootModalHideTimer);
+        chatLootModalHideTimer = null;
+    }
+    modal.classList.remove('chat-loot-open');
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => {
+        modal.classList.add('chat-loot-open');
+    });
+}
+
+function closeChatLootModalUi() {
+    const modal = document.getElementById('chat-loot-modal');
+    if (!modal) return;
+    closeChatLootV1Detail(true);
+    closeChatLootV2Detail(true);
+    if (chatLootModalHideTimer) {
+        clearTimeout(chatLootModalHideTimer);
+        chatLootModalHideTimer = null;
+    }
+    modal.classList.remove('chat-loot-open');
+    modal.setAttribute('aria-hidden', 'true');
+    setChatLootLoading(false);
+    chatLootModalHideTimer = setTimeout(() => {
+        if (!modal.classList.contains('chat-loot-open')) {
+            modal.classList.add('hidden');
+        }
+        chatLootModalHideTimer = null;
+    }, CHAT_LOOT_MODAL_TRANSITION_MS);
+}
+
+function getChatLootCachedEntry(contact, dateKey = getChatOotdDateKey(new Date())) {
+    if (!contact || typeof contact !== 'object') return null;
+    const entry = contact.todayCarryLoot;
+    if (!entry || typeof entry !== 'object') return null;
+    if (String(entry.dateKey || '') !== String(dateKey || '')) return null;
+    if (!entry.payload || typeof entry.payload !== 'object') return null;
+    return entry;
+}
+
+async function requestChatLootPayloadFromApi(contact) {
+    const state = window.iphoneSimState || {};
+    const settings = state.aiSettings2 && state.aiSettings2.url ? state.aiSettings2 : state.aiSettings;
+    if (!settings || !settings.url || !settings.key) {
+        throw new Error('AI API 未配置');
+    }
+
+    let fetchUrl = String(settings.url || '').trim();
+    if (!fetchUrl.endsWith('/chat/completions')) {
+        fetchUrl = fetchUrl.endsWith('/') ? `${fetchUrl}chat/completions` : `${fetchUrl}/chat/completions`;
+    }
+    const cleanKey = String(settings.key || '').replace(/[^\x00-\x7F]/g, '').trim();
+    const contactName = getChatOotdContactDisplayName(contact);
+    const personaText = normalizeChatOotdText(contact && contact.persona, '无', 1200);
+    const now = new Date();
+    const dateLabel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    const systemPrompt = [
+        '你是联系人随身物品生成助手。',
+        '请生成该联系人“今日随身物品”清单。',
+        '严禁输出 Markdown，严禁输出解释。',
+        '只输出一个 JSON 对象，格式必须是：',
+        '{"summary":"一句总览","items":[{"name":"物品名称","description":"描述","use":"用处","type":"类型","value":"价值","weight":"重量"}]}',
+        '要求：',
+        '- items 返回 4~6 个对象。',
+        '- 每个对象六个字段都必须非空。',
+        '- description 15~80 字，use 6~40 字。',
+        '- value 用简短等级或描述（如 HIGH / MED / LOW）。',
+        '- weight 用可读格式（如 0.35 KG）。'
+    ].join('\n');
+
+    const userPrompt = [
+        `联系人：${contactName}`,
+        `人设：${personaText}`,
+        `日期：${dateLabel}`,
+        '请生成这位联系人今天会携带的随身物品 JSON。'
+    ].join('\n');
+
+    const callApi = async (useJsonFormat) => {
+        const requestBody = {
+            model: settings.model || 'gpt-4o-mini',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.75
+        };
+        if (useJsonFormat) {
+            requestBody.response_format = { type: 'json_object' };
+        }
+        const response = await fetch(fetchUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${cleanKey}`
+            },
+            body: JSON.stringify(requestBody)
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        const choice = data && Array.isArray(data.choices) ? data.choices[0] : null;
+        let content = choice && choice.message ? choice.message.content : '';
+        if (Array.isArray(content)) {
+            content = content.map((part) => {
+                if (typeof part === 'string') return part;
+                if (part && typeof part.text === 'string') return part.text;
+                return '';
+            }).join('\n');
+        }
+        return String(content || '').trim();
+    };
+
+    let rawContent = '';
+    try {
+        rawContent = await callApi(true);
+    } catch (firstError) {
+        console.warn('[Loot] first attempt failed, retrying without json_object', firstError);
+        rawContent = await callApi(false);
+    }
+    return normalizeChatLootPayload(parseChatLootJson(rawContent), contact);
+}
+
+async function openChatLootModal(contactId = null, options = {}) {
+    const resolvedContactId = contactId
+        || (window.iphoneSimState && window.iphoneSimState.currentAiProfileContactId)
+        || (window.iphoneSimState && window.iphoneSimState.currentChatContactId);
+    if (!resolvedContactId || !window.iphoneSimState || !Array.isArray(window.iphoneSimState.contacts)) {
+        return;
+    }
+    const contact = window.iphoneSimState.contacts.find(item => String(item.id) === String(resolvedContactId));
+    if (!contact) return;
+    const lootStyle = getChatLootStyleForContact(contact);
+    const forceRefresh = !!(options && options.forceRefresh);
+    const dateKey = getChatOotdDateKey(new Date());
+
+    const requestSeq = ++chatLootGenerateRequestSeq;
+    applyChatLootStyle(lootStyle);
+    openChatLootModalUi();
+
+    const fallbackPayload = buildChatLootFallbackPayload(contact);
+    renderChatLootResult(contact, fallbackPayload);
+
+    const cachedEntry = forceRefresh ? null : getChatLootCachedEntry(contact, dateKey);
+    if (cachedEntry) {
+        const cachedPayload = normalizeChatLootPayload(cachedEntry.payload, contact);
+        renderChatLootResult(contact, cachedPayload);
+        setChatLootLoading(false);
+        if (typeof window.showChatToast === 'function') {
+            window.showChatToast('今日随身物品已缓存，点击左上刷新可重新生成', 1800);
+        }
+        return;
+    }
+
+    setChatLootLoading(true, forceRefresh ? 'REFRESHING LOOT...' : 'GENERATING LOOT...');
+    let lootPayload = null;
+    try {
+        lootPayload = await requestChatLootPayloadFromApi(contact);
+    } catch (error) {
+        console.error('[Loot] payload generation failed', error);
+        if (typeof window.showChatToast === 'function') {
+            window.showChatToast(`随身物品生成失败，已使用默认结果：${error && error.message ? error.message : '未知错误'}`, 2800);
+        }
+        lootPayload = fallbackPayload;
+    }
+    if (requestSeq !== chatLootGenerateRequestSeq) return;
+
+    renderChatLootResult(contact, lootPayload);
+    setChatLootLoading(false);
+
+    contact.todayCarryLoot = {
+        dateKey,
+        payload: {
+            summary: lootPayload.summary,
+            items: Array.isArray(lootPayload.items) ? lootPayload.items.map(item => ({ ...item })) : []
+        },
+        source: forceRefresh ? 'manual_refresh' : 'auto_generate',
+        updatedAt: Date.now()
+    };
+    if (typeof saveConfig === 'function') {
+        saveConfig();
+    }
+}
+
+window.openChatLootModal = openChatLootModal;
+
 async function requestChatOotdPayloadFromApi(contact, weatherMeta) {
     const state = window.iphoneSimState || {};
     const settings = state.aiSettings2 && state.aiSettings2.url ? state.aiSettings2 : state.aiSettings;
@@ -1134,14 +2441,52 @@ function syncAiProfileCustomizeStyleUi(styleKey) {
     });
 }
 
+function syncAiProfileCustomizeLootStyleUi(styleKey) {
+    const normalized = normalizeChatLootStyleKey(styleKey);
+    const selectorBg = document.getElementById('ai-profile-loot-selector-bg');
+    if (selectorBg) {
+        selectorBg.style.transform = normalized === 'v2' ? 'translateX(100%)' : 'translateX(0)';
+    }
+    const options = document.querySelectorAll('#ai-profile-customize-modal .ai-profile-loot-style-option');
+    options.forEach((option) => {
+        const input = option.querySelector('input[name="ai-profile-loot-style"]');
+        const isActive = !!(input && normalizeChatLootStyleKey(input.value) === normalized);
+        option.classList.toggle('active', isActive);
+    });
+}
+
+function syncAiProfileCustomizeVlogStyleUi(styleKey) {
+    const normalized = normalizeChatVlogStyleKey(styleKey);
+    const selectorBg = document.getElementById('ai-profile-vlog-selector-bg');
+    if (selectorBg) {
+        selectorBg.style.transform = normalized === 'v2' ? 'translateX(100%)' : 'translateX(0)';
+    }
+    const options = document.querySelectorAll('#ai-profile-customize-modal .ai-profile-vlog-style-option');
+    options.forEach((option) => {
+        const input = option.querySelector('input[name="ai-profile-vlog-style"]');
+        const isActive = !!(input && normalizeChatVlogStyleKey(input.value) === normalized);
+        option.classList.toggle('active', isActive);
+    });
+}
+
 function updateAiProfileCustomizeAllPreviews() {
     AI_PROFILE_HIGHLIGHT_KEYS.forEach((key) => {
         updateAiProfileCustomizePreviewByKey(key);
     });
-    const styleKey = normalizeChatOotdStyleKey(aiProfileCustomizeDraft && aiProfileCustomizeDraft.style);
-    const checkedInput = document.querySelector(`#ai-profile-customize-modal input[name="ai-profile-ootd-style"][value="${styleKey}"]`);
-    if (checkedInput) checkedInput.checked = true;
-    syncAiProfileCustomizeStyleUi(styleKey);
+    const ootdStyleKey = normalizeChatOotdStyleKey(aiProfileCustomizeDraft && aiProfileCustomizeDraft.style);
+    const ootdCheckedInput = document.querySelector(`#ai-profile-customize-modal input[name="ai-profile-ootd-style"][value="${ootdStyleKey}"]`);
+    if (ootdCheckedInput) ootdCheckedInput.checked = true;
+    syncAiProfileCustomizeStyleUi(ootdStyleKey);
+
+    const lootStyleKey = normalizeChatLootStyleKey(aiProfileCustomizeDraft && aiProfileCustomizeDraft.lootStyle);
+    const lootCheckedInput = document.querySelector(`#ai-profile-customize-modal input[name="ai-profile-loot-style"][value="${lootStyleKey}"]`);
+    if (lootCheckedInput) lootCheckedInput.checked = true;
+    syncAiProfileCustomizeLootStyleUi(lootStyleKey);
+
+    const vlogStyleKey = normalizeChatVlogStyleKey(aiProfileCustomizeDraft && aiProfileCustomizeDraft.vlogStyle);
+    const vlogCheckedInput = document.querySelector(`#ai-profile-customize-modal input[name="ai-profile-vlog-style"][value="${vlogStyleKey}"]`);
+    if (vlogCheckedInput) vlogCheckedInput.checked = true;
+    syncAiProfileCustomizeVlogStyleUi(vlogStyleKey);
 }
 
 function closeAiProfileCustomizeModal() {
@@ -1179,6 +2524,8 @@ function openAiProfileCustomizeModal() {
     aiProfileCustomizeDraft = {
         contactId: contact.id,
         style: getChatOotdStyleForContact(contact),
+        lootStyle: getChatLootStyleForContact(contact),
+        vlogStyle: getChatVlogStyleForContact(contact),
         images: normalizeAiProfileHighlightImageDraft(contact.profileHighlightImages)
     };
     updateAiProfileCustomizeAllPreviews();
@@ -1263,6 +2610,24 @@ function bindAiProfileCustomizeUploadActions() {
             syncAiProfileCustomizeStyleUi(aiProfileCustomizeDraft.style);
         });
     });
+
+    const lootStyleInputs = modal.querySelectorAll('input[name="ai-profile-loot-style"]');
+    lootStyleInputs.forEach((input) => {
+        input.addEventListener('change', () => {
+            if (!aiProfileCustomizeDraft || !input.checked) return;
+            aiProfileCustomizeDraft.lootStyle = normalizeChatLootStyleKey(input.value);
+            syncAiProfileCustomizeLootStyleUi(aiProfileCustomizeDraft.lootStyle);
+        });
+    });
+
+    const vlogStyleInputs = modal.querySelectorAll('input[name="ai-profile-vlog-style"]');
+    vlogStyleInputs.forEach((input) => {
+        input.addEventListener('change', () => {
+            if (!aiProfileCustomizeDraft || !input.checked) return;
+            aiProfileCustomizeDraft.vlogStyle = normalizeChatVlogStyleKey(input.value);
+            syncAiProfileCustomizeVlogStyleUi(aiProfileCustomizeDraft.vlogStyle);
+        });
+    });
 }
 
 function saveAiProfileCustomizeDraft() {
@@ -1274,11 +2639,21 @@ function saveAiProfileCustomizeDraft() {
     }
     contact.profileHighlightImages = normalizeAiProfileHighlightImageDraft(aiProfileCustomizeDraft.images);
     contact.ootdCardStyle = normalizeChatOotdStyleKey(aiProfileCustomizeDraft.style);
+    contact.lootCardStyle = normalizeChatLootStyleKey(aiProfileCustomizeDraft.lootStyle);
+    contact.vlogCardStyle = normalizeChatVlogStyleKey(aiProfileCustomizeDraft.vlogStyle);
     if (typeof saveConfig === 'function') saveConfig();
     if (typeof renderAiProfile === 'function') renderAiProfile(contact);
     const ootdModal = document.getElementById('chat-ootd-modal');
     if (ootdModal && !ootdModal.classList.contains('hidden')) {
         openChatOotdModal(contact.id, { forceRefresh: false });
+    }
+    const lootModal = document.getElementById('chat-loot-modal');
+    if (lootModal && !lootModal.classList.contains('hidden')) {
+        openChatLootModal(contact.id, { forceRefresh: false });
+    }
+    const vlogModal = document.getElementById('chat-vlog-modal');
+    if (vlogModal && !vlogModal.classList.contains('hidden')) {
+        openChatVlogModal(contact.id, { forceRefresh: false });
     }
     closeAiProfileCustomizeModal();
     if (typeof window.showChatToast === 'function') {
@@ -5994,6 +7369,7 @@ function setupChatListeners() {
 
     const aiProfileScreen = document.getElementById('ai-profile-screen');
     const closeAiProfileBtn = document.getElementById('close-ai-profile');
+    const aiProfileRegenerateBtn = document.getElementById('ai-profile-regenerate-trigger');
     const aiProfileMoreBtn = document.getElementById('ai-profile-more');
     const aiProfileMenuTrigger = document.getElementById('ai-profile-menu-trigger');
     const aiProfileSendMsgBtn = document.getElementById('ai-profile-send-msg');
@@ -6019,13 +7395,23 @@ function setupChatListeners() {
     const closeAiProfileCustomizeBtn = document.getElementById('close-ai-profile-customize');
     const aiProfileCustomizeCancelBtn = document.getElementById('ai-profile-customize-cancel');
     const aiProfileCustomizeSaveBtn = document.getElementById('ai-profile-customize-save');
+    const aiVlogEntry = document.getElementById('ai-vlog-entry');
     const aiOotdEntry = document.getElementById('ai-ootd-entry');
+    const aiLootEntry = document.getElementById('ai-loot-entry');
     const aiMomentsEntry = document.getElementById('ai-moments-entry');
     const aiMomentsPreview = document.getElementById('ai-moments-preview');
+    const chatVlogModal = document.getElementById('chat-vlog-modal');
+    const chatVlogCard = document.getElementById('chat-vlog-card');
+    const closeChatVlogBtn = document.getElementById('close-chat-vlog');
+    const chatVlogRefreshBtn = document.getElementById('chat-vlog-refresh-btn');
     const chatOotdModal = document.getElementById('chat-ootd-modal');
     const chatOotdCard = document.getElementById('chat-ootd-card');
     const closeChatOotdBtn = document.getElementById('close-chat-ootd');
     const chatOotdRefreshBtn = document.getElementById('chat-ootd-refresh-btn');
+    const chatLootModal = document.getElementById('chat-loot-modal');
+    const chatLootCard = document.getElementById('chat-loot-card');
+    const closeChatLootBtn = document.getElementById('close-chat-loot');
+    const chatLootRefreshBtn = document.getElementById('chat-loot-refresh-btn');
     const chatOotdFingerprintBox = document.getElementById('chat-ootd-fingerprint-box');
     const chatOotdBarcodeScanner = document.getElementById('chat-ootd-barcode-scanner');
     const chatOotdV5TearLine = document.getElementById('chat-ootd-v5-tear-line');
@@ -6044,6 +7430,18 @@ function setupChatListeners() {
         });
     }
     if (aiProfileMoreBtn) aiProfileMoreBtn.addEventListener('click', openAiProfileCustomizeModal);
+    if (aiProfileRegenerateBtn) {
+        aiProfileRegenerateBtn.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const contactId = window.iphoneSimState
+                ? (window.iphoneSimState.currentAiProfileContactId || window.iphoneSimState.currentChatContactId)
+                : null;
+            if (typeof window.regenerateAiProfileCard === 'function') {
+                await window.regenerateAiProfileCard(contactId);
+            }
+        });
+    }
     if (aiProfileMenuTrigger) {
         aiProfileMenuTrigger.addEventListener('click', (event) => {
             event.preventDefault();
@@ -6100,6 +7498,23 @@ function setupChatListeners() {
         });
     }
 
+    const openAiVlogFromProfile = async (event = null) => {
+        if (event) event.preventDefault();
+        const contactId = window.iphoneSimState
+            ? (window.iphoneSimState.currentAiProfileContactId || window.iphoneSimState.currentChatContactId)
+            : null;
+        await openChatVlogModal(contactId);
+    };
+
+    if (aiVlogEntry) {
+        aiVlogEntry.addEventListener('click', openAiVlogFromProfile);
+        aiVlogEntry.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                openAiVlogFromProfile(event);
+            }
+        });
+    }
+
     const openAiOotdFromProfile = async (event = null) => {
         if (event) event.preventDefault();
         const contactId = window.iphoneSimState
@@ -6113,6 +7528,56 @@ function setupChatListeners() {
         aiOotdEntry.addEventListener('keydown', (event) => {
             if (event.key === 'Enter' || event.key === ' ') {
                 openAiOotdFromProfile(event);
+            }
+        });
+    }
+
+    const openAiLootFromProfile = async (event = null) => {
+        if (event) event.preventDefault();
+        const contactId = window.iphoneSimState
+            ? (window.iphoneSimState.currentAiProfileContactId || window.iphoneSimState.currentChatContactId)
+            : null;
+        await openChatLootModal(contactId);
+    };
+
+    if (aiLootEntry) {
+        aiLootEntry.addEventListener('click', openAiLootFromProfile);
+        aiLootEntry.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                openAiLootFromProfile(event);
+            }
+        });
+    }
+
+    if (closeChatVlogBtn) {
+        closeChatVlogBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            closeChatVlogModalUi();
+        });
+    }
+    if (chatVlogRefreshBtn) {
+        chatVlogRefreshBtn.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const contactId = window.iphoneSimState
+                ? (window.iphoneSimState.currentAiProfileContactId || window.iphoneSimState.currentChatContactId)
+                : null;
+            await openChatVlogModal(contactId, { forceRefresh: true });
+        });
+    }
+    if (chatVlogModal) {
+        chatVlogModal.addEventListener('click', (event) => {
+            if (event.target === chatVlogModal) {
+                closeChatVlogModalUi();
+            }
+        });
+    }
+    if (chatVlogCard) {
+        chatVlogCard.addEventListener('click', (event) => {
+            event.stopPropagation();
+            if (chatVlogCard.classList.contains('chat-vlog-card-v2') && !chatVlogCard.classList.contains('is-loading')) {
+                pulseChatVlogV2FooterStatus();
             }
         });
     }
@@ -6142,6 +7607,34 @@ function setupChatListeners() {
     }
     if (chatOotdCard) {
         chatOotdCard.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+    }
+    if (closeChatLootBtn) {
+        closeChatLootBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            closeChatLootModalUi();
+        });
+    }
+    if (chatLootRefreshBtn) {
+        chatLootRefreshBtn.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const contactId = window.iphoneSimState
+                ? (window.iphoneSimState.currentAiProfileContactId || window.iphoneSimState.currentChatContactId)
+                : null;
+            await openChatLootModal(contactId, { forceRefresh: true });
+        });
+    }
+    if (chatLootModal) {
+        chatLootModal.addEventListener('click', (event) => {
+            if (event.target === chatLootModal) {
+                closeChatLootModalUi();
+            }
+        });
+    }
+    if (chatLootCard) {
+        chatLootCard.addEventListener('click', (event) => {
             event.stopPropagation();
         });
     }

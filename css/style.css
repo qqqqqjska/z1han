@@ -41,7 +41,7 @@
 /* Notification Banner */
 .notification-banner {
     position: absolute;
-    top: 110px; /* 标题栏下�?*/
+    top: 110px; /* 标题栏下�?*/
     left: 50%;
     transform: translateX(-50%);
     background-color: rgba(255, 255, 255, 0.95);
@@ -157,7 +157,7 @@
 /* Thought Bubble */
 .thought-bubble {
     position: absolute;
-    top: 95px; /* 标题栏下�?*/
+    top: 95px; /* 标题栏下�?*/
     left: 50%;
     transform: translateX(-50%);
     background-color: #fff;
@@ -166,11 +166,11 @@
     border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
     font-size: 14px;
-    z-index: 1010; /* 高于通知横幅，确保不被遮�?*/
+    z-index: 1010; /* 高于通知横幅，确保不被遮�?*/
     max-width: 80%;
     text-align: center;
     transition: opacity 0.3s ease, transform 0.3s ease;
-    pointer-events: none; /* 允许点击穿�?*/
+    pointer-events: none; /* 允许点击穿�?*/
 }
 
 .thought-bubble.hidden {
@@ -179,7 +179,7 @@
     pointer-events: none;
 }
 
-/* 气泡尖角指向正上�?*/
+/* 气泡尖角指向正上�?*/
 .thought-bubble::before {
     content: '';
     position: absolute;
@@ -301,7 +301,7 @@ html, body {
     height: -webkit-fill-available;
   }
   
-  /* 如果应用有主容器，比�?phone-screen */
+  /* 如果应用有主容器，比�?phone-screen */
   .screen-container {
     height: 100vh;
     height: -webkit-fill-available;
@@ -317,14 +317,14 @@ html, body {
   }
 }
 
-/* 3. 安全区域适配（iPhone X以上机型�?*/
+/* 3. 安全区域适配（iPhone X以上机型�?*/
 html, body {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
 body {
-  /* 移除 body �?padding，让应用全屏，由内部元素处理适配 */
+  /* 移除 body �?padding，让应用全屏，由内部元素处理适配 */
   /* padding-top: env(safe-area-inset-top); */
   /* padding-bottom: env(safe-area-inset-bottom); */
   padding-left: env(safe-area-inset-left);
@@ -332,10 +332,10 @@ body {
   box-sizing: border-box;
 }
 
-/* 4. 固定底部导航栏适配（如果有的话�?*/
+/* 4. 固定底部导航栏适配（如果有的话�?*/
 .dock-bar {
   padding-bottom: env(safe-area-inset-bottom);
-  /* 确保在安全区域之�?*/
+  /* 确保在安全区域之�?*/
   margin-bottom: calc(env(safe-area-inset-bottom) + 10px); 
 }
 
@@ -344,7 +344,7 @@ body {
   margin-bottom: 0; 
 }
 
-/* 5. 顶部导航栏适配（如果有的话�?*/
+/* 5. 顶部导航栏适配（如果有的话�?*/
 .status-bar {
   padding-top: env(safe-area-inset-top);
   height: calc(47px + env(safe-area-inset-top));
@@ -385,7 +385,7 @@ body {
     user-select: none;
 }
 
-/* 通用隐藏类（用于 JS 控制显示/隐藏�?*/
+/* 通用隐藏类（用于 JS 控制显示/隐藏�?*/
 .hidden {
     display: none !important;
 }
@@ -393,7 +393,7 @@ body {
 body {
     font-family: var(--font-family);
     background-color: #e5e5e5;
-    display: block; /* 改为 block，移�?flex 居中 */
+    display: block; /* 改为 block，移�?flex 居中 */
     margin: 0;
     padding: 0;
     min-height: 100vh;
@@ -425,7 +425,7 @@ body {
     font-size: 14px;
     font-weight: 600;
     color: #000;
-    z-index: 200; /* 提高层级，确保在所有应用之�?*/
+    z-index: 200; /* 提高层级，确保在所有应用之�?*/
     pointer-events: none; /* 避免阻挡点击 */
     position: absolute; /* 确保它浮动在顶部 */
     top: 0;
@@ -520,7 +520,7 @@ body {
     z-index: 2;
 }
 
-/* 唱片中心�?*/
+/* 唱片中心�?*/
 .vinyl-cover::after {
     content: '';
     position: absolute;
@@ -675,14 +675,14 @@ body {
 .icon-settings { background-color: var(--color-settings); }
 .icon-theme { background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%); background-color: var(--color-theme); }
 
-/* 左侧大图标特殊处�?*/
+/* 左侧大图标特殊处�?*/
 .large-item .app-icon {
     width: 70px;
     height: 70px;
     font-size: 32px;
 }
 
-/* 底部Dock�?*/
+/* 底部Dock�?*/
 .dock-bar {
     position: absolute;
     bottom: 34px;
@@ -728,7 +728,7 @@ body {
     display: none;
 }
 
-/* 响应式调�?*/
+/* 响应式调�?*/
 @media (max-height: 700px) {
     .top-section {
         margin-bottom: 10px;
@@ -1145,7 +1145,7 @@ textarea {
     position: relative;
 }
 
-/* 顶部抓手�?*/
+/* 顶部抓手�?*/
 .modal-header::before {
     content: '';
     position: absolute;
@@ -1319,8 +1319,8 @@ textarea {
     position: absolute;
     top: 0;
     width: 100%;
-    /* 默认背景�?*/
-    background-color: #f2f2f7; /* 与底栏一�?*/
+    /* 默认背景�?*/
+    background-color: #f2f2f7; /* 与底栏一�?*/
     border-bottom: 1px solid rgba(0,0,0,0.1);
     z-index: 100;
     transition: background-color 0.3s, color 0.3s, border-bottom 0.3s, opacity 0.15s ease-in-out;
@@ -1386,10 +1386,10 @@ textarea {
     overflow-y: auto;
     padding-bottom: 0;
     padding-top: 91px;
-    padding-top: calc(44px + max(47px, env(safe-area-inset-top, 0px))); /* �?absolute header 留出空间 */
+    padding-top: calc(44px + max(47px, env(safe-area-inset-top, 0px))); /* �?absolute header 留出空间 */
 }
 
-/* 动态页和个人页不需�?padding，让背景图通顶 */
+/* 动态页和个人页不需�?padding，让背景图通顶 */
 .wechat-body.full-screen {
     padding-top: 0;
 }
@@ -1398,7 +1398,7 @@ textarea {
     margin-top: 0;
 }
 
-/* 给各�?tab 内容添加 padding 以防被底栏遮�?*/
+/* 给各�?tab 内容添加 padding 以防被底栏遮�?*/
 #wechat-tab-contacts, #wechat-tab-me, #wechat-tab-addressbook {
     padding-bottom: calc(80px + env(safe-area-inset-bottom)); /* 增加底部 padding */
 }
@@ -1551,7 +1551,7 @@ textarea {
     padding: 0; /* 移除内边距，实现通栏效果 */
     transition: opacity 0.15s ease-in-out;
     opacity: 1;
-    overflow: hidden; /* 防止横向滚动条出�?*/
+    overflow: hidden; /* 防止横向滚动条出�?*/
 }
 
 .contact-list.fade-out {
@@ -1954,7 +1954,7 @@ textarea {
 }
 
 .chat-input-area.push-up-more {
-    margin-bottom: 300px; /* 功能菜单弹出时上�?*/
+    margin-bottom: 300px; /* 功能菜单弹出时上�?*/
 }
 
 #chat-input {
@@ -2052,8 +2052,8 @@ textarea {
     display: flex;
     flex-direction: column;
     padding: 0;
-    z-index: 90; /* 低于输入�?*/
-    transform: translateY(100%); /* 初始隐藏在底�?*/
+    z-index: 90; /* 低于输入�?*/
+    transform: translateY(100%); /* 初始隐藏在底�?*/
     transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.25s;
     visibility: hidden;
     padding-bottom: max(20px, env(safe-area-inset-bottom));
@@ -2155,7 +2155,7 @@ textarea {
     border-top: 1px solid #dcdcdc;
     display: flex;
     flex-direction: column;
-    z-index: 90; /* 低于输入�?*/
+    z-index: 90; /* 低于输入�?*/
     transform: translateY(100%);
     transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.25s;
     /* 减少底部 padding，只保留安全区域，因为高度已经增加了，内容区域会自动延伸 */
@@ -2428,7 +2428,7 @@ textarea {
 }
 
 .chat-message.user .msg-time {
-    /* order: -1; �?DOM 结构中控制顺序更稳定 */
+    /* order: -1; �?DOM 结构中控制顺序更稳定 */
     margin-right: 8px;
 }
 
@@ -2437,7 +2437,7 @@ textarea {
 }
 
 .chat-avatar {
-    width: 30px; /* 更小的头�?*/
+    width: 30px; /* 更小的头�?*/
     height: 30px;
     border-radius: 50%; /* 圆形头像 */
     margin: 0 8px;
@@ -2450,7 +2450,7 @@ textarea {
     border-radius: 18px; /* 圆润气泡 */
     max-width: 70%;
     position: relative;
-    font-size: inherit; /* 继承父容器字体大�?*/
+    font-size: inherit; /* 继承父容器字体大�?*/
     line-height: 1.4;
     word-wrap: break-word;
     white-space: pre-wrap; /* 支持换行 */
@@ -2470,13 +2470,13 @@ textarea {
     border-bottom-left-radius: 4px; /* 尾巴 */
 }
 
-/* 移除旧的三角形尾�?*/
+/* 移除旧的三角形尾�?*/
 .chat-message.other .message-content::before,
 .chat-message.user .message-content::before {
     display: none;
 }
 
-/* System Message (拍一�?style) */
+/* System Message (拍一�?style) */
 .chat-message.system {
     justify-content: center;
     margin-bottom: 15px;
@@ -2597,7 +2597,7 @@ textarea {
     opacity: 1;
 }
 
-/* 修复用户转账卡片状态颜�?*/
+/* 修复用户转账卡片状态颜�?*/
 .chat-message.user .message-content.transfer-msg.accepted,
 .chat-message.user .message-content.transfer-msg.returned {
     background-color: #ffffff;
@@ -2638,7 +2638,7 @@ textarea {
 
 .message-content.transfer-msg.accepted .transfer-icon,
 .message-content.transfer-msg.returned .transfer-icon {
-    background-color: #8e8e93; /* 灰色背景表示已处�?*/
+    background-color: #8e8e93; /* 灰色背景表示已处�?*/
 }
 
 .transfer-info {
@@ -2648,7 +2648,7 @@ textarea {
     flex: 1;
     margin-top: 0 !important;
     justify-content: center;
-    min-width: 0; /* 关键修复：允�?flex 子项收缩，使 text-overflow 生效 */
+    min-width: 0; /* 关键修复：允�?flex 子项收缩，使 text-overflow 生效 */
 }
 
 .transfer-amount {
@@ -2832,7 +2832,7 @@ textarea {
     padding-bottom: calc(50px + env(safe-area-inset-bottom));
 }
 
-/* 个人朋友圈全屏页不需要底�?padding */
+/* 个人朋友圈全屏页不需要底�?padding */
 #personal-moments-screen .moments-container {
     padding-bottom: env(safe-area-inset-bottom);
 }
@@ -3268,6 +3268,7 @@ textarea {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+    display: none;
 }
 
 #ai-profile-screen .ai-profile-avatar-ring-1 {
@@ -3317,19 +3318,39 @@ textarea {
 }
 
 #ai-profile-screen .ai-profile-info-primary {
-    text-align: center;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 #ai-profile-screen #ai-profile-name {
-    font-size: 36px;
+    font-size: 26px;
     font-weight: 600;
-    letter-spacing: -1px;
+    letter-spacing: 0px;
     margin: 0 0 8px;
-    text-shadow: 0 4px 12px rgba(255, 255, 255, 0.8);
+    text-shadow: none;
+    text-align: center;
+    width: 100%;
+    color: #3f3f46;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.12;
+}
+
+#ai-profile-screen #ai-profile-name::before {
+    content: "@";
+    font-size: 0.7em;
+    font-weight: 600;
+    color: inherit;
+    line-height: 1;
+    margin-right: 2px;
+    transform: translateY(-2px);
 }
 
 #ai-profile-screen .profile-id {
-    font-size: 15px;
+    font-size: 13px;
     color: var(--ai-text-sub);
     font-weight: 400;
     letter-spacing: 1px;
@@ -3338,11 +3359,13 @@ textarea {
     border: none;
     background: none;
     min-height: 0;
+    text-align: center;
+    width: 100%;
 }
-
 #ai-profile-screen .profile-nickname {
     display: none !important;
 }
+
 
 #ai-profile-screen .profile-content-section {
     width: 100%;
@@ -3356,7 +3379,7 @@ textarea {
     position: relative;
     z-index: 10;
     animation: ai-profile-slide-up 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-    max-height: 60vh;
+    max-height: 64vh;
     overflow-y: auto;
 }
 
@@ -3728,12 +3751,12 @@ textarea {
     border-radius: 4px;
 }
 
-/* 移动端发动态按钮优�?*/
+/* 移动端发动态按钮优�?*/
 #add-moment-btn {
     pointer-events: auto;
     cursor: pointer;
     position: relative;
-    z-index: 102; /* �?nav-bar �?*/
+    z-index: 102; /* �?nav-bar �?*/
     padding: 10px; /* 增加点击区域 */
     margin: -10px; /* 抵消 padding 带来的布局影响 */
 }
@@ -4092,7 +4115,7 @@ input:checked + .slider:before {
 /* Sticker Message Style */
 .message-content.sticker-msg {
     background-color: transparent !important; /* 强制透明背景 */
-    padding: 0; /* 移除内边�?*/
+    padding: 0; /* 移除内边�?*/
     border-radius: 0; /* 移除圆角 */
     box-shadow: none; /* 移除阴影 */
 }
@@ -4130,8 +4153,8 @@ input:checked + .slider:before {
 }
 
 .message-content.sticker-msg img {
-    max-width: 150px; /* 适当调整表情包大�?*/
-    border-radius: 0; /* 表情包本身可能不需要圆角，或者保持原�?*/
+    max-width: 150px; /* 适当调整表情包大�?*/
+    border-radius: 0; /* 表情包本身可能不需要圆角，或者保持原�?*/
     display: block; /* 消除底部间隙 */
 }
 
@@ -4165,7 +4188,7 @@ input:checked + .slider:before {
 
 /* --------------------------------------------------------- */
 /* Music Listen Invite Card (Pure CSS Version)                */
-/* 调位置入口：直接改这里的变量，分别控制每个元素上下偏�?*/
+/* 调位置入口：直接改这里的变量，分别控制每个元素上下偏�?*/
 /* --------------------------------------------------------- */
 .music-listen-invite-card {
     --music-invite-card-width: 260px;
@@ -4702,7 +4725,7 @@ input:checked + .slider:before {
     align-items: flex-start;
 }
 
-/* 调整 message-content �?wrapper 中的宽度 */
+/* 调整 message-content �?wrapper 中的宽度 */
 .msg-wrapper .message-content {
     max-width: 100%;
     width: fit-content;
@@ -4747,7 +4770,7 @@ input:checked + .slider:before {
     transition: padding-left 0.2s ease;
 }
 
-/* 系统消息在多选模式下不偏移，且不可点�?*/
+/* 系统消息在多选模式下不偏移，且不可点�?*/
 .chat-body.multi-select-mode .chat-message.system {
     padding-left: 0;
     padding-right: 0;
@@ -4785,13 +4808,13 @@ input:checked + .slider:before {
     z-index: 10;
 }
 
-/* 默认（其他人消息）勾选圈从左侧进�?*/
+/* 默认（其他人消息）勾选圈从左侧进�?*/
 .chat-body.multi-select-mode .chat-message .select-checkbox {
     left: 10px; /* 进入视野 */
     right: auto;
 }
 
-/* 用户消息（右侧）勾选圈出现在气泡右�?*/
+/* 用户消息（右侧）勾选圈出现在气泡右�?*/
 .chat-body.multi-select-mode .chat-message.user .select-checkbox {
     right: 10px;
     left: auto;
@@ -4808,7 +4831,7 @@ input:checked + .slider:before {
     font-weight: 900;
 }
 
-/* JS 创建的复选框样式适配（与上面�?.select-checkbox 对应�?*/
+/* JS 创建的复选框样式适配（与上面�?.select-checkbox 对应�?*/
 input.msg-select-checkbox {
     position: absolute;
     left: -30px;
@@ -4833,7 +4856,7 @@ input.msg-select-checkbox {
     right: auto;
 }
 
-/* 右侧（用户）消息�?JS 创建复选框定位到气泡右�?*/
+/* 右侧（用户）消息�?JS 创建复选框定位到气泡右�?*/
 .chat-body.multi-select-mode .chat-message.user input.msg-select-checkbox {
     right: 10px;
     left: auto;
@@ -4855,12 +4878,12 @@ input.msg-select-checkbox {
     transform: translate(-50%, -50%);
 }
 
-/* 调整多选模式下的点击行为，防止触发长按或其他事�?*/
+/* 调整多选模式下的点击行为，防止触发长按或其他事�?*/
 .chat-body.multi-select-mode .message-content {
     pointer-events: none; /* 让点击穿透到 chat-message */
 }
 
-/* 把多选时的退出按钮放�?header 的返回位�?*/
+/* 把多选时的退出按钮放�?header 的返回位�?*/
 .chat-header .multi-select-cancel {
     position: absolute;
     left: 15px;
@@ -4876,7 +4899,7 @@ input.msg-select-checkbox {
     cursor: pointer;
 }
 
-/* 多选删除按�?- 悬浮在右下角 */
+/* 多选删除按�?- 悬浮在右下角 */
 .multi-select-delete {
     position: absolute;
     bottom: 70px;
@@ -4922,13 +4945,13 @@ input.msg-select-checkbox {
     position: relative;
 }
 
-/* 垂直�?*/
+/* 垂直�?*/
 .timeline-container::before {
     content: '';
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 60px; /* 时间和内容的分界�?*/
+    left: 60px; /* 时间和内容的分界�?*/
     width: 2px;
     background-color: #e5e5ea;
     z-index: 0;
@@ -4961,12 +4984,12 @@ input.msg-select-checkbox {
     position: relative;
 }
 
-/* 连接�?*/
+/* 连接�?*/
 .timeline-content::before {
     content: '';
     position: absolute;
     top: 10px;
-    left: -26px; /* 调整到垂直线�?*/
+    left: -26px; /* 调整到垂直线�?*/
     width: 10px;
     height: 10px;
     border-radius: 50%;
@@ -5366,17 +5389,17 @@ input.msg-select-checkbox {
     padding-bottom: calc(60px + env(safe-area-inset-bottom)) !important;
 }
 
-/* --- 适配旧组件到网格�?--- */
+/* --- 适配旧组件到网格�?--- */
 /* ============================================================
-   全新的主屏幕网格与组件系�?(修复版：方形网格 & 文字下方)
+   全新的主屏幕网格与组件系�?(修复版：方形网格 & 文字下方)
    ============================================================ */
 
-/* --- 1. 隐藏的原生组件仓�?--- */
+/* --- 1. 隐藏的原生组件仓�?--- */
 #widget-repository {
     display: none !important;
 }
 
-/* --- 2. 主屏幕网格容�?--- */
+/* --- 2. 主屏幕网格容�?--- */
 /* --- style.css --- */
 
 /* 分页容器 */
@@ -5401,7 +5424,7 @@ input.msg-select-checkbox {
 }
 
 .home-screen-page {
-    width: 100vw; /* 每一页占满屏幕宽�?*/
+    width: 100vw; /* 每一页占满屏幕宽�?*/
     height: 100%;
     flex-shrink: 0;
     scroll-snap-align: start;
@@ -5413,8 +5436,8 @@ input.msg-select-checkbox {
     grid-template-columns: repeat(4, 1fr);
     
     /* === 修改这里 === */
-    /* 原来�? grid-auto-rows: min-content; */
-    /* 改为固定 60px，这�?App 图标的标准高�?*/
+    /* 原来�? grid-auto-rows: min-content; */
+    /* 改为固定 60px，这�?App 图标的标准高�?*/
     grid-auto-rows: 60px;
     /* ================ */
     
@@ -5427,10 +5450,10 @@ input.msg-select-checkbox {
     align-content: start;
 }
 
-/* 分页指示�?*/
+/* 分页指示�?*/
 .page-indicators {
     position: absolute;
-    bottom: 110px; /* Dock栏上�?*/
+    bottom: 110px; /* Dock栏上�?*/
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -5466,17 +5489,17 @@ input.msg-select-checkbox {
     z-index: 1;
 }
 
-/* 【关键逻辑】小组件格子：必须打�?60px 的限制，撑满它跨越的区域 */
+/* 【关键逻辑】小组件格子：必须打�?60px 的限制，撑满它跨越的区域 */
 .grid-slot.widget-slot {
     width: 100% !important;  /* 宽度填满跨越的列 */
     height: 100% !important; /* 高度填满跨越的行 */
-    aspect-ratio: auto !important; /* 取消正方形比例限�?*/
+    aspect-ratio: auto !important; /* 取消正方形比例限�?*/
     justify-self: stretch; /* 强制水平拉伸 */
     min-height: 0;
     display: flex;
 }
 
-/* 编辑模式下：显示虚线�?(现在虚线框会紧贴图标�? */
+/* 编辑模式下：显示虚线�?(现在虚线框会紧贴图标�? */
 .edit-mode .grid-slot {
     /* 稍微调整背景色，让它看起来像个占位符 */
     background-color: rgba(200, 200, 200, 0.3);
@@ -5512,24 +5535,24 @@ input.msg-select-checkbox {
     transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* 图标图片部分 - 【关键修改】恢复固定大�?60px */
+/* 图标图片部分 - 【关键修改】恢复固定大�?60px */
 .app-icon-img {
     width: 60px;  /* 恢复标准大小 */
     height: 60px; /* 恢复标准大小 */
-    border-radius: 14px; /* 恢复原来的圆�?*/
+    border-radius: 14px; /* 恢复原来的圆�?*/
     background-color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 28px; /* 恢复原来的图标字�?*/
+    font-size: 28px; /* 恢复原来的图标字�?*/
     box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-    flex-shrink: 0; /* 防止被挤�?*/
+    flex-shrink: 0; /* 防止被挤�?*/
 }
 
 /* 应用名字 - 移到格子下方 */
 .app-name {
     position: absolute;
-    /* 定位到格子底部边缘再往下一�?*/
+    /* 定位到格子底部边缘再往下一�?*/
     top: calc(100% + 1px); 
     left: 50%;
     transform: translateX(-50%);
@@ -5543,7 +5566,7 @@ input.msg-select-checkbox {
     z-index: 20;
 }
 
-/* 自定�?JSON 组件容器 - 填满格子 (组件依然需要填�? */
+/* 自定�?JSON 组件容器 - 填满格子 (组件依然需要填�? */
 .custom-widget {
     width: 100%;
     height: 100%;
@@ -5555,7 +5578,7 @@ input.msg-select-checkbox {
     transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* 修复原生组件在网格中的显�?*/
+/* 修复原生组件在网格中的显�?*/
 .widget-slot .music-widget,
 .widget-slot .polaroid-widget {
     margin: 0 !important;
@@ -5573,7 +5596,7 @@ input.msg-select-checkbox {
     transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* 针对音乐组件的特殊微�?*/
+/* 针对音乐组件的特殊微�?*/
 .widget-slot .music-widget .vinyl-wrapper {
     width: 45%; 
     height: auto;
@@ -5611,7 +5634,7 @@ input.msg-select-checkbox {
     cursor: grabbing;
 }
 
-/* --- 6. 删除按钮 (�?iOS 减号) --- */
+/* --- 6. 删除按钮 (�?iOS 减号) --- */
 .delete-btn {
     position: absolute;
     top: -8px;
@@ -5648,7 +5671,7 @@ input.msg-select-checkbox {
     to { transform: scale(1); }
 }
 
-/* --- 7. 编辑模式底部工具�?--- */
+/* --- 7. 编辑模式底部工具�?--- */
 #edit-mode-toolbar {
     position: absolute;
     bottom: 110px; 
@@ -5746,11 +5769,11 @@ input.msg-select-checkbox {
     pointer-events: none; 
 }
 
-/* 预览框尺�?*/
+/* 预览框尺�?*/
 .size-2x2 { width: 140px; height: 140px; }
 .size-4x2 { width: 290px; height: 140px; }
-.size-4x3 { width: 290px; height: 215px; } /* 3行高�?+ 2个间�?*/
-.size-4x4 { width: 290px; height: 290px; } /* 4行高�?+ 3个间�?*/
+.size-4x3 { width: 290px; height: 215px; } /* 3行高�?+ 2个间�?*/
+.size-4x4 { width: 290px; height: 290px; } /* 4行高�?+ 3个间�?*/
 
 .library-item-name {
     font-size: 14px;
@@ -5758,7 +5781,7 @@ input.msg-select-checkbox {
     color: #333;
 }
 /* ================================================================= */
-/* [核弹级修�?v3] 强制覆盖 - 语音消息样式 */
+/* [核弹级修�?v3] 强制覆盖 - 语音消息样式 */
 /* 使用 html body 前缀极大提高优先级，确保覆盖原有蓝色气泡样式 */
 /* ================================================================= */
 
@@ -5773,11 +5796,11 @@ html body .chat-message.other .message-content.voice-msg {
     box-shadow: none !important;
     outline: none !important;
     
-    /* 强制去除内边距，防止“大蓝气泡”残�?*/
+    /* 强制去除内边距，防止“大蓝气泡”残�?*/
     padding: 0 !important;
     margin: 0 !important;
     
-    /* 布局：垂直排�?*/
+    /* 布局：垂直排�?*/
     display: flex !important;
     flex-direction: column !important;
     
@@ -5796,7 +5819,7 @@ html body .chat-message.user .message-content.voice-msg {
     align-items: flex-end !important;
 }
 
-/* 2. 语音�?(顶部绿色/白色�? */
+/* 2. 语音�?(顶部绿色/白色�? */
 html body .voice-bar-top {
     display: flex !important;
     align-items: center !important;
@@ -5810,7 +5833,7 @@ html body .voice-bar-top {
     box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
     margin-bottom: 0 !important;
     cursor: pointer;
-    flex: none !important; /* 防止被拉�?*/
+    flex: none !important; /* 防止被拉�?*/
 }
 
 /* 对方发的消息 (左侧白条) */
@@ -5828,7 +5851,7 @@ html body .chat-message.other .voice-bar-top::before {
     border-color: transparent #ffffff transparent transparent;
 }
 
-/* 我发的消�?(右侧绿条) */
+/* 我发的消�?(右侧绿条) */
 html body .chat-message.user .voice-bar-top {
     background-color: #000000 !important;
     color: #ffffff !important;
@@ -5844,16 +5867,16 @@ html body .chat-message.user .voice-bar-top::after {
     border-color: transparent #000000 transparent transparent;
 }
 
-/* 3. 转文字气�?(底部白色方块) - 彻底修复高度问题 */
+/* 3. 转文字气�?(底部白色方块) - 彻底修复高度问题 */
 html body .voice-text-bottom {
     display: block !important;
     position: relative !important;
     background-color: #ffffff !important;
     color: #333 !important;
     
-    /* 间距与尺�?*/
-    margin-top: 6px !important;    /* 与语音条的距�?*/
-    padding: 5px 10px !important;  /* 紧凑内边�?*/
+    /* 间距与尺�?*/
+    margin-top: 6px !important;    /* 与语音条的距�?*/
+    padding: 5px 10px !important;  /* 紧凑内边�?*/
     border-radius: 6px !important;
     
     /* 字体排版 */
@@ -5863,10 +5886,10 @@ html body .voice-text-bottom {
     white-space: pre-wrap !important;
     word-break: break-all !important;
     
-    /* 关键：防止被父容器拉�?*/
+    /* 关键：防止被父容器拉�?*/
     flex: none !important; 
     width: fit-content !important;
-    max-width: 240px !important; /* 限制最大宽�?*/
+    max-width: 240px !important; /* 限制最大宽�?*/
     height: auto !important;
     min-height: 0 !important;
     
@@ -5874,7 +5897,7 @@ html body .voice-text-bottom {
     z-index: 9 !important;
 }
 
-/* 隐藏时彻底消�?*/
+/* 隐藏时彻底消�?*/
 html body .voice-text-bottom.hidden {
     display: none !important;
 }
@@ -5902,7 +5925,7 @@ html body .chat-message.other .voice-icon-box i { transform: rotate(90deg); }
 html body .chat-message.user .voice-icon-box i { transform: rotate(-90deg); }
 /* --- 见面功能样式 --- */
 
-/* 见面列表�?*/
+/* 见面列表�?*/
 .meeting-item {
     position: relative;
     display: flex;
@@ -5931,7 +5954,7 @@ html body .chat-message.user .voice-icon-box i { transform: rotate(-90deg); }
     background: #fdfdfc;
 }
 
-/* 魔法棒按钮样�?*/
+/* 魔法棒按钮样�?*/
 .meeting-icon-btn {
     width: 40px;
     height: 40px;
@@ -5945,7 +5968,7 @@ html body .chat-message.user .voice-icon-box i { transform: rotate(-90deg); }
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
-    flex-shrink: 0; /* 防止被挤�?*/
+    flex-shrink: 0; /* 防止被挤�?*/
 }
 .meeting-icon-btn:hover {
     background: #e0e0ef;
@@ -5968,7 +5991,7 @@ html body .chat-message.user .voice-icon-box i { transform: rotate(-90deg); }
 }
 /* --- style.css --- */
 
-/* 1. �?root 中定义见面专用字体变量，默认继承全局字体 */
+/* 1. �?root 中定义见面专用字体变量，默认继承全局字体 */
 :root {
     --meeting-font-family: var(--font-family);
 }
@@ -5983,7 +6006,7 @@ html body .chat-message.user .voice-icon-box i { transform: rotate(-90deg); }
 #meeting-input {
     font-family: var(--meeting-font-family) !important;
 }
-/* --- 见面字体隔离样式 (添加�?style.css 末尾) --- */
+/* --- 见面字体隔离样式 (添加�?style.css 末尾) --- */
 
 /* 1. 定义专属变量，默认继承全局 */
 :root {
@@ -6012,7 +6035,7 @@ html body .chat-message.user .voice-icon-box i { transform: rotate(-90deg); }
 
 .voice-playing-anim {
     animation: voice-play 1s infinite;
-    color: #ffffff !important; /* 播放时变�?*/
+    color: #ffffff !important; /* 播放时变�?*/
 }
 
 /* Generating Pulse Animation */
@@ -6034,7 +6057,7 @@ html body .chat-message.user .voice-icon-box i { transform: rotate(-90deg); }
     right: 20px;
     width: 60px;
     height: 60px;
-    background-color: #ffffff; /* 微信�?*/
+    background-color: #ffffff; /* 微信�?*/
     border-radius: 12px;
     display: flex;
     flex-direction: column;
@@ -6175,13 +6198,13 @@ html body .chat-message.user .voice-icon-box i { transform: rotate(-90deg); }
     top: 45%;
     left: 20px;
     right: 20px;
-    bottom: 200px; /* 留出底部控制栏和输入框空�?*/
+    bottom: 200px; /* 留出底部控制栏和输入框空�?*/
     overflow-y: auto;
     z-index: 10;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    /* 隐藏滚动�?*/
+    /* 隐藏滚动�?*/
     -ms-overflow-style: none;
     scrollbar-width: none;
 }
@@ -6226,7 +6249,7 @@ html body .chat-message.user .voice-icon-box i { transform: rotate(-90deg); }
 
 .voice-call-input-area {
     position: absolute;
-    bottom: 150px; /* 上移一�?*/
+    bottom: 150px; /* 上移一�?*/
     left: 20px;
     right: 20px;
     display: flex;
@@ -6276,7 +6299,7 @@ html body .chat-message.user .voice-icon-box i { transform: rotate(-90deg); }
     align-items: flex-end;
     padding: 0; /* 移除 padding，由 row 控制 */
     z-index: 20; /* 提高层级 */
-    pointer-events: none; /* 容器不阻挡，子元素开�?*/
+    pointer-events: none; /* 容器不阻挡，子元素开�?*/
 }
 
 .voice-call-actions-row {
@@ -6329,7 +6352,7 @@ html body .chat-message.user .voice-icon-box i { transform: rotate(-90deg); }
     color: #333;
 }
 
-/* 麦克风关闭状�?*/
+/* 麦克风关闭状�?*/
 .voice-action-btn.white:not(.active) {
     background-color: rgba(255, 255, 255, 0.2);
     color: #fff;
