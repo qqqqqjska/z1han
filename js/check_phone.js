@@ -1090,55 +1090,72 @@ function initPhoneGrid() {
     // 注入查手机专用样式，修复底部空隙问题
     const style = document.createElement('style');
     style.innerHTML = `
-        /* 查手机-微信 悬浮Dock栏适配 */
+        /* 查手机-微信 原生标准底部TabBar适配 */
         #phone-wechat .wechat-tab-bar {
             position: absolute !important;
-            width: auto !important;
-            min-width: 220px !important;
-            height: 64px !important;
+            width: 100% !important;
+            min-width: 100% !important;
+            height: calc(52px + env(safe-area-inset-bottom)) !important;
             min-height: 0 !important;
-            left: 50% !important;
-            right: auto !important;
-            bottom: max(30px, env(safe-area-inset-bottom)) !important;
-            transform: translateX(-50%) !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            transform: none !important;
             
-            border-radius: 32px !important;
+            border-radius: 0 !important;
             margin: 0 !important;
-            padding: 0 20px !important;
+            padding: 4px 0 env(safe-area-inset-bottom) 0 !important;
             
-            background-color: rgba(255, 255, 255, 0.9) !important;
+            background-color: #f7f7f7 !important;
             backdrop-filter: blur(20px) !important;
             -webkit-backdrop-filter: blur(20px) !important;
-            border-top: none !important;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
+            border-top: 0.5px solid rgba(0,0,0,0.15) !important;
+            box-shadow: none !important;
             
+            display: flex !important;
             align-items: center !important;
             justify-content: space-around !important;
             z-index: 999 !important;
+            box-sizing: border-box !important;
         }
 
-        /* 调整图标位置 - 恢复居中 */
+        /* 微信TabBar项目：图标与文字垂直排列 */
         #phone-wechat .wechat-tab-item {
+            display: flex !important;
+            flex-direction: column !important;
             justify-content: center !important;
             align-items: center !important;
             margin-top: 0 !important;
             flex: 1 !important;
             height: 100% !important;
-            color: #b0b0b0 !important;
+            color: #191919 !important;
+            font-size: 10px !important;
+            gap: 3px !important;
+            text-decoration: none !important;
+            user-select: none !important;
+        }
+
+        #phone-wechat .wechat-tab-item i {
+            font-size: 20px !important;
+            line-height: 1 !important;
         }
         
         #phone-wechat .wechat-tab-item.active {
-            color: #007AFF !important;
+            color: #07C160 !important;
+        }
+
+        #phone-wechat .wechat-tab-item.active i {
+            color: #07C160 !important;
         }
         
-        /* 查手机-微信背景色调整 (灰底) */
+        /* 查手机-微信基础背景色 (微信浅灰) */
         #phone-wechat {
-            background-color: #f2f2f7 !important;
+            background-color: #ededed !important;
         }
         
-        /* 隐藏微信原生标题栏背景，使其透明 */
+        /* 微信原生标题栏 */
         #phone-wechat-header {
-            background-color: transparent !important;
+            background-color: #ededed !important;
             border-bottom: none !important;
         }
         
@@ -6992,17 +7009,19 @@ window.switchPhoneWechatTab = function(tabName) {
         // Header style for Contacts (Chats)
         if (header) header.style.backgroundColor = '#ededed';
         if (backBtn) {
-            backBtn.style.color = '#000';
+            backBtn.style.color = '#191919';
             backBtn.style.textShadow = 'none';
         }
         if (title) {
             title.style.display = 'block';
-            title.style.color = '#000';
-            title.textContent = '微信'; // Ensure title is WeChat
+            title.style.color = '#191919';
+            title.style.fontWeight = '600';
+            title.style.fontSize = '17px';
+            title.textContent = '微信';
         }
         if (generateBtn) {
-            generateBtn.innerHTML = '<i class="fas fa-plus"></i>';
-            generateBtn.style.color = '#000';
+            generateBtn.innerHTML = '<i class="far fa-plus-circle" style="font-size: 20px;"></i>';
+            generateBtn.style.color = '#191919';
             generateBtn.style.textShadow = 'none';
             // 确保切换回来时重新绑定菜单事件
             generateBtn.onclick = (e) => showPhoneWechatGenerateMenu(e);
@@ -8964,9 +8983,9 @@ function renderPhoneWechatContacts(contactId) {
     const container = document.getElementById('phone-wechat-tab-contacts');
     if (!container) return;
 
-    // 强制修复背景色，确保圆角卡片可见
+    // 微信原生底层浅灰背景
     const appEl = document.getElementById('phone-wechat');
-    if (appEl) appEl.style.backgroundColor = '#f2f2f7';
+    if (appEl) appEl.style.backgroundColor = '#ededed';
     
     // 获取数据
     const content = window.iphoneSimState.phoneContent && window.iphoneSimState.phoneContent[contactId];
@@ -8980,35 +8999,33 @@ function renderPhoneWechatContacts(contactId) {
         });
     }
 
-    // 更新 Header 标题
+    // 更新 Header 标题（原生微信只有有未读或特殊状态时才带括号，这里还原为纯“微信”样式）
     const titleEl = document.getElementById('phone-wechat-title');
     if (titleEl) {
-        titleEl.textContent = `微信(${chats ? chats.length : 0})`;
+        titleEl.textContent = '微信';
         titleEl.style.fontSize = '17px';
         titleEl.style.fontWeight = '600';
+        titleEl.style.color = '#191919';
     }
 
     // 构建 HTML
     let html = `
-        <!-- 搜索框 -->
-        <div style="padding: 20px 16px 16px 16px;">
-            <div style="background: #e3e3e8; border-radius: 10px; height: 36px; display: flex; align-items: center; justify-content: center; color: #8e8e93;">
-                <i class="fas fa-search" style="font-size: 14px; margin-right: 6px;"></i>
-                <span style="font-size: 16px;">搜索</span>
+        <!-- 原生微信风格搜索框 -->
+        <div style="padding: 10px 12px 10px 12px; background: #ededed;">
+            <div style="background: #ffffff; border-radius: 6px; height: 36px; display: flex; align-items: center; justify-content: center; color: #b2b2b2;">
+                <i class="fas fa-search" style="font-size: 14px; margin-right: 6px; color: #b2b2b2;"></i>
+                <span style="font-size: 16px; color: #b2b2b2;">搜索</span>
             </div>
         </div>
     `;
 
     if (!chats || chats.length === 0) {
         html += `
-            <div style="padding: 0 16px;">
-                <div style="background: #fff; border-radius: 18px; padding: 20px; text-align: center; color: #999;">
-                    点击右上角生成聊天
-                </div>
+            <div style="background: #fff; padding: 60px 20px; text-align: center; color: #999; font-size: 15px;">
+                点击右上角 + 生成聊天
             </div>`;
     } else {
-        html += `<div style="padding: 0 16px 100px 16px;">
-            <div style="background: #fff; border-radius: 18px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">`;
+        html += `<div style="background: #ffffff; padding-bottom: calc(60px + env(safe-area-inset-bottom));">`;
         
         chats.forEach((chat, index) => {
             // 预处理头像 URL，避免 404 和 403
@@ -9019,33 +9036,32 @@ function renderPhoneWechatContacts(contactId) {
             }
 
             const unreadHtml = chat.unread > 0 
-                ? `<div class="unread-badge" style="position: absolute; top: -5px; right: -5px;">${chat.unread}</div>` 
+                ? `<div class="unread-badge" style="position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; line-height: 18px; padding: 0 4px; border-radius: 9px; font-size: 11px; background: #fa5151; color: #fff; text-align: center; box-sizing: border-box;">${chat.unread}</div>` 
                 : '';
 
             // 最后一项不显示下划线
-            const borderStyle = index === chats.length - 1 ? 'border: none;' : 'border-bottom: 1px solid #f0f0f0;';
+            const borderStyle = index === chats.length - 1 ? 'border: none;' : 'border-bottom: 0.5px solid #ececec;';
 
             html += `
-                <div onclick="window.openPhoneWechatChat(${index}, '${contactId}')" style="display: flex; align-items: center; padding: 12px 16px; cursor: pointer; background: #fff;">
+                <div onclick="window.openPhoneWechatChat(${index}, '${contactId}')" style="display: flex; align-items: center; padding: 12px 16px; cursor: pointer; background: #ffffff; -webkit-tap-highlight-color: rgba(0,0,0,0.05);">
                     <div style="position: relative; margin-right: 12px; flex-shrink: 0;">
-                        <img src="${avatar}" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover;" onerror="this.onerror=null;this.src=window.getSmartAvatar('${chat.name || 'User'}')">
+                        <img src="${avatar}" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; display: block;" onerror="this.onerror=null;this.src=window.getSmartAvatar('${chat.name || 'User'}')">
                         ${unreadHtml}
                     </div>
-                    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; height: 48px; ${borderStyle}">
-                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;">
-                            <span style="font-size: 16px; font-weight: 500; color: #000;">${chat.name}</span>
-                            <span style="font-size: 12px; color: #8e8e93;">${chat.time || ''}</span>
+                    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0; padding-bottom: 12px; padding-top: 2px; ${borderStyle}">
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px;">
+                            <span style="font-size: 16px; font-weight: 500; color: #191919; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;">${chat.name}</span>
+                            <span style="font-size: 12px; color: #b2b2b2; flex-shrink: 0;">${chat.time || ''}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-size: 14px; color: #8e8e93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">${chat.lastMessage || ''}</span>
-                            <i class="fas fa-chevron-right" style="font-size: 12px; color: #d1d1d6; opacity: 0.5;"></i>
+                            <span style="font-size: 14px; color: #999999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90%; line-height: 1.4;">${chat.lastMessage || ''}</span>
                         </div>
                     </div>
                 </div>
             `;
         });
         
-        html += `</div></div>`;
+        html += `</div>`;
     }
     
     container.innerHTML = html;
