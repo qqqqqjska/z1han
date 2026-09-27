@@ -1150,7 +1150,7 @@ function initPhoneGrid() {
         
         /* 查手机-微信基础背景色 (微信浅灰) */
         #phone-wechat {
-            background-color: #ededed !important;
+            background-color: #ededed;
         }
         
         #phone-wechat .app-body {
@@ -1164,8 +1164,9 @@ function initPhoneGrid() {
         
         /* 微信原生标题栏 */
         #phone-wechat-header {
-            background-color: #ededed !important;
-            border-bottom: none !important;
+            background-color: #ededed;
+            border-bottom: none;
+            transition: background-color 0.2s ease;
         }
         
         /* 查手机-联系人选择弹窗半屏高度优化 */
@@ -6294,7 +6295,7 @@ function enterPhoneCheck(contactId) {
     
     // 修复微信底栏和容器样式
     const wechatTabBar = document.querySelector('#phone-wechat .wechat-tab-bar');
-    if (wechatTabBar && wechatTabBar.children.length !== 4) {
+    if (wechatTabBar) {
         wechatTabBar.innerHTML = `
             <div class="wechat-tab-item active" data-tab="contacts" onclick="switchPhoneWechatTab('contacts')">
                 <i class="fas fa-comment"></i>
@@ -8868,7 +8869,11 @@ function renderPhoneWechatMoments(contactId) {
             commentsHtml = `<div class="moment-comments">
                 ${moment.comments.map(c => {
                     const cName = c.name || c.user || '好友';
-                    const cContent = c.content || '...';
+                    let cContent = c.content || '...';
+                    
+                    // 处理 "回复 XXX：" 的情况，将 XXX 变成蓝色
+                    cContent = cContent.replace(/^回复\s+([^：:]+)[：:]/, '回复 <span style="color: #576b95; font-weight: 500;">$1</span>：');
+                    
                     return `
                     <div class="comment-item" style="margin-bottom: 2px; word-break: break-all;">
                         <span class="comment-user" style="color: #576b95; font-weight: 500;">${cName}</span><span style="color: #191919;">：</span><span class="comment-content" style="color: #191919;">${cContent}</span>
@@ -9100,8 +9105,8 @@ function renderPhoneWechatContacts(contactId) {
 
     // 构建 HTML
     let html = `
-        <div style="height: 100%; overflow-y: auto; background: #ededed;">
-            <div style="height: max(90px, calc(44px + env(safe-area-inset-top)));"></div>
+        <div style="height: 100%; overflow-y: auto; background: #ffffff;">
+            <div style="height: max(90px, calc(44px + env(safe-area-inset-top))); background: #ededed;"></div>
             <!-- 原生微信风格搜索框 -->
             <div style="padding: 8px 12px; background: #ededed;">
                 <div style="background: #ffffff; border-radius: 6px; height: 36px; display: flex; align-items: center; justify-content: center; color: #b2b2b2;">
