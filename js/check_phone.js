@@ -1136,7 +1136,7 @@ function initPhoneGrid() {
         }
 
         #phone-wechat .wechat-tab-item i {
-            font-size: 20px !important;
+            font-size: 24px !important;
             line-height: 1 !important;
         }
         
@@ -7020,7 +7020,7 @@ window.switchPhoneWechatTab = function(tabName) {
             title.textContent = '微信';
         }
         if (generateBtn) {
-            generateBtn.innerHTML = '<i class="far fa-plus-circle" style="font-size: 20px;"></i>';
+            generateBtn.innerHTML = '<i class="far fa-plus-circle" style="font-size: 22px;"></i>';
             generateBtn.style.color = '#191919';
             generateBtn.style.textShadow = 'none';
             // 确保切换回来时重新绑定菜单事件
@@ -9011,9 +9011,9 @@ function renderPhoneWechatContacts(contactId) {
     // 构建 HTML
     let html = `
         <!-- 原生微信风格搜索框 -->
-        <div style="padding: 10px 12px 10px 12px; background: #ededed;">
+        <div style="padding: 8px 12px; background: #ededed;">
             <div style="background: #ffffff; border-radius: 6px; height: 36px; display: flex; align-items: center; justify-content: center; color: #b2b2b2;">
-                <i class="fas fa-search" style="font-size: 14px; margin-right: 6px; color: #b2b2b2;"></i>
+                <i class="fas fa-search" style="font-size: 15px; margin-right: 6px; color: #b2b2b2;"></i>
                 <span style="font-size: 16px; color: #b2b2b2;">搜索</span>
             </div>
         </div>
@@ -9043,18 +9043,18 @@ function renderPhoneWechatContacts(contactId) {
             const borderStyle = index === chats.length - 1 ? 'border: none;' : 'border-bottom: 0.5px solid #ececec;';
 
             html += `
-                <div onclick="window.openPhoneWechatChat(${index}, '${contactId}')" style="display: flex; align-items: center; padding: 12px 16px; cursor: pointer; background: #ffffff; -webkit-tap-highlight-color: rgba(0,0,0,0.05);">
-                    <div style="position: relative; margin-right: 12px; flex-shrink: 0;">
+                <div onclick="window.openPhoneWechatChat(${index}, '${contactId}')" style="display: flex; align-items: center; padding: 0 16px; cursor: pointer; background: #ffffff; -webkit-tap-highlight-color: rgba(0,0,0,0.05);">
+                    <div style="position: relative; margin-right: 12px; flex-shrink: 0; padding: 12px 0;">
                         <img src="${avatar}" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; display: block;" onerror="this.onerror=null;this.src=window.getSmartAvatar('${chat.name || 'User'}')">
                         ${unreadHtml}
                     </div>
-                    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0; padding-bottom: 12px; padding-top: 2px; ${borderStyle}">
-                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px;">
-                            <span style="font-size: 16px; font-weight: 500; color: #191919; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;">${chat.name}</span>
+                    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 16px 0; ${borderStyle}">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span style="font-size: 17px; font-weight: 400; color: #191919; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;">${chat.name}</span>
                             <span style="font-size: 12px; color: #b2b2b2; flex-shrink: 0;">${chat.time || ''}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-size: 14px; color: #999999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90%; line-height: 1.4;">${chat.lastMessage || ''}</span>
+                            <span style="font-size: 14px; color: #999999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90%; line-height: 1.2;">${chat.lastMessage || ''}</span>
                         </div>
                     </div>
                 </div>
