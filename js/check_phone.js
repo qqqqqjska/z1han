@@ -9123,7 +9123,7 @@ function renderPhoneWechatContacts(contactId) {
 
     // 1. 原生微信全宽搜索栏（无任何卡片悬浮边距）
     let html = `
-        <div style="padding: 8px 10px 10px 10px; background-color: #ededed; width: 100%; box-sizing: border-box;">
+        <div style="padding: 8px 12px 10px 12px; background-color: #ededed; width: 100%; box-sizing: border-box;">
             <div style="background-color: #ffffff; border-radius: 6px; height: 36px; display: flex; align-items: center; justify-content: center; color: #b2b2b2; width: 100%;">
                 <i class="fas fa-search" style="font-size: 14px; margin-right: 6px; color: #b2b2b2;"></i>
                 <span style="font-size: 15px; color: #b2b2b2; letter-spacing: -0.2px;">搜索</span>
@@ -9131,10 +9131,50 @@ function renderPhoneWechatContacts(contactId) {
         </div>
     `;
 
-    // 2. 纯白无边距连续平铺列表
+    // 2. 纯白无边距连续平铺列表 (完全还原微信原生UI)
     if (!chats || chats.length === 0) {
         html += `
-            <div style="background-color: #ffffff; padding
+            <div style="background-color: #ffffff; padding: 60px 20px; text-align: center; color: #999; font-size: 14px;">
+                暂无聊天会话<br><span style="font-size: 12px; color: #bbb; margin-top: 6px; display: inline-block;">点击右上角 + 生成聊天内容</span>
+            </div>
+        `;
+    } else {
+        html += `<div class="wechat-chat-list" style="background-color: #ffffff; width: 100%;">`;
+        chats.forEach((chat, index) => {
+            let avatar = chat.avatar;
+            if (!avatar || avatar.includes('placehold') || avatar.includes('dicebear')) {
+                avatar = window.getSmartAvatar(chat.name);
+            }
+            const name = chat.name || '未知好友';
+            const lastMsg = chat.lastMessage || (chat.messages && chat.messages.length > 0 ? chat.messages[chat.messages.length - 1].content : '');
+            const time = chat.time || '刚刚';
+            const unread = Number(chat.unread) || 0;
+            const isLast = index === chats.length - 1;
+
+            html += `
+                <div class="wechat-chat-row" onclick="window.openPhoneWechatChat(${index}, '${contactId}')" style="display: flex; align-items: center; padding: 12px 16px; background: #ffffff; cursor: pointer; position: relative; user-select: none;">
+                    <div style="position: relative; width: 48px; height: 48px; flex-shrink: 0; margin-right: 12px;">
+                        <img src="${avatar}" onerror="this.onerror=null;this.src=window.getSmartAvatar('${name}')" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; display: block; background: #eee;">
+                        ${unread > 0 ? `<span style="position: absolute; top: -4px; right: -4px; background: #fa5151; color: #fff; font-size: 11px; font-weight: bold; border-radius: 9px; min-width: 18px; height: 18px; line-height: 18px; text-align: center; padding: 0 4px; box-sizing: border-box;">${unread > 99 ? '99+' : unread}</span>` : ''}
+                    </div>
+                    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; height: 48px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span style="font-size: 16px; font-weight: 500; color: #191919; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${name}</span>
+                            <span style="font-size: 12px; color: #b2b2b2; flex-shrink: 0; margin-left: 8px;">${time}</span>
+                        </div>
+                        <div style="font-size: 13.5px; color: #888888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3;">
+                            ${lastMsg || '&nbsp;'}
+                        </div>
+                    </div>
+                    ${!isLast ? `<div style="position: absolute; bottom: 0; left: 76px; right: 0; height: 0.5px; background-color: #ededed;"></div>` : ''}
+                </div>
+            `;
+        });
+        html += `</div>`;
+    }
+
+    container.innerHTML = html;
+}
 
 window.openPhoneWechatChat = function(index, contactId) {
     const content = window.iphoneSimState.phoneContent && window.iphoneSimState.phoneContent[contactId];
