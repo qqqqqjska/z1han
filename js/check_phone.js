@@ -8782,6 +8782,7 @@ function renderPhoneWechatMoments(contactId) {
     
     if (!list) return;
     list.innerHTML = '';
+    list.style.backgroundColor = '#ffffff';
 
     if (!moments || moments.length === 0) {
         list.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">点击右上角生成动态</div>';
@@ -8854,7 +8855,7 @@ function renderPhoneWechatMoments(contactId) {
 
         let likesHtml = '';
         if (moment.likes && moment.likes.length > 0) {
-            likesHtml = `<div class="moment-likes"><i class="far fa-heart"></i> ${moment.likes.join(', ')}</div>`;
+            likesHtml = `<div class="moment-likes" style="color: #576b95; font-weight: 500; margin-bottom: 4px; word-break: break-all;"><i class="far fa-heart" style="font-size: 12px; margin-right: 4px;"></i>${moment.likes.join(', ')}</div>`;
         }
 
         let commentsHtml = '';
@@ -8864,8 +8865,8 @@ function renderPhoneWechatMoments(contactId) {
                     const cName = c.name || c.user || '好友';
                     const cContent = c.content || '...';
                     return `
-                    <div class="comment-item">
-                        <span class="comment-user">${cName}</span>：<span class="comment-content">${cContent}</span>
+                    <div class="comment-item" style="margin-bottom: 2px; word-break: break-all;">
+                        <span class="comment-user" style="color: #576b95; font-weight: 500;">${cName}</span><span style="color: #191919;">：</span><span class="comment-content" style="color: #191919;">${cContent}</span>
                     </div>
                 `}).join('')}
             </div>`;
@@ -8873,22 +8874,27 @@ function renderPhoneWechatMoments(contactId) {
 
         let footerHtml = '';
         if (likesHtml || commentsHtml) {
-            footerHtml = `<div class="moment-likes-comments">${likesHtml}${commentsHtml}</div>`;
+            footerHtml = `<div class="moment-likes-comments" style="background-color: #F4F4F4; border-radius: 4px; padding: 8px; margin-top: 10px; font-size: 14px;">${likesHtml}${commentsHtml}</div>`;
         }
 
+        item.style.backgroundColor = '#ffffff';
+        item.style.borderBottom = '0.5px solid #ececec';
+        item.style.padding = '16px';
+        item.style.display = 'flex';
+
         item.innerHTML = `
-            <img src="${avatar}" class="moment-avatar" onerror="this.onerror=null;this.src=window.getSmartAvatar('${moment.name || 'User'}')">
-            <div class="moment-content">
-                <div class="moment-name">${moment.name}</div>
-                <div class="moment-text">${moment.content}</div>
+            <img src="${avatar}" class="moment-avatar" style="width: 42px; height: 42px; border-radius: 6px; object-fit: cover; margin-right: 12px; flex-shrink: 0;" onerror="this.onerror=null;this.src=window.getSmartAvatar('${moment.name || 'User'}')">
+            <div class="moment-content" style="flex: 1; min-width: 0;">
+                <div class="moment-name" style="color: #576b95; font-weight: 600; font-size: 16px; margin-bottom: 4px;">${moment.name}</div>
+                <div class="moment-text" style="font-size: 15px; color: #191919; line-height: 1.5; margin-bottom: 8px; word-break: break-word;">${moment.content}</div>
                 ${imagesHtml}
-                <div class="moment-info">
+                <div class="moment-info" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
                     <div style="display: flex; align-items: center;">
-                        <span class="moment-time">${moment.time}</span>
+                        <span class="moment-time" style="font-size: 13px; color: #b2b2b2;">${moment.time}</span>
                         ${visibilityHtml}
                     </div>
                     <div style="position: relative;">
-                        <button class="moment-action-btn"><i class="fas fa-ellipsis-h"></i></button>
+                        <button class="moment-action-btn" style="background-color: #F4F4F4; border: none; border-radius: 4px; width: 32px; height: 20px; display: flex; align-items: center; justify-content: center; color: #576b95; cursor: pointer;"><i class="fas fa-ellipsis-h" style="font-size: 12px;"></i></button>
                     </div>
                 </div>
                 ${footerHtml}
