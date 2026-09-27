@@ -7074,18 +7074,60 @@ window.switchPhoneWechatTab = function(tabName) {
         if (tabContent) tabContent.style.display = 'block';
         
         // Header style for Moments
-        if (header) header.style.backgroundColor = 'transparent';
+        if (header) {
+            header.style.backgroundColor = 'transparent';
+            header.style.transition = 'background-color 0.2s ease';
+        }
         if (backBtn) {
             backBtn.style.color = '#fff';
             backBtn.style.textShadow = '0 1px 3px rgba(0,0,0,0.5)';
+            backBtn.style.transition = 'color 0.2s ease, text-shadow 0.2s ease';
         }
         if (title) title.style.display = 'none';
         if (generateBtn) {
             generateBtn.innerHTML = '<i class="fas fa-camera"></i>';
             generateBtn.style.color = '#fff';
             generateBtn.style.textShadow = '0 1px 3px rgba(0,0,0,0.5)';
+            generateBtn.style.transition = 'color 0.2s ease, text-shadow 0.2s ease';
             // 确保切换回来时重新绑定菜单事件
             generateBtn.onclick = (e) => showPhoneWechatGenerateMenu(e);
+        }
+        
+        // 绑定朋友圈滚动事件以实现顶栏变色
+        if (tabContent && !tabContent.dataset.scrollBound) {
+            tabContent.dataset.scrollBound = 'true';
+            tabContent.addEventListener('scroll', function() {
+                const coverEl = document.getElementById('phone-wechat-cover');
+                // 封面高度减去顶栏高度（约80px），作为变色阈值
+                const threshold = coverEl ? Math.max(100, coverEl.offsetHeight - 80) : 220;
+                
+                if (this.scrollTop > threshold) {
+                    if (header) header.style.backgroundColor = '#ededed';
+                    if (backBtn) {
+                        backBtn.style.color = '#191919';
+                        backBtn.style.textShadow = 'none';
+                    }
+                    if (generateBtn) {
+                        generateBtn.style.color = '#191919';
+                        generateBtn.style.textShadow = 'none';
+                    }
+                } else {
+                    if (header) header.style.backgroundColor = 'transparent';
+                    if (backBtn) {
+                        backBtn.style.color = '#fff';
+                        backBtn.style.textShadow = '0 1px 3px rgba(0,0,0,0.5)';
+                    }
+                    if (generateBtn) {
+                        generateBtn.style.color = '#fff';
+                        generateBtn.style.textShadow = '0 1px 3px rgba(0,0,0,0.5)';
+                    }
+                }
+            });
+        }
+        
+        // 切换到朋友圈时，主动触发一次滚动事件以更新顶栏状态
+        if (tabContent) {
+            tabContent.dispatchEvent(new Event('scroll'));
         }
     }
 };
