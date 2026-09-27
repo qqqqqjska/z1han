@@ -9047,10 +9047,10 @@ function renderPhoneWechatContacts(contactId) {
 
     // 构建 HTML
     let html = `
-        <div style="height: 100%; overflow-y: auto; background: #ededed; display: flex; flex-direction: column;">
-            <div style="height: calc(44px + max(47px, env(safe-area-inset-top))); flex-shrink: 0;"></div>
+        <div style="height: 100%; overflow-y: auto; background: #ededed;">
+            <div style="height: max(90px, calc(44px + env(safe-area-inset-top)));"></div>
             <!-- 原生微信风格搜索框 -->
-            <div style="padding: 8px 12px; background: #ededed; flex-shrink: 0;">
+            <div style="padding: 8px 12px; background: #ededed;">
                 <div style="background: #ffffff; border-radius: 6px; height: 36px; display: flex; align-items: center; justify-content: center; color: #b2b2b2;">
                     <i class="fas fa-search" style="font-size: 15px; margin-right: 6px; color: #b2b2b2;"></i>
                     <span style="font-size: 16px; color: #b2b2b2;">搜索</span>
@@ -9060,11 +9060,11 @@ function renderPhoneWechatContacts(contactId) {
 
     if (!chats || chats.length === 0) {
         html += `
-            <div style="background: #fff; padding: 60px 20px; text-align: center; color: #999; font-size: 15px; flex: 1;">
+            <div style="background: #fff; padding: 60px 20px; text-align: center; color: #999; font-size: 15px; min-height: calc(100% - 150px);">
                 点击右上角 + 生成聊天
             </div></div>`;
     } else {
-        html += `<div style="background: #ffffff; padding-bottom: calc(60px + env(safe-area-inset-bottom)); flex: 1;">`;
+        html += `<div style="background: #ffffff; padding-bottom: calc(60px + env(safe-area-inset-bottom)); min-height: calc(100% - 150px);">`;
         
         chats.forEach((chat, index) => {
             // 预处理头像 URL，避免 404 和 403
