@@ -8871,14 +8871,15 @@ function renderPhoneWechatMoments(contactId) {
                     const cName = c.name || c.user || '好友';
                     let cContent = c.content || '...';
                     
-                    // 处理 "回复 XXX：" 的情况，将 XXX 变成蓝色
-                    cContent = cContent.replace(/^回复\s+([^：:]+)[：:]/, '回复 <span style="color: #576b95; font-weight: 500;">$1</span>：');
-                    
-                    return `
-                    <div class="comment-item" style="margin-bottom: 2px; word-break: break-all;">
-                        <span class="comment-user" style="color: #576b95; font-weight: 500;">${cName}</span><span style="color: #191919;">：</span><span class="comment-content" style="color: #191919;">${cContent}</span>
-                    </div>
-                `}).join('')}
+                    const replyMatch = cContent.match(/^回复\s*([^：:]+)[：:]\s*(.*)/);
+                    if (replyMatch) {
+                        const targetName = replyMatch[1];
+                        const realContent = replyMatch[2];
+                        return `<div class="comment-item" style="margin-bottom: 4px; word-break: break-all; line-height: 1.4; font-size: 14px;"><span class="comment-user" style="color: #576b95; font-weight: 500;">${cName}</span><span style="color: #191919; margin: 0 4px;">回复</span><span class="comment-user" style="color: #576b95; font-weight: 500;">${targetName}</span><span style="color: #191919;">：</span><span class="comment-content" style="color: #191919;">${realContent}</span></div>`;
+                    } else {
+                        return `<div class="comment-item" style="margin-bottom: 4px; word-break: break-all; line-height: 1.4; font-size: 14px;"><span class="comment-user" style="color: #576b95; font-weight: 500;">${cName}</span><span style="color: #191919;">：</span><span class="comment-content" style="color: #191919;">${cContent}</span></div>`;
+                    }
+                }).join('')}
             </div>`;
         }
 
