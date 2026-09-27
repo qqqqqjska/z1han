@@ -1153,6 +1153,15 @@ function initPhoneGrid() {
             background-color: #ededed !important;
         }
         
+        #phone-wechat .app-body {
+            padding: 0 !important;
+        }
+        
+        #phone-wechat .phone-wechat-tab-content {
+            padding: 0 !important;
+            height: 100% !important;
+        }
+        
         /* 微信原生标题栏 */
         #phone-wechat-header {
             background-color: #ededed !important;
@@ -6283,6 +6292,29 @@ function enterPhoneCheck(contactId) {
     const app = document.getElementById('phone-app');
     if (app) app.classList.remove('hidden');
     
+    // 修复微信底栏和容器样式
+    const wechatTabBar = document.querySelector('#phone-wechat .wechat-tab-bar');
+    if (wechatTabBar && wechatTabBar.children.length !== 4) {
+        wechatTabBar.innerHTML = `
+            <div class="wechat-tab-item active" data-tab="contacts" onclick="switchPhoneWechatTab('contacts')">
+                <i class="fas fa-comment"></i>
+                <span>微信</span>
+            </div>
+            <div class="wechat-tab-item" data-tab="address_book" onclick="alert('通讯录功能开发中')">
+                <i class="fas fa-address-book"></i>
+                <span>通讯录</span>
+            </div>
+            <div class="wechat-tab-item" data-tab="moments" onclick="switchPhoneWechatTab('moments')">
+                <i class="far fa-compass"></i>
+                <span>发现</span>
+            </div>
+            <div class="wechat-tab-item" data-tab="me" onclick="alert('我功能开发中')">
+                <i class="far fa-user"></i>
+                <span>我</span>
+            </div>
+        `;
+    }
+
     // 加载特定联系人的布局
     loadPhoneLayout(contactId);
     calculateTotalPhonePages();
@@ -7003,8 +7035,9 @@ window.switchPhoneWechatTab = function(tabName) {
     }
 
     if (tabName === 'contacts') {
-        tabs[0].classList.add('active');
-        document.getElementById('phone-wechat-tab-contacts').style.display = 'block';
+        if (tabs[0]) tabs[0].classList.add('active');
+        const tabContent = document.getElementById('phone-wechat-tab-contacts');
+        if (tabContent) tabContent.style.display = 'block';
         
         // Header style for Contacts (Chats)
         if (header) header.style.backgroundColor = '#ededed';
@@ -7033,8 +7066,12 @@ window.switchPhoneWechatTab = function(tabName) {
         }
 
     } else {
-        tabs[1].classList.add('active');
-        document.getElementById('phone-wechat-tab-moments').style.display = 'block';
+        // 发现是第3个tab (index 2)
+        if (tabs[2]) tabs[2].classList.add('active');
+        else if (tabs[1]) tabs[1].classList.add('active'); // 兼容旧结构
+        
+        const tabContent = document.getElementById('phone-wechat-tab-moments');
+        if (tabContent) tabContent.style.display = 'block';
         
         // Header style for Moments
         if (header) header.style.backgroundColor = 'transparent';
@@ -9021,11 +9058,11 @@ function renderPhoneWechatContacts(contactId) {
 
     if (!chats || chats.length === 0) {
         html += `
-            <div style="background: #fff; padding: 60px 20px; text-align: center; color: #999; font-size: 15px;">
+            <div style="background: #fff; padding: 60px 20px; text-align: center; color: #999; font-size: 15px; height: 100%;">
                 点击右上角 + 生成聊天
             </div>`;
     } else {
-        html += `<div style="background: #ffffff; padding-bottom: calc(60px + env(safe-area-inset-bottom));">`;
+        html += `<div style="background: #ffffff; padding-bottom: calc(60px + env(safe-area-inset-bottom)); min-height: 100%; overflow-y: auto;">`;
         
         chats.forEach((chat, index) => {
             // 预处理头像 URL，避免 404 和 403
