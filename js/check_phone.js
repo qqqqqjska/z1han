@@ -7071,7 +7071,12 @@ window.switchPhoneWechatTab = function(tabName) {
         else if (tabs[1]) tabs[1].classList.add('active'); // 兼容旧结构
         
         const tabContent = document.getElementById('phone-wechat-tab-moments');
-        if (tabContent) tabContent.style.display = 'block';
+        if (tabContent) {
+            tabContent.style.display = 'block';
+            tabContent.style.backgroundColor = '#ffffff';
+        }
+        const appEl = document.getElementById('phone-wechat');
+        if (appEl) appEl.style.backgroundColor = '#ffffff';
         
         // Header style for Moments
         if (header) {
