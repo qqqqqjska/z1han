@@ -8868,20 +8868,63 @@ function renderPhoneWechatMoments(contactId) {
         }
 
         let commentsHtml = '';
-        if (moment.comments && moment.comments.length > 0) {
-            commentsHtml = `<div class="moment-comments">
-                ${moment.comments.map(c => {
-                    const cName = c.name || c.user || '好友';
-                    let cContent = (c.content || '...').replace(/\n/g, '');
+            if (moment.comments && moment.comments.length > 0) {
+                html += `<div class="moment-comments">`;
+                let lastAuthor = "";
+                moment.comments.forEach(comment => {
+                    let commentText = comment;
+                    let author = "";
+                    let replyTo = "";
+                    let content = "";
                     
-                    const replyMatch = cContent.match(/^回复\s*([^：:]+)[：:]\s*(.*)/);
+                    // 兼容 "A 回复 B：内容" 的格式
+                    let replyMatch = commentText.match(/^(.+?)\s+回复\s+(.+?)：(.*)$/);
                     if (replyMatch) {
-                        const targetName = replyMatch[1];
-                        const realContent = replyMatch[2];
-                        return `<div class="comment-item" style="margin-bottom: 4px; word-break: break-all; line-height: 1.4; font-size: 14px; display: flex; align-items: flex-start;"><span class="comment-user" style="color: #576b95; font-weight: 500; white-space: nowrap;">${cName}</span><span style="color: #191919; margin: 0 4px; white-space: nowrap;">回复</span><span class="comment-user" style="color: #576b95; font-weight: 500; white-space: nowrap;">${targetName}</span><span style="color: #191919;">：</span><span class="comment-content" style="color: #191919; flex: 1;">${realContent}</span></div>`;
+                        author = replyMatch[1].trim();
+                        replyTo = replyMatch[2].trim();
+                        content = replyMatch[3].trim();
                     } else {
-                        return `<div class="comment-item" style="margin-bottom: 4px; word-break: break-all; line-height: 1.4; font-size: 14px; display: flex; align-items: flex-start;"><span class="comment-user" style="color: #576b95; font-weight: 500; white-space: nowrap;">${cName}</span><span style="color: #191919;">：</span><span class="comment-content" style="color: #191919; flex: 1;">${cContent}</span></div>`;
+                        let colonIndex = commentText.indexOf('：');
+                        if (colonIndex !== -1) {
+                            author = commentText.substring(0, colonIndex).trim();
+                            let rest = commentText.substring(colonIndex + 1).trim();
+                            
+                            if (rest.startsWith('回复 ')) {
+                                let secondColonIndex = rest.indexOf('：');
+                                if (secondColonIndex !== -1) {
+                                    replyTo = rest.substring(3, secondColonIndex).trim();
+                                    content = rest.substring(secondColonIndex + 1).trim();
+                                } else {
+                                    content = rest;
+                                }
+                            } else {
+                                content = rest;
+                                // 自动推断回复：如果当前是号主，且上一条是别人，自动加上回复
+                                if (author === moment.author && lastAuthor && lastAuthor !== author) {
+                                    replyTo = lastAuthor;
+                                }
+                            }
+                        } else {
+                            content = commentText;
+                        }
                     }
+
+                    html += `<div class="comment-item">`;
+                    if (author) {
+                        html += `<span class="comment-author">${author}</span>`;
+                        if (replyTo) {
+                            html += `<span class="comment-reply-text">回复</span><span class="comment-author">${replyTo}</span>`;
+                        }
+                        html += `<span class="comment-colon">：</span>`;
+                    }
+                    html += `<span class="comment-content">${content}</span></div>`;
+                    
+                    if (author) {
+                        lastAuthor = author;
+                    }
+                });
+                html += `</div>`;
+            }
                 }).join('')}
             </div>`;
         }
