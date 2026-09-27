@@ -7075,6 +7075,9 @@ window.switchPhoneWechatTab = function(tabName) {
         if (tabContent) {
             tabContent.style.display = 'block';
             tabContent.style.backgroundColor = '#ffffff';
+            tabContent.style.height = '100%';
+            tabContent.style.overflowY = 'auto';
+            tabContent.style.paddingBottom = '80px';
         }
         const appEl = document.getElementById('phone-wechat');
         if (appEl) appEl.style.backgroundColor = '#ffffff';
@@ -8869,15 +8872,15 @@ function renderPhoneWechatMoments(contactId) {
             commentsHtml = `<div class="moment-comments">
                 ${moment.comments.map(c => {
                     const cName = c.name || c.user || '好友';
-                    let cContent = c.content || '...';
+                    let cContent = (c.content || '...').replace(/\n/g, '');
                     
                     const replyMatch = cContent.match(/^回复\s*([^：:]+)[：:]\s*(.*)/);
                     if (replyMatch) {
                         const targetName = replyMatch[1];
                         const realContent = replyMatch[2];
-                        return `<div class="comment-item" style="margin-bottom: 4px; word-break: break-all; line-height: 1.4; font-size: 14px;"><span class="comment-user" style="color: #576b95; font-weight: 500;">${cName}</span><span style="color: #191919; margin: 0 4px;">回复</span><span class="comment-user" style="color: #576b95; font-weight: 500;">${targetName}</span><span style="color: #191919;">：</span><span class="comment-content" style="color: #191919;">${realContent}</span></div>`;
+                        return `<div class="comment-item" style="margin-bottom: 4px; word-break: break-all; line-height: 1.4; font-size: 14px; display: flex; align-items: flex-start;"><span class="comment-user" style="color: #576b95; font-weight: 500; white-space: nowrap;">${cName}</span><span style="color: #191919; margin: 0 4px; white-space: nowrap;">回复</span><span class="comment-user" style="color: #576b95; font-weight: 500; white-space: nowrap;">${targetName}</span><span style="color: #191919;">：</span><span class="comment-content" style="color: #191919; flex: 1;">${realContent}</span></div>`;
                     } else {
-                        return `<div class="comment-item" style="margin-bottom: 4px; word-break: break-all; line-height: 1.4; font-size: 14px;"><span class="comment-user" style="color: #576b95; font-weight: 500;">${cName}</span><span style="color: #191919;">：</span><span class="comment-content" style="color: #191919;">${cContent}</span></div>`;
+                        return `<div class="comment-item" style="margin-bottom: 4px; word-break: break-all; line-height: 1.4; font-size: 14px; display: flex; align-items: flex-start;"><span class="comment-user" style="color: #576b95; font-weight: 500; white-space: nowrap;">${cName}</span><span style="color: #191919;">：</span><span class="comment-content" style="color: #191919; flex: 1;">${cContent}</span></div>`;
                     }
                 }).join('')}
             </div>`;
