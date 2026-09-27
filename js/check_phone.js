@@ -9047,22 +9047,24 @@ function renderPhoneWechatContacts(contactId) {
 
     // 构建 HTML
     let html = `
-        <!-- 原生微信风格搜索框 -->
-        <div style="padding: 8px 12px; background: #ededed;">
-            <div style="background: #ffffff; border-radius: 6px; height: 36px; display: flex; align-items: center; justify-content: center; color: #b2b2b2;">
-                <i class="fas fa-search" style="font-size: 15px; margin-right: 6px; color: #b2b2b2;"></i>
-                <span style="font-size: 16px; color: #b2b2b2;">搜索</span>
+        <div style="height: 100%; overflow-y: auto; background: #ededed; display: flex; flex-direction: column;">
+            <div style="height: calc(44px + max(47px, env(safe-area-inset-top))); flex-shrink: 0;"></div>
+            <!-- 原生微信风格搜索框 -->
+            <div style="padding: 8px 12px; background: #ededed; flex-shrink: 0;">
+                <div style="background: #ffffff; border-radius: 6px; height: 36px; display: flex; align-items: center; justify-content: center; color: #b2b2b2;">
+                    <i class="fas fa-search" style="font-size: 15px; margin-right: 6px; color: #b2b2b2;"></i>
+                    <span style="font-size: 16px; color: #b2b2b2;">搜索</span>
+                </div>
             </div>
-        </div>
     `;
 
     if (!chats || chats.length === 0) {
         html += `
-            <div style="background: #fff; padding: 60px 20px; text-align: center; color: #999; font-size: 15px; height: 100%;">
+            <div style="background: #fff; padding: 60px 20px; text-align: center; color: #999; font-size: 15px; flex: 1;">
                 点击右上角 + 生成聊天
-            </div>`;
+            </div></div>`;
     } else {
-        html += `<div style="background: #ffffff; padding-bottom: calc(60px + env(safe-area-inset-bottom)); min-height: 100%; overflow-y: auto;">`;
+        html += `<div style="background: #ffffff; padding-bottom: calc(60px + env(safe-area-inset-bottom)); flex: 1;">`;
         
         chats.forEach((chat, index) => {
             // 预处理头像 URL，避免 404 和 403
@@ -9098,7 +9100,7 @@ function renderPhoneWechatContacts(contactId) {
             `;
         });
         
-        html += `</div>`;
+        html += `</div></div>`;
     }
     
     container.innerHTML = html;
