@@ -3165,7 +3165,8 @@
     }
 
     function normalizeGroupContextMessage(message, groupContact) {
-        const prefix = buildGroupContextPrefix(message, groupContact);
+        const group = getGroupContact(groupContact);
+        const prefix = buildGroupContextPrefix(message, group);
         const replyPrefix = buildGroupReplyPrefix(message.replyTo);
         const parts = [prefix, replyPrefix].filter(Boolean);
         let body = '';
@@ -3188,7 +3189,7 @@
             body = '[图片]';
         } else if (message.type === 'sticker') {
             body = `[表情包${message.description ? `: ${message.description}` : ''}]`;
-            if (group.stickerVisionEnabled === true) {
+            if (group && group.stickerVisionEnabled === true) {
                 const imageUrl = String(message.content || '').trim();
                 if (imageUrl) {
                     const textPart = [...parts, body].filter(Boolean).join(' ');
