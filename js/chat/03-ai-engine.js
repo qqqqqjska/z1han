@@ -4091,7 +4091,7 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
         } else {
             replyHtml = `
                 <div class="quote-container">
-                    <span class="quote-prefix">回复 </span><span class="quote-name">${escapeChatMessageHtml(replyTo.name)}: </span><span class="quote-text">${escapeChatMessageHtml(replyPreviewText)}</span>
+                    <span class="quote-name">${escapeChatMessageHtml(replyTo.name)}: </span><span class="quote-text">${escapeChatMessageHtml(replyPreviewText)}</span>
                 </div>
             `;
         }
