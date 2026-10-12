@@ -4079,7 +4079,7 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
 
             const quoteSourceMarkup = shouldHideQuoteSourceBubble ? '' : `
                 <div class="quote-container quote-target-${replyTargetRoleClass}" aria-hidden="true">
-                    <div class="quote-preview-text">${escapeChatMessageHtml(replyPreviewText)}</div>
+                    <div class="quote-preview-text"><span class="quote-prefix">回复 </span><span class="quote-name">${escapeChatMessageHtml(replyTo.name)}: </span><span class="quote-text">${escapeChatMessageHtml(replyPreviewText)}</span></div>
                 </div>
             `;
             const quoteThreadModifierClass = shouldHideQuoteSourceBubble ? ' quote-thread-prev-only' : '';
