@@ -1,4 +1,4 @@
-﻿function maskChatImageDebugKey(key) {
+function maskChatImageDebugKey(key) {
     const raw = String(key || '');
     if (!raw) return '(empty)';
     if (raw.length <= 8) return `${raw.slice(0, 2)}***${raw.slice(-1)}`;
@@ -4079,7 +4079,7 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
 
             const quoteSourceMarkup = shouldHideQuoteSourceBubble ? '' : `
                 <div class="quote-container quote-target-${replyTargetRoleClass}" aria-hidden="true">
-                    <div class="quote-preview-text"><span class="quote-prefix">回复 </span><span class="quote-name">${escapeChatMessageHtml(replyTo.name)}: </span><span class="quote-text">${escapeChatMessageHtml(replyPreviewText)}</span></div>
+                    <div class="quote-preview-text">${escapeChatMessageHtml(replyPreviewText)}</div>
                 </div>
             `;
             const quoteThreadModifierClass = shouldHideQuoteSourceBubble ? ' quote-thread-prev-only' : '';
@@ -4091,7 +4091,7 @@ function appendMessageToUI(text, isUser, type = 'text', description = null, repl
         } else {
             replyHtml = `
                 <div class="quote-container">
-                    <span class="quote-prefix">回复 </span><span class="quote-name">${escapeChatMessageHtml(replyTo.name)}: </span><span class="quote-text">${escapeChatMessageHtml(replyPreviewText)}</span>
+                    <span class="quote-text">${escapeChatMessageHtml(replyPreviewText)}</span>
                 </div>
             `;
         }
@@ -13047,7 +13047,6 @@ window.buildAiPromptMessages = async function(contactId, instruction = null, opt
 
     return messages;
 };
-
 
 
 
